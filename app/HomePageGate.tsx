@@ -95,7 +95,7 @@ export default function HomePageGate() {
         href="/admin/events"
         className="mt-6 min-h-[48px] min-w-[48px] rounded-xl bg-white px-6 py-3 text-base font-medium text-gray-900 hover:bg-gray-200 active:bg-gray-300"
       >
-        Let's Go!
+        {"Let's Go!"}
       </Link>
     </div>
   );
