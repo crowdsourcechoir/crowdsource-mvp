@@ -14,6 +14,10 @@ async function getFFmpeg(): Promise<import("@ffmpeg/ffmpeg").FFmpeg> {
 }
 
 export async function videoDataUrlToMp4Blob(dataUrl: string): Promise<Blob> {
+  if (dataUrl.startsWith("data:video/mp4")) {
+    const res = await fetch(dataUrl);
+    return res.blob();
+  }
   const res = await fetch(dataUrl);
   const arrayBuffer = await res.arrayBuffer();
   const data = new Uint8Array(arrayBuffer);

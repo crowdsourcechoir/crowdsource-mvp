@@ -62,12 +62,15 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
       );
       streamRef.current = stream;
 
-      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-        ? "video/webm;codecs=vp9,opus"
-        : "video/webm";
+      // Prefer MP4 on Safari/iOS so playback works; use WebM elsewhere
+      const mimeType = MediaRecorder.isTypeSupported("video/mp4")
+        ? "video/mp4"
+        : MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+          ? "video/webm;codecs=vp9,opus"
+          : "video/webm";
       const recorder = new MediaRecorder(stream, {
-        videoBitsPerSecond: 5000000,
-        audioBitsPerSecond: 256000,
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000,
         mimeType,
       });
 
@@ -75,7 +78,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         if (e.data.size) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: "video/webm" });
+        const b = new Blob(chunksRef.current, { type: mimeType });
         setBlob(b);
         setStatus("recorded");
         onRecordingReady?.(b);

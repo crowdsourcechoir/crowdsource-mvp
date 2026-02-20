@@ -35,6 +35,29 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function SubmissionVideoPlayer({ dataUrl }: { dataUrl: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <>
+      {!failed ? (
+        <video
+          src={dataUrl}
+          controls
+          playsInline
+          muted
+          className="h-full w-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-black/80 p-4 text-center text-sm text-gray-400">
+          <p>This video can&apos;t play in this browser.</p>
+          <p className="text-xs">Use &quot;Download video (.mp4)&quot; to watch it.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -439,12 +462,7 @@ export default function EventDetailPage() {
                     <div className="w-full min-w-0 max-w-md">
                       <p className="mb-1 text-xs text-gray-500">Video</p>
                       <div className="aspect-video max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
-                        <video
-                          src={sub.videoDataUrl}
-                          controls
-                          playsInline
-                          className="h-full w-full object-contain"
-                        />
+                        <SubmissionVideoPlayer dataUrl={sub.videoDataUrl} />
                       </div>
                     </div>
                   )}
