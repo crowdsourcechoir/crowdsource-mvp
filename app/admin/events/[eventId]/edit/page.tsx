@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getEventById, updateEvent, isStoredEvent, addEvent } from "@/data/eventsClient";
+import { getEventById, updateEvent, isStoredEvent, addEvent, hideMockEvent } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import EventForm, { type EventFormValues } from "@/components/EventForm";
 
@@ -23,11 +23,13 @@ export default function EditEventPage() {
     if (!event) return;
     if (isStoredEvent(event.id)) {
       updateEvent(event.id, values);
+      router.push(`/admin/events/${event.id}`);
     } else {
-      // Demo event: save as new stored event
-      addEvent(values);
+      // Demo/mock event: save as new stored event and hide the mock so list shows updated data
+      hideMockEvent(event.id);
+      const newEvent = addEvent(values);
+      router.push(`/admin/events/${newEvent.id}`);
     }
-    router.push(`/admin/events/${event.id}`);
   }
 
   if (notFound || !event) {

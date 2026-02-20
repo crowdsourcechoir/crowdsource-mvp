@@ -4,6 +4,7 @@ import type { Event } from "@/data/mockEvents";
 import { mockEvents } from "@/data/mockEvents";
 
 const STORAGE_KEY = "crowdsource-custom-events";
+const HIDDEN_MOCK_IDS_KEY = "crowdsource-hidden-mock-event-ids";
 
 function getStoredEvents(): Event[] {
   if (typeof window === "undefined") return [];
@@ -26,20 +27,48 @@ function saveStoredEvents(events: Event[]) {
   }
 }
 
+function getHiddenMockIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(HIDDEN_MOCK_IDS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function hideMockEvent(id: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const ids = getHiddenMockIds();
+    if (ids.includes(id)) return;
+    ids.push(id);
+    localStorage.setItem(HIDDEN_MOCK_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
 export function getAllEvents(): Event[] {
-  return [...mockEvents, ...getStoredEvents()];
+  const hidden = getHiddenMockIds();
+  const visibleMocks = mockEvents.filter((e) => !hidden.includes(e.id));
+  return [...visibleMocks, ...getStoredEvents()];
 }
 
 export function getEventBySlug(slug: string): Event | undefined {
   const fromStored = getStoredEvents().find((e) => e.slug === slug);
   if (fromStored) return fromStored;
-  return mockEvents.find((e) => e.slug === slug);
+  const hidden = getHiddenMockIds();
+  return mockEvents.find((e) => e.slug === slug && !hidden.includes(e.id));
 }
 
 export function getEventById(id: string): Event | undefined {
   const fromStored = getStoredEvents().find((e) => e.id === id);
   if (fromStored) return fromStored;
-  return mockEvents.find((e) => e.id === id);
+  const hidden = getHiddenMockIds();
+  return mockEvents.find((e) => e.id === id && !hidden.includes(e.id));
 }
 
 export function addEvent(values: Omit<Event, "id">): Event {

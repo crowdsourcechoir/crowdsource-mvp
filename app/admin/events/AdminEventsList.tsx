@@ -15,8 +15,20 @@ export default function AdminEventsList() {
   const [events, setEvents] = useState<Event[]>([]);
   const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
 
-  useEffect(() => {
+  function refreshEvents() {
     setEvents(getAllEvents());
+  }
+
+  useEffect(() => {
+    refreshEvents();
+  }, []);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshEvents();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
 
   const filtered = useMemo(() => {

@@ -47,7 +47,7 @@ function formatDateForSlug(dateStr: string): string {
 export default function EventForm({ onSubmit, initialValues: initialProp, submitLabel = "Create Event" }: EventFormProps) {
   const [values, setValues] = useState<EventFormValues>({ ...initialValues, ...initialProp });
   const [success, setSuccess] = useState(false);
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(!!initialProp?.slug);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   useEffect(() => {
     if (slugManuallyEdited || !values.date) return;
