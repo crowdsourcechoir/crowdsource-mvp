@@ -14,8 +14,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { transcripts } = body as {
+    const { transcripts, scope } = body as {
       transcripts: Array<{ name: string | null; text: string }>;
+      scope?: string;
     };
     if (!Array.isArray(transcripts) || transcripts.length === 0) {
       return NextResponse.json(
@@ -30,15 +31,16 @@ export async function POST(request: Request) {
     );
     const combined = parts.join("\n\n");
 
+    const systemBase =
+      "You are a script editor. Given multiple audience responses (voice/video transcripts), produce one concise summary script that aggregates the main themes, quotes, and ideas. Write in clear prose suitable for a host or performer to read. Keep it under 400 words unless the material clearly needs more.";
+    const systemWithScope =
+      scope?.trim() ? `${systemBase}\n\nAdditional instructions (follow these): ${scope.trim()}` : systemBase;
+
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content:
-            "You are a script editor. Given multiple audience responses (voice/video transcripts), produce one concise summary script that aggregates the main themes, quotes, and ideas. Write in clear prose suitable for a host or performer to read. Keep it under 400 words unless the material clearly needs more.",
-        },
+        { role: "system", content: systemWithScope },
         {
           role: "user",
           content: `Aggregate these audience responses into a single summary script:\n\n${combined}`,

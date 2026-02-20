@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
+const COUNTDOWN_SECONDS = 5;
 const MAX_SECONDS = 20;
 
 type RecordAudioProps = {
@@ -11,7 +12,8 @@ type RecordAudioProps = {
 };
 
 export default function RecordAudio({ onRecordingReady, onClear, className = "" }: RecordAudioProps) {
-  const [status, setStatus] = useState<"idle" | "recording" | "recorded">("idle");
+  const [status, setStatus] = useState<"idle" | "countdown" | "recording" | "recorded">("idle");
+  const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [secondsLeft, setSecondsLeft] = useState(MAX_SECONDS);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,46 +34,72 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
     streamRef.current = null;
   }, []);
 
-  const startRecording = async () => {
+  const startActualRecording = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    const options: MediaRecorderOptions = { audioBitsPerSecond: 256000 };
+    if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+      options.mimeType = "audio/webm;codecs=opus";
+    }
+    const recorder = new MediaRecorder(stream, options);
+    mediaRecorderRef.current = recorder;
+    chunksRef.current = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size) chunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const b = new Blob(chunksRef.current, { type: "audio/webm" });
+      setBlob(b);
+      setStatus("recorded");
+      onRecordingReady?.(b);
+    };
+
+    recorder.start();
+    setStatus("recording");
+    setSecondsLeft(MAX_SECONDS);
+
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          stopRecording();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  }, [onRecordingReady, stopRecording]);
+
+  useEffect(() => {
+    if (status !== "countdown") return;
+    if (countdown <= 0) {
+      startActualRecording();
+      return;
+    }
+    const t = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [status, countdown, startActualRecording]);
+
+  const requestAndCountdown = async () => {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const options: MediaRecorderOptions = { audioBitsPerSecond: 256000 };
-      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-        options.mimeType = "audio/webm;codecs=opus";
-      }
-      const recorder = new MediaRecorder(stream, options);
-      mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size) chunksRef.current.push(e.data);
-      };
-      recorder.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: "audio/webm" });
-        setBlob(b);
-        setStatus("recorded");
-        onRecordingReady?.(b);
-      };
-
-      recorder.start();
-      setStatus("recording");
-      setSecondsLeft(MAX_SECONDS);
-
-      timerRef.current = setInterval(() => {
-        setSecondsLeft((s) => {
-          if (s <= 1) {
-            stopRecording();
-            return 0;
-          }
-          return s - 1;
-        });
-      }, 1000);
+      setCountdown(COUNTDOWN_SECONDS);
+      setStatus("countdown");
     } catch (err) {
       setError("Microphone access is needed to record.");
     }
   };
+
+  const cancelCountdown = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setStatus("idle");
+    setCountdown(COUNTDOWN_SECONDS);
+  }, []);
 
   const handleStop = () => {
     stopRecording();
@@ -89,13 +117,26 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
       {status === "idle" && (
         <button
           type="button"
-          onClick={startRecording}
+          onClick={requestAndCountdown}
           className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-2xl border-2 border-gray-600 bg-gray-800 px-6 py-4 text-base font-medium text-white active:bg-gray-700 sm:min-h-[64px]"
         >
           {MicIcon}
           <span>Record audio</span>
           <span className="text-sm text-gray-400">(up to {MAX_SECONDS}s)</span>
         </button>
+      )}
+      {status === "countdown" && (
+        <div className="flex flex-col items-center gap-4 rounded-2xl border-2 border-gray-600 bg-gray-800/90 px-6 py-8">
+          <p className="text-center text-sm text-gray-300">Get ready… recording starts in</p>
+          <p className="text-5xl font-bold tabular-nums text-white">{countdown}</p>
+          <button
+            type="button"
+            onClick={cancelCountdown}
+            className="text-sm font-medium text-gray-400 underline hover:text-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
       )}
       {status === "recording" && (
         <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border-2 border-red-500/50 bg-gray-800/80 p-4">

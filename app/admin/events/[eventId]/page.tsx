@@ -36,25 +36,80 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function SubmissionVideoPlayer({ dataUrl }: { dataUrl: string }) {
+  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  return (
-    <>
-      {!failed ? (
-        <video
-          src={dataUrl}
-          controls
-          playsInline
-          muted
-          className="h-full w-full object-contain"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-black/80 p-4 text-center text-sm text-gray-400">
-          <p>This video can&apos;t play in this browser.</p>
+  const [convertedSrc, setConvertedSrc] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState(false);
+
+  const src = convertedSrc || dataUrl;
+  const isWebM = dataUrl.startsWith("data:video/webm");
+
+  const handleConvertAndPlay = async () => {
+    setConvertError(false);
+    setConverting(true);
+    try {
+      const blob = await videoDataUrlToMp4Blob(dataUrl);
+      const url = URL.createObjectURL(blob);
+      setConvertedSrc(url);
+      setFailed(false);
+    } catch {
+      setConvertError(true);
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (convertedSrc) URL.revokeObjectURL(convertedSrc);
+    };
+  }, [convertedSrc]);
+
+  if (!loaded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setLoaded(true)}
+        className="flex h-full w-full items-center justify-center bg-gray-900/80 text-sm text-gray-400 hover:bg-gray-800/80 hover:text-gray-300"
+      >
+        Load video
+      </button>
+    );
+  }
+
+  if (failed && !convertedSrc) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-black/80 p-4 text-center text-sm text-gray-400">
+        <p>This video can&apos;t play in this browser.</p>
+        {isWebM && (
+          <button
+            type="button"
+            onClick={handleConvertAndPlay}
+            disabled={converting}
+            className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 disabled:opacity-50"
+          >
+            {converting ? "Converting…" : "Convert & play"}
+          </button>
+        )}
+        {convertError && <p className="text-xs text-red-400">Conversion failed. Try &quot;Download video (.mp4)&quot;.</p>}
+        {!isWebM && (
           <p className="text-xs">Use &quot;Download video (.mp4)&quot; to watch it.</p>
-        </div>
-      )}
-    </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <video
+      key={src}
+      src={src}
+      controls
+      playsInline
+      muted
+      className="h-full w-full object-contain"
+      onError={() => setFailed(true)}
+    />
   );
 }
 
@@ -72,6 +127,7 @@ export default function EventDetailPage() {
   const [summaryScript, setSummaryScript] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [transcribeAllStatus, setTranscribeAllStatus] = useState<string | null>(null);
+  const [summaryScope, setSummaryScope] = useState("");
 
   useEffect(() => {
     getEventById(eventId)
@@ -210,6 +266,20 @@ export default function EventDetailPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Submissions</h2>
           {submissions.length > 0 && (
+            <>
+            <div className="mb-3 w-full">
+              <label htmlFor="summary-scope" className="mb-1 block text-xs font-medium text-gray-500">
+                Summary scope (optional)
+              </label>
+              <textarea
+                id="summary-scope"
+                value={summaryScope}
+                onChange={(e) => setSummaryScope(e.target.value)}
+                placeholder="e.g. Focus on hope and community; keep under 2 minutes when read aloud"
+                rows={2}
+                className="w-full resize-y rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-gray-500 focus:outline-none"
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -224,6 +294,7 @@ export default function EventDetailPage() {
                 );
                 const total = toTranscribe.length;
                 setTranscribeAllStatus(total > 0 ? `Transcribing 0/${total}…` : "Generating summary…");
+                const transcriptBySubId = new Map<string, string>();
                 try {
                   for (let i = 0; i < toTranscribe.length; i++) {
                     const sub = toTranscribe[i];
@@ -241,16 +312,26 @@ export default function EventDetailPage() {
                       });
                       const data = await res.json();
                       if (!res.ok) throw new Error(data.error || "Transcription failed");
-                      updateSubmissionTranscript(event.slug, sub.id, data.text ?? "");
+                      const text = data.text ?? "";
+                      updateSubmissionTranscript(event.slug, sub.id, text);
+                      transcriptBySubId.set(sub.id, text);
                     } catch (e) {
                       console.error("Transcribe failed for", sub.id, e);
                     }
                   }
-                  setSubmissions(getSubmissionsForEvent(event.slug));
-                  setTranscribeAllStatus("Generating summary…");
-                  const withTranscripts = getSubmissionsForEvent(event.slug).filter(
-                    (s) => s.transcript?.trim()
+                  setSubmissions((prev) =>
+                    prev.map((s) => ({
+                      ...s,
+                      transcript: transcriptBySubId.get(s.id) ?? s.transcript,
+                    }))
                   );
+                  setTranscribeAllStatus("Generating summary…");
+                  const withTranscripts = submissions
+                    .map((s) => ({
+                      name: s.name,
+                      text: transcriptBySubId.get(s.id) ?? s.transcript ?? "",
+                    }))
+                    .filter((x) => x.text.trim());
                   if (withTranscripts.length === 0) {
                     setSummaryScript("No transcripts available to summarize.");
                     return;
@@ -259,10 +340,8 @@ export default function EventDetailPage() {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      transcripts: withTranscripts.map((s) => ({
-                        name: s.name,
-                        text: s.transcript,
-                      })),
+                      transcripts: withTranscripts,
+                      scope: summaryScope.trim() || undefined,
                     }),
                   });
                   const data = await res.json();
@@ -280,40 +359,6 @@ export default function EventDetailPage() {
               className="rounded-lg border border-white/30 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
             >
               {transcribeAllStatus ?? "Transcribe all & summarize"}
-            </button>
-            <button
-              type="button"
-              disabled={loadingSummary || !!transcribeAllStatus || submissions.every((s) => !s.transcript)}
-              onClick={async () => {
-                const withTranscripts = submissions.filter((s) => s.transcript?.trim());
-                if (withTranscripts.length === 0) return;
-                setLoadingSummary(true);
-                try {
-                  const res = await fetch("/api/summarize", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      transcripts: withTranscripts.map((s) => ({
-                        name: s.name,
-                        text: s.transcript,
-                      })),
-                    }),
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error || "Summary failed");
-                  setSummaryScript(data.summary ?? "");
-                } catch (e) {
-                  console.error(e);
-                  setSummaryScript(
-                    `Error: ${e instanceof Error ? e.message : "Could not generate summary."}`
-                  );
-                } finally {
-                  setLoadingSummary(false);
-                }
-              }}
-              className="rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 disabled:opacity-50"
-            >
-              {loadingSummary ? "Generating…" : "Generate summary only"}
             </button>
             <button
               type="button"
@@ -347,6 +392,7 @@ export default function EventDetailPage() {
               {loadingExportAll ? "Preparing…" : "Download All"}
             </button>
             </div>
+            </>
           )}
         </div>
         {submissions.length === 0 ? (
@@ -422,7 +468,9 @@ export default function EventDetailPage() {
                             if (!res.ok) throw new Error(data.error || "Transcription failed");
                             const text = data.text ?? "";
                             updateSubmissionTranscript(event.slug, sub.id, text);
-                            setSubmissions(getSubmissionsForEvent(event.slug));
+                            setSubmissions((prev) =>
+                              prev.map((s) => (s.id === sub.id ? { ...s, transcript: text } : s))
+                            );
                           } catch (e) {
                             console.error(e);
                             alert(e instanceof Error ? e.message : "Transcription failed");
@@ -461,7 +509,7 @@ export default function EventDetailPage() {
                   {sub.videoDataUrl && (
                     <div className="w-full min-w-0 max-w-md">
                       <p className="mb-1 text-xs text-gray-500">Video</p>
-                      <div className="aspect-video max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
+                      <div className="max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
                         <SubmissionVideoPlayer dataUrl={sub.videoDataUrl} />
                       </div>
                     </div>

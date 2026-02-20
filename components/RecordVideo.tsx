@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
+const COUNTDOWN_SECONDS = 5;
 const MAX_SECONDS = 20;
 
 type RecordVideoProps = {
@@ -11,7 +12,8 @@ type RecordVideoProps = {
 };
 
 export default function RecordVideo({ onRecordingReady, onClear, className = "" }: RecordVideoProps) {
-  const [status, setStatus] = useState<"idle" | "recording" | "recorded">("idle");
+  const [status, setStatus] = useState<"idle" | "preview" | "countdown" | "recording" | "recorded">("idle");
+  const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [secondsLeft, setSecondsLeft] = useState(MAX_SECONDS);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,24 +38,70 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
 
   useEffect(() => () => stopRecording(), [stopRecording]);
 
-  // Attach stream to video once the recording UI is mounted (so the <video> element exists)
+  const showPreview = status === "preview" || status === "countdown" || status === "recording";
   useEffect(() => {
-    if (status !== "recording" || !streamRef.current || !videoPreviewRef.current) return;
+    if (!showPreview || !streamRef.current || !videoPreviewRef.current) return;
     const video = videoPreviewRef.current;
     video.srcObject = streamRef.current;
     video.muted = true;
     video.play().catch(() => {});
-  }, [status]);
+  }, [showPreview, status]); // re-attach when status changes (e.g. countdown → recording mounts a new <video>)
 
-  const startRecording = async () => {
+  const startActualRecording = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream) return;
+
+    const mimeType = MediaRecorder.isTypeSupported("video/mp4")
+      ? "video/mp4"
+      : MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+        ? "video/webm;codecs=vp9,opus"
+        : "video/webm";
+    const recorder = new MediaRecorder(stream, {
+      videoBitsPerSecond: 2500000,
+      audioBitsPerSecond: 128000,
+      mimeType,
+    });
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size) chunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const b = new Blob(chunksRef.current, { type: mimeType });
+      setBlob(b);
+      setStatus("recorded");
+      onRecordingReady?.(b);
+      if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+    };
+
+    recorder.start();
+    setStatus("recording");
+    setSecondsLeft(MAX_SECONDS);
+
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          stopRecording();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  }, [onRecordingReady, stopRecording]);
+
+  useEffect(() => {
+    if (status !== "countdown") return;
+    if (countdown <= 0) {
+      startActualRecording();
+      return;
+    }
+    const t = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [status, countdown, startActualRecording]);
+
+  const requestPreview = async () => {
     setError(null);
     try {
-      // Prefer front camera on phones for selfie video
-      const videoConstraints: MediaTrackConstraints = {
-        facingMode: "user",
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      };
+      const videoConstraints: MediaTrackConstraints = { facingMode: "user" };
       const stream = await navigator.mediaDevices.getUserMedia({
         video: videoConstraints,
         audio: true,
@@ -61,47 +109,26 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       );
       streamRef.current = stream;
-
-      // Prefer MP4 on Safari/iOS so playback works; use WebM elsewhere
-      const mimeType = MediaRecorder.isTypeSupported("video/mp4")
-        ? "video/mp4"
-        : MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-          ? "video/webm;codecs=vp9,opus"
-          : "video/webm";
-      const recorder = new MediaRecorder(stream, {
-        videoBitsPerSecond: 2500000,
-        audioBitsPerSecond: 128000,
-        mimeType,
-      });
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size) chunksRef.current.push(e.data);
-      };
-      recorder.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: mimeType });
-        setBlob(b);
-        setStatus("recorded");
-        onRecordingReady?.(b);
-        if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
-      };
-
-      recorder.start();
-      setStatus("recording");
-      setSecondsLeft(MAX_SECONDS);
-
-      timerRef.current = setInterval(() => {
-        setSecondsLeft((s) => {
-          if (s <= 1) {
-            stopRecording();
-            return 0;
-          }
-          return s - 1;
-        });
-      }, 1000);
+      setStatus("preview");
     } catch (err) {
       setError("Camera access is needed to record video.");
     }
   };
+
+  const beginCountdown = () => {
+    setCountdown(COUNTDOWN_SECONDS);
+    setStatus("countdown");
+  };
+
+  const cancelPreviewOrCountdown = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+    setStatus("idle");
+    setCountdown(COUNTDOWN_SECONDS);
+  }, []);
 
   const handleStop = () => {
     stopRecording();
@@ -119,13 +146,67 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
       {status === "idle" && (
         <button
           type="button"
-          onClick={startRecording}
+          onClick={requestPreview}
           className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-2xl border-2 border-gray-600 bg-gray-800 px-6 py-4 text-base font-medium text-white active:bg-gray-700 sm:min-h-[64px]"
         >
           {VideoIcon}
           <span>Record video</span>
           <span className="text-sm text-gray-400">(up to {MAX_SECONDS}s)</span>
         </button>
+      )}
+      {status === "preview" && (
+        <div className="space-y-3">
+          <video
+            ref={videoPreviewRef}
+            autoPlay
+            playsInline
+            muted
+            className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            style={{ transform: "scaleX(-1)" }}
+          />
+          <p className="text-center text-sm text-gray-400">Get your selfie ready, then start recording.</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={beginCountdown}
+              className="min-h-[48px] rounded-xl bg-white px-6 py-3 text-base font-medium text-gray-900 active:bg-gray-200"
+            >
+              Start recording
+            </button>
+            <button
+              type="button"
+              onClick={cancelPreviewOrCountdown}
+              className="text-sm font-medium text-gray-400 underline hover:text-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {status === "countdown" && (
+        <div className="space-y-3">
+          <div className="relative">
+            <video
+              ref={videoPreviewRef}
+              autoPlay
+              playsInline
+              muted
+              className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+              style={{ transform: "scaleX(-1)" }}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-black/50">
+              <p className="text-sm text-white/90">Recording in</p>
+              <p className="text-5xl font-bold tabular-nums text-white">{countdown}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={cancelPreviewOrCountdown}
+            className="w-full text-center text-sm font-medium text-gray-400 underline hover:text-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
       )}
       {status === "recording" && (
         <div className="space-y-3">
@@ -134,7 +215,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             autoPlay
             playsInline
             muted
-            className="aspect-video max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
             style={{ transform: "scaleX(-1)" }}
           />
           <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border-2 border-red-500/50 bg-gray-800/80 p-4">
@@ -157,7 +238,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             controls
             playsInline
             muted
-            className="aspect-video max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
           />
           <span className="text-sm text-gray-400">Recorded</span>
           <div className="flex flex-wrap items-center justify-center gap-2">

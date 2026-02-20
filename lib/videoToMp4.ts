@@ -1,8 +1,20 @@
 /**
  * Convert webm video (data URL) to MP4 blob using ffmpeg.wasm.
  * Used for high-fidelity download in professional settings.
+ * Decodes data URLs directly (no fetch) to avoid URL length limits that produce 0-byte blobs.
  */
 let ffmpegInstance: import("@ffmpeg/ffmpeg").FFmpeg | null = null;
+
+/** Decode a data URL to raw bytes. Avoids fetch() so long videos don't hit URL length limits. */
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const comma = dataUrl.indexOf(",");
+  if (comma === -1) throw new Error("Invalid data URL");
+  const base64 = dataUrl.slice(comma + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 async function getFFmpeg(): Promise<import("@ffmpeg/ffmpeg").FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
@@ -15,12 +27,10 @@ async function getFFmpeg(): Promise<import("@ffmpeg/ffmpeg").FFmpeg> {
 
 export async function videoDataUrlToMp4Blob(dataUrl: string): Promise<Blob> {
   if (dataUrl.startsWith("data:video/mp4")) {
-    const res = await fetch(dataUrl);
-    return res.blob();
+    const data = dataUrlToBytes(dataUrl);
+    return new Blob([data as BlobPart], { type: "video/mp4" });
   }
-  const res = await fetch(dataUrl);
-  const arrayBuffer = await res.arrayBuffer();
-  const data = new Uint8Array(arrayBuffer);
+  const data = dataUrlToBytes(dataUrl);
 
   const ffmpeg = await getFFmpeg();
   await ffmpeg.writeFile("input.webm", data);

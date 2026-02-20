@@ -5,7 +5,9 @@ import type { Event } from "@/data/mockEvents";
 import { googleMapsSearchUrl } from "@/components/AddressMap";
 import RecordAudio from "@/components/RecordAudio";
 import RecordVideo from "@/components/RecordVideo";
+import { formatDateLong, formatTime } from "@/lib/formatDate";
 import { addSubmission } from "@/data/submissionsClient";
+import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
 
 type PublicEventContentProps = {
   event: Event;
@@ -23,6 +25,8 @@ function displayPrompt(prompt: string): string {
 
 export default function PublicEventContent({ event }: PublicEventContentProps) {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
 
@@ -37,14 +41,31 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-    const name = (form.querySelector('[name="name"]') as HTMLInputElement)?.value?.trim() || null;
-    let audioDataUrl: string | null = null;
-    let videoDataUrl: string | null = null;
-    if (audioBlob) audioDataUrl = await blobToDataUrl(audioBlob);
-    if (videoBlob) videoDataUrl = await blobToDataUrl(videoBlob);
-    addSubmission(event.slug, { name, audioDataUrl, videoDataUrl });
-    setSubmitted(true);
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const form = e.currentTarget;
+      const name = (form.querySelector('[name="name"]') as HTMLInputElement)?.value?.trim() || null;
+      let audioDataUrl: string | null = null;
+      let videoDataUrl: string | null = null;
+      if (audioBlob) audioDataUrl = await blobToDataUrl(audioBlob);
+      if (videoBlob) {
+        const rawVideoUrl = await blobToDataUrl(videoBlob);
+        // Store as MP4 so preview works on all devices and download is high-fidelity
+        if (rawVideoUrl.startsWith("data:video/webm")) {
+          const mp4Blob = await videoDataUrlToMp4Blob(rawVideoUrl);
+          videoDataUrl = await blobToDataUrl(mp4Blob);
+        } else {
+          videoDataUrl = rawVideoUrl;
+        }
+      }
+      addSubmission(event.slug, { name, audioDataUrl, videoDataUrl });
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitError("Submit failed. Try again or submit without video.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -75,7 +96,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
             <div className="px-4 py-3 sm:px-6">
               <h1 className="text-base font-semibold text-white sm:text-lg">{event.title}</h1>
               <p className="mt-0.5 text-sm text-gray-400">
-                {event.date} · {event.time}
+                {formatDateLong(event.date)} · {formatTime(event.time)}
               </p>
               <a
                 href={googleMapsSearchUrl(event.venue, event.address)}
@@ -105,10 +126,16 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
 
             <div className="mt-10 border-t border-gray-700/60 pt-8 text-center">
               <h2 className="text-lg font-semibold text-white">Submit your response</h2>
+              <p className="mt-2 text-sm text-gray-400">Choose either audio or video for your response.</p>
               {submitted ? (
                 <p className="mt-4 text-green-400">Thank you! Your response has been received.</p>
               ) : (
                 <form onSubmit={handleSubmit} className="mx-auto mt-6 max-w-sm space-y-6">
+                  {submitError && (
+                    <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                      {submitError}
+                    </p>
+                  )}
                   <div className="text-left">
                     <label htmlFor="name" className="block text-sm font-medium text-gray-300">
                       Name
@@ -134,9 +161,10 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                   />
                   <button
                     type="submit"
-                    className="min-h-[48px] w-full rounded-2xl bg-white px-6 py-3 text-base font-medium text-gray-900 active:bg-gray-200"
+                    disabled={submitting}
+                    className="min-h-[48px] w-full rounded-2xl bg-white px-6 py-3 text-base font-medium text-gray-900 active:bg-gray-200 disabled:opacity-60 disabled:pointer-events-none"
                   >
-                    Submit
+                    {submitting ? "Submitting…" : "Submit"}
                   </button>
                 </form>
               )}

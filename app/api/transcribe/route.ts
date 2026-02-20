@@ -8,6 +8,14 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
   return Buffer.from(base64, "base64");
 }
 
+/** Derive file extension and mime type from data URL for Whisper (supports mp4, webm, etc.). */
+function getFileInfo(dataUrl: string): { filename: string; type: string } {
+  const match = dataUrl.match(/^data:(video|audio)\/([^;]+);/);
+  const mime = match ? `${match[1]}/${match[2]}` : "audio/webm";
+  const ext = mime.includes("mp4") ? "mp4" : "webm";
+  return { filename: `audio.${ext}`, type: mime };
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -26,8 +34,9 @@ export async function POST(request: Request) {
     }
 
     const buffer = dataUrlToBuffer(dataUrl);
+    const { filename, type } = getFileInfo(dataUrl);
     const openai = new OpenAI({ apiKey });
-    const file = await toFile(buffer, "audio.webm", { type: "audio/webm" });
+    const file = await toFile(buffer, filename, { type });
 
     const transcription = await openai.audio.transcriptions.create({
       file,

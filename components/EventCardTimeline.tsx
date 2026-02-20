@@ -1,28 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import type { Event } from "@/data/mockEvents";
+import { formatTimelineDate, formatTime } from "@/lib/formatDate";
 import { googleMapsSearchUrl } from "./AddressMap";
 import QRCodeDisplay from "./QRCodeDisplay";
-
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function formatTimelineDate(dateStr: string): { short: string; dayOfWeek: string } {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return { short: dateStr, dayOfWeek: "" };
-  const month = MONTHS[d.getMonth()];
-  const day = d.getDate();
-  const dayOfWeek = DAYS[d.getDay()];
-  return { short: `${month} ${day}`, dayOfWeek };
-}
-
-function formatTime(timeStr: string): string {
-  if (!timeStr) return "";
-  const [h, m] = timeStr.split(":");
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const h12 = hour % 12 || 12;
-  return m ? `${h12}:${m} ${ampm}` : `${h12} ${ampm}`;
-}
 
 type EventCardTimelineProps = {
   event: Event;
@@ -32,6 +15,19 @@ type EventCardTimelineProps = {
 export default function EventCardTimeline({ event, baseUrl = "http://localhost:3000" }: EventCardTimelineProps) {
   const { short: dateShort, dayOfWeek } = formatTimelineDate(event.date);
   const timeFormatted = formatTime(event.time);
+  const base = (baseUrl ?? "").replace(/\/$/, "");
+  const eventUrl = `${base || "http://localhost:3000"}/e/${event.slug}`;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(eventUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <article className="flex flex-col gap-4 rounded-xl border border-gray-700/60 bg-[#18181b] p-4 transition hover:border-gray-600 sm:flex-row sm:gap-6 sm:p-5">
@@ -49,6 +45,18 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
             {event.venue}
           </a>
         </p>
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span className="truncate text-gray-500" title={eventUrl}>
+            {eventUrl}
+          </span>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="shrink-0 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-300 hover:bg-gray-700"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </p>
         <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
           <Link
             href={`/admin/events/${event.id}`}
@@ -56,12 +64,6 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
           >
             Manage Event
             <span aria-hidden>→</span>
-          </Link>
-          <Link
-            href={`/admin/conductor/${event.id}`}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 sm:min-h-0 sm:min-w-0 sm:justify-start"
-          >
-            Go Live
           </Link>
           <Link
             href={`/e/${event.slug}`}
@@ -72,7 +74,13 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
         </div>
       </div>
       <div className="flex shrink-0 flex-row items-center justify-start gap-3 sm:ml-auto sm:gap-4">
-        <QRCodeDisplay url={`${baseUrl}/e/${event.slug}`} size={80} className="rounded border border-gray-600" />
+        <QRCodeDisplay
+          key={eventUrl}
+          url={eventUrl}
+          size={80}
+          className="rounded border border-gray-600"
+          downloadFilename={`${event.slug}-qr.png`}
+        />
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-800 sm:h-28 sm:w-28">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -86,4 +94,5 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
   );
 }
 
-export { formatTimelineDate };
+export { formatTimelineDate, formatTime } from "@/lib/formatDate";
+export { formatDateLong } from "@/lib/formatDate";

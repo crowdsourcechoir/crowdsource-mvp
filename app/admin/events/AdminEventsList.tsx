@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getAllEvents } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
-import EventCardTimeline, { formatTimelineDate } from "@/components/EventCardTimeline";
+import EventCardTimeline from "@/components/EventCardTimeline";
+import { formatTimelineDate } from "@/lib/formatDate";
 
 function isUpcoming(event: Event): boolean {
   const eventDate = new Date(`${event.date}T23:59:59`);
@@ -13,6 +14,7 @@ function isUpcoming(event: Event): boolean {
 
 export default function AdminEventsList() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
   const [baseUrl, setBaseUrl] = useState("https://crowdsource-mvp.vercel.app");
   useEffect(() => {
@@ -20,9 +22,11 @@ export default function AdminEventsList() {
   }, []);
 
   function refreshEvents() {
+    setLoading(true);
     getAllEvents()
       .then(setEvents)
-      .catch(() => setEvents([]));
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -111,7 +115,7 @@ export default function AdminEventsList() {
         </ul>
       </div>
 
-      {filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <p className="mt-12 text-center text-gray-500">
           {filter === "upcoming" ? "No upcoming events." : "No past events."}
         </p>
