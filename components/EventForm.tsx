@@ -37,10 +37,11 @@ const MONTH_ABBREV = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "s
 
 function formatDateForSlug(dateStr: string): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return "";
-  const month = MONTH_ABBREV[d.getMonth()];
-  const day = d.getDate();
+  // Parse as local date (YYYY-MM-DD) so slug matches calendar day; avoid UTC midnight shifting to previous day
+  const parts = dateStr.split("-").map(Number);
+  const [, month1, day] = parts;
+  if (!month1 || !day || month1 < 1 || month1 > 12) return "";
+  const month = MONTH_ABBREV[month1 - 1];
   return `csc-${month}${day}`;
 }
 

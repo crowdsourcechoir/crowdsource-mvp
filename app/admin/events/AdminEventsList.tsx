@@ -14,9 +14,15 @@ function isUpcoming(event: Event): boolean {
 export default function AdminEventsList() {
   const [events, setEvents] = useState<Event[]>([]);
   const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
+  const [baseUrl, setBaseUrl] = useState("https://crowdsource-mvp.vercel.app");
+  useEffect(() => {
+    if (typeof window !== "undefined") setBaseUrl(window.location.origin);
+  }, []);
 
   function refreshEvents() {
-    setEvents(getAllEvents());
+    getAllEvents()
+      .then(setEvents)
+      .catch(() => setEvents([]));
   }
 
   useEffect(() => {
@@ -97,7 +103,7 @@ export default function AdminEventsList() {
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <EventCardTimeline event={event} />
+                  <EventCardTimeline event={event} baseUrl={baseUrl} />
                 </div>
               </li>
             );

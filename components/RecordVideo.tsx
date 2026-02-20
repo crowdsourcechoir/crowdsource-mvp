@@ -36,15 +36,31 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
 
   useEffect(() => () => stopRecording(), [stopRecording]);
 
+  // Attach stream to video once the recording UI is mounted (so the <video> element exists)
+  useEffect(() => {
+    if (status !== "recording" || !streamRef.current || !videoPreviewRef.current) return;
+    const video = videoPreviewRef.current;
+    video.srcObject = streamRef.current;
+    video.muted = true;
+    video.play().catch(() => {});
+  }, [status]);
+
   const startRecording = async () => {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // Prefer front camera on phones for selfie video
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: true,
+      }).catch(() =>
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      );
       streamRef.current = stream;
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream;
-        videoPreviewRef.current.muted = true;
-      }
 
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
         ? "video/webm;codecs=vp9,opus"
@@ -115,7 +131,8 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             autoPlay
             playsInline
             muted
-            className="max-h-48 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            className="aspect-video max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            style={{ transform: "scaleX(-1)" }}
           />
           <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border-2 border-red-500/50 bg-gray-800/80 p-4">
             <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
@@ -136,7 +153,8 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             src={URL.createObjectURL(blob)}
             controls
             playsInline
-            className="max-h-48 w-full rounded-2xl border-2 border-gray-700 bg-black"
+            muted
+            className="aspect-video max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
           />
           <span className="text-sm text-gray-400">Recorded</span>
           <div className="flex flex-wrap items-center justify-center gap-2">

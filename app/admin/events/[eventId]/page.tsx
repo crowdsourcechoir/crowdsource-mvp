@@ -51,12 +51,15 @@ export default function EventDetailPage() {
   const [transcribeAllStatus, setTranscribeAllStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    const e = getEventById(eventId);
-    if (e) {
-      setEvent(e);
-      setSubmissions(getSubmissionsForEvent(e.slug));
-    }
-    setLoaded(true);
+    getEventById(eventId)
+      .then((e) => {
+        if (e) {
+          setEvent(e);
+          setSubmissions(getSubmissionsForEvent(e.slug));
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
   }, [eventId]);
 
   if (!loaded) {

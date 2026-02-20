@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getEventById, updateEvent, isStoredEvent, addEvent, hideMockEvent } from "@/data/eventsClient";
+import { getEventById, updateEvent } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import EventForm, { type EventFormValues } from "@/components/EventForm";
 
@@ -14,22 +14,18 @@ export default function EditEventPage() {
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const e = getEventById(eventId);
-    if (e) setEvent(e);
-    else setNotFound(true);
+    getEventById(eventId)
+      .then((e) => {
+        if (e) setEvent(e);
+        else setNotFound(true);
+      })
+      .catch(() => setNotFound(true));
   }, [eventId]);
 
-  function handleSubmit(values: EventFormValues) {
+  async function handleSubmit(values: EventFormValues) {
     if (!event) return;
-    if (isStoredEvent(event.id)) {
-      updateEvent(event.id, values);
-      router.push(`/admin/events/${event.id}`);
-    } else {
-      // Demo/mock event: save as new stored event and hide the mock so list shows updated data
-      hideMockEvent(event.id);
-      const newEvent = addEvent(values);
-      router.push(`/admin/events/${newEvent.id}`);
-    }
+    const updated = await updateEvent(event.id, values);
+    if (updated) router.push(`/admin/events/${event.id}`);
   }
 
   if (notFound || !event) {

@@ -7,8 +7,8 @@ import { addEvent } from "@/data/eventsClient";
 export default function NewEventPage() {
   const router = useRouter();
 
-  function handleSubmit(values: EventFormValues) {
-    addEvent({
+  async function handleSubmit(values: EventFormValues) {
+    const created = await addEvent({
       slug: values.slug,
       title: values.title,
       description: values.description,
@@ -19,7 +19,7 @@ export default function NewEventPage() {
       prompt: values.prompt,
       heroImage: values.heroImage,
     });
-    router.push("/admin/events");
+    if (created) router.push("/admin/events");
   }
 
   return (

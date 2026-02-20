@@ -1,7 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { getEventById } from "@/data/eventsClient";
+import type { Event } from "@/data/mockEvents";
 import ConductorView from "./ConductorView";
 
 const STAGES = [
@@ -17,8 +19,19 @@ const STAGES = [
 export default function ConductorPageClient() {
   const params = useParams();
   const eventId = typeof params?.eventId === "string" ? params.eventId : "";
-  const event = getEventById(eventId);
+  const [event, setEvent] = useState<Event | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
+  useEffect(() => {
+    getEventById(eventId)
+      .then(setEvent)
+      .catch(() => setEvent(null))
+      .finally(() => setLoaded(true));
+  }, [eventId]);
+
+  if (!loaded) {
+    return <p className="text-gray-400">Loading…</p>;
+  }
   if (!event) {
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-6">
