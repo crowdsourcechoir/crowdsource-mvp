@@ -51,10 +51,13 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       if (audioBlob) audioDataUrl = await blobToDataUrl(audioBlob);
       if (videoBlob) {
         const rawVideoUrl = await blobToDataUrl(videoBlob);
-        // Store as MP4 so preview works on all devices and download is high-fidelity
         if (rawVideoUrl.startsWith("data:video/webm")) {
-          const mp4Blob = await videoDataUrlToMp4Blob(rawVideoUrl);
-          videoDataUrl = await blobToDataUrl(mp4Blob);
+          try {
+            const mp4Blob = await videoDataUrlToMp4Blob(rawVideoUrl);
+            videoDataUrl = await blobToDataUrl(mp4Blob);
+          } catch {
+            videoDataUrl = rawVideoUrl;
+          }
         } else {
           videoDataUrl = rawVideoUrl;
         }
@@ -62,7 +65,13 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       addSubmission(event.slug, { name, audioDataUrl, videoDataUrl });
       setSubmitted(true);
     } catch (err) {
-      setSubmitError("Submit failed. Try again or submit without video.");
+      console.error("Submit error:", err);
+      const isQuota = err instanceof DOMException && err.name === "QuotaExceededError";
+      setSubmitError(
+        isQuota
+          ? "Storage full. Try submitting without video, or clear site data for this page."
+          : "Submit failed. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }

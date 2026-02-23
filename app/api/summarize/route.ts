@@ -7,7 +7,10 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY is not set. Add it to .env.local to use AI summary." },
+      {
+        error:
+          "OPENAI_API_KEY is not set. For local dev add it to .env.local; for production add it in Vercel → Settings → Environment Variables.",
+      },
       { status: 503 }
     );
   }

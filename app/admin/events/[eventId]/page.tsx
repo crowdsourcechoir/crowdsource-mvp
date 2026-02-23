@@ -333,7 +333,13 @@ export default function EventDetailPage() {
                     }))
                     .filter((x) => x.text.trim());
                   if (withTranscripts.length === 0) {
-                    setSummaryScript("No transcripts available to summarize.");
+                    if (toTranscribe.length > 0 && transcriptBySubId.size === 0) {
+                      setSummaryScript(
+                        "Transcription didn’t run (API key problem?). Add OPENAI_API_KEY in Vercel → Settings → Environment Variables for production, or in .env.local for local dev, then redeploy."
+                      );
+                    } else {
+                      setSummaryScript("No transcripts available to summarize.");
+                    }
                     return;
                   }
                   const res = await fetch("/api/summarize", {
@@ -473,7 +479,12 @@ export default function EventDetailPage() {
                             );
                           } catch (e) {
                             console.error(e);
-                            alert(e instanceof Error ? e.message : "Transcription failed");
+                            const msg = e instanceof Error ? e.message : "Transcription failed";
+                            const friendly =
+                              msg.includes("API key") || msg.includes("401") || msg.includes("OPENAI")
+                                ? "Transcription failed: check OPENAI_API_KEY. Use Vercel → Settings → Environment Variables (production) or .env.local (local)."
+                                : msg;
+                            alert(friendly);
                           } finally {
                             setLoadingTranscribeId(null);
                           }
