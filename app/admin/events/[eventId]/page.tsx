@@ -134,7 +134,7 @@ export default function EventDetailPage() {
       .then((e) => {
         if (e) {
           setEvent(e);
-          setSubmissions(getSubmissionsForEvent(e.slug));
+          getSubmissionsForEvent(e.slug).then(setSubmissions);
         }
         setLoaded(true);
       })
@@ -313,7 +313,7 @@ export default function EventDetailPage() {
                       const data = await res.json();
                       if (!res.ok) throw new Error(data.error || "Transcription failed");
                       const text = data.text ?? "";
-                      updateSubmissionTranscript(event.slug, sub.id, text);
+                      await updateSubmissionTranscript(event.slug, sub.id, text);
                       transcriptBySubId.set(sub.id, text);
                     } catch (e) {
                       console.error("Transcribe failed for", sub.id, e);
@@ -473,7 +473,7 @@ export default function EventDetailPage() {
                             const data = await res.json();
                             if (!res.ok) throw new Error(data.error || "Transcription failed");
                             const text = data.text ?? "";
-                            updateSubmissionTranscript(event.slug, sub.id, text);
+                            await updateSubmissionTranscript(event.slug, sub.id, text);
                             setSubmissions((prev) =>
                               prev.map((s) => (s.id === sub.id ? { ...s, transcript: text } : s))
                             );

@@ -62,14 +62,14 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
           videoDataUrl = rawVideoUrl;
         }
       }
-      addSubmission(event.slug, { name, audioDataUrl, videoDataUrl });
+      await addSubmission(event.slug, { name, audioDataUrl, videoDataUrl });
       setSubmitted(true);
     } catch (err) {
       console.error("Submit error:", err);
       const isQuota = err instanceof DOMException && err.name === "QuotaExceededError";
       setSubmitError(
         isQuota
-          ? "Storage full. Try submitting without video, or clear site data for this page."
+          ? "Storage full. Clear site data for this site in your browser settings, then try again."
           : "Submit failed. Please try again."
       );
     } finally {
