@@ -259,7 +259,7 @@ export default function EventDetailPage() {
                   onClick={() => {
                     const lines: string[] = [
                       "TRANSCRIPT OUTPUT",
-                      event?.name ? `Event: ${event.name}` : "",
+                      event?.title ? `Event: ${event.title}` : "",
                       `Generated: ${formatDate(new Date().toISOString())}`,
                       "",
                       "--- Section 1 — Lyric prompts (for Suno) ---",
