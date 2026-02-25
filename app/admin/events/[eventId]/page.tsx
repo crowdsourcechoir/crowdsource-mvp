@@ -125,7 +125,7 @@ export default function EventDetailPage() {
   const [loadingExportAll, setLoadingExportAll] = useState(false);
   const [loadingTranscribeId, setLoadingTranscribeId] = useState<string | null>(null);
   const [transcriptOutput, setTranscriptOutput] = useState<{
-    section1: { prompts: Array<{ detailedStylePrompt: string; alternativeStylePrompt: string; genreBlueprint: string }> };
+    section1: { prompts: Array<{ detailedStylePrompt: string; alternativeStylePrompt: string; genreBlueprint: string; lyricIdeas?: string }> };
     section2: { keyPhrases: string[] };
   } | null>(null);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
@@ -276,6 +276,11 @@ export default function EventDetailPage() {
                       lines.push("Genre Blueprint (2 sentences):");
                       lines.push(p.genreBlueprint);
                       lines.push("");
+                      if (p.lyricIdeas) {
+                        lines.push("Lyric ideas from submissions:");
+                        lines.push(p.lyricIdeas);
+                        lines.push("");
+                      }
                     });
                     lines.push("--- Section 2 — Key phrases (exact from transcripts) ---");
                     lines.push("");
@@ -343,6 +348,12 @@ export default function EventDetailPage() {
                             <span className="font-medium text-gray-400">Genre Blueprint (2 sentences):</span>
                             <p className="mt-0.5">{p.genreBlueprint}</p>
                           </div>
+                          {p.lyricIdeas && (
+                            <div>
+                              <span className="font-medium text-gray-400">Lyric ideas from submissions:</span>
+                              <p className="mt-0.5 whitespace-pre-wrap">{p.lyricIdeas}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

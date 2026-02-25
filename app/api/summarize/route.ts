@@ -7,6 +7,8 @@ export type LyricPromptOption = {
   detailedStylePrompt: string;
   alternativeStylePrompt: string;
   genreBlueprint: string;
+  /** Lyric ideas, themes, or suggested lines drawn from the transcripts (so the song reflects crowdsourced content). */
+  lyricIdeas: string;
 };
 
 export type TranscriptOutput = {
@@ -17,13 +19,15 @@ export type TranscriptOutput = {
 const SYSTEM_PROMPT = `You are a music producer and lyricist. Given audience voice/video transcripts from an event, you produce two outputs as JSON only (no other text).
 
 SECTION 1 — Three Lyric Prompts (for Suno or similar song-creation tools)
-Generate exactly 3 different song directions. Each option must have three fields:
+Generate exactly 3 different song directions. Each option must have FOUR fields:
 
 1. "detailedStylePrompt": One paragraph describing style for AI music generation. Include: genre, BPM range, tempo feel, key instruments, vocal style (lead + backing if relevant), structure (e.g. big sing-along chorus), vibe/mood, mix character. Add what to avoid (e.g. "avoid trap hats", "avoid heavy autotune") when helpful. Example style: "pop, dance-pop anthem, 118–122 BPM upbeat party tempo, bright piano stabs + funky rhythm guitar + punchy bass + glossy synth leads, four-on-the-floor drums with claps, female lead vocal with group chant backing vocals, big sing-along chorus, celebratory birthday vibe, crisp modern mix, avoid trap hats, avoid heavy autotune"
 
 2. "alternativeStylePrompt": One short line, same idea but condensed. Example: "upbeat dance-pop, party anthem, energetic female vocal, big catchy chorus, live party band feel with synth accents"
 
 3. "genreBlueprint": Exactly 2 sentences describing how this genre typically works: structure, rhyme scheme, line length, what makes it work for the theme. Example: "Dance-pop birthday anthems typically follow a verse–pre-chorus–big singalong chorus structure, with rhythmic, conversational verses building into an explosive, repetitive hook. Rhymes are simple and punchy (AABB or ABAB), keeping lines tight and chant-ready so a crowd can easily join in."
+
+4. "lyricIdeas": Concrete lyric ideas drawn FROM THE TRANSCRIPTS so the song is not generic. Include: specific themes, suggested hook lines, images, or emotions that came from the submissions. Use direct references to what people said (e.g. "a line about X that someone mentioned", "the recurring wish for Y"). Each of the 3 options should have DIFFERENT lyric angles from the same transcripts (e.g. option 1: hope and community, option 2: specific memories people shared, option 3: wishes for the future). Format as 3–6 short bullet points or 2–4 sentences. This is critical: without lyric ideas from the transcripts, the song would miss the point of crowdsourcing.
 
 Base the 3 options on the themes, emotions, and content in the transcripts so they are relevant to the actual responses.
 
@@ -34,9 +38,9 @@ Respond with ONLY a single JSON object in this exact shape (no markdown, no code
 {
   "section1": {
     "prompts": [
-      { "detailedStylePrompt": "...", "alternativeStylePrompt": "...", "genreBlueprint": "..." },
-      { "detailedStylePrompt": "...", "alternativeStylePrompt": "...", "genreBlueprint": "..." },
-      { "detailedStylePrompt": "...", "alternativeStylePrompt": "...", "genreBlueprint": "..." }
+      { "detailedStylePrompt": "...", "alternativeStylePrompt": "...", "genreBlueprint": "...", "lyricIdeas": "..." },
+      { "detailedStylePrompt": "...", "alternativeStylePrompt": "...", "genreBlueprint": "...", "lyricIdeas": "..." },
+      { "detailedStylePrompt": "...", "alternativeStylePrompt": "...", "genreBlueprint": "...", "lyricIdeas": "..." }
     ]
   },
   "section2": {
@@ -105,6 +109,13 @@ export async function POST(request: Request) {
 
     if (!parsed.section1?.prompts || !Array.isArray(parsed.section1.prompts)) {
       parsed.section1 = { prompts: [] };
+    } else {
+      parsed.section1.prompts = parsed.section1.prompts.map((p) => ({
+        detailedStylePrompt: p.detailedStylePrompt ?? "",
+        alternativeStylePrompt: p.alternativeStylePrompt ?? "",
+        genreBlueprint: p.genreBlueprint ?? "",
+        lyricIdeas: typeof p.lyricIdeas === "string" ? p.lyricIdeas : "",
+      }));
     }
     if (!parsed.section2?.keyPhrases || !Array.isArray(parsed.section2.keyPhrases)) {
       parsed.section2 = { keyPhrases: [] };
