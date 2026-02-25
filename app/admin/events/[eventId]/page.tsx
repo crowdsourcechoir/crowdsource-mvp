@@ -124,7 +124,11 @@ export default function EventDetailPage() {
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [loadingExportAll, setLoadingExportAll] = useState(false);
   const [loadingTranscribeId, setLoadingTranscribeId] = useState<string | null>(null);
-  const [summaryScript, setSummaryScript] = useState<string | null>(null);
+  const [transcriptOutput, setTranscriptOutput] = useState<{
+    section1: { prompts: Array<{ detailedStylePrompt: string; alternativeStylePrompt: string; genreBlueprint: string }> };
+    section2: { keyPhrases: string[] };
+  } | null>(null);
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [transcribeAllStatus, setTranscribeAllStatus] = useState<string | null>(null);
   const [summaryScope, setSummaryScope] = useState("");
@@ -244,21 +248,140 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      {summaryScript && (
+      {(transcriptOutput || transcriptError) && (
         <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-white">Summary script</h2>
+            <h2 className="text-lg font-semibold text-white">Transcript output</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              {transcriptOutput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const lines: string[] = [
+                      "TRANSCRIPT OUTPUT",
+                      event?.name ? `Event: ${event.name}` : "",
+                      `Generated: ${formatDate(new Date().toISOString())}`,
+                      "",
+                      "--- Section 1 — Lyric prompts (for Suno) ---",
+                      "",
+                    ];
+                    transcriptOutput.section1?.prompts?.forEach((p, i) => {
+                      lines.push(`Lyric prompt ${i + 1}`);
+                      lines.push("Detailed Style Prompt:");
+                      lines.push(p.detailedStylePrompt);
+                      lines.push("");
+                      lines.push("Alternative Style Prompt:");
+                      lines.push(p.alternativeStylePrompt);
+                      lines.push("");
+                      lines.push("Genre Blueprint (2 sentences):");
+                      lines.push(p.genreBlueprint);
+                      lines.push("");
+                    });
+                    lines.push("--- Section 2 — Key phrases (exact from transcripts) ---");
+                    lines.push("");
+                    transcriptOutput.section2?.keyPhrases?.forEach((phrase) => {
+                      lines.push(`• "${phrase}"`);
+                    });
+                    lines.push("");
+                    lines.push("--- Section 3 — Full transcripts ---");
+                    lines.push("");
+                    submissions
+                      .filter((s) => s.transcript)
+                      .forEach((s) => {
+                        lines.push(`${s.name} · ${formatDate(s.submittedAt)}`);
+                        lines.push("");
+                        lines.push(s.transcript ?? "");
+                        lines.push("");
+                        lines.push("---");
+                        lines.push("");
+                      });
+                    const text = lines.join("\n");
+                    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+                    const slug = event?.slug ?? eventId;
+                    const date = new Date().toISOString().slice(0, 10);
+                    downloadBlob(blob, `transcript-output-${slug}-${date}.txt`);
+                  }}
+                  className="rounded border border-gray-600 bg-gray-800 px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
+                >
+                  Download
+                </button>
+              )}
             <button
               type="button"
-              onClick={() => setSummaryScript(null)}
+              onClick={() => { setTranscriptOutput(null); setTranscriptError(null); }}
               className="rounded border border-gray-600 bg-gray-800 px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
             >
               Close
             </button>
+            </div>
           </div>
-          <div className="whitespace-pre-wrap rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm leading-relaxed text-gray-300">
-            {summaryScript}
-          </div>
+          {transcriptError && (
+            <div className="mb-4 rounded-lg border border-red-800/60 bg-red-950/40 p-4 text-sm text-red-200">
+              {transcriptError}
+            </div>
+          )}
+          {transcriptOutput && (
+            <div className="space-y-6">
+              {/* Section 1: Lyric prompts */}
+              {transcriptOutput.section1?.prompts?.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-base font-semibold text-white">Section 1 — Lyric prompts (for Suno)</h3>
+                  <div className="space-y-4">
+                    {transcriptOutput.section1.prompts.map((p, i) => (
+                      <div key={i} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                        <h4 className="mb-2 text-sm font-medium text-gray-200">Lyric prompt {i + 1}</h4>
+                        <div className="space-y-3 text-sm text-gray-300">
+                          <div>
+                            <span className="font-medium text-gray-400">Detailed Style Prompt:</span>
+                            <p className="mt-0.5 whitespace-pre-wrap">{p.detailedStylePrompt}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-400">Alternative Style Prompt:</span>
+                            <p className="mt-0.5">{p.alternativeStylePrompt}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-400">Genre Blueprint (2 sentences):</span>
+                            <p className="mt-0.5">{p.genreBlueprint}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Section 2: Key phrases */}
+              {transcriptOutput.section2?.keyPhrases?.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-base font-semibold text-white">Section 2 — Key phrases (exact from transcripts)</h3>
+                  <ul className="list-inside list-disc space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-300">
+                    {transcriptOutput.section2.keyPhrases.map((phrase, i) => (
+                      <li key={i} className="leading-relaxed">&quot;{phrase}&quot;</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {/* Section 3: Full transcripts */}
+              {submissions.some((s) => s.transcript) && (
+                <div>
+                  <h3 className="mb-2 text-base font-semibold text-white">Section 3 — Full transcripts</h3>
+                  <div className="space-y-4">
+                    {submissions
+                      .filter((s) => s.transcript)
+                      .map((s) => (
+                        <div key={s.id} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                          <p className="mb-2 text-sm font-medium text-gray-200">
+                            {s.name} · {formatDate(s.submittedAt)}
+                          </p>
+                          <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-300">
+                            {s.transcript}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -269,13 +392,13 @@ export default function EventDetailPage() {
             <>
             <div className="mb-3 w-full">
               <label htmlFor="summary-scope" className="mb-1 block text-xs font-medium text-gray-500">
-                Summary scope (optional)
+                Lyric / scope (optional)
               </label>
               <textarea
                 id="summary-scope"
                 value={summaryScope}
                 onChange={(e) => setSummaryScope(e.target.value)}
-                placeholder="e.g. Focus on hope and community; keep under 2 minutes when read aloud"
+                placeholder="e.g. Focus on hope and community; birthday party vibe"
                 rows={2}
                 className="w-full resize-y rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-gray-500 focus:outline-none"
               />
@@ -293,7 +416,7 @@ export default function EventDetailPage() {
                   (s) => (s.audioDataUrl || s.videoDataUrl) && !s.transcript
                 );
                 const total = toTranscribe.length;
-                setTranscribeAllStatus(total > 0 ? `Transcribing 0/${total}…` : "Generating summary…");
+                setTranscribeAllStatus(total > 0 ? `Transcribing 0/${total}…` : "Generating lyric prompts…");
                 const transcriptBySubId = new Map<string, string>();
                 try {
                   for (let i = 0; i < toTranscribe.length; i++) {
@@ -325,7 +448,7 @@ export default function EventDetailPage() {
                       transcript: transcriptBySubId.get(s.id) ?? s.transcript,
                     }))
                   );
-                  setTranscribeAllStatus("Generating summary…");
+                  setTranscribeAllStatus("Generating lyric prompts…");
                   const withTranscripts = submissions
                     .map((s) => ({
                       name: s.name,
@@ -334,14 +457,17 @@ export default function EventDetailPage() {
                     .filter((x) => x.text.trim());
                   if (withTranscripts.length === 0) {
                     if (toTranscribe.length > 0 && transcriptBySubId.size === 0) {
-                      setSummaryScript(
+                      setTranscriptError(
                         "Transcription didn’t run (API key problem?). Add OPENAI_API_KEY in Vercel → Settings → Environment Variables for production, or in .env.local for local dev, then redeploy."
                       );
+                      setTranscriptOutput(null);
                     } else {
-                      setSummaryScript("No transcripts available to summarize.");
+                      setTranscriptError("No transcripts available to generate from.");
+                      setTranscriptOutput(null);
                     }
                     return;
                   }
+                  setTranscriptError(null);
                   const res = await fetch("/api/summarize", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -351,20 +477,21 @@ export default function EventDetailPage() {
                     }),
                   });
                   const data = await res.json();
-                  if (!res.ok) throw new Error(data.error || "Summary failed");
-                  setSummaryScript(data.summary ?? "");
+                  if (!res.ok) throw new Error(data.error || "Generate failed");
+                  setTranscriptOutput(data);
                 } catch (e) {
                   console.error(e);
-                  setSummaryScript(
+                  setTranscriptError(
                     `Error: ${e instanceof Error ? e.message : "Something went wrong."}`
                   );
+                  setTranscriptOutput(null);
                 } finally {
                   setTranscribeAllStatus(null);
                 }
               }}
               className="rounded-lg border border-white/30 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
             >
-              {transcribeAllStatus ?? "Transcribe all & summarize"}
+              {transcribeAllStatus ?? "Transcribe all & generate"}
             </button>
             <button
               type="button"
