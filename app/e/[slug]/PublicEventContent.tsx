@@ -58,6 +58,7 @@ const CONVERSATION_ID_KEY = (eventId: string, sessionToken: string) =>
 const FIRST_QUESTION = "What's your name?";
 const THANKS_MESSAGE = "Thanks so much for sharing! That's all for now.";
 const OPENING_PROMPT = "We're crowdsourcing a song for this event. Want to help create it?";
+const COMPLETION_MESSAGE = "Thanks! Your answers will help shape the song we're making.";
 function getOrCreateSessionToken(eventId: string, version: string): string {
   if (typeof window === "undefined") return "";
   const key = SESSION_TOKEN_KEY(eventId, version);
@@ -408,6 +409,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                     <div className="min-h-[76px] py-2 sm:min-h-[100px] sm:py-4">
                       <p className="mx-auto max-w-xl font-mono text-base leading-snug text-gray-200 sm:text-lg">
                         <TypewriterText
+                          key="opening"
                           text={OPENING_PROMPT}
                           speed={16}
                           className="inline"
@@ -449,11 +451,17 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                     >
                       <p className="mx-auto max-w-xl font-mono text-base leading-snug text-gray-200 sm:text-lg">
                         {chatFinished ? (
-                          "Thanks! Your answers will help shape the song we're making."
+                          <TypewriterText
+                            key={`completion-${conversationId ?? "none"}`}
+                            text={COMPLETION_MESSAGE}
+                            speed={16}
+                            className="inline"
+                          />
                         ) : sending && !chatFinished ? (
                           <span className="text-gray-500">…</span>
                         ) : displayMessage ? (
                           <TypewriterText
+                            key={displayMessage}
                             text={displayMessage}
                             speed={16}
                             className="inline"
@@ -514,7 +522,12 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                         {isVoiceVideoQuestion && (
                           <div className="mt-4 w-full space-y-3 rounded-none bg-black/25 p-3 sm:p-4 backdrop-blur-sm">
                             <p className="font-mono text-base font-medium tracking-wide text-gray-300">
-                              Record a message (optional)
+                              <TypewriterText
+                                key={currentMessage ?? "voice-hint"}
+                                text="Record a message (optional)"
+                                speed={16}
+                                className="inline"
+                              />
                             </p>
                             <RecordAudio onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
                             <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />

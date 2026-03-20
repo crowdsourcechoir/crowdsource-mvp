@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 
 const CHAR_MS = 18;
 
@@ -33,7 +33,9 @@ export default function TypewriterText({
     }
   }, [text, instant, onComplete]);
 
-  useEffect(() => {
+  // Reset before paint when `text` changes — otherwise the previous `visibleLength`
+  // can be >= the new string length and the full next question flashes at once.
+  useLayoutEffect(() => {
     if (instant) return;
     setVisibleLength(0);
   }, [text, instant]);
