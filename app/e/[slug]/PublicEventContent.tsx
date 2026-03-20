@@ -3,7 +3,6 @@
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { Bebas_Neue } from "next/font/google";
 import type { Event } from "@/data/mockEvents";
-import { googleMapsSearchUrl } from "@/components/AddressMap";
 import RecordAudio from "@/components/RecordAudio";
 import RecordVideo from "@/components/RecordVideo";
 import TypewriterText from "@/components/TypewriterText";
@@ -50,16 +49,6 @@ function eventInterviewVersion(event: Event): string {
     brief: event.agentBrief ?? null,
   });
   return stableHash(payload);
-}
-
-function formatDateShort(date: string): string {
-  const dt = new Date(`${date}T12:00:00`);
-  if (Number.isNaN(dt.getTime())) return date;
-  return dt.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 const SESSION_TOKEN_KEY = (eventId: string, version: string) => `csc_agent_session_${eventId}_${version}`;
@@ -295,7 +284,9 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
     try {
       const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
       const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
-      let res = await sendMessage(conversationId, content, { audioDataUrl, videoDataUrl });
+      const outgoingContent =
+        isNameQuestion && !content && !audioDataUrl && !videoDataUrl ? "__skip_name__" : content;
+      let res = await sendMessage(conversationId, outgoingContent, { audioDataUrl, videoDataUrl });
       /* If server returned the name question again (e.g. skip path failed), send once more to advance */
       if (
         content === "" &&
@@ -384,7 +375,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
           href="https://crowdsourcechoir.com"
           target="_blank"
           rel="noopener noreferrer"
-          className={`block w-fit opacity-95 mx-auto ${chatStarted ? "mb-4 sm:mb-5" : "mb-8"}`}
+          className={`block w-fit opacity-95 mx-auto ${chatStarted ? "mb-4 sm:mb-5" : "mb-10"}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Crowdsource Choir" className={`${chatStarted ? "h-12 sm:h-16" : "h-16 sm:h-20"} w-auto`} />
@@ -403,19 +394,9 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
 
         <div className="space-y-6">
           <div className="mx-auto w-full max-w-2xl">
-            <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "text-4xl sm:text-5xl" : "text-5xl sm:text-6xl"}`}>
+            <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "mt-1 text-4xl sm:text-5xl" : "mt-2 text-5xl sm:text-6xl"}`}>
               {event.title}
             </h1>
-            <a
-              href={googleMapsSearchUrl(event.venue, event.address)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`block font-mono text-base text-gray-100 hover:text-white hover:underline ${chatStarted ? "mt-2" : "mt-3"}`}
-            >
-              <span className="text-[var(--crowdsource-accent)]">{formatDateShort(event.date)} · </span>
-              <span>{event.venue}</span>
-              {event.address ? <span className="text-gray-300"> ({event.address})</span> : null}
-            </a>
           </div>
 
           <div className={chatStarted ? "pt-0" : "pt-2"}>

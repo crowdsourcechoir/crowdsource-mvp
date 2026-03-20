@@ -96,7 +96,8 @@ export async function POST(
 
     try {
       const body = await request.json();
-      const content = typeof body.content === "string" ? body.content.trim() : "";
+      const rawContent = typeof body.content === "string" ? body.content : "";
+      const content = rawContent === "__skip_name__" ? "" : rawContent.trim();
       const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
       const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
 
@@ -314,7 +315,8 @@ export async function POST(
   }
   try {
     const body = await request.json();
-    const content = typeof body.content === "string" ? body.content.trim() : "";
+    const rawContent = typeof body.content === "string" ? body.content : "";
+    const content = rawContent === "__skip_name__" ? "" : rawContent.trim();
     const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
     const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
     const storedAudioUrl = await persistMedia(conversationId, "audio", audioDataUrl);
