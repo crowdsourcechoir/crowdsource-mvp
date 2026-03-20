@@ -373,14 +373,14 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
 
       <div
         className={`relative mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-col px-4 text-center sm:px-5 ${
-          chatStarted ? "py-4 sm:py-6" : "py-6 sm:py-10"
+          chatStarted ? "py-6 sm:py-7" : "py-6 sm:py-10"
         }`}
       >
         <a
           href="https://crowdsourcechoir.com"
           target="_blank"
           rel="noopener noreferrer"
-          className={`block w-fit opacity-95 mx-auto ${chatStarted ? "mb-4 sm:mb-5" : "mb-10"}`}
+          className={`block w-fit opacity-95 mx-auto ${chatStarted ? "mb-6 sm:mb-7" : "mb-10"}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Crowdsource Choir" className={`${chatStarted ? "h-12 sm:h-16" : "h-16 sm:h-20"} w-auto`} />
@@ -398,8 +398,8 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
         )}
 
         <div className={chatStarted ? "flex min-h-[calc(100dvh-150px)] flex-col" : "space-y-6"}>
-          <div className={`mx-auto w-full max-w-2xl ${chatStarted ? "mb-4" : ""}`}>
-            <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "mt-1 text-4xl sm:text-5xl" : "mt-2 text-5xl sm:text-6xl"}`}>
+          <div className={`mx-auto w-full max-w-2xl ${chatStarted ? "mt-[10vh] mb-6 sm:mt-[8vh] sm:mb-8" : ""}`}>
+            <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "mt-3 text-4xl sm:text-5xl" : "mt-2 text-5xl sm:text-6xl"}`}>
               {event.title}
             </h1>
             {!chatStarted && (
@@ -411,7 +411,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
             )}
           </div>
 
-          <div className={chatStarted ? "flex flex-1 items-center justify-center pt-0" : "pt-2"}>
+          <div className={chatStarted ? "flex flex-1 items-start justify-center pt-6 sm:pt-8" : "pt-2"}>
             {/* Chatbot opens with a prompt; "Let's do it." starts the interview */}
             <div className="w-full">
                 {!chatStarted ? (
