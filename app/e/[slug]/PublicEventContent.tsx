@@ -99,6 +99,14 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   const firstMessageRequested = useRef(false);
   const responseInputRef = useRef<HTMLTextAreaElement | null>(null);
 
+  function focusResponseInput() {
+    if (!responseInputRef.current) return;
+    // Delay one frame so focus runs after state-driven re-render.
+    requestAnimationFrame(() => {
+      responseInputRef.current?.focus();
+    });
+  }
+
   async function withTimeout<T>(p: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
     let t: ReturnType<typeof setTimeout> | null = null;
     try {
@@ -244,7 +252,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   useEffect(() => {
     if (!chatStarted || chatFinished || sending) return;
     if (!responseInputRef.current) return;
-    responseInputRef.current.focus();
+    focusResponseInput();
   }, [chatStarted, currentMessage, chatFinished, sending]);
 
   function handleParticipateAgain() {
@@ -306,6 +314,9 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       setChatError(err instanceof Error ? err.message : "Submit failed");
     } finally {
       setSending(false);
+      if (!chatFinished) {
+        focusResponseInput();
+      }
     }
   }
 
@@ -427,7 +438,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                         <button
                           type="submit"
                           disabled={sending}
-                          className="flex min-h-[56px] w-full items-center justify-center border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] shadow-[0_12px_30px_rgba(0,0,0,0.22)] backdrop-blur-sm transition hover:bg-[var(--crowdsource-accent)]/12 focus:outline-none focus:ring-2 focus:ring-[var(--crowdsource-accent)]/70 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50"
+                          className="flex min-h-[56px] w-full items-center justify-center border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] shadow-[0_12px_30px_rgba(0,0,0,0.22)] backdrop-blur-sm transition hover:bg-[var(--crowdsource-accent)] hover:text-[#1a1530] focus:outline-none focus:ring-2 focus:ring-[var(--crowdsource-accent)]/70 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50"
                         >
                           {sending ? "Starting…" : "Let's make a song"}
                         </button>

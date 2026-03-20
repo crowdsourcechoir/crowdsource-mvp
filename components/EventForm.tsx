@@ -439,7 +439,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
 
                       setValues((v) => {
                         const prevBrief = v.agentBrief ?? null;
-                        const nextAskAbout = theme?.questionGoals?.length ? theme.questionGoals : local.askAbout;
+                        const nextAskAbout = local.askAbout;
                         const nextEmotionalArc = local.emotionalArc;
 
                         return {
