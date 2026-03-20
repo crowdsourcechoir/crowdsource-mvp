@@ -153,7 +153,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         <button
           type="button"
           onClick={requestPreview}
-          className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-none bg-[#1d2a3f]/92 px-6 py-4 font-mono text-base font-medium tracking-wide text-[#CFFF81] shadow-[0_8px_24px_rgba(0,0,0,0.3)] backdrop-blur-sm transition hover:bg-[#CFFF81] hover:text-[#1a1530] active:bg-[#bde97a] sm:min-h-[64px]"
+          className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-none border border-[#CFFF81]/35 bg-[#1a0f2d]/45 px-6 py-4 font-mono text-base font-medium tracking-wide text-[#CFFF81] shadow-[0_10px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl transition hover:border-[#CFFF81]/55 hover:bg-[#CFFF81]/12 hover:text-[#f4ffc8] active:bg-[#CFFF81]/20 sm:min-h-[64px]"
         >
           {VideoIcon}
           <span>Record video</span>
@@ -167,15 +167,15 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             autoPlay
             playsInline
             muted
-            className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            className="max-h-64 w-full rounded-2xl border border-fuchsia-300/25 bg-black object-contain ring-1 ring-white/10"
             style={{ transform: "scaleX(-1)" }}
           />
-          <p className="text-center text-sm text-gray-400">Get your selfie ready, then start recording.</p>
+          <p className="text-center text-sm text-gray-300/90">Get your selfie ready, then start recording.</p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
               onClick={beginCountdown}
-              className="min-h-[48px] rounded-xl bg-white px-6 py-3 text-base font-medium text-gray-900 active:bg-gray-200"
+              className="min-h-[48px] rounded-xl border border-white/25 bg-white/15 px-6 py-3 text-base font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 ring-white/15 backdrop-blur-xl transition hover:bg-white/25 active:bg-white/20"
             >
               Start recording
             </button>
@@ -197,10 +197,10 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
               autoPlay
               playsInline
               muted
-              className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+              className="max-h-64 w-full rounded-2xl border border-fuchsia-300/25 bg-black object-contain ring-1 ring-white/10"
               style={{ transform: "scaleX(-1)" }}
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-black/50">
+            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-[#1a0f2d]/65 backdrop-blur-md ring-1 ring-inset ring-white/10">
               <p className="text-sm text-white/90">Recording in</p>
               <p className="text-5xl font-bold tabular-nums text-white">{countdown}</p>
             </div>
@@ -221,10 +221,10 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             autoPlay
             playsInline
             muted
-            className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            className="max-h-64 w-full rounded-2xl border border-fuchsia-300/25 bg-black object-contain ring-1 ring-white/10"
             style={{ transform: "scaleX(-1)" }}
           />
-          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fuchsia-300/35 bg-[#2b2a4a]/75 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fuchsia-300/35 bg-[#1a0f2d]/45 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl">
             <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
             <span className="text-sm text-white/85">Recording… {secondsLeft}s left</span>
             <button
@@ -244,7 +244,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             controls
             playsInline
             muted
-            className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
+            className="max-h-64 w-full rounded-2xl border border-fuchsia-300/25 bg-black object-contain ring-1 ring-white/10"
           />
           <span className="text-sm text-gray-400">Recorded</span>
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -255,7 +255,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
                 setStatus("idle");
                 onClear?.();
               }}
-              className="rounded-xl border border-fuchsia-300/35 bg-[#1d2a3f]/92 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-[0_8px_24px_rgba(0,0,0,0.3)] backdrop-blur-sm transition hover:bg-[#24354d]/95"
+              className="rounded-xl border border-fuchsia-300/35 bg-[#1a0f2d]/45 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-[0_8px_28px_rgba(0,0,0,0.3)] ring-1 ring-white/10 backdrop-blur-xl transition hover:bg-[#2d1f42]/55"
             >
               Re-record
             </button>
