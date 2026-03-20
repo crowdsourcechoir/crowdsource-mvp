@@ -6,6 +6,7 @@ import type { Event } from "@/data/mockEvents";
 import RecordAudio from "@/components/RecordAudio";
 import RecordVideo from "@/components/RecordVideo";
 import TypewriterText from "@/components/TypewriterText";
+import { formatDateLong } from "@/lib/formatDate";
 import { addSubmission } from "@/data/submissionsClient";
 import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
 import {
@@ -370,7 +371,11 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       />
       <div className="absolute inset-0 bg-black/20" aria-hidden />
 
-      <div className={`relative mx-auto max-w-3xl px-4 text-center sm:px-5 ${chatStarted ? "py-4 sm:py-6" : "py-6 sm:py-10"}`}>
+      <div
+        className={`relative mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-col px-4 text-center sm:px-5 ${
+          chatStarted ? "py-4 sm:py-6" : "py-6 sm:py-10"
+        }`}
+      >
         <a
           href="https://crowdsourcechoir.com"
           target="_blank"
@@ -397,11 +402,18 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
             <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "mt-1 text-4xl sm:text-5xl" : "mt-2 text-5xl sm:text-6xl"}`}>
               {event.title}
             </h1>
+            {!chatStarted && (
+              <p className="mt-2 font-mono text-base text-gray-100">
+                <span className="text-[var(--crowdsource-accent)]">{formatDateLong(event.date)} · </span>
+                <span>{event.venue}</span>
+                {event.address ? <span className="text-gray-300"> ({event.address})</span> : null}
+              </p>
+            )}
           </div>
 
-          <div className={chatStarted ? "pt-0" : "pt-2"}>
+          <div className={chatStarted ? "flex flex-1 items-center pt-0" : "pt-2"}>
             {/* Chatbot opens with a prompt; "Let's do it." starts the interview */}
-            <>
+            <div className="w-full">
                 {!chatStarted ? (
                   <>
                     {/* Same prompt treatment as chat questions: typewriter + same font size */}
@@ -520,7 +532,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                     )}
                   </div>
                 )}
-            </>
+            </div>
           </div>
         </div>
       </div>
