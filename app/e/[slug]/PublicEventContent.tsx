@@ -438,7 +438,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                         <button
                           type="submit"
                           disabled={sending}
-                          className="flex min-h-[56px] w-full items-center justify-center border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] shadow-[0_12px_30px_rgba(0,0,0,0.22)] backdrop-blur-sm transition hover:bg-[var(--crowdsource-accent)] hover:text-[#1a1530] focus:outline-none focus:ring-2 focus:ring-[var(--crowdsource-accent)]/70 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50"
+                          className="flex min-h-[56px] w-full items-center justify-center border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] shadow-[0_12px_30px_rgba(0,0,0,0.22)] backdrop-blur-sm transition hover:bg-[#CFFF81] hover:text-[#1a1530] focus:outline-none focus:ring-2 focus:ring-[var(--crowdsource-accent)]/70 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50"
                         >
                           {sending ? "Starting…" : "Let's make a song"}
                         </button>
