@@ -25,7 +25,7 @@ function rowToTurn(row: Record<string, unknown>) {
   };
 }
 
-const FIRST_QUESTION = "What's your name? Or skip if you wish to remain anonymous.";
+const FIRST_QUESTION = "What's your name?";
 const DEFAULT_THEME = {
   system_prompt_template:
     "You are a warm, friendly host at an event. Ask one short, casual question at a time. Draw out memories, shoutouts, and wishes. Use the event context and brief to personalize. Keep it conversational and do not collect sensitive personal info.",
@@ -125,7 +125,7 @@ export async function POST(
         !isFirstMessage &&
         existingTurns.length === 1 &&
         existingTurns[0].role === "agent" &&
-        /name|anonymous/i.test(lastAgentContent);
+        /name/i.test(lastAgentContent);
 
       const DEFAULT_THEME = {
         system_prompt_template:
@@ -230,8 +230,8 @@ export async function POST(
       }
 
       // Subsequent user messages.
-      if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion && !isNameQuestion) {
-        return NextResponse.json({ error: "Please type an answer for this question. You can only skip the name question." }, { status: 400 });
+      if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
+        return NextResponse.json({ error: "Please type an answer for this question." }, { status: 400 });
       }
 
       const userTurnInserted = await localInsertTurn({
@@ -345,12 +345,11 @@ export async function POST(
       : "";
     const isVoiceVideoQuestion =
       /record/.test(lastAgentContent) && (/voice|video/.test(lastAgentContent));
-    /* Allow skip when the only turn so far is the agent's (the name question) */
     const isNameQuestion =
       !isFirstMessage &&
       existingTurns.length === 1 &&
       existingTurns[0].role === "agent" &&
-      /name|anonymous/i.test(lastAgentContent);
+      /name/i.test(lastAgentContent);
 
     let userTurn: Record<string, unknown> | null = null;
 
@@ -499,9 +498,9 @@ export async function POST(
       });
     }
     if (!isFirstMessage) {
-      if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion && !isNameQuestion) {
+      if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
         return NextResponse.json(
-          { error: "Please type an answer for this question. You can only skip the name question." },
+          { error: "Please type an answer for this question." },
           { status: 400 }
         );
       }

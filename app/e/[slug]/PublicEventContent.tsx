@@ -55,7 +55,7 @@ function eventInterviewVersion(event: Event): string {
 const SESSION_TOKEN_KEY = (eventId: string, version: string) => `csc_agent_session_${eventId}_${version}`;
 const CONVERSATION_ID_KEY = (eventId: string, sessionToken: string) =>
   `csc_agent_conversation_${eventId}_${sessionToken}`;
-const FIRST_QUESTION = "What's your name? Or skip if you wish to remain anonymous.";
+const FIRST_QUESTION = "What's your name?";
 const THANKS_MESSAGE = "Thanks so much for sharing! That's all for now.";
 const OPENING_PROMPT = "We're crowdsourcing a song for this event. Want to help create it?";
 function getOrCreateSessionToken(eventId: string, version: string): string {
@@ -114,11 +114,11 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   const isVoiceVideoQuestion =
     currentMessage?.toLowerCase().includes("record") &&
     (currentMessage?.toLowerCase().includes("voice") || currentMessage?.toLowerCase().includes("video"));
-  /* First question is always the name question; treat null/loading as first question so user can skip */
+  /* First question is the name question; detect it for placeholder/flow handling. */
   const isNameQuestion =
     typeof currentMessage === "string"
-      ? /name/i.test(currentMessage) && /anonymous|skip/i.test(currentMessage)
-      : !!conversationId; /* allow skip when we're still loading the first message */
+      ? /what'?s your name\??/i.test(currentMessage)
+      : !!conversationId;
   const displayMessage = currentMessage ?? (conversationId ? FIRST_QUESTION : null);
 
   async function handleStartChat(e: FormEvent) {
@@ -274,7 +274,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   async function handleChatSubmit(e: FormEvent) {
     e.preventDefault();
     if (!conversationId || sending || chatFinished) return;
-    if (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion && !isNameQuestion) return;
+    if (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion) return;
     const content = inputValue.trim();
     setInputValue("");
     if (responseInputRef.current) {
@@ -285,19 +285,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
     try {
       const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
       const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
-      const outgoingContent =
-        isNameQuestion && !content && !audioDataUrl && !videoDataUrl ? "__skip_name__" : content;
-      let res = await sendMessage(conversationId, outgoingContent, { audioDataUrl, videoDataUrl });
-      /* If server returned the name question again (e.g. skip path failed), send once more to advance */
-      if (
-        content === "" &&
-        !audioDataUrl &&
-        !videoDataUrl &&
-        res.nextMessage.agentMessage === FIRST_QUESTION &&
-        res.turn === null
-      ) {
-        res = await sendMessage(conversationId, "");
-      }
+      const res = await sendMessage(conversationId, content, { audioDataUrl, videoDataUrl });
       setAudioBlob(null);
       setVideoBlob(null);
       setCurrentMessage(res.nextMessage.agentMessage);
@@ -506,14 +494,14 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                               el.style.height = "auto";
                               el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
                             }}
-                            placeholder={isNameQuestion ? "Your name (optional)" : "Type your answer…"}
+                            placeholder={isNameQuestion ? "Your name" : "Type your answer…"}
                             disabled={sending}
                             rows={1}
                             className="min-h-[52px] max-h-[180px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-3 font-mono text-base font-medium tracking-wide leading-6 text-white placeholder-gray-300 focus:outline-none"
                           />
                           <button
                             type="submit"
-                            disabled={sending || (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion && !isNameQuestion)}
+                            disabled={sending || (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion)}
                             className="min-h-[44px] min-w-[84px] shrink-0 px-2 py-2 text-center font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:opacity-85 disabled:text-[var(--crowdsource-accent)]"
                           >
                             Submit
