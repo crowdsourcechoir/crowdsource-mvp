@@ -21,7 +21,7 @@ export type EventFormValues = {
 };
 
 type EventFormProps = {
-  onSubmit: (values: EventFormValues) => void;
+  onSubmit: (values: EventFormValues) => Promise<void> | void;
   initialValues?: Partial<EventFormValues>;
   submitLabel?: string;
 };
@@ -162,7 +162,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
     setValues((v) => ({ ...v, slug: formatDateForSlug(values.date) }));
   }, [values.date, slugManuallyEdited]);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const normalizedAskAbout = (values.agentBrief?.askAbout ?? [])
       .map((x) => x.trim())
@@ -175,8 +175,12 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
           askAbout: normalizedAskAbout,
         }
       : null;
-    onSubmit({ ...values, agentBrief: brief });
-    setSuccess(true);
+    try {
+      await onSubmit({ ...values, agentBrief: brief });
+      setSuccess(true);
+    } catch {
+      setSuccess(false);
+    }
   }
 
   function setBrief<K extends keyof AgentBrief>(key: K, value: AgentBrief[K]) {
