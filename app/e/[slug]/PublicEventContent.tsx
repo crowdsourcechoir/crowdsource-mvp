@@ -379,18 +379,18 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       />
       <div className="absolute inset-0 bg-black/20" aria-hidden />
 
-      <div className="relative mx-auto max-w-3xl px-4 py-6 text-center sm:px-5 sm:py-10">
+      <div className={`relative mx-auto max-w-3xl px-4 text-center sm:px-5 ${chatStarted ? "py-4 sm:py-6" : "py-6 sm:py-10"}`}>
         <a
           href="https://crowdsourcechoir.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="mb-8 block w-fit opacity-95 mx-auto"
+          className={`block w-fit opacity-95 mx-auto ${chatStarted ? "mb-4 sm:mb-5" : "mb-8"}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Crowdsource Choir" className="h-16 w-auto sm:h-20" />
+          <img src="/logo.png" alt="Crowdsource Choir" className={`${chatStarted ? "h-12 sm:h-16" : "h-16 sm:h-20"} w-auto`} />
         </a>
 
-        {event.heroImage && (
+        {!chatStarted && event.heroImage && (
           <div className="mx-auto mb-6 w-full max-w-64 sm:mb-8 sm:max-w-72">
             <div className="relative aspect-square overflow-hidden rounded-none">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -403,14 +403,14 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
 
         <div className="space-y-6">
           <div className="mx-auto w-full max-w-2xl">
-            <h1 className={`${bebasNeue.className} text-5xl leading-none tracking-wide text-[var(--crowdsource-accent)] sm:text-6xl`}>
+            <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "text-4xl sm:text-5xl" : "text-5xl sm:text-6xl"}`}>
               {event.title}
             </h1>
             <a
               href={googleMapsSearchUrl(event.venue, event.address)}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 block font-mono text-base text-gray-100 hover:text-white hover:underline"
+              className={`block font-mono text-base text-gray-100 hover:text-white hover:underline ${chatStarted ? "mt-2" : "mt-3"}`}
             >
               <span className="text-[var(--crowdsource-accent)]">{formatDateShort(event.date)} · </span>
               <span>{event.venue}</span>
@@ -418,7 +418,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
             </a>
           </div>
 
-          <div className="pt-2">
+          <div className={chatStarted ? "pt-0" : "pt-2"}>
             {/* Chatbot opens with a prompt; "Let's do it." starts the interview */}
             <>
                 {!chatStarted ? (
@@ -495,7 +495,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                       </div>
                     )}
                     {!chatFinished && (
-                      <form onSubmit={handleChatSubmit} className="mx-auto mt-6 w-full max-w-lg">
+                      <form onSubmit={handleChatSubmit} className={`mx-auto w-full max-w-lg ${chatStarted ? "mt-4" : "mt-6"}`}>
                         <div className="flex w-full gap-2 rounded-none bg-black/20 px-3 py-2.5 backdrop-blur-sm">
                           <textarea
                             ref={responseInputRef}
