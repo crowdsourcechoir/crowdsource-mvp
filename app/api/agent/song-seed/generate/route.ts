@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import OpenAI from "openai";
 import { localGetEventTranscripts } from "@/lib/local-agent-interview-store";
 import { localUpsertSongSeedForEvent } from "@/lib/local-song-seeds-store";
+import {
+  extractSunoPromptsFromRow,
+  mergeSourceMappingWithSunoBackup,
+  stripSunoBackupFromSourceMapping,
+} from "@/lib/song-seed-suno";
 
 export const maxDuration = 60;
 
@@ -38,8 +43,8 @@ function rowToSongSeed(row: Record<string, unknown>) {
     singableHooks: Array.isArray(row.singable_hooks) ? row.singable_hooks : [],
     shoutouts: Array.isArray(row.shoutouts) ? row.shoutouts : [],
     emotionalToneSummary: (row.emotional_tone_summary as string) ?? "",
-    sourceMapping: Array.isArray(row.source_mapping) ? row.source_mapping : [],
-    sunoPrompts: Array.isArray(row.suno_prompts) ? row.suno_prompts : [],
+    sourceMapping: stripSunoBackupFromSourceMapping(row.source_mapping),
+    sunoPrompts: extractSunoPromptsFromRow(row),
     createdAt: row.created_at,
   };
 }
@@ -103,6 +108,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "AI returned invalid JSON for Song Seed." }, { status: 500 });
       }
 
+      const sunoLocal = Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [];
       const payload = {
         id: "local",
         eventId,
@@ -111,13 +117,16 @@ export async function POST(request: Request) {
         singableHooks: parsed.singableHooks ?? [],
         shoutouts: parsed.shoutouts ?? [],
         emotionalToneSummary: parsed.emotionalToneSummary ?? "",
-        sourceMapping: Array.isArray(parsed.sourceMapping) ? parsed.sourceMapping : [],
-        sunoPrompts: Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [],
+        sourceMapping: mergeSourceMappingWithSunoBackup(parsed.sourceMapping, sunoLocal),
+        sunoPrompts: sunoLocal,
         createdAt: new Date().toISOString(),
       };
 
       await localUpsertSongSeedForEvent(eventId, payload);
-      return NextResponse.json(payload);
+      return NextResponse.json({
+        ...payload,
+        sourceMapping: stripSunoBackupFromSourceMapping(payload.sourceMapping),
+      });
     } catch (err) {
       console.error("Local song seed generate error:", err);
       return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -220,6 +229,8 @@ export async function POST(request: Request) {
     }
 
     if (isLocalEvent) {
+      const sunoEarly = Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [];
+      const smMerged = mergeSourceMappingWithSunoBackup(parsed.sourceMapping, sunoEarly);
       return NextResponse.json({
         id: "local",
         eventId,
@@ -228,13 +239,14 @@ export async function POST(request: Request) {
         singableHooks: parsed.singableHooks ?? [],
         shoutouts: parsed.shoutouts ?? [],
         emotionalToneSummary: parsed.emotionalToneSummary ?? "",
-        sourceMapping: parsed.sourceMapping ?? [],
-        sunoPrompts: Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [],
+        sourceMapping: stripSunoBackupFromSourceMapping(smMerged),
+        sunoPrompts: sunoEarly,
         createdAt: new Date().toISOString(),
       });
     }
 
     const suno = Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [];
+    const sourceMappingMerged = mergeSourceMappingWithSunoBackup(parsed.sourceMapping, suno);
     const baseRow = {
       event_id: eventId,
       top_themes: parsed.topThemes ?? [],
@@ -242,31 +254,26 @@ export async function POST(request: Request) {
       singable_hooks: parsed.singableHooks ?? [],
       shoutouts: parsed.shoutouts ?? [],
       emotional_tone_summary: parsed.emotionalToneSummary ?? "",
-      source_mapping: parsed.sourceMapping ?? [],
+      source_mapping: sourceMappingMerged,
     };
 
     let inserted: Record<string, unknown> | null = null;
     let eInsert: { message?: string } | null = null;
 
+    // Primary: dedicated column + redundant copy inside source_mapping.
     ({ data: inserted, error: eInsert } = await supabaseAdmin
       .from("song_seeds")
       .insert({ ...baseRow, suno_prompts: suno })
       .select()
       .single());
 
-    // Older DBs may not have run the suno_prompts migration yet.
+    // Fallback: column missing — prompts still persist in source_mapping backup entry.
     if (eInsert && /suno_prompts|schema cache/i.test(eInsert.message ?? "")) {
       ({ data: inserted, error: eInsert } = await supabaseAdmin
         .from("song_seeds")
         .insert(baseRow)
         .select()
         .single());
-      if (inserted && suno.length > 0) {
-        return NextResponse.json({
-          ...rowToSongSeed(inserted),
-          sunoPrompts: suno,
-        });
-      }
     }
 
     if (eInsert || !inserted) {

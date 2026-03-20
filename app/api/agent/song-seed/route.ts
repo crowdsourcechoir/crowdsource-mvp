@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { localGetLatestSongSeedForEvent } from "@/lib/local-song-seeds-store";
+import { localGetLatestSongSeedForEvent, type LocalSongSeedPayload } from "@/lib/local-song-seeds-store";
+import { extractSunoPromptsFromRow, stripSunoBackupFromSourceMapping } from "@/lib/song-seed-suno";
+
+function localSeedToDbRow(seed: LocalSongSeedPayload): Record<string, unknown> {
+  return {
+    id: seed.id,
+    event_id: seed.eventId,
+    top_themes: seed.topThemes,
+    notable_lines: seed.notableLines,
+    singable_hooks: seed.singableHooks,
+    shoutouts: seed.shoutouts,
+    emotional_tone_summary: seed.emotionalToneSummary,
+    source_mapping: seed.sourceMapping,
+    suno_prompts: seed.sunoPrompts,
+    created_at: seed.createdAt,
+  };
+}
 
 function rowToSongSeed(row: Record<string, unknown>) {
   return {
@@ -11,8 +27,8 @@ function rowToSongSeed(row: Record<string, unknown>) {
     singableHooks: Array.isArray(row.singable_hooks) ? row.singable_hooks : [],
     shoutouts: Array.isArray(row.shoutouts) ? row.shoutouts : [],
     emotionalToneSummary: (row.emotional_tone_summary as string) ?? "",
-    sourceMapping: Array.isArray(row.source_mapping) ? row.source_mapping : [],
-    sunoPrompts: Array.isArray(row.suno_prompts) ? row.suno_prompts : [],
+    sourceMapping: stripSunoBackupFromSourceMapping(row.source_mapping),
+    sunoPrompts: extractSunoPromptsFromRow(row),
     createdAt: row.created_at,
   };
 }
@@ -28,7 +44,7 @@ export async function GET(request: Request) {
     }
     const seed = await localGetLatestSongSeedForEvent(eventId);
     if (!seed) return NextResponse.json(null, { status: 404 });
-    return NextResponse.json(seed);
+    return NextResponse.json(rowToSongSeed(localSeedToDbRow(seed)));
   }
 
   if (!supabaseAdmin) {
