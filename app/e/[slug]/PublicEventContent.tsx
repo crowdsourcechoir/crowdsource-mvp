@@ -397,8 +397,8 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
           </div>
         )}
 
-        <div className="space-y-6">
-          <div className="mx-auto w-full max-w-2xl">
+        <div className={chatStarted ? "flex min-h-[calc(100dvh-150px)] flex-col" : "space-y-6"}>
+          <div className={`mx-auto w-full max-w-2xl ${chatStarted ? "mb-4" : ""}`}>
             <h1 className={`${bebasNeue.className} leading-none tracking-wide text-[var(--crowdsource-accent)] ${chatStarted ? "mt-1 text-4xl sm:text-5xl" : "mt-2 text-5xl sm:text-6xl"}`}>
               {event.title}
             </h1>
@@ -411,7 +411,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
             )}
           </div>
 
-          <div className={chatStarted ? "flex flex-1 items-center pt-0" : "pt-2"}>
+          <div className={chatStarted ? "flex flex-1 items-center justify-center pt-0" : "pt-2"}>
             {/* Chatbot opens with a prompt; "Let's do it." starts the interview */}
             <div className="w-full">
                 {!chatStarted ? (
