@@ -369,7 +369,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden text-gray-100 pb-[env(safe-area-inset-bottom)]"
+      className="relative min-h-[100dvh] overflow-hidden text-gray-100 pb-[env(safe-area-inset-bottom)]"
       style={{ ["--crowdsource-accent" as string]: "#CFFF81" }}
     >
       <div
@@ -521,9 +521,9 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                           <button
                             type="submit"
                             disabled={sending || (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion && !isNameQuestion)}
-                            className="min-h-[44px] shrink-0 px-2 py-2 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:opacity-85 disabled:text-[var(--crowdsource-accent)]"
+                            className="min-h-[44px] min-w-[84px] shrink-0 px-2 py-2 text-center font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:opacity-85 disabled:text-[var(--crowdsource-accent)]"
                           >
-                            {sending ? "…" : "Submit"}
+                            Submit
                           </button>
                         </div>
                         {isVoiceVideoQuestion && (
