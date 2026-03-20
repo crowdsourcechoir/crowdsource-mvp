@@ -453,7 +453,11 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                         ) : sending && !chatFinished ? (
                           <span className="text-gray-500">…</span>
                         ) : displayMessage ? (
-                          <span className="inline">{displayMessage}</span>
+                          <TypewriterText
+                            text={displayMessage}
+                            speed={16}
+                            className="inline"
+                          />
                         ) : (
                           <span className="text-gray-500">…</span>
                         )}
