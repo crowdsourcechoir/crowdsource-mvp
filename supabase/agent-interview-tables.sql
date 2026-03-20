@@ -110,3 +110,9 @@ create table if not exists public.song_seeds (
 comment on column public.song_seeds.source_mapping is 'Array of { participant_id?, turn_id?, line_index?, field } for attribution';
 
 create index if not exists idx_song_seeds_event on public.song_seeds(event_id);
+
+-- Suno-ready prompts (safe if already applied — see song-seeds-suno-prompts.sql)
+alter table public.song_seeds
+  add column if not exists suno_prompts jsonb not null default '[]';
+
+comment on column public.song_seeds.suno_prompts is 'Array of 3 ready-to-paste prompts for Suno song engine, generated from this seed';

@@ -51,6 +51,7 @@ export async function GET(request: Request) {
       .select("id, participant_id")
       .eq("event_id", eventId);
     if (eConvs || !Array.isArray(convs)) {
+      console.error("[interview-submissions] agent_conversations query failed:", eConvs?.message);
       return NextResponse.json({ items: [] });
     }
     if (convs.length === 0) return NextResponse.json({ items: [] });
@@ -70,7 +71,10 @@ export async function GET(request: Request) {
       .from("agent_conversation_turns")
       .select("conversation_id, turn_index, role, content, created_at, audio_url, video_url")
       .in("conversation_id", conversationIds);
-    if (eTurns || !Array.isArray(turns)) return NextResponse.json({ items: [] });
+    if (eTurns || !Array.isArray(turns)) {
+      console.error("[interview-submissions] agent_conversation_turns query failed:", eTurns?.message);
+      return NextResponse.json({ items: [] });
+    }
 
     const turnsByConv = new Map<string, any[]>();
     for (const t of turns) {

@@ -23,7 +23,12 @@ import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
 type InterviewSubmissionItem = {
   participantName: string;
   conversationId: string;
-  answers: Array<{ createdAt: string; content: string }>;
+  answers: Array<{
+    createdAt: string;
+    content: string;
+    audioUrl?: string | null;
+    videoUrl?: string | null;
+  }>;
 };
 
 function formatDate(iso: string): string {
@@ -585,7 +590,13 @@ export default function EventDetailPage() {
 
       <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-white">Submissions</h2>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold text-white">Submissions</h2>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              Agent interviews are saved on the server and appear under &quot;Agent interviews&quot; below. Older &quot;browser-stored&quot;
+              clips are legacy and only exist on the device that recorded them.
+            </p>
+          </div>
           {submissions.length > 0 && (
             <>
             <div className="mb-3 w-full">
@@ -726,8 +737,9 @@ export default function EventDetailPage() {
             </>
           )}
         </div>
-        {submissions.length === 0 && event.agentThemeId ? (
-          <div className="space-y-4">
+        {event.agentThemeId && (
+          <div className="mb-8 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-300">Agent interviews (server)</h3>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -740,7 +752,7 @@ export default function EventDetailPage() {
             </div>
             {loadingAgentInterviewSubmissions && <p className="text-gray-500">Loading interview answers…</p>}
             {!loadingAgentInterviewSubmissions && agentInterviewSubmissions.length === 0 && (
-              <p className="text-gray-500">No interview answers yet.</p>
+              <p className="text-gray-500">No agent interview answers yet.</p>
             )}
             {agentInterviewSubmissions.length > 0 && (
               <ul className="space-y-6">
@@ -762,7 +774,29 @@ export default function EventDetailPage() {
                             className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
                           >
                             <p className="text-xs text-gray-500">Answer {idx + 1}</p>
-                            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-200">{a.content}</p>
+                            {a.content?.trim() ? (
+                              <p className="mt-1 whitespace-pre-wrap text-sm text-gray-200">{a.content}</p>
+                            ) : null}
+                            {a.audioUrl ? (
+                              <div className="mt-2 max-w-md">
+                                <p className="mb-1 text-xs text-gray-500">Audio</p>
+                                <audio src={a.audioUrl} controls className="h-9 w-full" preload="metadata" />
+                              </div>
+                            ) : null}
+                            {a.videoUrl ? (
+                              <div className="mt-2 max-w-md">
+                                <p className="mb-1 text-xs text-gray-500">Video</p>
+                                <div className="max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
+                                  <video
+                                    src={a.videoUrl}
+                                    controls
+                                    playsInline
+                                    muted
+                                    className="min-h-[120px] w-full object-contain"
+                                  />
+                                </div>
+                              </div>
+                            ) : null}
                           </li>
                         ))}
                       </ul>
@@ -772,8 +806,12 @@ export default function EventDetailPage() {
               </ul>
             )}
           </div>
-        ) : (
-          <ul className="space-y-6">
+        )}
+
+        {submissions.length > 0 && (
+          <>
+            <h3 className="mb-3 text-sm font-semibold text-gray-300">Browser-stored (legacy)</h3>
+            <ul className="space-y-6">
             {submissions.map((sub) => (
               <li
                 key={sub.id}
@@ -898,6 +936,11 @@ export default function EventDetailPage() {
               </li>
             ))}
           </ul>
+          </>
+        )}
+
+        {!event.agentThemeId && submissions.length === 0 && (
+          <p className="text-sm text-gray-500">No submissions yet.</p>
         )}
       </section>
     </div>

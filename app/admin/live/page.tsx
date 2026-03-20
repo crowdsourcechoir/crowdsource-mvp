@@ -4,17 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getAllEvents } from "@/data/eventsClient";
-import { createSession, listSessions, type PromptGameSession } from "@/data/livePromptGame";
+import { createSession } from "@/data/livePromptGame";
 import type { Event } from "@/data/mockEvents";
 
 type LiveMode = "game" | "fishbowl" | "signal";
-
-function getModeFromSessionName(name: string | null | undefined): LiveMode {
-  const n = (name ?? "").toLowerCase();
-  if (n.includes("fish")) return "fishbowl";
-  if (n.includes("signal") || n.includes("megaphone") || n.includes("loud")) return "signal";
-  return "game";
-}
 
 function ModeIcon({ mode }: { mode: LiveMode }) {
   const common = "h-7 w-7";
@@ -117,9 +110,7 @@ export default function LivePage() {
 
   const [mode, setMode] = useState<LiveMode>("game");
   const [events, setEvents] = useState<Event[]>([]);
-  const [sessions, setSessions] = useState<PromptGameSession[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
-  const [loadingSessions, setLoadingSessions] = useState(true);
   const [launching, setLaunching] = useState(false);
 
   const eventIdParam = searchParams.get("eventId");
@@ -140,13 +131,6 @@ export default function LivePage() {
       .finally(() => setLoadingEvents(false));
   }, []);
 
-  useEffect(() => {
-    listSessions()
-      .then((list) => setSessions(Array.isArray(list) ? list : []))
-      .catch(() => setSessions([]))
-      .finally(() => setLoadingSessions(false));
-  }, []);
-
   const assignedEvent = useMemo(() => events.find((e) => e.id === assignedEventId) ?? null, [events, assignedEventId]);
 
   async function handleLaunchSession() {
@@ -165,11 +149,6 @@ export default function LivePage() {
       setLaunching(false);
     }
   }
-
-  const recentSessions = useMemo(() => {
-    const list = sessions.slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-    return list.slice(0, 6);
-  }, [sessions]);
 
   return (
     <div className="min-h-screen bg-[#0c0c0e] text-white">
@@ -254,47 +233,6 @@ export default function LivePage() {
             View Past Sessions &gt;
           </Link>
         </div>
-      </section>
-
-      <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-5 sm:p-6">
-        <h2 className="text-lg font-bold text-white sm:text-xl">Recent Sessions</h2>
-
-        {loadingSessions ? (
-          <p className="mt-3 text-sm text-gray-500">Loading…</p>
-        ) : recentSessions.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">No sessions yet. Launch one above.</p>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {recentSessions.map((s) => {
-              const sMode = getModeFromSessionName(s.name);
-              const linkedEvent = events.find((e) => e.id === s.linked_event_id) ?? null;
-              const label = linkedEvent ? `Event: ${linkedEvent.title}` : "Standalone Session";
-              return (
-                <li key={s.id}>
-                  <Link
-                    href={`/admin/live-prompt-game/sessions/${s.id}`}
-                    className="block rounded-xl border border-gray-700/60 bg-[#0c0c0e] px-4 py-3 transition hover:border-gray-600"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate font-semibold text-white">{s.name}</span>
-                          <span className="rounded-full border border-gray-600 bg-gray-800 px-2.5 py-1 text-xs font-medium text-gray-200">
-                            {sMode === "game" ? "Game" : sMode === "fishbowl" ? "Fishbowl" : "Signal"}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-gray-500">{label}</div>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(s.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </section>
     </div>
   );

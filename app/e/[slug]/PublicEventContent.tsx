@@ -448,16 +448,12 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                       }
                     >
                       <p className="mx-auto max-w-xl font-mono text-base leading-snug text-gray-200 sm:text-lg">
-                        {sending && !currentMessage && !displayMessage ? (
-                          <span className="text-gray-500">…</span>
-                        ) : chatFinished ? (
+                        {chatFinished ? (
                           "Thanks! Your answers will help shape the song we're making."
+                        ) : sending && !chatFinished ? (
+                          <span className="text-gray-500">…</span>
                         ) : displayMessage ? (
-                          <TypewriterText
-                            text={displayMessage}
-                            speed={16}
-                            className="inline"
-                          />
+                          <span className="inline">{displayMessage}</span>
                         ) : (
                           <span className="text-gray-500">…</span>
                         )}
@@ -476,7 +472,11 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                       </div>
                     )}
                     {!chatFinished && (
-                      <form onSubmit={handleChatSubmit} className={`mx-auto w-full max-w-lg ${chatStarted ? "mt-4" : "mt-6"}`}>
+                      <form
+                        onSubmit={handleChatSubmit}
+                        aria-busy={sending}
+                        className={`mx-auto w-full max-w-lg ${chatStarted ? "mt-4" : "mt-6"}`}
+                      >
                         <div className="flex w-full gap-2 rounded-none bg-black/20 px-3 py-2.5 backdrop-blur-sm">
                           <textarea
                             ref={responseInputRef}

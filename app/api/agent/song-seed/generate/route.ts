@@ -234,20 +234,41 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: inserted, error: eInsert } = await supabaseAdmin
+    const suno = Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [];
+    const baseRow = {
+      event_id: eventId,
+      top_themes: parsed.topThemes ?? [],
+      notable_lines: parsed.notableLines ?? [],
+      singable_hooks: parsed.singableHooks ?? [],
+      shoutouts: parsed.shoutouts ?? [],
+      emotional_tone_summary: parsed.emotionalToneSummary ?? "",
+      source_mapping: parsed.sourceMapping ?? [],
+    };
+
+    let inserted: Record<string, unknown> | null = null;
+    let eInsert: { message?: string } | null = null;
+
+    ({ data: inserted, error: eInsert } = await supabaseAdmin
       .from("song_seeds")
-      .insert({
-        event_id: eventId,
-        top_themes: parsed.topThemes ?? [],
-        notable_lines: parsed.notableLines ?? [],
-        singable_hooks: parsed.singableHooks ?? [],
-        shoutouts: parsed.shoutouts ?? [],
-        emotional_tone_summary: parsed.emotionalToneSummary ?? "",
-        source_mapping: parsed.sourceMapping ?? [],
-        suno_prompts: Array.isArray(parsed.sunoPrompts) ? parsed.sunoPrompts.slice(0, 3) : [],
-      })
+      .insert({ ...baseRow, suno_prompts: suno })
       .select()
-      .single();
+      .single());
+
+    // Older DBs may not have run the suno_prompts migration yet.
+    if (eInsert && /suno_prompts|schema cache/i.test(eInsert.message ?? "")) {
+      ({ data: inserted, error: eInsert } = await supabaseAdmin
+        .from("song_seeds")
+        .insert(baseRow)
+        .select()
+        .single());
+      if (inserted && suno.length > 0) {
+        return NextResponse.json({
+          ...rowToSongSeed(inserted),
+          sunoPrompts: suno,
+        });
+      }
+    }
+
     if (eInsert || !inserted) {
       return NextResponse.json({ error: eInsert?.message ?? "Failed to save Song Seed." }, { status: 400 });
     }
