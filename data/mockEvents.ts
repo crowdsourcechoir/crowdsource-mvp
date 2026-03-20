@@ -1,3 +1,5 @@
+import type { AgentBrief } from "./agentInterview";
+
 export type Event = {
   id: string;
   slug: string;
@@ -9,6 +11,8 @@ export type Event = {
   address: string;
   prompt: string;
   heroImage: string;
+  agentThemeId?: string | null;
+  agentBrief?: AgentBrief | null;
 };
 
 export const mockEvents: Event[] = [

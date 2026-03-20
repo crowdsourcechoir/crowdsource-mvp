@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "lsof -ti:3000 | xargs kill -9 2>/dev/null; next dev -p 3000",
-    "fresh": "rm -rf .next && npm run build && next dev -p 3000",
-    "reboot": "rm -rf node_modules .next && npm install && next dev -p 3000",
+    "dev": "lsof -ti:3000 | xargs kill -9 2>/dev/null; sleep 2; rm -rf .next-dev && WATCHPACK_POLLING=true WATCHPACK_POLLING_INTERVAL=1000 next dev -p 3000",
+    "dev:webpack": "lsof -ti:3000 | xargs kill -9 2>/dev/null; sleep 2; rm -rf .next-dev && WATCHPACK_POLLING=true WATCHPACK_POLLING_INTERVAL=1000 next dev -p 3000",
+    "dev:clean": "lsof -ti:3000 | xargs kill -9 2>/dev/null; sleep 1; rm -rf .next-dev && WATCHPACK_POLLING=true WATCHPACK_POLLING_INTERVAL=1000 next dev -p 3000",
+    "dev:turbo": "lsof -ti:3000 | xargs kill -9 2>/dev/null; sleep 2; rm -rf .next-dev && WATCHPACK_POLLING=true WATCHPACK_POLLING_INTERVAL=1000 next dev --turbo -p 3000",
+    "fresh": "rm -rf .next && npm run build && rm -rf .next-dev && WATCHPACK_POLLING=true WATCHPACK_POLLING_INTERVAL=1000 next dev -p 3000",
+    "reboot": "rm -rf node_modules .next .next-dev && npm install && next dev -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -14,6 +17,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@supabase/supabase-js": "^2.97.0",
+    "iceberg-js": "^0.8.1",
     "jszip": "^3.10.1",
     "next": "14.2.35",
     "openai": "^6.22.0",

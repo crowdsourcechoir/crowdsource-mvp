@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { getAllEvents } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
-import EventCardTimeline from "@/components/EventCardTimeline";
-import { formatTimelineDate } from "@/lib/formatDate";
+import AdminEventCard from "@/components/AdminEventCard";
+import { getAgentThemes, type AgentTheme } from "@/data/agentInterview";
 
 function isUpcoming(event: Event): boolean {
   const eventDate = new Date(`${event.date}T23:59:59`);
@@ -13,10 +14,15 @@ function isUpcoming(event: Event): boolean {
 }
 
 export default function AdminEventsList() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
   const [baseUrl, setBaseUrl] = useState("https://crowdsource-mvp.vercel.app");
+  const [themes, setThemes] = useState<AgentTheme[]>([]);
+  const showCreatedBanner = searchParams.get("created") === "1";
   useEffect(() => {
     if (typeof window !== "undefined") setBaseUrl(window.location.origin);
   }, []);
@@ -32,6 +38,21 @@ export default function AdminEventsList() {
   useEffect(() => {
     refreshEvents();
   }, []);
+
+  useEffect(() => {
+    getAgentThemes()
+      .then(setThemes)
+      .catch(() => setThemes([]));
+  }, []);
+
+  /* Refetch when user navigates to this page so list stays in sync with local store */
+  useEffect(() => {
+    if (pathname === "/admin/events") refreshEvents();
+  }, [pathname]);
+
+  function clearCreatedParam() {
+    router.replace("/admin/events", { scroll: false });
+  }
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -52,21 +73,25 @@ export default function AdminEventsList() {
 
   return (
     <div className="min-h-screen bg-[#0c0c0e] text-white">
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+      {showCreatedBanner && (
+        <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-green-700/60 bg-green-900/20 px-4 py-3 text-sm text-green-200">
+          <span>Event created. Click it below to open.</span>
+          <button type="button" onClick={clearCreatedParam} className="shrink-0 font-medium hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold text-white sm:text-3xl">Events</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/admin/events/new"
-            className="min-h-[44px] min-w-[44px] text-sm text-gray-500 hover:text-gray-300 sm:min-h-0 sm:min-w-0"
-          >
-            create
-          </Link>
-          <div className="flex rounded-lg border border-gray-700 bg-black/40 p-0.5">
+        <p className="mt-2 text-sm text-gray-400">Manage public events for crowd-driven choir participation</p>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex rounded-xl border border-gray-700 bg-black/40 p-0.5">
             <button
               type="button"
               onClick={() => setFilter("upcoming")}
-              className={`min-h-[44px] rounded-md px-4 py-2 text-sm font-medium transition sm:min-h-0 ${
-                filter === "upcoming" ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-300"
+              className={`min-h-[44px] rounded-lg px-5 py-2 text-sm font-medium transition ${
+                filter === "upcoming" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
               }`}
             >
               Upcoming
@@ -74,46 +99,38 @@ export default function AdminEventsList() {
             <button
               type="button"
               onClick={() => setFilter("past")}
-              className={`min-h-[44px] rounded-md px-4 py-2 text-sm font-medium transition sm:min-h-0 ${
-                filter === "past" ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-300"
+              className={`min-h-[44px] rounded-lg px-5 py-2 text-sm font-medium transition ${
+                filter === "past" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
               }`}
             >
               Past
             </button>
           </div>
+          <Link
+            href="/admin/events/new"
+            className="inline-flex min-h-[48px] items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200"
+          >
+            + Create Event
+          </Link>
         </div>
       </div>
 
-      <div className="relative">
-        {filtered.length > 0 && (
-          <div
-            className="absolute left-[5.5rem] top-0 bottom-0 w-0 border-l border-dashed border-gray-700 sm:left-[7.5rem]"
-            aria-hidden
-          />
-        )}
-        <ul className="space-y-4 sm:space-y-5">
-          {filtered.map((event) => {
-            const { short, dayOfWeek } = formatTimelineDate(event.date);
-            return (
-              <li key={event.id} className="relative flex items-start gap-3 sm:gap-4">
-                <div className="w-20 shrink-0 pt-5 text-left sm:w-24">
-                  <span className="block text-sm font-bold text-white">{short}</span>
-                  <span className="block text-xs text-gray-500 sm:text-sm">{dayOfWeek}</span>
-                </div>
-                <div className="relative z-10 w-4 shrink-0">
-                  <div
-                    className="absolute left-1/2 top-6 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gray-600 bg-[#0c0c0e]"
-                    aria-hidden
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <EventCardTimeline event={event} baseUrl={baseUrl} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <ul className="space-y-4 sm:space-y-5">
+        {filtered.map((event) => {
+          const theme = event.agentThemeId ? themes.find((t) => t.id === event.agentThemeId) : null;
+          const badgeLabel =
+            theme?.key === "birthday"
+              ? "Birthday"
+              : theme?.key === "fundraiser"
+                ? "Fundraiser"
+                : "Other";
+          return (
+            <li key={event.id}>
+              <AdminEventCard event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
+            </li>
+          );
+        })}
+      </ul>
 
       {!loading && filtered.length === 0 && (
         <p className="mt-12 text-center text-gray-500">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getEventById } from "@/data/eventsClient";
 import { googleMapsSearchUrl } from "@/components/AddressMap";
@@ -10,10 +10,21 @@ import {
   updateSubmissionTranscript,
   type StoredSubmission,
 } from "@/data/submissionsClient";
+import {
+  getSongSeedForEvent,
+  generateSongSeed,
+  type SongSeed,
+} from "@/data/agentInterview";
 import type { Event } from "@/data/mockEvents";
 import JSZip from "jszip";
 import { dataUrlToWavBlob } from "@/lib/audioToWav";
 import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
+
+type InterviewSubmissionItem = {
+  participantName: string;
+  conversationId: string;
+  answers: Array<{ createdAt: string; content: string }>;
+};
 
 function formatDate(iso: string): string {
   try {
@@ -132,6 +143,11 @@ export default function EventDetailPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [transcribeAllStatus, setTranscribeAllStatus] = useState<string | null>(null);
   const [summaryScope, setSummaryScope] = useState("");
+  const [songSeed, setSongSeed] = useState<SongSeed | null>(null);
+  const [loadingSongSeed, setLoadingSongSeed] = useState(false);
+  const [songSeedError, setSongSeedError] = useState<string | null>(null);
+  const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
+  const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
 
   useEffect(() => {
     getEventById(eventId)
@@ -139,11 +155,43 @@ export default function EventDetailPage() {
         if (e) {
           setEvent(e);
           getSubmissionsForEvent(e.slug).then(setSubmissions);
+          if (e.agentThemeId) getSongSeedForEvent(e.id).then(setSongSeed).catch(() => setSongSeed(null));
+
+          if (e.agentThemeId) {
+            setLoadingAgentInterviewSubmissions(true);
+            fetch(`/api/agent/interview-submissions?eventId=${encodeURIComponent(e.id)}`)
+              .then(async (r) => {
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error((data as any)?.error || "Failed to load");
+                return data;
+              })
+              .then((data) => {
+                const items = (data as any)?.items;
+                setAgentInterviewSubmissions(Array.isArray(items) ? items : []);
+              })
+              .catch(() => setAgentInterviewSubmissions([]))
+              .finally(() => setLoadingAgentInterviewSubmissions(false));
+          } else {
+            setAgentInterviewSubmissions([]);
+          }
         }
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, [eventId]);
+
+  const agentInterviewCopyText = useMemo(() => {
+    if (!agentInterviewSubmissions.length) return "";
+    const parts: string[] = [];
+    agentInterviewSubmissions.forEach((item) => {
+      parts.push(`Participant: ${item.participantName}`);
+      item.answers.forEach((a, idx) => {
+        parts.push(`- (${idx + 1}) ${a.content}`);
+      });
+      parts.push("");
+    });
+    return parts.join("\n").trim();
+  }, [agentInterviewSubmissions]);
 
   if (!loaded) {
     return (
@@ -157,6 +205,9 @@ export default function EventDetailPage() {
     return (
       <div className="mx-auto max-w-2xl rounded-xl border border-gray-700 bg-[#18181b] p-6">
         <p className="text-gray-400">Event not found.</p>
+        <p className="mt-2 text-sm text-gray-500">
+          With local events (USE_LOCAL_EVENTS=true), events live in the dev server&apos;s memory. If you just created this event, run only one dev server (stop any other terminal running <code className="rounded bg-gray-800 px-1">npm run dev</code>) and try creating again.
+        </p>
         <button
           type="button"
           onClick={() => router.push("/admin/events")}
@@ -396,6 +447,142 @@ export default function EventDetailPage() {
         </section>
       )}
 
+      {event.agentThemeId && (
+        <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white">Song Seed (from Agent Interviews)</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={loadingSongSeed}
+                onClick={async () => {
+                  setLoadingSongSeed(true);
+                  setSongSeedError(null);
+                  try {
+                    const seed = await generateSongSeed(event.id);
+                    setSongSeed(seed);
+                  } catch (err) {
+                    setSongSeedError(err instanceof Error ? err.message : "Generate failed");
+                  } finally {
+                    setLoadingSongSeed(false);
+                  }
+                }}
+                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
+              >
+                {loadingSongSeed ? "Generating…" : "Generate Song Seed"}
+              </button>
+            </div>
+          </div>
+          {songSeedError && (
+            <p className="mb-4 rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-sm text-red-200">
+              {songSeedError}
+            </p>
+          )}
+          {songSeed && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Top themes</h3>
+                <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                  <p className="whitespace-pre-wrap text-sm text-gray-200">
+                    {songSeed.topThemes.join(" · ")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(songSeed.topThemes.join("\n"))}
+                    className="mt-2 text-xs text-amber-400 hover:underline"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Notable lines</h3>
+                <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                  <ul className="list-inside list-disc space-y-1 text-sm text-gray-200">
+                    {songSeed.notableLines.map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(songSeed.notableLines.join("\n"))}
+                    className="mt-2 text-xs text-amber-400 hover:underline"
+                  >
+                    Copy all
+                  </button>
+                </div>
+              </div>
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Singable hooks</h3>
+                <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                  <p className="whitespace-pre-wrap text-sm text-gray-200">
+                    {songSeed.singableHooks.join("\n")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(songSeed.singableHooks.join("\n"))}
+                    className="mt-2 text-xs text-amber-400 hover:underline"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Shoutouts</h3>
+                <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                  <p className="text-sm text-gray-200">{songSeed.shoutouts.join(", ")}</p>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(songSeed.shoutouts.join(", "))}
+                    className="mt-2 text-xs text-amber-400 hover:underline"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              {songSeed.emotionalToneSummary && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-300">Emotional tone</h3>
+                  <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                    <p className="text-sm text-gray-200">{songSeed.emotionalToneSummary}</p>
+                  </div>
+                </div>
+              )}
+              {songSeed.sunoPrompts && songSeed.sunoPrompts.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-300">Suno-ready song prompts</h3>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Copy any prompt below and paste into the Suno song engine. Each is a different angle for this event.
+                  </p>
+                  <div className="space-y-4">
+                    {songSeed.sunoPrompts.map((prompt, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4"
+                      >
+                        <p className="whitespace-pre-wrap text-sm text-gray-200">{prompt}</p>
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(prompt)}
+                          className="mt-2 text-xs text-amber-400 hover:underline"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!songSeed && !loadingSongSeed && !songSeedError && (
+            <p className="text-sm text-gray-500">
+              Generate a Song Seed from agent interview transcripts. Participants must have completed interviews first.
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Submissions</h2>
@@ -539,8 +726,52 @@ export default function EventDetailPage() {
             </>
           )}
         </div>
-        {submissions.length === 0 ? (
-          <p className="text-gray-500">No submissions yet.</p>
+        {submissions.length === 0 && event.agentThemeId ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={loadingAgentInterviewSubmissions || !agentInterviewCopyText}
+                onClick={() => navigator.clipboard.writeText(agentInterviewCopyText)}
+                className="rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-50"
+              >
+                {loadingAgentInterviewSubmissions ? "Preparing…" : "Copy all interview answers"}
+              </button>
+            </div>
+            {loadingAgentInterviewSubmissions && <p className="text-gray-500">Loading interview answers…</p>}
+            {!loadingAgentInterviewSubmissions && agentInterviewSubmissions.length === 0 && (
+              <p className="text-gray-500">No interview answers yet.</p>
+            )}
+            {agentInterviewSubmissions.length > 0 && (
+              <ul className="space-y-6">
+                {agentInterviewSubmissions.map((item) => (
+                  <li key={item.conversationId} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm text-gray-400">{item.participantName}</span>
+                      <span className="text-xs text-gray-500">
+                        Conversation {item.conversationId.slice(0, 6)}…
+                      </span>
+                    </div>
+                    {item.answers.length === 0 ? (
+                      <p className="text-sm text-gray-500">No answers recorded.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {item.answers.map((a, idx) => (
+                          <li
+                            key={`${item.conversationId}_${a.createdAt}_${idx}`}
+                            className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
+                          >
+                            <p className="text-xs text-gray-500">Answer {idx + 1}</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-200">{a.content}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : (
           <ul className="space-y-6">
             {submissions.map((sub) => (

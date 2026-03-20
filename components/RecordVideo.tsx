@@ -57,8 +57,9 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         ? "video/webm;codecs=vp9,opus"
         : "video/webm";
     const recorder = new MediaRecorder(stream, {
-      videoBitsPerSecond: 2500000,
-      audioBitsPerSecond: 128000,
+      // Keep payload size low enough for serverless API limits.
+      videoBitsPerSecond: 500000,
+      audioBitsPerSecond: 64000,
       mimeType,
     });
 
@@ -101,7 +102,12 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
   const requestPreview = async () => {
     setError(null);
     try {
-      const videoConstraints: MediaTrackConstraints = { facingMode: "user" };
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: "user",
+        width: { ideal: 640, max: 960 },
+        height: { ideal: 360, max: 540 },
+        frameRate: { ideal: 20, max: 24 },
+      };
       const stream = await navigator.mediaDevices.getUserMedia({
         video: videoConstraints,
         audio: true,
@@ -147,11 +153,11 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         <button
           type="button"
           onClick={requestPreview}
-          className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-2xl border-2 border-gray-600 bg-gray-800 px-6 py-4 text-base font-medium text-white active:bg-gray-700 sm:min-h-[64px]"
+          className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-none bg-[#1d2a3f]/92 px-6 py-4 font-mono text-base font-medium tracking-wide text-[#CFFF81] shadow-[0_8px_24px_rgba(0,0,0,0.3)] backdrop-blur-sm transition hover:bg-[#CFFF81] hover:text-[#1a1530] active:bg-[#bde97a] sm:min-h-[64px]"
         >
           {VideoIcon}
           <span>Record video</span>
-          <span className="text-sm text-gray-400">(up to {MAX_SECONDS}s)</span>
+          <span className="text-sm text-current/80">(up to {MAX_SECONDS}s)</span>
         </button>
       )}
       {status === "preview" && (
@@ -218,13 +224,13 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             className="max-h-64 w-full rounded-2xl border-2 border-gray-700 bg-black object-contain"
             style={{ transform: "scaleX(-1)" }}
           />
-          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border-2 border-red-500/50 bg-gray-800/80 p-4">
+          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fuchsia-300/35 bg-[#2b2a4a]/75 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-sm">
             <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
-            <span className="text-sm text-gray-300">Recording… {secondsLeft}s left</span>
+            <span className="text-sm text-white/85">Recording… {secondsLeft}s left</span>
             <button
               type="button"
               onClick={handleStop}
-              className="min-h-[44px] rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white active:bg-red-700"
+              className="min-h-[44px] rounded-xl bg-red-600 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-sm transition hover:bg-red-500 active:bg-red-700"
             >
               Stop
             </button>
@@ -249,7 +255,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
                 setStatus("idle");
                 onClear?.();
               }}
-              className="rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
+              className="rounded-xl border border-fuchsia-300/35 bg-[#1d2a3f]/92 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-[0_8px_24px_rgba(0,0,0,0.3)] backdrop-blur-sm transition hover:bg-[#24354d]/95"
             >
               Re-record
             </button>

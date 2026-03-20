@@ -1,17 +1,16 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createHmac } from "crypto";
+import {
+  ROOT_AUTH_COOKIE_NAME,
+  getRootAuthExpectedToken,
+  hasRootAuthPasswordConfigured,
+  verifyRootPagePassword,
+} from "@/lib/root-page-auth";
 
-const COOKIE_NAME = "root_auth";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-function signToken(secret: string): string {
-  return createHmac("sha256", secret).update("root").digest("hex");
-}
-
 export async function POST(request: Request) {
-  const password = process.env.ROOT_PAGE_PASSWORD;
-  if (!password) {
+  if (!(await hasRootAuthPasswordConfigured())) {
     return NextResponse.json(
       { error: "Login not configured. Set ROOT_PAGE_PASSWORD in .env.local." },
       { status: 503 }
@@ -30,13 +29,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing password" }, { status: 400 });
   }
 
-  if (submitted !== password) {
+  const ok = await verifyRootPagePassword(submitted);
+  if (!ok) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 });
   }
 
-  const token = signToken(password);
+  const token = await getRootAuthExpectedToken();
+  if (!token) {
+    return NextResponse.json({ error: "Login not configured" }, { status: 503 });
+  }
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
+  cookieStore.set(ROOT_AUTH_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -53,6 +53,8 @@ export default function EditEventPage() {
     address: event.address,
     prompt: event.prompt,
     heroImage: event.heroImage,
+    agentThemeId: event.agentThemeId ?? null,
+    agentBrief: event.agentBrief ?? null,
   };
 
   return (

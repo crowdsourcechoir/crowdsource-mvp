@@ -13,6 +13,8 @@ type QRCodeDisplayProps = {
   url: string;
   size?: number;
   className?: string;
+  /** Render at 2x for sharper display on high-DPI (recommended for small QRs). */
+  highRes?: boolean;
   /** If set, show a "Download" link to export a print-ready PNG. */
   downloadFilename?: string;
 };
@@ -21,11 +23,13 @@ export default function QRCodeDisplay({
   url,
   size = DISPLAY_SIZE,
   className = "",
+  highRes = false,
   downloadFilename,
 }: QRCodeDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<QRCodeStyling | null>(null);
   const [ready, setReady] = useState(false);
+  const renderSize = highRes ? size * 2 : size;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -40,8 +44,8 @@ export default function QRCodeDisplay({
         typeof window !== "undefined" ? `${window.location.origin}/logo.png` : "";
 
       const options = {
-        width: size,
-        height: size,
+        width: renderSize,
+        height: renderSize,
         data: url,
         margin: 4,
         qrOptions: { errorCorrectionLevel: "H" as const },
@@ -73,7 +77,7 @@ export default function QRCodeDisplay({
       container.innerHTML = "";
       setReady(false);
     };
-  }, [url, size]);
+  }, [url, renderSize]);
 
   const handleDownload = async () => {
     if (!downloadFilename) return;
@@ -145,21 +149,29 @@ export default function QRCodeDisplay({
   };
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className={`flex flex-col items-center gap-1 ${className}`}>
       <div
-        className="relative overflow-hidden rounded-lg border-2 border-white shadow"
-        style={{ width: size + 4, height: size + 4, padding: 2, background: "#000" }}
+        className="relative overflow-hidden rounded-lg"
+        style={{
+          width: size,
+          height: size,
+          background: "#000",
+        }}
       >
         {!ready && (
-          <div
-            className="absolute inset-0 m-0.5 animate-pulse rounded bg-gray-800"
-            style={{ margin: 2 }}
-          />
+          <div className="absolute inset-0 animate-pulse rounded-lg bg-gray-800" />
         )}
         <div
           ref={containerRef}
-          className="relative overflow-hidden rounded"
-          style={{ width: size, height: size }}
+          className="absolute left-0 top-0 overflow-hidden rounded-lg"
+          style={{
+            width: renderSize,
+            height: renderSize,
+            ...(highRes && {
+              transform: `scale(${size / renderSize})`,
+              transformOrigin: "top left",
+            }),
+          }}
           aria-hidden
         />
       </div>

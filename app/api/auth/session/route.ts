@@ -1,24 +1,19 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createHmac } from "crypto";
-
-const COOKIE_NAME = "root_auth";
-
-function signToken(secret: string): string {
-  return createHmac("sha256", secret).update("root").digest("hex");
-}
+import {
+  ROOT_AUTH_COOKIE_NAME,
+  getRootAuthExpectedToken,
+  hasRootAuthPasswordConfigured,
+} from "@/lib/root-page-auth";
 
 export async function GET() {
-  const password = process.env.ROOT_PAGE_PASSWORD;
-  if (!password) {
-    return NextResponse.json({ ok: true }); // no password set = no gate
-  }
+  if (!(await hasRootAuthPasswordConfigured())) return NextResponse.json({ ok: true }); // no password set = no gate
 
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-  const expected = signToken(password);
+  const token = cookieStore.get(ROOT_AUTH_COOKIE_NAME)?.value;
+  const expected = await getRootAuthExpectedToken();
 
-  if (token && token === expected) {
+  if (token && expected && token === expected) {
     return NextResponse.json({ ok: true });
   }
 

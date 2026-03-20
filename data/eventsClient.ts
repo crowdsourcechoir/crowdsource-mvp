@@ -3,11 +3,18 @@
 import type { Event } from "@/data/mockEvents";
 
 async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await fetch(path, { cache: "no-store" });
   if (res.status === 404) throw new Error("NOT_FOUND");
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || "Request failed");
+    const text = await res.text();
+    let message = `Request failed (${res.status})`;
+    try {
+      const err = text ? (JSON.parse(text) as { error?: string }) : {};
+      if (err?.error && typeof err.error === "string") message = err.error;
+    } catch {
+      if (text && text.length < 200) message = text;
+    }
+    throw new Error(message);
   }
   return res.json();
 }
@@ -17,10 +24,18 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    cache: "no-store",
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || "Request failed");
+    const text = await res.text();
+    let message = `Request failed (${res.status})`;
+    try {
+      const err = text ? (JSON.parse(text) as { error?: string }) : {};
+      if (err?.error && typeof err.error === "string") message = err.error;
+    } catch {
+      if (text && text.length < 200) message = text;
+    }
+    throw new Error(message);
   }
   return res.json();
 }
@@ -32,8 +47,15 @@ async function apiPatch<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || "Request failed");
+    const text = await res.text();
+    let message = `Request failed (${res.status})`;
+    try {
+      const err = text ? (JSON.parse(text) as { error?: string }) : {};
+      if (err?.error && typeof err.error === "string") message = err.error;
+    } catch {
+      if (text && text.length < 200) message = text;
+    }
+    throw new Error(message);
   }
   return res.json();
 }
@@ -45,7 +67,20 @@ export async function getAllEvents(): Promise<Event[]> {
 
 export async function getEventBySlug(slug: string): Promise<Event | null> {
   try {
-    const event = await apiGet<Event>(`/api/events?slug=${encodeURIComponent(slug)}`);
+    const res = await fetch(`/api/events?slug=${encodeURIComponent(slug)}`, { cache: "no-store" });
+    if (res.status === 404) throw new Error("NOT_FOUND");
+    if (!res.ok) {
+      const text = await res.text();
+      let message = `Request failed (${res.status})`;
+      try {
+        const err = text ? (JSON.parse(text) as { error?: string }) : {};
+        if (err?.error && typeof err.error === "string") message = err.error;
+      } catch {
+        if (text && text.length < 200) message = text;
+      }
+      throw new Error(message);
+    }
+    const event = await res.json();
     return event ?? null;
   } catch (e) {
     if ((e as Error).message === "NOT_FOUND") return null;
@@ -74,6 +109,8 @@ export async function addEvent(values: Omit<Event, "id">): Promise<Event> {
     address: values.address,
     prompt: values.prompt,
     heroImage: values.heroImage,
+    agentThemeId: values.agentThemeId,
+    agentBrief: values.agentBrief,
   });
 }
 
