@@ -231,7 +231,20 @@ export async function POST(
 
       // Subsequent user messages.
       if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
-        return NextResponse.json({ error: "Please type an answer for this question." }, { status: 400 });
+        if (!isNameQuestion) {
+          // Empty submit: no error banner — just keep the same question visible.
+          return NextResponse.json({
+            turn: null,
+            nextMessage: {
+              agentMessage: lastAgentContent,
+              suggestedAnswerTypes: ["text"],
+              extractedTags: undefined,
+              stopReason: "continue",
+            },
+            agentTurn: null,
+          });
+        }
+        // Empty name = skip / anonymous; fall through and insert empty user turn.
       }
 
       const userTurnInserted = await localInsertTurn({
@@ -499,10 +512,20 @@ export async function POST(
     }
     if (!isFirstMessage) {
       if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
-        return NextResponse.json(
-          { error: "Please type an answer for this question." },
-          { status: 400 }
-        );
+        if (!isNameQuestion) {
+          // Empty submit: no error banner — just keep the same question visible.
+          return NextResponse.json({
+            turn: null,
+            nextMessage: {
+              agentMessage: lastAgentContent,
+              suggestedAnswerTypes: ["text"],
+              extractedTags: undefined,
+              stopReason: "continue",
+            },
+            agentTurn: null,
+          });
+        }
+        // Empty name = skip / anonymous; fall through and insert empty user turn.
       }
       const nextIndex = existingTurns.length;
       const { data: inserted, error: eInsert } = await supabaseAdmin
