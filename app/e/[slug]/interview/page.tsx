@@ -7,6 +7,7 @@ import { getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import TypewriterText from "@/components/TypewriterText";
 import QuestionLoadingIndicator from "@/components/QuestionLoadingIndicator";
+import EventPageLoadingShell from "@/components/EventPageLoadingShell";
 import {
   startAgentInterview,
   getConversation,
@@ -149,11 +150,7 @@ export default function InterviewPage() {
   }
 
   if (!loaded) {
-    return (
-      <div className="min-h-screen bg-[#0c0c0e] flex items-center justify-center">
-        <p className="text-gray-400">Loading…</p>
-      </div>
-    );
+    return <EventPageLoadingShell compact />;
   }
   if (!event) {
     return (

@@ -6,6 +6,7 @@ import { getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import PublicEventContent from "./PublicEventContent";
 import EventNotFound from "./EventNotFound";
+import EventPageLoadingShell from "@/components/EventPageLoadingShell";
 
 export default function EventPageClient() {
   const params = useParams();
@@ -20,7 +21,7 @@ export default function EventPageClient() {
       .finally(() => setLoaded(true));
   }, [slug]);
 
-  if (!loaded) return <p className="min-h-screen bg-[#0c0c0e] p-8 text-center text-gray-400">Loading…</p>;
+  if (!loaded) return <EventPageLoadingShell />;
   if (!event) return <EventNotFound />;
   return <PublicEventContent event={event} />;
 }
