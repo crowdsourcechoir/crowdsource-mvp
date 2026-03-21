@@ -459,10 +459,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                             className="inline"
                           />
                         ) : sending && !chatFinished ? (
-                          <QuestionLoadingIndicator
-                            size="lg"
-                            label="Getting your next question…"
-                          />
+                          <QuestionLoadingIndicator size="lg" />
                         ) : displayMessage ? (
                           <TypewriterText
                             key={displayMessage}
@@ -471,7 +468,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                             className="inline"
                           />
                         ) : (
-                          <QuestionLoadingIndicator size="lg" label="Loading…" />
+                          <QuestionLoadingIndicator size="lg" />
                         )}
                       </p>
                     </div>

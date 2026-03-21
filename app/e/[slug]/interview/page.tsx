@@ -212,7 +212,7 @@ export default function InterviewPage() {
             )}
             {sending && !finished && (
               <div className="rounded-xl border border-gray-700/50 bg-[#252528]/60 px-4 py-3">
-                <QuestionLoadingIndicator label="Getting your next question…" />
+                <QuestionLoadingIndicator />
               </div>
             )}
           </div>
