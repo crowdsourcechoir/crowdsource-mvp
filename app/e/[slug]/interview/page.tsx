@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import TypewriterText from "@/components/TypewriterText";
+import QuestionLoadingIndicator from "@/components/QuestionLoadingIndicator";
 import {
   startAgentInterview,
   getConversation,
@@ -206,8 +207,13 @@ export default function InterviewPage() {
             )}
             {currentMessage && !turns.some((t) => t.content === currentMessage) && (
               <p className="text-left text-lg leading-snug text-gray-200">
-                <TypewriterText text={currentMessage} speed={16} className="inline" />
+                <TypewriterText text={currentMessage} speed={9} className="inline" />
               </p>
+            )}
+            {sending && !finished && (
+              <div className="rounded-xl border border-gray-700/50 bg-[#252528]/60 px-4 py-3">
+                <QuestionLoadingIndicator label="Getting your next question…" />
+              </div>
             )}
           </div>
 
@@ -237,10 +243,37 @@ export default function InterviewPage() {
                 <button
                   type="submit"
                   disabled={sending || (!inputValue.trim() && !isVoiceVideoQuestion && !isNameQuestion)}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                  className="inline-flex min-w-[5.5rem] items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                   style={{ backgroundColor: "var(--crowdsource-accent)" }}
                 >
-                  {sending ? "…" : "Submit"}
+                  {sending ? (
+                    <>
+                      <svg
+                        className="h-4 w-4 shrink-0 animate-spin text-[#1a1530]"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                      >
+                        <circle
+                          className="opacity-30"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-90"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      <span>Sending</span>
+                    </>
+                  ) : (
+                    "Submit"
+                  )}
                 </button>
               </div>
               {isVoiceVideoQuestion && (

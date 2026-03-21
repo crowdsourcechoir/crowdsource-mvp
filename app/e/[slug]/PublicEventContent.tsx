@@ -6,6 +6,7 @@ import type { Event } from "@/data/mockEvents";
 import RecordAudio from "@/components/RecordAudio";
 import RecordVideo from "@/components/RecordVideo";
 import TypewriterText from "@/components/TypewriterText";
+import QuestionLoadingIndicator from "@/components/QuestionLoadingIndicator";
 import { formatDateLong } from "@/lib/formatDate";
 import { addSubmission } from "@/data/submissionsClient";
 import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
@@ -411,7 +412,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                         <TypewriterText
                           key="opening"
                           text={OPENING_PROMPT}
-                          speed={16}
+                          speed={9}
                           className="inline"
                         />
                       </p>
@@ -454,20 +455,23 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                           <TypewriterText
                             key={`completion-${conversationId ?? "none"}`}
                             text={COMPLETION_MESSAGE}
-                            speed={16}
+                            speed={9}
                             className="inline"
                           />
                         ) : sending && !chatFinished ? (
-                          <span className="text-gray-500">…</span>
+                          <QuestionLoadingIndicator
+                            size="lg"
+                            label="Getting your next question…"
+                          />
                         ) : displayMessage ? (
                           <TypewriterText
                             key={displayMessage}
                             text={displayMessage}
-                            speed={16}
+                            speed={9}
                             className="inline"
                           />
                         ) : (
-                          <span className="text-gray-500">…</span>
+                          <QuestionLoadingIndicator size="lg" label="Loading…" />
                         )}
                       </p>
                     </div>
@@ -514,20 +518,42 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                           <button
                             type="submit"
                             disabled={sending || (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion)}
-                            className="min-h-[44px] min-w-[84px] shrink-0 px-2 py-2 text-center font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:opacity-85 disabled:text-[var(--crowdsource-accent)]"
+                            className="inline-flex min-h-[44px] min-w-[5.5rem] shrink-0 items-center justify-center gap-2 px-2 py-2 text-center font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:opacity-85 disabled:text-[var(--crowdsource-accent)]"
                           >
-                            Submit
+                            {sending ? (
+                              <>
+                                <svg
+                                  className="h-4 w-4 shrink-0 animate-spin text-[var(--crowdsource-accent)]"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  aria-hidden
+                                >
+                                  <circle
+                                    className="opacity-35"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  />
+                                  <path
+                                    className="opacity-95"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  />
+                                </svg>
+                                <span>Sending</span>
+                              </>
+                            ) : (
+                              "Submit"
+                            )}
                           </button>
                         </div>
                         {isVoiceVideoQuestion && (
                           <div className="mt-4 w-full space-y-3 rounded-none bg-black/25 p-3 sm:p-4 backdrop-blur-sm">
                             <p className="font-mono text-base font-medium tracking-wide text-gray-300">
-                              <TypewriterText
-                                key={currentMessage ?? "voice-hint"}
-                                text="Record a message (optional)"
-                                speed={16}
-                                className="inline"
-                              />
+                              Record a message (optional)
                             </p>
                             <RecordAudio onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
                             <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
