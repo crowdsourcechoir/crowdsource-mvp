@@ -1,5 +1,9 @@
 "use client";
 
+import type { SongSeedTranscriptIssue } from "@/types/song-seed";
+
+export type { SongSeedTranscriptIssue };
+
 /** Theme from config (prompt template + settings). */
 export type AgentTheme = {
   id: string;
@@ -53,6 +57,9 @@ export type AgentConversationTurn = {
   content: string;
   audioUrl: string | null;
   videoUrl: string | null;
+  /** Filled asynchronously after submit (Whisper); null until ready. */
+  audioTranscript?: string | null;
+  videoTranscript?: string | null;
   createdAt: string;
 };
 
@@ -147,8 +154,29 @@ export async function sendMessage(
   });
 }
 
+/** Thrown when generate fails; `issues` is set when voice/video could not be transcribed (HTTP 422). */
+export type GenerateSongSeedError = Error & {
+  issues?: SongSeedTranscriptIssue[];
+  status?: number;
+};
+
 export async function generateSongSeed(eventId: string): Promise<SongSeed> {
-  return apiPost("/api/agent/song-seed/generate", { eventId });
+  const res = await fetch("/api/agent/song-seed/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    issues?: SongSeedTranscriptIssue[];
+  };
+  if (!res.ok) {
+    const err = new Error(body.error || "Request failed") as GenerateSongSeedError;
+    err.issues = body.issues;
+    err.status = res.status;
+    throw err;
+  }
+  return body as SongSeed;
 }
 
 export async function getSongSeedForEvent(eventId: string): Promise<SongSeed | null> {

@@ -9,6 +9,8 @@ type InterviewAnswer = {
   content: string;
   audioUrl?: string | null;
   videoUrl?: string | null;
+  audioTranscript?: string | null;
+  videoTranscript?: string | null;
 };
 
 type InterviewSubmissionItem = {
@@ -34,6 +36,8 @@ export async function GET(request: Request) {
           content: turn.content,
           audioUrl: turn.audioUrl ?? null,
           videoUrl: turn.videoUrl ?? null,
+          audioTranscript: turn.audioTranscript ?? null,
+          videoTranscript: turn.videoTranscript ?? null,
         })),
     }));
 
@@ -69,7 +73,7 @@ export async function GET(request: Request) {
     const conversationIds = convs.map((c: any) => c.id);
     const { data: turns, error: eTurns } = await supabaseAdmin
       .from("agent_conversation_turns")
-      .select("conversation_id, turn_index, role, content, created_at, audio_url, video_url")
+      .select("conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript")
       .in("conversation_id", conversationIds);
     if (eTurns || !Array.isArray(turns)) {
       console.error("[interview-submissions] agent_conversation_turns query failed:", eTurns?.message);
@@ -92,6 +96,8 @@ export async function GET(request: Request) {
           content: t.content,
           audioUrl: t.audio_url ?? null,
           videoUrl: t.video_url ?? null,
+          audioTranscript: t.audio_transcript ?? null,
+          videoTranscript: t.video_transcript ?? null,
         }));
       return {
         participantName: nameById.get(conv.participant_id) ?? "Anonymous",

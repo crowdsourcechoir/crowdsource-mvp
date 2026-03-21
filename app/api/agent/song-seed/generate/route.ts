@@ -8,10 +8,14 @@ import {
   mergeSourceMappingWithSunoBackup,
   stripSunoBackupFromSourceMapping,
 } from "@/lib/song-seed-suno";
+import { buildSongSeedTranscriptText } from "@/lib/transcribe-media";
 
-export const maxDuration = 60;
+/** Transcription + JSON generation can exceed 60s for events with many voice/video clips. */
+export const maxDuration = 300;
 
 const SONG_SEED_SYSTEM = `You are analyzing agent interview transcripts from an event to produce a "Song Seed" for songwriting.
+
+Participant lines may include typed text plus [Voice: ...] and/or [Video: ...] segments transcribed from recordings—treat those as part of what the person said.
 
 Given the full transcript (multiple participants, each with agent questions and user answers), produce a JSON object with:
 
@@ -71,16 +75,29 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No agent conversations found for this event." }, { status: 400 });
       }
 
-      let transcriptText = "";
-      for (const t of transcripts) {
-        transcriptText += `\n--- Participant: ${t.participantName} (conversation ${t.conversationId}) ---\n`;
-        for (const turn of t.turns) {
-          const role = turn.role === "agent" ? "Agent" : "Participant";
-          transcriptText += `${role}: ${turn.content}\n`;
-        }
-      }
-
       const openai = new OpenAI({ apiKey });
+      const transcriptResult = await buildSongSeedTranscriptText(
+        openai,
+        transcripts.map((t) => ({
+          participantLabel: t.participantName,
+          conversationId: t.conversationId,
+          turns: t.turns.map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+            audioUrl: turn.audioUrl,
+            videoUrl: turn.videoUrl,
+            audioTranscript: turn.audioTranscript,
+            videoTranscript: turn.videoTranscript,
+          })),
+        }))
+      );
+      if (!transcriptResult.ok) {
+        return NextResponse.json(
+          { error: transcriptResult.error, issues: transcriptResult.issues },
+          { status: 422 }
+        );
+      }
+      const transcriptText = transcriptResult.text;
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
@@ -174,31 +191,38 @@ export async function POST(request: Request) {
       .in("id", participantIds);
     const nameById = new Map((participants ?? []).map((p: { id: string; name: string | null }) => [p.id, p.name ?? "Anonymous"]));
 
-    let transcriptText = "";
-    const turnRefs: { conversationId: string; participantId: string; turnId: string; role: string; content: string }[] = [];
+    const openai = new OpenAI({ apiKey });
 
+    const sessions: Parameters<typeof buildSongSeedTranscriptText>[1] = [];
     for (const conv of convs) {
       const { data: turns } = await supabaseAdmin
         .from("agent_conversation_turns")
-        .select("id, turn_index, role, content")
+        .select("id, turn_index, role, content, audio_url, video_url, audio_transcript, video_transcript")
         .eq("conversation_id", conv.id)
         .order("turn_index", { ascending: true });
       const name = nameById.get(conv.participant_id) ?? "Anonymous";
-      transcriptText += `\n--- Participant: ${name} (conversation ${conv.id}) ---\n`;
-      for (const t of turns ?? []) {
-        const role = t.role === "agent" ? "Agent" : "Participant";
-        transcriptText += `${role}: ${t.content}\n`;
-        turnRefs.push({
-          conversationId: conv.id,
-          participantId: conv.participant_id,
-          turnId: t.id,
+      sessions.push({
+        participantLabel: name,
+        conversationId: conv.id,
+        turns: (turns ?? []).map((t) => ({
           role: t.role,
-          content: t.content,
-        });
-      }
+          content: t.content ?? "",
+          audioUrl: t.audio_url,
+          videoUrl: t.video_url,
+          audioTranscript: t.audio_transcript,
+          videoTranscript: t.video_transcript,
+        })),
+      });
     }
 
-    const openai = new OpenAI({ apiKey });
+    const transcriptResult = await buildSongSeedTranscriptText(openai, sessions);
+    if (!transcriptResult.ok) {
+      return NextResponse.json(
+        { error: transcriptResult.error, issues: transcriptResult.issues },
+        { status: 422 }
+      );
+    }
+    const transcriptText = transcriptResult.text;
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [

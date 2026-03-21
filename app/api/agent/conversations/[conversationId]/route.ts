@@ -24,6 +24,8 @@ function rowToTurn(row: Record<string, unknown>) {
     content: row.content,
     audioUrl: row.audio_url ?? null,
     videoUrl: row.video_url ?? null,
+    audioTranscript: row.audio_transcript ?? null,
+    videoTranscript: row.video_transcript ?? null,
     createdAt: row.created_at,
   };
 }
@@ -52,6 +54,8 @@ export async function GET(
         content: t.content,
         audioUrl: t.audioUrl,
         videoUrl: t.videoUrl,
+        audioTranscript: t.audioTranscript,
+        videoTranscript: t.videoTranscript,
         createdAt: t.createdAt,
       })),
     });

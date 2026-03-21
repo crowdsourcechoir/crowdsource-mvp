@@ -14,7 +14,9 @@ import {
   getSongSeedForEvent,
   generateSongSeed,
   type SongSeed,
+  type GenerateSongSeedError,
 } from "@/data/agentInterview";
+import type { SongSeedTranscriptIssue } from "@/types/song-seed";
 import type { Event } from "@/data/mockEvents";
 import JSZip from "jszip";
 import { dataUrlToWavBlob } from "@/lib/audioToWav";
@@ -151,6 +153,7 @@ export default function EventDetailPage() {
   const [songSeed, setSongSeed] = useState<SongSeed | null>(null);
   const [loadingSongSeed, setLoadingSongSeed] = useState(false);
   const [songSeedError, setSongSeedError] = useState<string | null>(null);
+  const [songSeedErrorIssues, setSongSeedErrorIssues] = useState<SongSeedTranscriptIssue[] | null>(null);
   const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
 
@@ -463,11 +466,14 @@ export default function EventDetailPage() {
                 onClick={async () => {
                   setLoadingSongSeed(true);
                   setSongSeedError(null);
+                  setSongSeedErrorIssues(null);
                   try {
                     const seed = await generateSongSeed(event.id);
                     setSongSeed(seed);
                   } catch (err) {
-                    setSongSeedError(err instanceof Error ? err.message : "Generate failed");
+                    const e = err as GenerateSongSeedError;
+                    setSongSeedError(e instanceof Error ? e.message : "Generate failed");
+                    setSongSeedErrorIssues(e.issues?.length ? e.issues : null);
                   } finally {
                     setLoadingSongSeed(false);
                   }
@@ -479,9 +485,19 @@ export default function EventDetailPage() {
             </div>
           </div>
           {songSeedError && (
-            <p className="mb-4 rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-sm text-red-200">
-              {songSeedError}
-            </p>
+            <div className="mb-4 rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-sm text-red-200">
+              <p className="whitespace-pre-wrap">{songSeedError}</p>
+              {songSeedErrorIssues && songSeedErrorIssues.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-red-100/90">
+                  {songSeedErrorIssues.map((i, idx) => (
+                    <li key={`${i.conversationId}-${i.kind}-${idx}`}>
+                      {i.participantLabel} — {i.kind === "video" ? "Video" : "Voice"} (
+                      <span className="font-mono text-xs opacity-80">{i.conversationId.slice(0, 8)}…</span>)
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
           {songSeed && (
             <div className="space-y-6">

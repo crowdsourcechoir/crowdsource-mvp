@@ -26,6 +26,9 @@ export type LocalAgentTurn = {
   content: string;
   audioUrl: string | null;
   videoUrl: string | null;
+  /** Filled by async Whisper job after submit (same semantics as Supabase). */
+  audioTranscript: string | null;
+  videoTranscript: string | null;
   createdAt: string;
 };
 
@@ -105,8 +108,17 @@ export async function localGetConversation(conversationId: string): Promise<{ co
   if (!conversation) return null;
   const turns = store.turns
     .filter((t) => t.conversationId === conversationId)
-    .sort((a, b) => a.turnIndex - b.turnIndex);
+    .sort((a, b) => a.turnIndex - b.turnIndex)
+    .map(normalizeTurn);
   return { conversation, turns };
+}
+
+function normalizeTurn(t: LocalAgentTurn): LocalAgentTurn {
+  return {
+    ...t,
+    audioTranscript: t.audioTranscript ?? null,
+    videoTranscript: t.videoTranscript ?? null,
+  };
 }
 
 export async function localInsertTurn(args: {
@@ -126,6 +138,8 @@ export async function localInsertTurn(args: {
     content: args.content,
     audioUrl: args.audioUrl ?? null,
     videoUrl: args.videoUrl ?? null,
+    audioTranscript: null,
+    videoTranscript: null,
     createdAt: new Date().toISOString(),
   };
   store.turns.push(turn);
@@ -136,6 +150,19 @@ export async function localInsertTurn(args: {
 
   await saveStore(store);
   return turn;
+}
+
+export async function localUpdateTurnTranscripts(args: {
+  turnId: string;
+  audioTranscript: string | null;
+  videoTranscript: string | null;
+}): Promise<void> {
+  const store = await loadStore();
+  const t = store.turns.find((x) => x.id === args.turnId);
+  if (!t) return;
+  t.audioTranscript = args.audioTranscript;
+  t.videoTranscript = args.videoTranscript;
+  await saveStore(store);
 }
 
 export async function localUpdateParticipantName(args: { participantId: string; name: string | null }): Promise<void> {
@@ -167,7 +194,8 @@ export async function localGetEventTranscripts(eventId: string): Promise<
   const results = conversations.map((c) => {
     const turns = store.turns
       .filter((t) => t.conversationId === c.id)
-      .sort((a, b) => a.turnIndex - b.turnIndex);
+      .sort((a, b) => a.turnIndex - b.turnIndex)
+      .map(normalizeTurn);
     return {
       participantId: c.participantId,
       participantName: participantById.get(c.participantId) ?? "Anonymous",

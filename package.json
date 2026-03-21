@@ -17,6 +17,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@supabase/supabase-js": "^2.97.0",
+    "@vercel/functions": "^3.4.3",
     "iceberg-js": "^0.8.1",
     "jszip": "^3.10.1",
     "next": "14.2.35",

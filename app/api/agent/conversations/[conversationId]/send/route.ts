@@ -9,6 +9,7 @@ import {
   localGetParticipant,
   localUpdateParticipantName,
 } from "@/lib/local-agent-interview-store";
+import { scheduleTranscriptionIfMediaPresent } from "@/lib/agent-post-submit-transcribe";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -21,6 +22,8 @@ function rowToTurn(row: Record<string, unknown>) {
     content: row.content,
     audioUrl: row.audio_url ?? null,
     videoUrl: row.video_url ?? null,
+    audioTranscript: row.audio_transcript ?? null,
+    videoTranscript: row.video_transcript ?? null,
     createdAt: row.created_at,
   };
 }
@@ -134,8 +137,18 @@ export async function POST(
         do_dont_rules: [] as string[],
       };
 
-      let userTurn: { id: string; conversationId: string; turnIndex: number; role: "agent" | "user"; content: string; audioUrl: string | null; videoUrl: string | null; createdAt: string } | null =
-        null;
+      let userTurn: {
+        id: string;
+        conversationId: string;
+        turnIndex: number;
+        role: "agent" | "user";
+        content: string;
+        audioUrl: string | null;
+        videoUrl: string | null;
+        audioTranscript: string | null;
+        videoTranscript: string | null;
+        createdAt: string;
+      } | null = null;
 
       if (isFirstMessage) {
         const firstAgentTurn = await localInsertTurn({
@@ -164,6 +177,8 @@ export async function POST(
               content: firstAgentTurn.content,
               audioUrl: firstAgentTurn.audioUrl,
               videoUrl: firstAgentTurn.videoUrl,
+              audioTranscript: firstAgentTurn.audioTranscript,
+              videoTranscript: firstAgentTurn.videoTranscript,
               createdAt: firstAgentTurn.createdAt,
             },
           });
@@ -175,6 +190,14 @@ export async function POST(
           turnIndex: 1,
           role: "user",
           content,
+          audioUrl: audioDataUrl,
+          videoUrl: videoDataUrl,
+        });
+        scheduleTranscriptionIfMediaPresent({
+          turnId: userInserted.id,
+          audioUrl: audioDataUrl,
+          videoUrl: videoDataUrl,
+          mode: "local",
         });
         userTurn = {
           id: userInserted.id,
@@ -184,6 +207,8 @@ export async function POST(
           content: userInserted.content,
           audioUrl: userInserted.audioUrl,
           videoUrl: userInserted.videoUrl,
+          audioTranscript: userInserted.audioTranscript,
+          videoTranscript: userInserted.videoTranscript,
           createdAt: userInserted.createdAt,
         };
 
@@ -224,6 +249,8 @@ export async function POST(
             content: nextAgentTurn.content,
             audioUrl: nextAgentTurn.audioUrl,
             videoUrl: nextAgentTurn.videoUrl,
+            audioTranscript: nextAgentTurn.audioTranscript,
+            videoTranscript: nextAgentTurn.videoTranscript,
             createdAt: nextAgentTurn.createdAt,
           },
         });
@@ -254,6 +281,12 @@ export async function POST(
         content,
         audioUrl: audioDataUrl,
         videoUrl: videoDataUrl,
+      });
+      scheduleTranscriptionIfMediaPresent({
+        turnId: userTurnInserted.id,
+        audioUrl: audioDataUrl,
+        videoUrl: videoDataUrl,
+        mode: "local",
       });
 
       const agentCount = existingTurns.filter((t) => t.role === "agent").length;
@@ -291,6 +324,8 @@ export async function POST(
           content: userTurnInserted.content,
           audioUrl: userTurnInserted.audioUrl,
           videoUrl: userTurnInserted.videoUrl,
+          audioTranscript: userTurnInserted.audioTranscript,
+          videoTranscript: userTurnInserted.videoTranscript,
           createdAt: userTurnInserted.createdAt,
         },
         nextMessage: {
@@ -307,6 +342,8 @@ export async function POST(
           content: agentTurnInserted.content,
           audioUrl: agentTurnInserted.audioUrl,
           videoUrl: agentTurnInserted.videoUrl,
+          audioTranscript: agentTurnInserted.audioTranscript,
+          videoTranscript: agentTurnInserted.videoTranscript,
           createdAt: agentTurnInserted.createdAt,
         },
       });
@@ -409,6 +446,8 @@ export async function POST(
           turn_index: 1,
           role: "user",
           content,
+          audio_url: storedAudioUrl,
+          video_url: storedVideoUrl,
         })
         .select()
         .single();
@@ -424,6 +463,12 @@ export async function POST(
           agentTurn: rowToTurn(agentTurnRow),
         });
       }
+      scheduleTranscriptionIfMediaPresent({
+        turnId: userTurnRow.id as string,
+        audioUrl: storedAudioUrl,
+        videoUrl: storedVideoUrl,
+        mode: "supabase",
+      });
       await supabaseAdmin
         .from("agent_participants")
         .update({ name: content })
@@ -544,6 +589,12 @@ export async function POST(
         return NextResponse.json({ error: eInsert?.message ?? "Failed to save message." }, { status: 400 });
       }
       userTurn = inserted;
+      scheduleTranscriptionIfMediaPresent({
+        turnId: inserted.id as string,
+        audioUrl: storedAudioUrl,
+        videoUrl: storedVideoUrl,
+        mode: "supabase",
+      });
       if (isNameQuestion && content) {
         await supabaseAdmin
           .from("agent_participants")
