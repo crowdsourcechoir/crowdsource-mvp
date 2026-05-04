@@ -22,6 +22,10 @@ export default function NewEventPage() {
         address: values.address,
         prompt: values.prompt,
         heroImage: values.heroImage,
+        heroImageMode: values.heroImageMode,
+        landingHeadline: values.landingHeadline,
+        landingCopy: values.landingCopy,
+        ctaText: values.ctaText,
         agentThemeId: values.agentThemeId ?? null,
         agentBrief: values.agentBrief ?? null,
       });

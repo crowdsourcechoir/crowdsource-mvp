@@ -14,7 +14,9 @@ import {
   startAgentInterview,
   getConversation,
   sendMessage,
+  type AgentNextMessageResponse,
 } from "@/data/agentInterview";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -53,12 +55,30 @@ function eventInterviewVersion(event: Event): string {
   return stableHash(payload);
 }
 
+function suggestedTypesForMessage(event: Event, message: string | null): AgentNextMessageResponse["suggestedAnswerTypes"] {
+  if (!message) return ["text"];
+  if (message === THANKS_MESSAGE) return ["text"];
+  const items = event.agentBrief?.askAboutItems ?? [];
+  const matched = items.find((item) => item?.prompt?.trim() === message.trim());
+  if (matched?.requireEmailCaptcha) return ["text", "email", "captcha"];
+  if (matched?.allowAudio || matched?.allowVideo) {
+    const types: AgentNextMessageResponse["suggestedAnswerTypes"] = ["text"];
+    if (matched.allowAudio) types.push("voice");
+    if (matched.allowVideo) types.push("video");
+    return types;
+  }
+  return /record/.test(message.toLowerCase()) && /voice|video/.test(message.toLowerCase())
+    ? ["text", "voice", "video"]
+    : ["text"];
+}
+
 const SESSION_TOKEN_KEY = (eventId: string, version: string) => `csc_agent_session_${eventId}_${version}`;
 const CONVERSATION_ID_KEY = (eventId: string, sessionToken: string) =>
   `csc_agent_conversation_${eventId}_${sessionToken}`;
 const FIRST_QUESTION = "What's your name?";
 const THANKS_MESSAGE = "Thanks so much for sharing! That's all for now.";
-const OPENING_PROMPT = "We're crowdsourcing a song for this event. Want to help create it?";
+const DEFAULT_OPENING_PROMPT = "We're crowdsourcing a song for this event. Want to help create it?";
+const DEFAULT_CTA_TEXT = "Let's make an anthem";
 const COMPLETION_MESSAGE = "Thanks! Your answers will help shape the song we're making.";
 function getOrCreateSessionToken(eventId: string, version: string): string {
   if (typeof window === "undefined") return "";
@@ -78,6 +98,8 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [photoMode, setPhotoMode] = useState<"bw" | "color">(event.heroImageMode === "color" ? "color" : "bw");
+  const [emailCaptchaToken, setEmailCaptchaToken] = useState<string | null>(null);
 
   /* Inline chat (agent interview) — same page, no stacking */
   const [chatStarted, setChatStarted] = useState(false);
@@ -85,6 +107,9 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   const [activeSessionToken, setActiveSessionToken] = useState<string | null>(null);
   const [currentMessage, setCurrentMessage] = useState<string | null>(null);
   const [chatFinished, setChatFinished] = useState(false);
+  const [currentSuggestedAnswerTypes, setCurrentSuggestedAnswerTypes] = useState<
+    AgentNextMessageResponse["suggestedAnswerTypes"]
+  >(["text"]);
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -113,9 +138,11 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
     }
   }
 
-  const isVoiceVideoQuestion =
-    currentMessage?.toLowerCase().includes("record") &&
-    (currentMessage?.toLowerCase().includes("voice") || currentMessage?.toLowerCase().includes("video"));
+  const allowAudioResponse = currentSuggestedAnswerTypes.includes("voice");
+  const allowVideoResponse = currentSuggestedAnswerTypes.includes("video");
+  const requiresEmailResponse = currentSuggestedAnswerTypes.includes("email");
+  const requiresCaptchaResponse = currentSuggestedAnswerTypes.includes("captcha");
+  const allowsMediaResponse = allowAudioResponse || allowVideoResponse;
   /* First question is the name question; detect it for placeholder/flow handling. */
   const isNameQuestion =
     typeof currentMessage === "string"
@@ -138,21 +165,8 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       setConversationId(conversation.id);
       setChatStarted(true);
       setActiveSessionToken(token);
-      // Persist conversation id so the chat can resume after refresh.
       if (typeof window !== "undefined") {
         localStorage.setItem(CONVERSATION_ID_KEY(event.id, token), conversation.id);
-      }
-      const { turns } = await withTimeout(
-        getConversation(conversation.id),
-        15000,
-        "Timed out while loading chat history. Please refresh and try again."
-      );
-      if (turns.length > 0) {
-        const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
-        if (lastAgent) {
-          setCurrentMessage(lastAgent.content);
-          if (lastAgent.content === THANKS_MESSAGE) setChatFinished(true);
-        }
       }
     } catch (err) {
       setChatError(err instanceof Error ? err.message : "Couldn't start chat");
@@ -160,6 +174,8 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
       setSending(false);
     }
   }
+
+  
 
   // Rehydrate conversation after refresh so locally-stored answers feel persistent.
   useEffect(() => {
@@ -182,6 +198,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
           const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
           if (lastAgent) {
             setCurrentMessage(lastAgent.content);
+            setCurrentSuggestedAnswerTypes(suggestedTypesForMessage(event, lastAgent.content));
             if (lastAgent.content === THANKS_MESSAGE) setChatFinished(true);
           }
         }
@@ -190,7 +207,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
         setChatError(err instanceof Error ? err.message : "Failed to load chat");
       })
       .finally(() => setSending(false));
-  }, [event.id, interviewVersion, chatStarted, conversationId]);
+  }, [event, event.id, interviewVersion, chatStarted, conversationId]);
 
   useEffect(() => {
     if (!conversationId || !chatStarted) return;
@@ -214,6 +231,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
           "Timed out while starting the first question."
         );
         setCurrentMessage(res.nextMessage.agentMessage);
+        setCurrentSuggestedAnswerTypes(res.nextMessage.suggestedAnswerTypes ?? ["text"]);
         setChatFinished(res.nextMessage.stopReason === "finished");
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to start";
@@ -224,7 +242,10 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
         try {
           const { turns } = await getConversation(conversationId);
           const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
-          if (lastAgent?.content) setCurrentMessage(lastAgent.content);
+          if (lastAgent?.content) {
+            setCurrentMessage(lastAgent.content);
+            setCurrentSuggestedAnswerTypes(suggestedTypesForMessage(event, lastAgent.content));
+          }
           if (lastAgent?.content === THANKS_MESSAGE) setChatFinished(true);
         } catch {
           // ignore fallback errors
@@ -233,7 +254,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
         setSending(false);
       }
     })();
-  }, [chatStarted, conversationId, currentMessage, sending]);
+  }, [chatStarted, conversationId, currentMessage, event, sending]);
 
   useEffect(() => {
     if (responseInputRef.current) {
@@ -265,6 +286,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
     setConversationId(null);
     setActiveSessionToken(null);
     setCurrentMessage(null);
+    setCurrentSuggestedAnswerTypes(["text"]);
     setChatFinished(false);
     setChatError(null);
     setInputValue("");
@@ -276,7 +298,15 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
   async function handleChatSubmit(e: FormEvent) {
     e.preventDefault();
     if (!conversationId || sending || chatFinished) return;
-    if (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion) return;
+    if (requiresEmailResponse && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputValue.trim())) {
+      setChatError("Please enter a valid email address.");
+      return;
+    }
+    if (requiresCaptchaResponse && !emailCaptchaToken) {
+      setChatError("Please complete captcha verification.");
+      return;
+    }
+    if (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse) return;
     const content = inputValue.trim();
     setInputValue("");
     if (responseInputRef.current) {
@@ -287,10 +317,16 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
     try {
       const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
       const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
-      const res = await sendMessage(conversationId, content, { audioDataUrl, videoDataUrl });
+      const res = await sendMessage(conversationId, content, {
+        audioDataUrl,
+        videoDataUrl,
+        captchaToken: requiresCaptchaResponse ? emailCaptchaToken : null,
+      });
       setAudioBlob(null);
       setVideoBlob(null);
+      setEmailCaptchaToken(null);
       setCurrentMessage(res.nextMessage.agentMessage);
+      setCurrentSuggestedAnswerTypes(res.nextMessage.suggestedAnswerTypes ?? ["text"]);
       setChatFinished(res.nextMessage.stopReason === "finished");
     } catch (err) {
       setChatError(err instanceof Error ? err.message : "Submit failed");
@@ -380,7 +416,11 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
           <div className="mx-auto mb-6 w-full max-w-64 sm:mb-8 sm:max-w-72">
             <div className="relative aspect-square overflow-hidden rounded-none">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={event.heroImage} alt="" className="h-full w-full object-cover grayscale" />
+              <img
+                src={event.heroImage}
+                alt=""
+                className={`h-full w-full object-cover ${photoMode === "bw" ? "grayscale" : ""}`}
+              />
               <div className="absolute inset-0 bg-gradient-to-tr from-fuchsia-700/35 via-pink-500/15 to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
             </div>
@@ -411,12 +451,17 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                       <p className="mx-auto max-w-xl font-mono text-base leading-snug text-gray-200 sm:text-lg">
                         <TypewriterText
                           key="opening"
-                          text={OPENING_PROMPT}
+                          text={event.landingHeadline || DEFAULT_OPENING_PROMPT}
                           speed={9}
                           className="inline"
                         />
                       </p>
                     </div>
+                    {!!event.landingCopy && (
+                      <p className="mx-auto mt-1 max-w-xl font-mono text-sm text-gray-300 sm:text-base">
+                        {event.landingCopy}
+                      </p>
+                    )}
                     <div className="mt-6">
                       <form onSubmit={handleStartChat} className="mx-auto w-full max-w-lg">
                         <button
@@ -424,7 +469,7 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                           disabled={sending}
                           className="flex min-h-[56px] w-full items-center justify-center border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] shadow-[0_12px_30px_rgba(0,0,0,0.22)] backdrop-blur-sm transition hover:bg-[#CFFF81] hover:text-[#1a1530] focus:outline-none focus:ring-2 focus:ring-[var(--crowdsource-accent)]/70 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50"
                         >
-                          {sending ? "Starting…" : "Let's make a song"}
+                          {sending ? "Starting…" : event.ctaText || DEFAULT_CTA_TEXT}
                         </button>
                       </form>
                       {!chatFinished && chatError && (
@@ -507,14 +552,20 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                               el.style.height = "auto";
                               el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
                             }}
-                            placeholder={isNameQuestion ? "Your name" : "Type your answer…"}
+                            placeholder={
+                              isNameQuestion
+                                ? "What would you like to be called?"
+                                : requiresEmailResponse
+                                  ? "you@example.com"
+                                  : "Type your answer…"
+                            }
                             disabled={sending}
                             rows={1}
                             className="min-h-[52px] max-h-[180px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-3 font-mono text-base font-medium tracking-wide leading-6 text-white placeholder-gray-300 focus:outline-none"
                           />
                           <button
                             type="submit"
-                            disabled={sending || (!inputValue.trim() && !audioBlob && !videoBlob && !isVoiceVideoQuestion)}
+                            disabled={sending || (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse)}
                             className="inline-flex min-h-[44px] min-w-[5.5rem] shrink-0 items-center justify-center gap-2 px-2 py-2 text-center font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:opacity-85 disabled:text-[var(--crowdsource-accent)]"
                           >
                             {sending ? (
@@ -547,13 +598,25 @@ export default function PublicEventContent({ event }: PublicEventContentProps) {
                             )}
                           </button>
                         </div>
-                        {isVoiceVideoQuestion && (
+                        {requiresCaptchaResponse && process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+                          <div className="mt-4">
+                            <TurnstileWidget
+                              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                              onTokenChange={setEmailCaptchaToken}
+                            />
+                          </div>
+                        )}
+                        {allowsMediaResponse && (
                           <div className="mt-4 w-full space-y-3 rounded-none bg-black/25 p-3 sm:p-4 backdrop-blur-sm">
                             <p className="font-mono text-base font-medium tracking-wide text-gray-300">
                               Record a message (optional)
                             </p>
-                            <RecordAudio onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
-                            <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
+                            {allowAudioResponse && (
+                              <RecordAudio onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
+                            )}
+                            {allowVideoResponse && (
+                              <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
+                            )}
                           </div>
                         )}
                       </form>

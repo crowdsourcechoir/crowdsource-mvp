@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { getAllEvents } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import AdminEventCard from "@/components/AdminEventCard";
 import { getAgentThemes, type AgentTheme } from "@/data/agentInterview";
+import AdminIndeterminateProgress from "@/components/AdminIndeterminateProgress";
+import AdminEventsLoadingSkeleton from "@/components/AdminEventsLoadingSkeleton";
 
 function isUpcoming(event: Event): boolean {
   const eventDate = new Date(`${event.date}T23:59:59`);
@@ -23,44 +25,44 @@ export default function AdminEventsList() {
   const [baseUrl, setBaseUrl] = useState("https://crowdsource-mvp.vercel.app");
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const showCreatedBanner = searchParams.get("created") === "1";
+
   useEffect(() => {
     if (typeof window !== "undefined") setBaseUrl(window.location.origin);
   }, []);
 
-  function refreshEvents() {
+  /** Single parallel load — faster than sequential events + themes; avoids double-fetch on mount. */
+  const loadData = useCallback(async () => {
     setLoading(true);
-    getAllEvents()
-      .then(setEvents)
-      .catch(() => setEvents([]))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => {
-    refreshEvents();
+    const [eventsResult, themesResult] = await Promise.allSettled([getAllEvents(), getAgentThemes()]);
+    if (eventsResult.status === "fulfilled") {
+      setEvents(Array.isArray(eventsResult.value) ? eventsResult.value : []);
+    } else {
+      setEvents([]);
+    }
+    if (themesResult.status === "fulfilled") {
+      setThemes(Array.isArray(themesResult.value) ? themesResult.value : []);
+    } else {
+      setThemes([]);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
-    getAgentThemes()
-      .then(setThemes)
-      .catch(() => setThemes([]));
-  }, []);
+    if (pathname !== "/admin/events") return;
+    loadData();
+  }, [pathname, loadData]);
 
-  /* Refetch when user navigates to this page so list stays in sync with local store */
   useEffect(() => {
-    if (pathname === "/admin/events") refreshEvents();
-  }, [pathname]);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && pathname === "/admin/events") loadData();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [pathname, loadData]);
 
   function clearCreatedParam() {
     router.replace("/admin/events", { scroll: false });
   }
-
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") refreshEvents();
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
 
   const filtered = useMemo(() => {
     const list = events.filter((e) => (filter === "upcoming" ? isUpcoming(e) : !isUpcoming(e)));
@@ -71,8 +73,12 @@ export default function AdminEventsList() {
     });
   }, [events, filter]);
 
+  const showFullSkeleton = loading && events.length === 0;
+
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white">
+    <div className="relative min-h-screen bg-[#0c0c0e] text-white">
+      {loading && <AdminIndeterminateProgress />}
+
       {showCreatedBanner && (
         <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-green-700/60 bg-green-900/20 px-4 py-3 text-sm text-green-200">
           <span>Event created. Click it below to open.</span>
@@ -115,22 +121,26 @@ export default function AdminEventsList() {
         </div>
       </div>
 
-      <ul className="space-y-4 sm:space-y-5">
-        {filtered.map((event) => {
-          const theme = event.agentThemeId ? themes.find((t) => t.id === event.agentThemeId) : null;
-          const badgeLabel =
-            theme?.key === "birthday"
-              ? "Birthday"
-              : theme?.key === "fundraiser"
-                ? "Fundraiser"
-                : "Other";
-          return (
-            <li key={event.id}>
-              <AdminEventCard event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
-            </li>
-          );
-        })}
-      </ul>
+      {showFullSkeleton ? (
+        <AdminEventsLoadingSkeleton />
+      ) : (
+        <ul className="space-y-4 sm:space-y-5">
+          {filtered.map((event) => {
+            const theme = event.agentThemeId ? themes.find((t) => t.id === event.agentThemeId) : null;
+            const badgeLabel =
+              theme?.key === "birthday"
+                ? "Birthday"
+                : theme?.key === "fundraiser"
+                  ? "Fundraiser"
+                  : "Other";
+            return (
+              <li key={event.id}>
+                <AdminEventCard event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {!loading && filtered.length === 0 && (
         <p className="mt-12 text-center text-gray-500">

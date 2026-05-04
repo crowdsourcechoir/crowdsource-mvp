@@ -5,7 +5,8 @@ import { randomUUID } from "crypto";
 export type LocalAgentParticipant = {
   id: string;
   eventId: string;
-  name: string | null;
+  displayName: string | null;
+  email: string | null;
   sessionToken: string;
   createdAt: string;
 };
@@ -68,7 +69,8 @@ export async function localFindParticipantBySessionToken(eventId: string, sessio
 
 export async function localCreateOrGetParticipantAndConversation(args: {
   eventId: string;
-  name?: string | null;
+  displayName?: string | null;
+  email?: string | null;
   sessionToken: string;
 }): Promise<{ participant: LocalAgentParticipant; conversation: LocalAgentConversation }> {
   const store = await loadStore();
@@ -82,7 +84,8 @@ export async function localCreateOrGetParticipantAndConversation(args: {
   const participant: LocalAgentParticipant = {
     id: randomUUID(),
     eventId: args.eventId,
-    name: args.name ?? null,
+    displayName: args.displayName ?? null,
+    email: args.email ?? null,
     sessionToken: args.sessionToken,
     createdAt: new Date().toISOString(),
   };
@@ -169,7 +172,15 @@ export async function localUpdateParticipantName(args: { participantId: string; 
   const store = await loadStore();
   const p = store.participants.find((x) => x.id === args.participantId);
   if (!p) return;
-  p.name = args.name ?? null;
+  p.displayName = args.name ?? null;
+  await saveStore(store);
+}
+
+export async function localUpdateParticipantEmail(args: { participantId: string; email: string | null }): Promise<void> {
+  const store = await loadStore();
+  const p = store.participants.find((x) => x.id === args.participantId);
+  if (!p) return;
+  p.email = args.email ?? null;
   await saveStore(store);
 }
 
@@ -182,13 +193,14 @@ export async function localGetEventTranscripts(eventId: string): Promise<
   Array<{
     participantId: string;
     participantName: string;
+    email: string | null;
     conversationId: string;
     turns: LocalAgentTurn[];
   }>
 > {
   const store = await loadStore();
-  const participantById = new Map<string, string>(
-    store.participants.map((p) => [p.id, p.name ?? "Anonymous"])
+  const participantById = new Map<string, { name: string; email: string | null }>(
+    store.participants.map((p) => [p.id, { name: p.displayName ?? "Anonymous", email: p.email ?? null }])
   );
   const conversations = store.conversations.filter((c) => c.eventId === eventId);
   const results = conversations.map((c) => {
@@ -198,7 +210,8 @@ export async function localGetEventTranscripts(eventId: string): Promise<
       .map(normalizeTurn);
     return {
       participantId: c.participantId,
-      participantName: participantById.get(c.participantId) ?? "Anonymous",
+      participantName: participantById.get(c.participantId)?.name ?? "Anonymous",
+      email: participantById.get(c.participantId)?.email ?? null,
       conversationId: c.id,
       turns,
     };

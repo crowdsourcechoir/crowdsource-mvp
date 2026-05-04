@@ -11,6 +11,11 @@ export type Event = {
   address: string;
   prompt: string;
   heroImage: string;
+  heroImageMode?: "bw" | "color";
+  landingHeadline?: string;
+  landingCopy?: string;
+  ctaText?: string;
+  allowAudioVideoPrompt?: boolean;
   agentThemeId?: string | null;
   agentBrief?: AgentBrief | null;
 };

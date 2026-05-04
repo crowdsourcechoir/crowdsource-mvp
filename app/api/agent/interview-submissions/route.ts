@@ -15,6 +15,7 @@ type InterviewAnswer = {
 
 type InterviewSubmissionItem = {
   participantName: string;
+  email?: string | null;
   conversationId: string;
   answers: InterviewAnswer[];
 };
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
     const transcripts = await localGetEventTranscripts(eventId);
     const items: InterviewSubmissionItem[] = transcripts.map((t) => ({
       participantName: t.participantName,
+      email: t.email ?? null,
       conversationId: t.conversationId,
       answers: t.turns
         .filter((turn) => turn.role === "user")
@@ -63,11 +65,17 @@ export async function GET(request: Request) {
     const participantIds = convs.map((c: any) => c.participant_id);
     const { data: participants, error: eParticipants } = await supabaseAdmin
       .from("agent_participants")
-      .select("id, name")
+      .select("id, name, display_name, email")
       .in("id", participantIds);
 
-    const nameById = new Map<string, string>(
-      (participants ?? []).map((p: any) => [p.id, p.name ?? "Anonymous"])
+    const identityById = new Map<string, { name: string; email: string | null }>(
+      (participants ?? []).map((p: any) => [
+        p.id,
+        {
+          name: p.display_name ?? p.name ?? "Anonymous",
+          email: p.email ?? null,
+        },
+      ])
     );
 
     const conversationIds = convs.map((c: any) => c.id);
@@ -100,8 +108,9 @@ export async function GET(request: Request) {
           videoTranscript: t.video_transcript ?? null,
         }));
       return {
-        participantName: nameById.get(conv.participant_id) ?? "Anonymous",
+        participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
         conversationId: conv.id,
+        email: identityById.get(conv.participant_id)?.email ?? null,
         answers,
       };
     });

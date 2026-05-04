@@ -16,6 +16,10 @@ export type EventFormValues = {
   address: string;
   prompt: string;
   heroImage: string;
+  heroImageMode: "bw" | "color";
+  landingHeadline: string;
+  landingCopy: string;
+  ctaText: string;
   agentThemeId: string | null;
   agentBrief: AgentBrief | null;
 };
@@ -38,6 +42,10 @@ const initialValues: EventFormValues = {
   // The agent interview is the default, so this is safe as a hidden default.
   prompt: "Let's do it.",
   heroImage: "",
+  heroImageMode: "bw",
+  landingHeadline: "We're crowdsourcing a song for this event. Want to help create it?",
+  landingCopy: "",
+  ctaText: "Let's make an anthem",
   agentThemeId: null,
   agentBrief: null,
 };
@@ -45,37 +53,49 @@ const initialValues: EventFormValues = {
 const MONTH_ABBREV = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const TEMPLATE_DEFAULTS: Record<
   "birthday" | "fundraiser" | "other",
-  { eventType: string; emotionalArc: string; askAbout: string[] }
+  {
+    eventType: string;
+    emotionalArc: string;
+    askAboutItems: Array<{
+      prompt: string;
+      allowAudio?: boolean;
+      allowVideo?: boolean;
+      requireEmailCaptcha?: boolean;
+    }>;
+  }
 > = {
   birthday: {
     eventType: "birthday",
     emotionalArc: "fun -> heartfelt -> celebratory",
-    askAbout: [
-      "In one word, how would you describe [person]?",
-      "What's one thing you love or admire about [person]?",
-      "What's a funny or \"classic [person]\" moment you've witnessed?",
-      "What is [person]'s superpower?",
-      "What do you wish for [person] in the next 50 years?",
-      "Finish this line: \"[person], you are...\"",
-      "What else would you like to say about [person]? Feel free to add text, or record a voice or video message - then tap Submit.",
+    askAboutItems: [
+      { prompt: "In one word, how would you describe [person]?" },
+      { prompt: "What's one thing you love or admire about [person]?" },
+      { prompt: "What's a funny or \"classic [person]\" moment you've witnessed?" },
+      { prompt: "What is [person]'s superpower?" },
+      { prompt: "What do you wish for [person] in the next 50 years?" },
+      { prompt: "Finish this line: \"[person], you are...\"" },
+      { prompt: "What else would you like to say about [person]?", allowAudio: true, allowVideo: true },
+      { prompt: "What email should we send your anthem to?", requireEmailCaptcha: true },
     ],
   },
   fundraiser: {
     eventType: "fundraiser",
     emotionalArc: "gratitude -> impact -> hope",
-    askAbout: [
-      "Why this cause matters to you",
-      "A moment of impact you've seen",
-      "What support you hope to inspire",
+    askAboutItems: [
+      { prompt: "Why this cause matters to you" },
+      { prompt: "A moment of impact you've seen" },
+      { prompt: "What support you hope to inspire" },
+      { prompt: "What email should we send your anthem to?", requireEmailCaptcha: true },
     ],
   },
   other: {
     eventType: "other",
     emotionalArc: "engaging -> reflective -> inspiring",
-    askAbout: [
-      "How you're connected to this event",
-      "A standout moment or insight",
-      "What message you'd like to share",
+    askAboutItems: [
+      { prompt: "How you're connected to this event" },
+      { prompt: "A standout moment or insight" },
+      { prompt: "What message you'd like to share" },
+      { prompt: "What email should we send your anthem to?", requireEmailCaptcha: true },
     ],
   },
 };
@@ -87,7 +107,12 @@ type SavedAgentTemplate = {
   eventType: "birthday" | "fundraiser" | "other" | string;
   whoWhat?: string;
   emotionalArc?: string;
-  askAbout: string[];
+  askAboutItems: Array<{
+    prompt: string;
+    allowAudio?: boolean;
+    allowVideo?: boolean;
+    requireEmailCaptcha?: boolean;
+  }>;
 };
 
 function formatDateForSlug(dateStr: string): string {
@@ -122,7 +147,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         setSavedTemplates(
-          parsed.filter((t) => t && typeof t.name === "string" && Array.isArray(t.askAbout))
+          parsed.filter((t) => t && typeof t.name === "string" && Array.isArray(t.askAboutItems))
         );
       }
     } catch {
@@ -150,12 +175,33 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
         ...(v.agentBrief ?? {}),
         eventType: d.eventType,
         emotionalArc: d.emotionalArc,
-        askAbout: d.askAbout,
+        askAboutItems: d.askAboutItems,
+        askAbout: d.askAboutItems.map((q) => q.prompt),
       },
     }));
     // Intentionally run once to ensure fields are editable immediately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const brief = values.agentBrief;
+    if (!brief) return;
+    if (Array.isArray(brief.askAboutItems) && brief.askAboutItems.length > 0) return;
+    const fromAskAbout = Array.isArray(brief.askAbout)
+      ? brief.askAbout
+          .map((prompt) => (typeof prompt === "string" ? prompt.trim() : ""))
+          .filter((prompt): prompt is string => prompt.length > 0)
+          .map((prompt) => ({ prompt, allowAudio: false, allowVideo: false, requireEmailCaptcha: false }))
+      : [];
+    if (fromAskAbout.length === 0) return;
+    setValues((v) => ({
+      ...v,
+      agentBrief: {
+        ...(v.agentBrief ?? {}),
+        askAboutItems: fromAskAbout,
+      },
+    }));
+  }, [values.agentBrief]);
 
   useEffect(() => {
     if (slugManuallyEdited || !values.date) return;
@@ -164,15 +210,21 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const normalizedAskAbout = (values.agentBrief?.askAbout ?? [])
-      .map((x) => x.trim())
-      .filter((x) => x.length > 0);
+    const normalizedAskAboutItems = (values.agentBrief?.askAboutItems ?? [])
+      .map((item) => ({
+        prompt: item.prompt.trim(),
+        allowAudio: !!item.allowAudio,
+        allowVideo: !!item.allowVideo,
+        requireEmailCaptcha: !!item.requireEmailCaptcha,
+      }))
+      .filter((item) => item.prompt.length > 0);
     const brief = values.agentBrief
       ? {
           eventType: values.agentBrief.eventType,
           whoWhat: values.agentBrief.whoWhat,
           emotionalArc: values.agentBrief.emotionalArc,
-          askAbout: normalizedAskAbout,
+          askAboutItems: normalizedAskAboutItems,
+          askAbout: normalizedAskAboutItems.map((item) => item.prompt),
         }
       : null;
     try {
@@ -209,7 +261,8 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
         eventType: tpl.eventType,
         whoWhat: tpl.whoWhat,
         emotionalArc: tpl.emotionalArc,
-        askAbout: tpl.askAbout,
+        askAboutItems: tpl.askAboutItems,
+        askAbout: tpl.askAboutItems.map((item) => item.prompt),
       },
     }));
     setCustomMode(true);
@@ -221,8 +274,15 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
       setThemeError("Add a template name before saving.");
       return;
     }
-    const askAbout = (values.agentBrief?.askAbout ?? []).map((x) => x.trim()).filter(Boolean);
-    if (askAbout.length === 0) {
+    const askAboutItems = (values.agentBrief?.askAboutItems ?? [])
+      .map((x) => ({
+        prompt: x.prompt.trim(),
+        allowAudio: !!x.allowAudio,
+        allowVideo: !!x.allowVideo,
+        requireEmailCaptcha: !!x.requireEmailCaptcha,
+      }))
+      .filter((x) => x.prompt.length > 0);
+    if (askAboutItems.length === 0) {
       setThemeError("Add at least one question topic before saving a template.");
       return;
     }
@@ -237,7 +297,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
       eventType: normalizedType,
       whoWhat: values.agentBrief?.whoWhat,
       emotionalArc: values.agentBrief?.emotionalArc,
-      askAbout,
+      askAboutItems,
     };
     persistSavedTemplates([tpl, ...savedTemplates]);
     setTemplateName("");
@@ -397,6 +457,67 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
           )}
         </div>
       </div>
+      <section className="rounded-2xl border border-gray-700/60 bg-[#1f1f1f] p-4 sm:p-6">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Public Landing Page</h3>
+        <p className="mt-1 text-xs text-gray-500">Customize the opening copy and CTA for this event.</p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="landingHeadline" className={labelClass}>
+              Landing headline
+            </label>
+            <input
+              id="landingHeadline"
+              type="text"
+              value={values.landingHeadline}
+              onChange={(e) => setValues((v) => ({ ...v, landingHeadline: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="landingCopy" className={labelClass}>
+              Supporting copy
+            </label>
+            <textarea
+              id="landingCopy"
+              rows={2}
+              value={values.landingCopy}
+              onChange={(e) => setValues((v) => ({ ...v, landingCopy: e.target.value }))}
+              className={inputClass}
+              placeholder="Optional short subheading under the headline."
+            />
+          </div>
+          <div>
+            <label htmlFor="ctaText" className={labelClass}>
+              CTA button text
+            </label>
+            <input
+              id="ctaText"
+              type="text"
+              value={values.ctaText}
+              onChange={(e) => setValues((v) => ({ ...v, ctaText: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="heroImageMode" className={labelClass}>
+                Default photo mode
+              </label>
+              <select
+                id="heroImageMode"
+                value={values.heroImageMode}
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, heroImageMode: e.target.value === "color" ? "color" : "bw" }))
+                }
+                className={inputClass}
+              >
+                <option value="bw">Black and white</option>
+                <option value="color">Full color</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-gray-700/60 bg-[#1f1f1f] p-4 sm:p-6">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Agent Interview</h3>
@@ -439,7 +560,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
 
                       setValues((v) => {
                         const prevBrief = v.agentBrief ?? null;
-                        const nextAskAbout = local.askAbout;
+                        const nextAskAboutItems = local.askAboutItems;
                         const nextEmotionalArc = local.emotionalArc;
 
                         return {
@@ -449,7 +570,8 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
                             ...(prevBrief ?? {}),
                             eventType: local.eventType,
                             // Always preload template defaults when template is clicked.
-                            askAbout: nextAskAbout,
+                            askAboutItems: nextAskAboutItems,
+                            askAbout: nextAskAboutItems.map((item) => item.prompt),
                             emotionalArc: nextEmotionalArc,
                           },
                         };
@@ -573,7 +695,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
                 <p className="mt-0.5 text-xs text-gray-500">Editable list. Reorder with ↑/↓. One topic per item.</p>
 
                 <div className="mt-3 space-y-3">
-                  {(values.agentBrief?.askAbout ?? []).map((q, idx) => (
+                  {(values.agentBrief?.askAboutItems ?? []).map((item, idx) => (
                     <div key={idx} className="rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-xs font-semibold text-gray-400">#{idx + 1}</span>
@@ -582,11 +704,12 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
                             type="button"
                             disabled={idx === 0}
                             onClick={() => {
-                              const next = [...(values.agentBrief?.askAbout ?? [])];
+                              const next = [...(values.agentBrief?.askAboutItems ?? [])];
                               const tmp = next[idx - 1];
                               next[idx - 1] = next[idx];
                               next[idx] = tmp;
-                              setBrief("askAbout", next);
+                              setBrief("askAboutItems", next);
+                              setBrief("askAbout", next.map((x) => x.prompt));
                             }}
                             className="rounded-lg border border-gray-700 bg-[#1f1f1f] px-2 py-1 text-xs font-semibold text-gray-300 disabled:opacity-40"
                           >
@@ -594,13 +717,14 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
                           </button>
                           <button
                             type="button"
-                            disabled={idx === (values.agentBrief?.askAbout ?? []).length - 1}
+                            disabled={idx === (values.agentBrief?.askAboutItems ?? []).length - 1}
                             onClick={() => {
-                              const next = [...(values.agentBrief?.askAbout ?? [])];
+                              const next = [...(values.agentBrief?.askAboutItems ?? [])];
                               const tmp = next[idx + 1];
                               next[idx + 1] = next[idx];
                               next[idx] = tmp;
-                              setBrief("askAbout", next);
+                              setBrief("askAboutItems", next);
+                              setBrief("askAbout", next.map((x) => x.prompt));
                             }}
                             className="rounded-lg border border-gray-700 bg-[#1f1f1f] px-2 py-1 text-xs font-semibold text-gray-300 disabled:opacity-40"
                           >
@@ -609,22 +733,75 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
                           <button
                             type="button"
                             onClick={() => {
-                              const next = [...(values.agentBrief?.askAbout ?? [])].filter((_, i) => i !== idx);
-                              setBrief("askAbout", next);
+                              const next = [...(values.agentBrief?.askAboutItems ?? [])].filter((_, i) => i !== idx);
+                              setBrief("askAboutItems", next);
+                              setBrief("askAbout", next.map((x) => x.prompt));
                             }}
                             className="rounded-lg border border-red-800/60 bg-red-950/30 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-900/30"
                           >
                             Delete
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...(values.agentBrief?.askAboutItems ?? [])];
+                              next[idx] = { ...next[idx], allowAudio: !next[idx]?.allowAudio };
+                              setBrief("askAboutItems", next);
+                              setBrief("askAbout", next.map((x) => x.prompt));
+                            }}
+                            className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+                              item.allowAudio
+                                ? "border border-blue-600/70 bg-blue-900/30 text-blue-200"
+                                : "border border-gray-700 bg-[#1f1f1f] text-gray-300"
+                            }`}
+                          >
+                            {item.allowAudio ? "Audio: On" : "Audio: Off"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...(values.agentBrief?.askAboutItems ?? [])];
+                              next[idx] = { ...next[idx], allowVideo: !next[idx]?.allowVideo };
+                              setBrief("askAboutItems", next);
+                              setBrief("askAbout", next.map((x) => x.prompt));
+                            }}
+                            className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+                              item.allowVideo
+                                ? "border border-purple-600/70 bg-purple-900/30 text-purple-200"
+                                : "border border-gray-700 bg-[#1f1f1f] text-gray-300"
+                            }`}
+                          >
+                            {item.allowVideo ? "Video: On" : "Video: Off"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...(values.agentBrief?.askAboutItems ?? [])];
+                              next[idx] = {
+                                ...next[idx],
+                                requireEmailCaptcha: !next[idx]?.requireEmailCaptcha,
+                              };
+                              setBrief("askAboutItems", next);
+                              setBrief("askAbout", next.map((x) => x.prompt));
+                            }}
+                            className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+                              item.requireEmailCaptcha
+                                ? "border border-emerald-600/70 bg-emerald-900/30 text-emerald-200"
+                                : "border border-gray-700 bg-[#1f1f1f] text-gray-300"
+                            }`}
+                          >
+                            {item.requireEmailCaptcha ? "Email+Captcha: On" : "Email+Captcha: Off"}
+                          </button>
                         </div>
                       </div>
                       <input
                         type="text"
-                        value={q}
+                        value={item.prompt}
                         onChange={(e) => {
-                          const next = [...(values.agentBrief?.askAbout ?? [])];
-                          next[idx] = e.target.value;
-                          setBrief("askAbout", next);
+                          const next = [...(values.agentBrief?.askAboutItems ?? [])];
+                          next[idx] = { ...next[idx], prompt: e.target.value };
+                          setBrief("askAboutItems", next);
+                          setBrief("askAbout", next.map((x) => x.prompt));
                         }}
                         className="mt-3 w-full rounded-xl border border-gray-600 bg-[#1f1f1f] px-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-gray-500 focus:outline-none"
                         placeholder="e.g. memories with the honoree"
@@ -635,9 +812,15 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
                   <button
                     type="button"
                     onClick={() => {
-                      const next = [...(values.agentBrief?.askAbout ?? [])];
-                      next.push("");
-                      setBrief("askAbout", next);
+                      const next = [...(values.agentBrief?.askAboutItems ?? [])];
+                      next.push({
+                        prompt: "",
+                        allowAudio: false,
+                        allowVideo: false,
+                        requireEmailCaptcha: false,
+                      });
+                      setBrief("askAboutItems", next);
+                      setBrief("askAbout", next.map((x) => x.prompt));
                     }}
                     className="min-h-[44px] w-full rounded-xl border border-gray-700 bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-[#2a2a2a]"
                   >

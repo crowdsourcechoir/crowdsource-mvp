@@ -42,6 +42,7 @@ export default function InterviewPage() {
   const searchParams = useSearchParams();
   const slug = typeof params?.slug === "string" ? params.slug : "";
   const nameFromUrl = searchParams.get("name")?.trim() || undefined;
+  const emailFromUrl = searchParams.get("email")?.trim() || undefined;
   const fresh = searchParams.get("fresh") === "1";
   const [event, setEvent] = useState<Event | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -103,13 +104,21 @@ export default function InterviewPage() {
     setError(null);
 
     const token = getOrCreateSessionToken(event.id, fresh);
-    startAgentInterview(event.id, { sessionToken: token, name: nameFromUrl })
+    if (!nameFromUrl || !emailFromUrl) {
+      setError("Display name and email are required. Start from the event page.");
+      return;
+    }
+    startAgentInterview(event.id, {
+      sessionToken: token,
+      displayName: nameFromUrl,
+      email: emailFromUrl,
+    })
       .then(({ conversation }) => {
         setConversationId(conversation.id);
         return fetchConversation(conversation.id);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to start interview"));
-  }, [event?.id, event?.agentThemeId, nameFromUrl, fetchConversation, fresh]);
+  }, [event?.id, event?.agentThemeId, nameFromUrl, emailFromUrl, fetchConversation, fresh]);
 
   useEffect(() => {
     if (!conversationId || turns.length > 0 || firstMessageRequested.current) return;

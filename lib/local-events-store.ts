@@ -17,6 +17,11 @@ export type EventRow = {
   address: string;
   prompt: string;
   hero_image: string;
+  hero_image_mode: "bw" | "color";
+  landing_headline: string;
+  landing_copy: string;
+  cta_text: string;
+  allow_audio_video_prompt: boolean;
   agent_theme_id: string | null;
   agent_brief: unknown;
 };

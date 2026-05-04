@@ -11,5 +11,21 @@ create table if not exists public.events (
   address text default '',
   prompt text default '',
   hero_image text default '',
+  hero_image_mode text not null default 'bw' check (hero_image_mode in ('bw', 'color')),
+  landing_headline text not null default 'We''re crowdsourcing a song for this event. Want to help create it?',
+  landing_copy text not null default '',
+  cta_text text not null default 'Let''s make an anthem',
+  allow_audio_video_prompt boolean not null default true,
   created_at timestamptz default now()
 );
+
+alter table public.events
+  add column if not exists hero_image_mode text not null default 'bw';
+alter table public.events
+  add column if not exists landing_headline text not null default 'We''re crowdsourcing a song for this event. Want to help create it?';
+alter table public.events
+  add column if not exists landing_copy text not null default '';
+alter table public.events
+  add column if not exists cta_text text not null default 'Let''s make an anthem';
+alter table public.events
+  add column if not exists allow_audio_video_prompt boolean not null default true;

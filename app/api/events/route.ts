@@ -44,7 +44,13 @@ export async function GET(request: Request) {
       return NextResponse.json(rowToEvent(data));
     }
 
-    const { data, error } = await supabaseAdmin.from("events").select("*").order("date", { ascending: true });
+    /* List: omit agent_brief (can be large JSON) — admin cards and public list don’t need it here. */
+    const { data, error } = await supabaseAdmin
+      .from("events")
+      .select(
+        "id, slug, title, description, date, time, venue, address, prompt, hero_image, hero_image_mode, landing_headline, landing_copy, cta_text, allow_audio_video_prompt, agent_theme_id"
+      )
+      .order("date", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json((data ?? []).map(rowToEvent));
   } catch (err) {
@@ -67,6 +73,13 @@ export async function POST(request: Request) {
         address: row.address as string,
         prompt: row.prompt as string,
         hero_image: row.hero_image as string,
+        hero_image_mode: (row.hero_image_mode as "bw" | "color") ?? "bw",
+        landing_headline:
+          (row.landing_headline as string) ??
+          "We're crowdsourcing a song for this event. Want to help create it?",
+        landing_copy: (row.landing_copy as string) ?? "",
+        cta_text: (row.cta_text as string) ?? "Let's make an anthem",
+        allow_audio_video_prompt: (row.allow_audio_video_prompt as boolean) ?? true,
         agent_theme_id: row.agent_theme_id as string | null,
         agent_brief: row.agent_brief,
       });
@@ -104,6 +117,13 @@ function eventToRow(e: Record<string, unknown>) {
     address: e.address ?? "",
     prompt: e.prompt ?? "",
     hero_image: e.heroImage ?? "",
+    hero_image_mode: (e as { heroImageMode?: "bw" | "color" }).heroImageMode ?? "bw",
+    landing_headline:
+      (e as { landingHeadline?: string }).landingHeadline ??
+      "We're crowdsourcing a song for this event. Want to help create it?",
+    landing_copy: (e as { landingCopy?: string }).landingCopy ?? "",
+    cta_text: (e as { ctaText?: string }).ctaText ?? "Let's make an anthem",
+    allow_audio_video_prompt: (e as { allowAudioVideoPrompt?: boolean }).allowAudioVideoPrompt ?? true,
     agent_theme_id: (e as { agentThemeId?: string | null }).agentThemeId ?? null,
     agent_brief: (e as { agentBrief?: unknown }).agentBrief ?? null,
   };
@@ -121,6 +141,13 @@ function rowToEvent(row: Record<string, unknown>) {
     address: row.address,
     prompt: row.prompt,
     heroImage: row.hero_image ?? "",
+    heroImageMode: row.hero_image_mode === "color" ? "color" : "bw",
+    landingHeadline:
+      (row.landing_headline as string) ??
+      "We're crowdsourcing a song for this event. Want to help create it?",
+    landingCopy: (row.landing_copy as string) ?? "",
+    ctaText: (row.cta_text as string) ?? "Let's make an anthem",
+    allowAudioVideoPrompt: (row.allow_audio_video_prompt as boolean) ?? true,
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
   };

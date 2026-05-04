@@ -24,6 +24,13 @@ export type AgentBrief = {
   whoWhat?: string;
   emotionalArc?: string;
   askAbout?: string[];
+  askAboutItems?: Array<{
+    prompt: string;
+    allowAudio?: boolean;
+    allowVideo?: boolean;
+    allowMedia?: boolean;
+    requireEmailCaptcha?: boolean;
+  }>;
   avoid?: string[];
   exampleAnswers?: string[];
 };
@@ -34,7 +41,8 @@ export type AgentBriefInput = Partial<AgentBrief>;
 export type AgentParticipant = {
   id: string;
   eventId: string;
-  name: string | null;
+  displayName: string | null;
+  email: string | null;
   sessionToken: string;
   createdAt: string;
 };
@@ -87,7 +95,7 @@ export type SongSeedSourceMappingItem = {
 /** LLM next-message response contract. */
 export type AgentNextMessageResponse = {
   agentMessage: string;
-  suggestedAnswerTypes: ("text" | "voice" | "short")[];
+  suggestedAnswerTypes: ("text" | "voice" | "video" | "short")[];
   extractedTags?: string[];
   stopReason: "continue" | "finished";
 };
@@ -122,11 +130,12 @@ export async function getAgentThemes(): Promise<AgentTheme[]> {
 
 export async function startAgentInterview(
   eventId: string,
-  options: { name?: string; sessionToken: string }
+  options: { sessionToken: string; displayName?: string; email?: string }
 ): Promise<{ participant: AgentParticipant; conversation: AgentConversation }> {
   return apiPost("/api/agent/participants", {
     eventId,
-    name: options.name ?? null,
+    displayName: options.displayName ?? null,
+    email: options.email ?? null,
     sessionToken: options.sessionToken,
   });
 }
@@ -141,7 +150,7 @@ export async function getConversation(conversationId: string): Promise<{
 export async function sendMessage(
   conversationId: string,
   content: string,
-  options?: { audioDataUrl?: string | null; videoDataUrl?: string | null }
+  options?: { audioDataUrl?: string | null; videoDataUrl?: string | null; captchaToken?: string | null }
 ): Promise<{
   turn: AgentConversationTurn | null;
   nextMessage: AgentNextMessageResponse;
@@ -151,6 +160,7 @@ export async function sendMessage(
     content,
     audioDataUrl: options?.audioDataUrl ?? null,
     videoDataUrl: options?.videoDataUrl ?? null,
+    captchaToken: options?.captchaToken ?? null,
   });
 }
 

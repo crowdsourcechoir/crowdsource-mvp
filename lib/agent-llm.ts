@@ -25,6 +25,13 @@ export type AgentBriefRow = {
   whoWhat?: string;
   emotionalArc?: string;
   askAbout?: string[];
+  askAboutItems?: Array<{
+    prompt: string;
+    allowAudio?: boolean;
+    allowVideo?: boolean;
+    allowMedia?: boolean;
+    requireEmailCaptcha?: boolean;
+  }>;
   avoid?: string[];
   exampleAnswers?: string[];
 } | null;
@@ -40,10 +47,49 @@ export type NextMessageInput = {
 
 export type NextMessageResult = {
   agentMessage: string;
-  suggestedAnswerTypes: ("text" | "voice" | "short")[];
+  suggestedAnswerTypes: ("text" | "voice" | "video" | "email" | "captcha" | "short")[];
   extractedTags?: string[];
   stopReason: "continue" | "finished";
 };
+
+type ScriptedQuestion = {
+  prompt: string;
+  allowAudio: boolean;
+  allowVideo: boolean;
+  requireEmailCaptcha: boolean;
+};
+
+function getScriptedQuestions(brief: AgentBriefRow, who: string): ScriptedQuestion[] {
+  const fromItems = Array.isArray(brief?.askAboutItems)
+    ? brief.askAboutItems
+        .map((item) => {
+          const prompt = typeof item?.prompt === "string" ? item.prompt.trim() : "";
+          if (!prompt) return null;
+          const allowAudio = !!item.allowAudio || !!item.allowMedia;
+          const allowVideo = !!item.allowVideo || !!item.allowMedia;
+          return { prompt, allowAudio, allowVideo, requireEmailCaptcha: !!item.requireEmailCaptcha };
+        })
+        .filter((x): x is ScriptedQuestion => !!x)
+    : [];
+
+  if (fromItems.length > 0) return fromItems;
+
+  const fromStrings = Array.isArray(brief?.askAbout)
+    ? brief.askAbout
+        .map((q) => (typeof q === "string" ? q.trim() : ""))
+        .filter((q): q is string => q.length > 0)
+        .map((prompt) => ({ prompt, allowAudio: false, allowVideo: false, requireEmailCaptcha: false }))
+    : [];
+
+  if (fromStrings.length > 0) return fromStrings;
+
+  return DEFAULT_QUESTIONS.map((toQuestion) => ({
+    prompt: toQuestion(who),
+    allowAudio: false,
+    allowVideo: false,
+    requireEmailCaptcha: false,
+  }));
+}
 
 function buildSystemPrompt(input: NextMessageInput): string {
   const { theme, brief, eventTitle } = input;
@@ -76,32 +122,15 @@ export async function getNextAgentMessage(
     || (input.eventTitle?.trim() && input.eventTitle.length < 80 ? input.eventTitle : null)
     || "them";
 
-  const briefQuestions = Array.isArray(brief?.askAbout)
-    ? brief.askAbout
-        .map((q) => (typeof q === "string" ? q.trim() : ""))
-        .filter((q): q is string => q.length > 0)
-    : [];
-  const scriptedQuestions =
-    briefQuestions.length > 0 ? briefQuestions : DEFAULT_QUESTIONS.map((toQuestion) => toQuestion(who));
+  const scriptedQuestions = getScriptedQuestions(brief, who);
 
-  // Step 0 = name (handled by send route). Step 2 = first scripted question. Voice step follows scripted questions.
-  const VOICE_STEP = 2 + scriptedQuestions.length;
-  if (currentStep > VOICE_STEP) {
+  // Step 0 = name (handled by send route). Step 2 = first scripted question.
+  const FINISH_STEP = 2 + scriptedQuestions.length;
+  if (currentStep >= FINISH_STEP) {
     return {
       agentMessage: "Thanks so much for sharing! That's all for now.",
       suggestedAnswerTypes: ["text"],
       stopReason: "finished",
-    };
-  }
-  if (currentStep === VOICE_STEP) {
-    const name =
-      (brief?.whoWhat?.trim() && brief.whoWhat.length < 80 ? brief.whoWhat : null) ||
-      (input.eventTitle?.trim() && input.eventTitle.length < 80 ? input.eventTitle : null) ||
-      "this person or event";
-    return {
-      agentMessage: `What else would you like to say about ${name}? Feel free to add text, or record a voice or video message — then tap Submit.`,
-      suggestedAnswerTypes: ["text", "voice"],
-      stopReason: "continue",
     };
   }
 
@@ -109,20 +138,34 @@ export async function getNextAgentMessage(
   const questionIndex = currentStep - 2;
   if (questionIndex >= 0 && questionIndex < scriptedQuestions.length) {
     const question = scriptedQuestions[questionIndex];
+    const suggestedAnswerTypes: NextMessageResult["suggestedAnswerTypes"] = ["text"];
+    if (question.allowAudio) suggestedAnswerTypes.push("voice");
+    if (question.allowVideo) suggestedAnswerTypes.push("video");
+    if (question.requireEmailCaptcha) {
+      suggestedAnswerTypes.push("email");
+      suggestedAnswerTypes.push("captcha");
+    }
     return {
-      agentMessage: question,
-      suggestedAnswerTypes: ["text"],
+      agentMessage: question.prompt,
+      suggestedAnswerTypes,
       stopReason: "continue",
     };
   }
 
   // Fallback: if still in scripted range, return the next scripted question instead of trusting LLM.
-  if (currentStep >= 1 && currentStep <= VOICE_STEP) {
+  if (currentStep >= 1 && currentStep < FINISH_STEP) {
     const idx = Math.max(0, currentStep - 2);
     const q = scriptedQuestions[Math.min(idx, scriptedQuestions.length - 1)];
+    const suggestedAnswerTypes: NextMessageResult["suggestedAnswerTypes"] = ["text"];
+    if (q.allowAudio) suggestedAnswerTypes.push("voice");
+    if (q.allowVideo) suggestedAnswerTypes.push("video");
+    if (q.requireEmailCaptcha) {
+      suggestedAnswerTypes.push("email");
+      suggestedAnswerTypes.push("captcha");
+    }
     return {
-      agentMessage: q,
-      suggestedAnswerTypes: ["text"],
+      agentMessage: q.prompt,
+      suggestedAnswerTypes,
       stopReason: "continue",
     };
   }
@@ -153,12 +196,14 @@ export async function getNextAgentMessage(
     parsed = JSON.parse(cleaned) as { question?: string; stopReason?: string };
   } catch {
     return {
-      agentMessage: raw || scriptedQuestions[0],
+      agentMessage: raw || scriptedQuestions[0]?.prompt || "Tell me more.",
       suggestedAnswerTypes: ["text"],
       stopReason: "continue",
     };
   }
-  const question = typeof parsed.question === "string" ? parsed.question.trim() : (raw || scriptedQuestions[0]);
+  const question = typeof parsed.question === "string"
+    ? parsed.question.trim()
+    : (raw || scriptedQuestions[0]?.prompt || "Tell me more.");
   const stopReason = (currentStep >= 1 && currentStep <= 8) ? "continue" : (parsed.stopReason === "finished" ? "finished" : "continue");
   return {
     agentMessage: question,

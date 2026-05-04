@@ -10,7 +10,8 @@ function rowToParticipant(row: Record<string, unknown>) {
   return {
     id: row.id,
     eventId,
-    name: row.name ?? null,
+    displayName: row.display_name ?? row.name ?? null,
+    email: row.email ?? null,
     sessionToken: row.session_token,
     createdAt: row.created_at,
   };
@@ -36,9 +37,10 @@ export async function POST(request: Request) {
   }
   try {
     const body = await request.json();
-    const { eventId, name, sessionToken } = body as {
+    const { eventId, displayName, email, sessionToken } = body as {
       eventId: string;
-      name?: string | null;
+      displayName?: string;
+      email?: string;
       sessionToken: string;
     };
     if (!eventId || !sessionToken || typeof sessionToken !== "string") {
@@ -47,6 +49,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    const normalizedDisplayName = (displayName ?? "").trim() || null;
+    const normalizedEmail = (email ?? "").trim().toLowerCase() || null;
 
     if (USE_LOCAL_EVENTS) {
       const local = localEventsGetById(eventId);
@@ -54,7 +58,8 @@ export async function POST(request: Request) {
 
       const { participant, conversation } = await localCreateOrGetParticipantAndConversation({
         eventId,
-        name: name ?? null,
+        displayName: normalizedDisplayName,
+        email: normalizedEmail,
         sessionToken,
       });
 
@@ -63,6 +68,8 @@ export async function POST(request: Request) {
           ...participant,
           event_id: participant.eventId,
           local_event_id: participant.eventId,
+          display_name: participant.displayName,
+          email: participant.email,
           session_token: participant.sessionToken,
           created_at: participant.createdAt,
         } as any),
@@ -100,6 +107,12 @@ export async function POST(request: Request) {
       .single();
 
     if (existingParticipant?.id) {
+      if (normalizedDisplayName || normalizedEmail) {
+        await supabaseAdmin
+          .from("agent_participants")
+          .update({ name: normalizedDisplayName, display_name: normalizedDisplayName, email: normalizedEmail })
+          .eq("id", existingParticipant.id);
+      }
       const { data: conv } = await supabaseAdmin
         .from("agent_conversations")
         .select("*")
@@ -125,7 +138,9 @@ export async function POST(request: Request) {
       .insert({
         event_id: isLocalEvent ? null : eventId,
         local_event_id: isLocalEvent ? eventId : null,
-        name: name ?? null,
+        name: normalizedDisplayName,
+        display_name: normalizedDisplayName,
+        email: normalizedEmail,
         session_token: sessionToken,
       })
       .select()

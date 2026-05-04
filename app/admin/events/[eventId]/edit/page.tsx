@@ -53,6 +53,11 @@ export default function EditEventPage() {
     address: event.address,
     prompt: event.prompt,
     heroImage: event.heroImage,
+    heroImageMode: event.heroImageMode ?? "bw",
+    landingHeadline:
+      event.landingHeadline ?? "We're crowdsourcing a song for this event. Want to help create it?",
+    landingCopy: event.landingCopy ?? "",
+    ctaText: event.ctaText ?? "Let's make an anthem",
     agentThemeId: event.agentThemeId ?? null,
     agentBrief: event.agentBrief ?? null,
   };

@@ -61,10 +61,17 @@ create table if not exists public.agent_participants (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
   name text default null,
+  display_name text default null,
+  email text default null,
   session_token text not null,
   created_at timestamptz default now(),
   unique(event_id, session_token)
 );
+
+alter table public.agent_participants
+  add column if not exists display_name text default null;
+alter table public.agent_participants
+  add column if not exists email text default null;
 
 create index if not exists idx_agent_participants_event on public.agent_participants(event_id);
 
