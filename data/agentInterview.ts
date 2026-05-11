@@ -95,7 +95,7 @@ export type SongSeedSourceMappingItem = {
 /** LLM next-message response contract. */
 export type AgentNextMessageResponse = {
   agentMessage: string;
-  suggestedAnswerTypes: ("text" | "voice" | "video" | "short")[];
+  suggestedAnswerTypes: ("text" | "voice" | "video" | "email" | "captcha" | "short")[];
   extractedTags?: string[];
   stopReason: "continue" | "finished";
 };
