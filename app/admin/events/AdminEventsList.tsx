@@ -20,6 +20,7 @@ export default function AdminEventsList() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<Event[]>([]);
+  const [eventsLoadError, setEventsLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
   const [baseUrl, setBaseUrl] = useState("https://crowdsource-mvp.vercel.app");
@@ -35,8 +36,12 @@ export default function AdminEventsList() {
     setLoading(true);
     const [eventsResult, themesResult] = await Promise.allSettled([getAllEvents(), getAgentThemes()]);
     if (eventsResult.status === "fulfilled") {
+      setEventsLoadError(null);
       setEvents(Array.isArray(eventsResult.value) ? eventsResult.value : []);
     } else {
+      const msg =
+        eventsResult.reason instanceof Error ? eventsResult.reason.message : "Could not load events.";
+      setEventsLoadError(msg);
       setEvents([]);
     }
     if (themesResult.status === "fulfilled") {
@@ -78,6 +83,17 @@ export default function AdminEventsList() {
   return (
     <div className="relative min-h-screen bg-[#0c0c0e] text-white">
       {loading && <AdminIndeterminateProgress />}
+
+      {eventsLoadError && (
+        <div className="mb-6 rounded-xl border border-red-700/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          <p className="font-medium">Events could not be loaded</p>
+          <p className="mt-1 text-red-200/90">{eventsLoadError}</p>
+          <p className="mt-2 text-xs text-red-300/80">
+            If this mentions a missing column, run the latest <code className="rounded bg-black/30 px-1">supabase/events-table.sql</code>{" "}
+            on your production Supabase project, then refresh.
+          </p>
+        </div>
+      )}
 
       {showCreatedBanner && (
         <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-green-700/60 bg-green-900/20 px-4 py-3 text-sm text-green-200">
@@ -142,10 +158,33 @@ export default function AdminEventsList() {
         </ul>
       )}
 
-      {!loading && filtered.length === 0 && (
-        <p className="mt-12 text-center text-gray-500">
-          {filter === "upcoming" ? "No upcoming events." : "No past events."}
-        </p>
+      {!loading && !eventsLoadError && filtered.length === 0 && (
+        <div className="mt-12 space-y-2 text-center text-gray-500">
+          <p>
+            {events.length === 0
+              ? filter === "upcoming"
+                ? "No upcoming events."
+                : "No past events."
+              : filter === "upcoming"
+                ? "No upcoming events — your event date may already be in the past."
+                : "No past events — try the Upcoming tab."}
+          </p>
+          {events.length > 0 && filter === "upcoming" && (
+            <p className="text-sm text-gray-400">
+              You have {events.length} event{events.length === 1 ? "" : "s"} total.{" "}
+              <button type="button" className="font-medium text-blue-400 hover:underline" onClick={() => setFilter("past")}>
+                Show Past
+              </button>
+            </p>
+          )}
+          {events.length > 0 && filter === "past" && (
+            <p className="text-sm text-gray-400">
+              <button type="button" className="font-medium text-blue-400 hover:underline" onClick={() => setFilter("upcoming")}>
+                Show Upcoming
+              </button>
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
