@@ -28,6 +28,8 @@ type EventFormProps = {
   onSubmit: (values: EventFormValues) => Promise<void> | void;
   initialValues?: Partial<EventFormValues>;
   submitLabel?: string;
+  /** Shown after a successful submit (e.g. before redirect). */
+  submitSuccessMessage?: string;
 };
 
 const initialValues: EventFormValues = {
@@ -125,9 +127,16 @@ function formatDateForSlug(dateStr: string): string {
   return `csc-${month}${day}`;
 }
 
-export default function EventForm({ onSubmit, initialValues: initialProp, submitLabel = "Create Event" }: EventFormProps) {
+export default function EventForm({
+  onSubmit,
+  initialValues: initialProp,
+  submitLabel = "Create Event",
+  submitSuccessMessage = "Event created.",
+}: EventFormProps) {
   const [values, setValues] = useState<EventFormValues>({ ...initialValues, ...initialProp });
   const [success, setSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const [customMode, setCustomMode] = useState(false);
@@ -210,6 +219,7 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setSubmitError(null);
     const normalizedAskAboutItems = (values.agentBrief?.askAboutItems ?? [])
       .map((item) => ({
         prompt: item.prompt.trim(),
@@ -227,11 +237,15 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
           askAbout: normalizedAskAboutItems.map((item) => item.prompt),
         }
       : null;
+    setIsSubmitting(true);
     try {
       await onSubmit({ ...values, agentBrief: brief });
       setSuccess(true);
-    } catch {
+    } catch (err) {
       setSuccess(false);
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -323,10 +337,15 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
   const labelClass = "block text-sm font-semibold text-gray-300";
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-xl space-y-6">
+    <form noValidate onSubmit={handleSubmit} className="mx-auto max-w-xl space-y-6">
+      {submitError && (
+        <div className="rounded-xl border border-red-800/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          {submitError}
+        </div>
+      )}
       {success && (
         <div className="rounded-xl border border-green-800/60 bg-green-900/20 px-4 py-3 text-sm text-green-300">
-          Event created.
+          {submitSuccessMessage}
         </div>
       )}
       <div>
@@ -835,9 +854,10 @@ export default function EventForm({ onSubmit, initialValues: initialProp, submit
 
       <button
         type="submit"
-        className="rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-200"
+        disabled={isSubmitting}
+        className="rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {submitLabel}
+        {isSubmitting ? "Saving…" : submitLabel}
       </button>
     </form>
   );

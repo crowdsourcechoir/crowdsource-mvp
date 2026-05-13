@@ -5,30 +5,48 @@ import { useEffect, useState } from "react";
 import { getEventById, updateEvent } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import EventForm, { type EventFormValues } from "@/components/EventForm";
+import { toDateInputValue, toTimeInputValue } from "@/lib/event-datetime-input";
+
+type LoadStatus = "loading" | "ready" | "notFound";
 
 export default function EditEventPage() {
   const params = useParams();
   const router = useRouter();
   const eventId = typeof params?.eventId === "string" ? params.eventId : "";
+  const [status, setStatus] = useState<LoadStatus>("loading");
   const [event, setEvent] = useState<Event | null>(null);
-  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
+    setStatus("loading");
+    setEvent(null);
     getEventById(eventId)
       .then((e) => {
-        if (e) setEvent(e);
-        else setNotFound(true);
+        if (e) {
+          setEvent(e);
+          setStatus("ready");
+        } else {
+          setStatus("notFound");
+        }
       })
-      .catch(() => setNotFound(true));
+      .catch(() => setStatus("notFound"));
   }, [eventId]);
 
   async function handleSubmit(values: EventFormValues) {
-    if (!event) return;
+    if (!event) throw new Error("Event is still loading or missing.");
     const updated = await updateEvent(event.id, values);
-    if (updated) router.push(`/admin/events/${event.id}`);
+    if (!updated) throw new Error("Could not save (event may have been deleted).");
+    router.push(`/admin/events/${event.id}`);
   }
 
-  if (notFound || !event) {
+  if (status === "loading") {
+    return (
+      <div className="mx-auto max-w-6xl rounded-lg border border-gray-700 bg-[#18181b] p-6">
+        <p className="text-gray-400">Loading event…</p>
+      </div>
+    );
+  }
+
+  if (status === "notFound" || !event) {
     return (
       <div className="rounded-lg border border-gray-700 bg-[#18181b] p-6">
         <p className="text-gray-400">Event not found.</p>
@@ -47,8 +65,8 @@ export default function EditEventPage() {
     title: event.title,
     slug: event.slug,
     description: event.description,
-    date: event.date,
-    time: event.time,
+    date: toDateInputValue(event.date),
+    time: toTimeInputValue(event.time),
     venue: event.venue,
     address: event.address,
     prompt: event.prompt,
@@ -66,8 +84,10 @@ export default function EditEventPage() {
     <div className="mx-auto max-w-6xl">
       <h2 className="mb-6 text-2xl font-semibold text-white">Edit Event</h2>
       <EventForm
+        key={event.id}
         initialValues={initialValues}
         submitLabel="Save"
+        submitSuccessMessage="Saved. Redirecting…"
         onSubmit={handleSubmit}
       />
     </div>
