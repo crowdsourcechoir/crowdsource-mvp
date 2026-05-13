@@ -5,6 +5,7 @@ node_modules
 
 # Next.js
 .next/
+.next-dev/
 .next 2/
 out/
 
@@ -25,3 +26,4 @@ yarn-error.log*
 
 # TypeScript
 next-env.d.ts
+*.tsbuildinfo
