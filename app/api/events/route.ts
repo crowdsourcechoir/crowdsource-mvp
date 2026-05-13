@@ -44,15 +44,14 @@ export async function GET(request: Request) {
       return NextResponse.json(rowToEvent(data));
     }
 
-    /* List: omit agent_brief (can be large JSON) — admin cards and public list don’t need it here. */
-    const { data, error } = await supabaseAdmin
-      .from("events")
-      .select(
-        "id, slug, title, description, date, time, venue, address, prompt, hero_image, hero_image_mode, landing_headline, landing_copy, cta_text, allow_audio_video_prompt, agent_theme_id"
-      )
-      .order("date", { ascending: true });
+    /* List: use * so older production DBs (missing newer columns) still return rows. Strip agent_brief here — it can be large. */
+    const { data, error } = await supabaseAdmin.from("events").select("*").order("date", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json((data ?? []).map(rowToEvent));
+    const list = (data ?? []).map((row) => {
+      const e = rowToEvent(row);
+      return { ...e, agentBrief: null };
+    });
+    return NextResponse.json(list);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
