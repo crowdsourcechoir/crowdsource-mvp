@@ -89,8 +89,9 @@ export default function AdminEventsList() {
           <p className="font-medium">Events could not be loaded</p>
           <p className="mt-1 text-red-200/90">{eventsLoadError}</p>
           <p className="mt-2 text-xs text-red-300/80">
-            If this mentions a missing column, run the latest <code className="rounded bg-black/30 px-1">supabase/events-table.sql</code>{" "}
-            on your production Supabase project, then refresh.
+            In Supabase → SQL Editor, run <code className="rounded bg-black/30 px-1">supabase/prod-patch-events-columns.sql</code> (or the{" "}
+            <code className="rounded bg-black/30 px-1">alter table … add column if not exists</code> block in{" "}
+            <code className="rounded bg-black/30 px-1">supabase/events-table.sql</code>), then refresh.
           </p>
         </div>
       )}
