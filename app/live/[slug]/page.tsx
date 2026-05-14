@@ -158,31 +158,6 @@ export default function LiveJoinPage({ params }: { params: { slug: string } }) {
     }
   };
 
-  if (!session && !loadError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0c0c0e] text-white">
-        Loading…
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0c0c0e] px-4 text-center text-white">
-        <p className="text-lg">Session not found</p>
-        <p className="text-sm text-gray-500">
-          {loadError || "Check the link or scan the QR again."}
-        </p>
-        <a
-          href="/"
-          className="mt-4 text-sm font-medium text-gray-400 hover:text-white"
-        >
-          Go home
-        </a>
-      </div>
-    );
-  }
-
   const maxChars = currentRound?.character_limit ?? 140;
 
   const signalBlock: SignalPromptBlock | null = useMemo(() => {
@@ -224,6 +199,32 @@ export default function LiveJoinPage({ params }: { params: { slug: string } }) {
       console.error(e);
     }
   };
+
+  if (!session && !loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0c0c0e] text-white">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0c0c0e] px-4 text-center text-white">
+        <p className="text-lg">Session not found</p>
+        <p className="text-sm text-gray-500">
+          {loadError || "Check the link or scan the QR again."}
+        </p>
+        <a
+          href="/"
+          className="mt-4 text-sm font-medium text-gray-400 hover:text-white"
+        >
+          Go home
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0c0c0e] text-white">
       <div className="mx-auto max-w-lg px-4 py-6">
