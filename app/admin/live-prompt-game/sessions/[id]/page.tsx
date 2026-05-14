@@ -509,6 +509,19 @@ export default function HostControlRoomPage({
           </div>
         )}
 
+        {session.state === "VOTING" && signalBlockHost?.kind === "signal" && !session.ended_at && (
+          <div className="mt-4">
+            <button
+              type="button"
+              disabled={actionLoading !== null}
+              onClick={handleCloseVoting}
+              className="min-h-[48px] w-full max-w-sm rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50 sm:text-base"
+            >
+              {actionLoading === "close-vote" ? "…" : "Finish round — next prompt"}
+            </button>
+          </div>
+        )}
+
         {!session.ended_at && (
           <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <QRCodeDisplay
@@ -756,6 +769,22 @@ export default function HostControlRoomPage({
                   >
                     {actionLoading === "prepop-next" ? "…" : "Next Question"}
                   </button>
+                ) : signalBlockHost?.kind === "signal" ? (
+                  <div className="flex w-full flex-col gap-2">
+                    <button
+                      type="button"
+                      disabled={actionLoading !== null}
+                      onClick={handleCloseVoting}
+                      className="min-h-[52px] w-full max-w-md rounded-xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      {actionLoading === "close-vote" ? "…" : "Finish round — next prompt"}
+                    </button>
+                    <p className="max-w-xl text-sm text-gray-400">
+                      Ends voting and sends everyone to <span className="text-gray-200">waiting</span>. Then use{" "}
+                      <span className="text-gray-200">Start harmonic world vote</span> or{" "}
+                      <span className="text-gray-200">Send Prompt Live</span> for the next moment.
+                    </p>
+                  </div>
                 ) : (
                   <>
                     <button

@@ -225,32 +225,36 @@ export default function LiveJoinPage({ params }: { params: { slug: string } }) {
     );
   }
 
+  /** Signal collective vote: strip chrome so only layer + question + choices show. */
+  const signalMinimal = session.state === "VOTING" && signalBlock;
+
   return (
     <div className="min-h-screen bg-[#0c0c0e] text-white">
-      <div className="mx-auto max-w-lg px-4 py-6">
-        {/* Header: logo upper left, QR upper right */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="Crowdsource Choir"
-              className="h-12 w-auto sm:h-14"
-            />
-          </div>
-          {typeof window !== "undefined" && session && (
+      <div className={`mx-auto max-w-lg px-4 ${signalMinimal ? "py-8" : "py-6"}`}>
+        {!signalMinimal && (
+          <div className="flex items-start justify-between gap-4">
             <div className="shrink-0">
-              <QRCodeDisplay
-                url={joinUrl(session.slug)}
-                size={96}
-                highRes
-                className="shrink-0"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="Crowdsource Choir"
+                className="h-12 w-auto sm:h-14"
               />
             </div>
-          )}
-        </div>
+            {typeof window !== "undefined" && session && (
+              <div className="shrink-0">
+                <QRCodeDisplay
+                  url={joinUrl(session.slug)}
+                  size={96}
+                  highRes
+                  className="shrink-0"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
-        <div className="mt-6">
+        <div className={signalMinimal ? "mt-0" : "mt-6"}>
         {session.state === "WAITING" ? (
           <p className="mt-8 text-center text-lg text-gray-300">
             You&apos;re in! Waiting for host to start.
@@ -261,15 +265,6 @@ export default function LiveJoinPage({ params }: { params: { slug: string } }) {
               <h1 className="mt-6 text-xl font-bold text-white sm:text-2xl">
                 Vote for your favorite phrases (up to 3).
               </h1>
-            )}
-            {session.state === "VOTING" && signalBlock && (
-              <div className="mt-6 space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-amber-500/90">Signal</p>
-                <h1 className="text-xl font-bold text-white sm:text-2xl">Shape the next sound together</h1>
-                <p className="text-sm text-gray-400">
-                  One collective choice per round. Tap the world that fits the room.
-                </p>
-              </div>
             )}
 
         {session.state === "RESPONDING" && currentRound && (
@@ -318,16 +313,15 @@ export default function LiveJoinPage({ params }: { params: { slug: string } }) {
         )}
 
         {session.state === "VOTING" && signalBlock && currentRound && (
-          <div className="mt-6 space-y-4">
-            <div className="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-4 sm:p-5">
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-5 sm:p-6">
               <p className="text-xs font-medium uppercase tracking-wide text-amber-400/90">
                 {layerLabel(signalBlock.layerType)}
               </p>
-              <p className="mt-2 text-lg font-medium leading-snug text-white">{currentRound.prompt_text}</p>
+              <p className="mt-3 text-xl font-semibold leading-snug text-white sm:text-2xl">
+                {currentRound.prompt_text}
+              </p>
             </div>
-            <p className="text-center text-sm text-gray-400">
-              {myVoteIds.length === 0 ? "Tap your choice — you can change it until the host closes the round." : "You’re in. Tap another option to switch your vote."}
-            </p>
             <div className="grid gap-3">
               {signalBlock.choices.map((ch) => {
                 const sid = ch.submissionId!;
