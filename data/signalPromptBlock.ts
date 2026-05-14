@@ -33,19 +33,6 @@ export function isSignalChoiceDeviceId(deviceId: string): boolean {
   return deviceId.startsWith("__signal_choice__:");
 }
 
-/** First harmonic-world prototype (2–5s preview stubs in Ableton later). */
-export const DEFAULT_SIGNAL_HARMONIC_BLOCK: SignalPromptBlock = {
-  version: 1,
-  kind: "signal",
-  layerType: "harmonic",
-  choices: [
-    { id: "ocean", label: "Ocean", triggerId: "ableton.stub.layer.harmonic.ocean" },
-    { id: "fire", label: "Fire", triggerId: "ableton.stub.layer.harmonic.fire" },
-    { id: "night", label: "Night", triggerId: "ableton.stub.layer.harmonic.night" },
-    { id: "sunrise", label: "Sunrise", triggerId: "ableton.stub.layer.harmonic.sunrise" },
-  ],
-};
-
 export function parsePromptBlock(raw: unknown): PromptBlock | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;

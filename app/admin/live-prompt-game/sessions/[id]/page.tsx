@@ -25,7 +25,8 @@ import {
   type PhraseCard,
   type ResponseType,
 } from "@/data/livePromptGame";
-import { DEFAULT_SIGNAL_HARMONIC_BLOCK, parsePromptBlock } from "@/data/signalPromptBlock";
+import { parsePromptBlock } from "@/data/signalPromptBlock";
+import { signalCatalogGrouped, type SignalCatalogEntry } from "@/data/signalPromptCatalog";
 
 const POLL_MS = 2500;
 const VOTING_SECONDS_PER_ROUND = 10;
@@ -145,16 +146,16 @@ export default function HostControlRoomPage({
     }
   };
 
-  const handleSignalHarmonicRound = async () => {
+  const handleSignalCatalogRound = async (entry: SignalCatalogEntry) => {
     if (!sessionId) return;
     setSending(true);
     try {
       const round = await createRound(sessionId, {
-        prompt_text: "Where should the harmonic world drift next?",
+        prompt_text: entry.promptText,
         response_type: "short_phrase",
         character_limit: 80,
         timer_seconds: null,
-        prompt_block: DEFAULT_SIGNAL_HARMONIC_BLOCK,
+        prompt_block: entry.block,
       });
       setRounds((prev) => [...prev, round]);
       setSession((prev) =>
@@ -562,7 +563,7 @@ export default function HostControlRoomPage({
                 {session.name === "Game" || session.name === "Live Prompt Game"
                   ? "Live Prompt Mode is custom prompts. Pre-Populated Mode generates a fast category queue."
                   : session.name === "Signal"
-                    ? "Signal: collective emotional choices map to stub Ableton trigger IDs (OSC/MIDI later). Use Harmonic round to prototype one voting screen."
+                    ? "Signal: collective emotional choices map to stub Ableton trigger IDs (OSC/MIDI later). Start any preset below while WAITING."
                     : "This session is using the same Game-flow host controls for now. Fishbowl setup will be customized next."}
               </p>
             </div>
@@ -593,22 +594,34 @@ export default function HostControlRoomPage({
             <>
               {session.name === "Signal" && (
                 <div className="mt-4 rounded-xl border border-amber-900/40 bg-amber-950/25 p-4">
-                  <h3 className="text-sm font-semibold text-amber-200">Signal prototype</h3>
+                  <h3 className="text-sm font-semibold text-amber-200">Signal voting presets</h3>
                   <p className="mt-1 text-xs text-gray-400">
-                    One voting round: harmonic worlds (Ocean / Fire / Night / Sunrise). Opens immediately in VOTING.
-                    Stub trigger IDs are logged for future Ableton; audience only sees emotional labels.
+                    Each button opens one collective vote (4 choices). Audience sees only the question and choices.
+                    Stub trigger IDs log on this host view for Ableton later.
                   </p>
-                  <button
-                    type="button"
-                    disabled={sending || session.state !== "WAITING"}
-                    onClick={handleSignalHarmonicRound}
-                    className="mt-3 min-h-[44px] rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500 disabled:opacity-40"
-                  >
-                    {sending ? "Starting…" : "Start harmonic world vote"}
-                  </button>
+                  <div className="mt-4 space-y-4">
+                    {signalCatalogGrouped().map(({ layer, title, entries }) => (
+                      <div key={layer}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-500/90">{title}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {entries.map((entry) => (
+                            <button
+                              key={entry.id}
+                              type="button"
+                              disabled={sending || session.state !== "WAITING"}
+                              onClick={() => handleSignalCatalogRound(entry)}
+                              className="min-h-[40px] rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-900/50 disabled:opacity-40 sm:text-sm"
+                            >
+                              {sending ? "…" : entry.buttonLabel}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                   {session.state !== "WAITING" && (
-                    <p className="mt-2 text-xs text-gray-500">
-                      End the current stage (close voting → waiting) before launching another prototype round.
+                    <p className="mt-3 text-xs text-gray-500">
+                      Finish the current round (Stage or Controls) to return to WAITING, then launch another preset.
                     </p>
                   )}
                 </div>
@@ -781,7 +794,7 @@ export default function HostControlRoomPage({
                     </button>
                     <p className="max-w-xl text-sm text-gray-400">
                       Ends voting and sends everyone to <span className="text-gray-200">waiting</span>. Then use{" "}
-                      <span className="text-gray-200">Start harmonic world vote</span> or{" "}
+                      <span className="text-gray-200">a voting preset</span> or{" "}
                       <span className="text-gray-200">Send Prompt Live</span> for the next moment.
                     </p>
                   </div>
