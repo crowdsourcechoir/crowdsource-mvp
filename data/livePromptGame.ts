@@ -2,6 +2,8 @@
  * Live Prompt Game — types and API client. Isolated from Events.
  */
 
+import type { PromptBlock } from "@/data/signalPromptBlock";
+
 export type PromptGameSessionState = "WAITING" | "RESPONDING" | "VOTING";
 export type ResponseType = "one_word" | "short_phrase" | "sentence";
 
@@ -25,6 +27,8 @@ export type PromptGameRound = {
   timer_seconds: number | null;
   created_at: string;
   closed_at: string | null;
+  /** Structured block (Signal: choices + stub trigger IDs). From `prompt_game_rounds.prompt_block`. */
+  prompt_block?: PromptBlock | null;
 };
 
 export type PromptGameSubmission = {
@@ -129,6 +133,7 @@ export async function createRound(
     response_type?: ResponseType;
     character_limit?: number;
     timer_seconds?: number | null;
+    prompt_block?: PromptBlock;
   }
 ): Promise<PromptGameRound> {
   return api<PromptGameRound>(`/api/live-prompt-game/sessions/${sessionId}/rounds`, {

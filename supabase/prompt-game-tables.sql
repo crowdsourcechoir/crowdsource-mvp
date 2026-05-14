@@ -22,7 +22,8 @@ create table if not exists public.prompt_game_rounds (
   character_limit int not null default 140,
   timer_seconds int,
   created_at timestamptz default now(),
-  closed_at timestamptz
+  closed_at timestamptz,
+  prompt_block jsonb
 );
 
 alter table public.prompt_game_sessions
