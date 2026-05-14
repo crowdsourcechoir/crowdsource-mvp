@@ -184,7 +184,7 @@ export default function LivePage() {
                       ? "Answer fun prompts in a game format"
                       : m === "fishbowl"
                         ? "Contribute thoughts moving in a circle"
-                        : "Submit signals or questions to the host"}
+                        : "Find the signal from the noise."}
                   </div>
                 </div>
               </div>

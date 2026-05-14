@@ -25,6 +25,7 @@ import {
   type PhraseCard,
   type ResponseType,
 } from "@/data/livePromptGame";
+import { DEFAULT_SIGNAL_HARMONIC_BLOCK, parsePromptBlock } from "@/data/signalPromptBlock";
 
 const POLL_MS = 2500;
 const VOTING_SECONDS_PER_ROUND = 10;
@@ -137,6 +138,29 @@ export default function HostControlRoomPage({
           ? { ...prev, state: "RESPONDING", current_round_id: round.id }
           : null
       );
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSignalHarmonicRound = async () => {
+    if (!sessionId) return;
+    setSending(true);
+    try {
+      const round = await createRound(sessionId, {
+        prompt_text: "Where should the harmonic world drift next?",
+        response_type: "short_phrase",
+        character_limit: 80,
+        timer_seconds: null,
+        prompt_block: DEFAULT_SIGNAL_HARMONIC_BLOCK,
+      });
+      setRounds((prev) => [...prev, round]);
+      setSession((prev) =>
+        prev ? { ...prev, state: "VOTING", current_round_id: round.id } : null
+      );
+      await refresh(sessionId);
     } catch (e) {
       console.error(e);
     } finally {
@@ -317,6 +341,12 @@ export default function HostControlRoomPage({
       }
       return;
     }
+    const currentRoundForTimer = rounds.find((r) => r.id === session.current_round_id);
+    const isSignalRound = parsePromptBlock(currentRoundForTimer?.prompt_block)?.kind === "signal";
+    if (isSignalRound) {
+      setVotingCountdown(null);
+      return;
+    }
     if (votingRoundIdRef.current !== session.current_round_id) {
       votingRoundIdRef.current = session.current_round_id;
       setVotingCountdown(VOTING_SECONDS_PER_ROUND);
@@ -428,6 +458,15 @@ export default function HostControlRoomPage({
 
   const joinLink = joinUrl(session.slug, baseUrl);
   const currentRound = rounds.find((r) => r.id === session.current_round_id);
+  const signalBlockHost = currentRound ? parsePromptBlock(currentRound.prompt_block) : null;
+  const signalLeadingCard =
+    signalBlockHost?.kind === "signal" && session.state === "VOTING" && phraseCards.length > 0
+      ? phraseCards.reduce((a, b) => (a.vote_count >= b.vote_count ? a : b), phraseCards[0])
+      : null;
+  const signalLeadingChoice =
+    signalLeadingCard && signalBlockHost?.kind === "signal"
+      ? signalBlockHost.choices.find((c) => c.submissionId === signalLeadingCard.id)
+      : null;
 
   return (
     <div className="min-h-screen bg-[#0c0c0e] text-white">
@@ -455,8 +494,20 @@ export default function HostControlRoomPage({
         <p className="mt-2 text-2xl font-bold text-white sm:text-3xl">
           {session.state === "WAITING" && "WAITING — Join Now"}
           {session.state === "RESPONDING" && "RESPONDING — Submissions Open"}
-          {session.state === "VOTING" && "VOTING — Vote on Phrases"}
+          {session.state === "VOTING" &&
+            (signalBlockHost?.kind === "signal" ? "VOTING — Collective choice" : "VOTING — Vote on Phrases")}
         </p>
+
+        {session.state === "VOTING" && signalLeadingChoice && (
+          <div className="mt-4 rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-50">
+            <p className="font-semibold text-amber-200">Room pulse (live)</p>
+            <p className="mt-1 text-white">
+              Leading: <span className="font-medium">{signalLeadingChoice.label}</span> ({signalLeadingCard?.vote_count ?? 0}{" "}
+              votes)
+            </p>
+            <p className="mt-1 font-mono text-xs text-amber-100/80">Stub trigger: {signalLeadingChoice.triggerId}</p>
+          </div>
+        )}
 
         {!session.ended_at && (
           <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
@@ -497,7 +548,9 @@ export default function HostControlRoomPage({
               <p className="mt-1 text-xs text-gray-500">
                 {session.name === "Game" || session.name === "Live Prompt Game"
                   ? "Live Prompt Mode is custom prompts. Pre-Populated Mode generates a fast category queue."
-                  : "This session is using the same Game-flow host controls for now. Fishbowl and Signal setup will be customized next."}
+                  : session.name === "Signal"
+                    ? "Signal: collective emotional choices map to stub Ableton trigger IDs (OSC/MIDI later). Use Harmonic round to prototype one voting screen."
+                    : "This session is using the same Game-flow host controls for now. Fishbowl setup will be customized next."}
               </p>
             </div>
 
@@ -525,6 +578,28 @@ export default function HostControlRoomPage({
 
           {gameMode === "live" ? (
             <>
+              {session.name === "Signal" && (
+                <div className="mt-4 rounded-xl border border-amber-900/40 bg-amber-950/25 p-4">
+                  <h3 className="text-sm font-semibold text-amber-200">Signal prototype</h3>
+                  <p className="mt-1 text-xs text-gray-400">
+                    One voting round: harmonic worlds (Ocean / Fire / Night / Sunrise). Opens immediately in VOTING.
+                    Stub trigger IDs are logged for future Ableton; audience only sees emotional labels.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={sending || session.state !== "WAITING"}
+                    onClick={handleSignalHarmonicRound}
+                    className="mt-3 min-h-[44px] rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500 disabled:opacity-40"
+                  >
+                    {sending ? "Starting…" : "Start harmonic world vote"}
+                  </button>
+                  {session.state !== "WAITING" && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      End the current stage (close voting → waiting) before launching another prototype round.
+                    </p>
+                  )}
+                </div>
+              )}
               <textarea
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
