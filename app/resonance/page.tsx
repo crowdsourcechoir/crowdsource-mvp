@@ -48,6 +48,7 @@ const SAMPLES: ResonanceSample[] = [
 
 const DISSOLVE_MS = 1100;
 const RESUME_TIMEOUT_MS = 700;
+const FULL_FIELD_HOLD_MS = 4200;
 
 type BrowserWindow = Window &
   typeof globalThis & {
@@ -121,6 +122,7 @@ function seconds(ms: number) {
 export default function ResonancePrototypePage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [holdElapsed, setHoldElapsed] = useState(0);
   const [isDissolving, setIsDissolving] = useState(false);
   const [isEngaged, setIsEngaged] = useState(false);
   const [runState, setRunState] = useState<"ready" | "playing" | "complete">("ready");
@@ -130,6 +132,8 @@ export default function ResonancePrototypePage() {
   const activeIndexRef = useRef(0);
   const dissolveRef = useRef(false);
   const engagedRef = useRef(false);
+  const holdElapsedRef = useRef(0);
+  const holdStartRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number | null>(null);
   const renderFrameRef = useRef(0);
   const runStateRef = useRef(runState);
@@ -138,9 +142,18 @@ export default function ResonancePrototypePage() {
 
   const sample = SAMPLES[activeIndex];
   const totalHeld = useMemo(() => totals.reduce((sum, value) => sum + value, 0), [totals]);
+  const holdPower = Math.min(holdElapsed / FULL_FIELD_HOLD_MS, 1);
+  const holdScale = 1 + holdPower * 5.2;
+  const holdBloom = Math.min(0.18 + holdPower * 0.82, 1);
+  const holdEnergy = Math.min(0.22 + holdPower * 0.78, 1);
+  const holdPulseMin = holdScale * 0.985;
+  const holdPulseMax = holdScale * 1.025;
 
   const setEngagement = useCallback((engaged: boolean) => {
     engagedRef.current = engaged;
+    holdStartRef.current = engaged ? performance.now() : null;
+    holdElapsedRef.current = 0;
+    setHoldElapsed(0);
     setIsEngaged(engaged);
   }, []);
 
@@ -176,6 +189,10 @@ export default function ResonancePrototypePage() {
         runStateRef.current === "playing" &&
         !dissolveRef.current
       ) {
+        const elapsed = holdStartRef.current === null ? 0 : time - holdStartRef.current;
+        holdElapsedRef.current = elapsed;
+        setHoldElapsed(elapsed);
+
         const index = activeIndexRef.current;
         totalsRef.current = totalsRef.current.map((value, valueIndex) =>
           valueIndex === index ? value + delta : value
@@ -199,12 +216,17 @@ export default function ResonancePrototypePage() {
       return;
     }
 
-    navigator.vibrate?.(14);
+    navigator.vibrate?.([18, 28, 18]);
     const interval = window.setInterval(() => {
-      navigator.vibrate?.(8);
-    }, 760);
+      const power = Math.min(holdElapsedRef.current / FULL_FIELD_HOLD_MS, 1);
+      const pulse = Math.round(12 + power * 34);
+      navigator.vibrate?.(power > 0.72 ? [pulse, 26, pulse] : pulse);
+    }, 190);
 
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      navigator.vibrate?.(0);
+    };
   }, [isEngaged]);
 
   useEffect(() => {
@@ -320,11 +342,43 @@ export default function ResonancePrototypePage() {
     "--orb-color": sample.color,
     "--orb-core": sample.core,
     "--orb-shadow": sample.shadow,
+    "--current-one-duration": `${13 - holdPower * 7}s`,
+    "--current-two-duration": `${15 - holdPower * 8}s`,
+    "--energy-one-blur": `${1.6 - holdPower * 0.6}rem`,
+    "--energy-one-end": 0.82 + holdPower * 0.46,
+    "--energy-one-opacity": holdPower * 0.5,
+    "--energy-one-start": 0.72 + holdPower * 0.38,
+    "--energy-two-blur": `${2.2 - holdPower * 0.7}rem`,
+    "--energy-two-end": 0.78 + holdPower * 0.42,
+    "--energy-two-opacity": holdPower * 0.38,
+    "--energy-two-start": 0.66 + holdPower * 0.32,
+    "--field-glow-blur": `${22 + holdPower * 20}px`,
+    "--field-glow-opacity": 0.78 + holdPower * 0.18,
+    "--flood-brightness": 0.8 + holdPower * 0.45,
+    "--flood-opacity": holdPower * 0.94,
+    "--flood-saturation": 1 + holdPower * 0.65,
+    "--flood-scale": 0.58 + holdPower * 0.72,
+    "--hold-bloom": holdBloom,
+    "--hold-energy": holdEnergy,
+    "--hold-halo-high": 1.18 + holdPower * 0.9,
+    "--hold-halo-low": 1.08 + holdPower * 0.72,
+    "--hold-orb-brightness": 1.25 + holdPower * 0.25,
+    "--hold-orb-saturation": 1.28 + holdPower * 0.5,
+    "--hold-power": holdPower,
+    "--hold-pulse-max": holdPulseMax,
+    "--hold-pulse-min": holdPulseMin,
+    "--hold-scale": holdScale,
+    "--orb-glow-far": `${16 + holdPower * 28}rem`,
+    "--orb-glow-near": `${3.2 + holdPower * 4}rem`,
+    "--orb-glow-wide": `${10 + holdPower * 16}rem`,
   } as React.CSSProperties;
 
   return (
     <main className="resonance-shell" style={orbStyle}>
       <div className="field-glow" />
+      <div className="signal-flood" />
+      <div className="energy-current energy-current-one" />
+      <div className="energy-current energy-current-two" />
 
       <section
         className={[
@@ -407,9 +461,60 @@ export default function ResonancePrototypePage() {
             radial-gradient(circle at 50% 50%, var(--orb-shadow), transparent 26rem),
             radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.08), transparent 18rem),
             radial-gradient(circle at 78% 86%, color-mix(in srgb, var(--orb-color) 18%, transparent), transparent 22rem);
-          filter: blur(22px);
-          opacity: 0.78;
+          filter: blur(var(--field-glow-blur));
+          opacity: var(--field-glow-opacity);
           transition: background 900ms ease, opacity 900ms ease;
+        }
+
+        .signal-flood,
+        .energy-current {
+          position: fixed;
+          inset: -18vmax;
+          pointer-events: none;
+        }
+
+        .signal-flood {
+          z-index: -1;
+          background:
+            radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--orb-core) 42%, transparent) 0 14%, transparent 34%),
+            radial-gradient(circle at 50% 50%, var(--orb-color) 0 28%, transparent 68%),
+            var(--orb-color);
+          filter: saturate(var(--flood-saturation)) brightness(var(--flood-brightness));
+          opacity: var(--flood-opacity);
+          transform: scale(var(--flood-scale));
+          transition:
+            filter 220ms ease,
+            opacity 900ms ease,
+            transform 900ms cubic-bezier(0.18, 0.9, 0.18, 1);
+        }
+
+        .energy-current {
+          z-index: 0;
+          border-radius: 999rem;
+          mix-blend-mode: screen;
+          opacity: var(--energy-one-opacity);
+          transform: scale(var(--energy-one-start));
+          transition:
+            opacity 700ms ease,
+            transform 700ms ease;
+        }
+
+        .energy-current-one {
+          background:
+            conic-gradient(from 25deg, transparent, color-mix(in srgb, var(--orb-core) 34%, transparent), transparent 34%, color-mix(in srgb, var(--orb-color) 42%, transparent), transparent 72%),
+            radial-gradient(circle, transparent 36%, color-mix(in srgb, var(--orb-core) 18%, transparent), transparent 66%);
+          filter: blur(var(--energy-one-blur));
+          animation: current-turn-one var(--current-one-duration) linear infinite;
+        }
+
+        .energy-current-two {
+          background:
+            conic-gradient(from 220deg, transparent, color-mix(in srgb, var(--orb-color) 36%, transparent), transparent 38%, color-mix(in srgb, white 24%, transparent), transparent 76%),
+            radial-gradient(circle, transparent 28%, color-mix(in srgb, var(--orb-color) 22%, transparent), transparent 72%);
+          filter: blur(var(--energy-two-blur));
+          opacity: var(--energy-two-opacity);
+          transform: scale(var(--energy-two-start));
+          animation: current-turn-two var(--current-two-duration) linear infinite reverse;
         }
 
         .orb-stage {
@@ -419,6 +524,7 @@ export default function ResonancePrototypePage() {
           width: min(100vw, 42rem);
           place-items: center;
           padding: 2rem;
+          z-index: 1;
         }
 
         .resonance-orb {
@@ -482,20 +588,29 @@ export default function ResonancePrototypePage() {
         }
 
         .is-engaged .resonance-orb {
-          filter: saturate(1.28) brightness(1.25);
-          transform: scale(1.18);
+          filter: saturate(var(--hold-orb-saturation)) brightness(var(--hold-orb-brightness));
+          transform: scale(var(--hold-scale));
+          transition:
+            transform 160ms linear,
+            filter 260ms ease,
+            box-shadow 260ms ease,
+            opacity 900ms ease,
+            background 900ms ease;
           box-shadow:
-            0 0 3.2rem color-mix(in srgb, var(--orb-core) 54%, transparent),
-            0 0 10rem color-mix(in srgb, var(--orb-color) 70%, transparent),
-            0 0 16rem color-mix(in srgb, var(--orb-color) 44%, transparent),
+            0 0 var(--orb-glow-near) color-mix(in srgb, var(--orb-core) 62%, transparent),
+            0 0 var(--orb-glow-wide) color-mix(in srgb, var(--orb-color) 78%, transparent),
+            0 0 var(--orb-glow-far) color-mix(in srgb, var(--orb-color) 56%, transparent),
             inset -1.6rem -2.1rem 4rem rgba(0, 0, 0, 0.24),
             inset 1.4rem 1.8rem 3.4rem rgba(255, 255, 255, 0.3);
           animation: orb-held 740ms ease-in-out infinite;
         }
 
         .is-engaged .orb-halo {
-          opacity: 0.72;
-          animation: halo-held 740ms ease-in-out infinite;
+          opacity: var(--hold-bloom);
+          box-shadow:
+            0 0 var(--orb-glow-wide) color-mix(in srgb, var(--orb-color) 58%, transparent),
+            inset 0 0 var(--orb-glow-near) color-mix(in srgb, var(--orb-core) 34%, transparent);
+          animation: halo-held 540ms ease-in-out infinite;
         }
 
         .is-dissolving .resonance-orb {
@@ -548,6 +663,7 @@ export default function ResonancePrototypePage() {
           padding: 1.25rem;
           box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.42);
           backdrop-filter: blur(22px);
+          z-index: 2;
         }
 
         .trace-kicker {
@@ -627,10 +743,10 @@ export default function ResonancePrototypePage() {
         @keyframes orb-held {
           0%,
           100% {
-            transform: scale(1.16);
+            transform: scale(var(--hold-pulse-min));
           }
           50% {
-            transform: scale(1.21);
+            transform: scale(var(--hold-pulse-max));
           }
         }
 
@@ -649,10 +765,28 @@ export default function ResonancePrototypePage() {
         @keyframes halo-held {
           0%,
           100% {
-            transform: scale(1.08);
+            transform: scale(var(--hold-halo-low));
           }
           50% {
-            transform: scale(1.18);
+            transform: scale(var(--hold-halo-high));
+          }
+        }
+
+        @keyframes current-turn-one {
+          from {
+            transform: rotate(0deg) scale(var(--energy-one-start));
+          }
+          to {
+            transform: rotate(360deg) scale(var(--energy-one-end));
+          }
+        }
+
+        @keyframes current-turn-two {
+          from {
+            transform: rotate(0deg) scale(var(--energy-two-start));
+          }
+          to {
+            transform: rotate(360deg) scale(var(--energy-two-end));
           }
         }
 
@@ -669,7 +803,8 @@ export default function ResonancePrototypePage() {
         @media (prefers-reduced-motion: reduce) {
           .resonance-orb,
           .orb-halo,
-          .whisper {
+          .whisper,
+          .energy-current {
             animation: none;
           }
         }
