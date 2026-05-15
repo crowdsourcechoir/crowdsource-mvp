@@ -47,6 +47,7 @@ const SAMPLES: ResonanceSample[] = [
 ];
 
 const DISSOLVE_MS = 1100;
+const RESUME_TIMEOUT_MS = 700;
 
 type BrowserWindow = Window &
   typeof globalThis & {
@@ -55,6 +56,20 @@ type BrowserWindow = Window &
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function resumeAudioContext(context: AudioContext) {
+  if (context.state === "running") return true;
+
+  const resumeAttempt = context
+    .resume()
+    .then(() => context.state === "running")
+    .catch(() => false);
+
+  return Promise.race([
+    resumeAttempt,
+    wait(RESUME_TIMEOUT_MS).then(() => context.state === "running"),
+  ]);
 }
 
 function playTexture(context: AudioContext, sample: ResonanceSample) {
@@ -210,15 +225,8 @@ export default function ResonancePrototypePage() {
     const context = audioContextRef.current ?? new AudioContextConstructor();
     audioContextRef.current = context;
 
-    try {
-      await context.resume();
-    } catch {
-      setAudioBlocked(true);
-      setRunState("ready");
-      return;
-    }
-
-    if (context.state !== "running") {
+    const canPlay = await resumeAudioContext(context);
+    if (!canPlay) {
       setAudioBlocked(true);
       setRunState("ready");
       return;
@@ -259,10 +267,13 @@ export default function ResonancePrototypePage() {
   }, [beginExperience]);
 
   const engage = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (runState !== "playing") return;
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
     setIsEngaged(true);
+
+    if (runStateRef.current !== "playing") {
+      beginExperience();
+    }
   };
 
   const release = (event: React.PointerEvent<HTMLButtonElement>) => {
