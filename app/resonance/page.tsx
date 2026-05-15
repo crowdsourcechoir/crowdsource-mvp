@@ -139,6 +139,11 @@ export default function ResonancePrototypePage() {
   const sample = SAMPLES[activeIndex];
   const totalHeld = useMemo(() => totals.reduce((sum, value) => sum + value, 0), [totals]);
 
+  const setEngagement = useCallback((engaged: boolean) => {
+    engagedRef.current = engaged;
+    setIsEngaged(engaged);
+  }, []);
+
   useEffect(() => {
     runStateRef.current = runState;
   }, [runState]);
@@ -203,23 +208,29 @@ export default function ResonancePrototypePage() {
   }, [isEngaged]);
 
   useEffect(() => {
-    const settle = () => setIsEngaged(false);
+    const settle = () => setEngagement(false);
     const settleWhenHidden = () => {
       if (document.visibilityState === "hidden") settle();
     };
 
     window.addEventListener("pointerup", settle);
     window.addEventListener("pointercancel", settle);
+    window.addEventListener("mouseup", settle);
+    window.addEventListener("touchend", settle);
+    window.addEventListener("touchcancel", settle);
     window.addEventListener("blur", settle);
     document.addEventListener("visibilitychange", settleWhenHidden);
 
     return () => {
       window.removeEventListener("pointerup", settle);
       window.removeEventListener("pointercancel", settle);
+      window.removeEventListener("mouseup", settle);
+      window.removeEventListener("touchend", settle);
+      window.removeEventListener("touchcancel", settle);
       window.removeEventListener("blur", settle);
       document.removeEventListener("visibilitychange", settleWhenHidden);
     };
-  }, []);
+  }, [setEngagement]);
 
   const beginExperience = useCallback(async () => {
     if (runStateRef.current === "playing") return;
@@ -269,11 +280,11 @@ export default function ResonancePrototypePage() {
 
     if (sequenceRef.current !== sequence) return;
 
-    setIsEngaged(false);
+    setEngagement(false);
     setIsDissolving(false);
     setTotals([...totalsRef.current]);
     setRunState("complete");
-  }, []);
+  }, [setEngagement]);
 
   useEffect(() => {
     beginExperience();
@@ -288,18 +299,21 @@ export default function ResonancePrototypePage() {
   const engage = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
-    setIsEngaged(true);
 
     if (runStateRef.current !== "playing") {
       beginExperience();
+      setEngagement(false);
+      return;
     }
+
+    setEngagement(true);
   };
 
   const release = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    setIsEngaged(false);
+    setEngagement(false);
   };
 
   const orbStyle = {
@@ -328,7 +342,7 @@ export default function ResonancePrototypePage() {
           onPointerDown={engage}
           onPointerUp={release}
           onPointerCancel={release}
-          onLostPointerCapture={() => setIsEngaged(false)}
+          onLostPointerCapture={() => setEngagement(false)}
         >
           <span className="orb-core" />
           <span className="orb-halo" />
