@@ -202,6 +202,25 @@ export default function ResonancePrototypePage() {
     return () => window.clearInterval(interval);
   }, [isEngaged]);
 
+  useEffect(() => {
+    const settle = () => setIsEngaged(false);
+    const settleWhenHidden = () => {
+      if (document.visibilityState === "hidden") settle();
+    };
+
+    window.addEventListener("pointerup", settle);
+    window.addEventListener("pointercancel", settle);
+    window.addEventListener("blur", settle);
+    document.addEventListener("visibilitychange", settleWhenHidden);
+
+    return () => {
+      window.removeEventListener("pointerup", settle);
+      window.removeEventListener("pointercancel", settle);
+      window.removeEventListener("blur", settle);
+      document.removeEventListener("visibilitychange", settleWhenHidden);
+    };
+  }, []);
+
   const beginExperience = useCallback(async () => {
     if (runStateRef.current === "playing") return;
 
