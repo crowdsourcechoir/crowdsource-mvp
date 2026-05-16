@@ -55,6 +55,13 @@ type BrowserWindow = Window &
     webkitAudioContext?: typeof AudioContext;
   };
 
+type RumbleVoice = {
+  gain: GainNode;
+  lfo: OscillatorNode;
+  lfoGain: GainNode;
+  oscillator: OscillatorNode;
+};
+
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -146,6 +153,7 @@ export default function ResonancePrototypePage() {
   const pendingStartHoldRef = useRef(false);
   const pointerDownRef = useRef(false);
   const renderFrameRef = useRef(0);
+  const rumbleRef = useRef<RumbleVoice | null>(null);
   const runStateRef = useRef(runState);
   const sequenceRef = useRef(0);
   const totalsRef = useRef<number[]>(SAMPLES.map(() => 0));
@@ -159,12 +167,76 @@ export default function ResonancePrototypePage() {
   const holdPulseMin = holdScale * 0.985;
   const holdPulseMax = holdScale * 1.025;
 
+  const stopRumble = useCallback(() => {
+    const context = audioContextRef.current;
+    const rumble = rumbleRef.current;
+    if (!context || !rumble) return;
+
+    const now = context.currentTime;
+    rumble.gain.gain.cancelScheduledValues(now);
+    rumble.gain.gain.setTargetAtTime(0.0001, now, 0.03);
+    rumble.oscillator.stop(now + 0.12);
+    rumble.lfo.stop(now + 0.12);
+    window.setTimeout(() => {
+      rumble.oscillator.disconnect();
+      rumble.lfo.disconnect();
+      rumble.lfoGain.disconnect();
+      rumble.gain.disconnect();
+    }, 180);
+    rumbleRef.current = null;
+  }, []);
+
+  const startRumble = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context || context.state !== "running" || rumbleRef.current) return;
+
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const lfo = context.createOscillator();
+    const lfoGain = context.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(42, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.setTargetAtTime(0.028, now, 0.035);
+
+    lfo.type = "sine";
+    lfo.frequency.setValueAtTime(13, now);
+    lfoGain.gain.setValueAtTime(5, now);
+    lfo.connect(lfoGain);
+    lfoGain.connect(oscillator.frequency);
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    lfo.start(now);
+    rumbleRef.current = { gain, lfo, lfoGain, oscillator };
+  }, []);
+
   const setEngagement = useCallback((engaged: boolean) => {
     engagedRef.current = engaged;
     holdStartRef.current = engaged ? performance.now() : null;
     holdElapsedRef.current = 0;
     setHoldElapsed(0);
     setIsEngaged(engaged);
+    if (engaged) {
+      startRumble();
+    } else {
+      stopRumble();
+    }
+  }, [startRumble, stopRumble]);
+
+  const updateRumble = useCallback((power: number) => {
+    const context = audioContextRef.current;
+    const rumble = rumbleRef.current;
+    if (!context || !rumble) return;
+
+    const now = context.currentTime;
+    rumble.gain.gain.setTargetAtTime(0.024 + power * 0.072, now, 0.05);
+    rumble.oscillator.frequency.setTargetAtTime(42 + power * 20, now, 0.08);
+    rumble.lfo.frequency.setTargetAtTime(13 + power * 8, now, 0.08);
+    rumble.lfoGain.gain.setTargetAtTime(5 + power * 8, now, 0.08);
   }, []);
 
   useEffect(() => {
@@ -202,6 +274,7 @@ export default function ResonancePrototypePage() {
         const elapsed = holdStartRef.current === null ? 0 : time - holdStartRef.current;
         holdElapsedRef.current = elapsed;
         setHoldElapsed(elapsed);
+        updateRumble(Math.min(elapsed / FULL_FIELD_HOLD_MS, 1));
 
         const index = activeIndexRef.current;
         totalsRef.current = totalsRef.current.map((value, valueIndex) =>
@@ -219,7 +292,7 @@ export default function ResonancePrototypePage() {
 
     animationFrame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(animationFrame);
-  }, []);
+  }, [updateRumble]);
 
   useEffect(() => {
     if (!isEngaged || typeof navigator === "undefined") {
@@ -333,10 +406,11 @@ export default function ResonancePrototypePage() {
 
     return () => {
       sequenceRef.current += 1;
+      stopRumble();
       audioContextRef.current?.close().catch(() => undefined);
       audioContextRef.current = null;
     };
-  }, [beginExperience]);
+  }, [beginExperience, stopRumble]);
 
   const engage = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
