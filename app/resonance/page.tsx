@@ -119,11 +119,12 @@ function seconds(ms: number) {
   return (ms / 1000).toFixed(1);
 }
 
-function pulseVibration(pattern: VibratePattern) {
+function pulseVibration(pattern: number | number[]) {
   if (typeof navigator === "undefined") return false;
   const vibrate = navigator.vibrate;
   if (typeof vibrate !== "function") return false;
-  return vibrate.call(navigator, pattern);
+  const vibrationPattern = typeof pattern === "number" ? [pattern] : pattern;
+  return vibrate.call(navigator, vibrationPattern);
 }
 
 export default function ResonancePrototypePage() {
