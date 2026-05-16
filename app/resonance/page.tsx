@@ -53,8 +53,29 @@ const RUMBLE_OPT_IN_KEY = "csc_resonance_iphone_rumble";
 
 type BrowserWindow = Window &
   typeof globalThis & {
+    CrowdsourceChoirResonanceHaptics?: NativeHapticsBridge;
     webkitAudioContext?: typeof AudioContext;
+    webkit?: {
+      messageHandlers?: {
+        crowdsourceChoirResonanceHaptics?: {
+          postMessage: (message: NativeHapticMessage) => void;
+        };
+      };
+    };
   };
+
+type NativeHapticEventType = "preview" | "start" | "update" | "stop";
+
+type NativeHapticMessage = {
+  channel: "resonance-haptics";
+  intensity: number;
+  timestamp: number;
+  type: NativeHapticEventType;
+};
+
+type NativeHapticsBridge = Partial<
+  Record<NativeHapticEventType, (message: NativeHapticMessage) => void>
+>;
 
 type RumbleVoice = {
   gain: GainNode;
@@ -146,6 +167,53 @@ function playRumblePreview(context: AudioContext) {
   harmonic.stop(now + 0.42);
 }
 
+function buildNativeHapticMessage(
+  type: NativeHapticEventType,
+  intensity = 0
+): NativeHapticMessage {
+  return {
+    channel: "resonance-haptics",
+    intensity: Math.max(0, Math.min(intensity, 1)),
+    timestamp: Date.now(),
+    type,
+  };
+}
+
+function hasNativeHapticBridge() {
+  if (typeof window === "undefined") return false;
+  const browserWindow = window as BrowserWindow;
+  return Boolean(
+    browserWindow.CrowdsourceChoirResonanceHaptics ||
+      browserWindow.webkit?.messageHandlers?.crowdsourceChoirResonanceHaptics
+  );
+}
+
+function sendNativeHapticEvent(type: NativeHapticEventType, intensity = 0) {
+  if (typeof window === "undefined") return false;
+  const browserWindow = window as BrowserWindow;
+  const message = buildNativeHapticMessage(type, intensity);
+
+  try {
+    const directBridge = browserWindow.CrowdsourceChoirResonanceHaptics;
+    const directHandler = directBridge?.[type];
+    if (typeof directHandler === "function") {
+      directHandler(message);
+      return true;
+    }
+
+    const webkitBridge =
+      browserWindow.webkit?.messageHandlers?.crowdsourceChoirResonanceHaptics;
+    if (webkitBridge) {
+      webkitBridge.postMessage(message);
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 function seconds(ms: number) {
   return (ms / 1000).toFixed(1);
 }
@@ -162,6 +230,7 @@ export default function ResonancePrototypePage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [holdElapsed, setHoldElapsed] = useState(0);
+  const [hasNativeHaptics, setHasNativeHaptics] = useState(false);
   const [hasVibrationApi, setHasVibrationApi] = useState(true);
   const [isDissolving, setIsDissolving] = useState(false);
   const [isEngaged, setIsEngaged] = useState(false);
@@ -177,6 +246,8 @@ export default function ResonancePrototypePage() {
   const holdStartRef = useRef<number | null>(null);
   const hasVibrationApiRef = useRef(true);
   const lastFrameRef = useRef<number | null>(null);
+  const lastNativeHapticUpdateRef = useRef(0);
+  const hasNativeHapticsRef = useRef(false);
   const pendingStartHoldRef = useRef(false);
   const pointerDownRef = useRef(false);
   const renderFrameRef = useRef(0);
@@ -194,7 +265,8 @@ export default function ResonancePrototypePage() {
   const holdEnergy = Math.min(0.22 + holdPower * 0.78, 1);
   const holdPulseMin = holdScale * 0.985;
   const holdPulseMax = holdScale * 1.025;
-  const showIphoneRumbleOptIn = !hasVibrationApi && !rumbleOptedIn;
+  const showIphoneRumbleOptIn =
+    !hasNativeHaptics && !hasVibrationApi && !rumbleOptedIn;
 
   const stopRumble = useCallback(() => {
     const context = audioContextRef.current;
@@ -223,6 +295,7 @@ export default function ResonancePrototypePage() {
       !context ||
       context.state !== "running" ||
       rumbleRef.current ||
+      hasNativeHapticsRef.current ||
       hasVibrationApiRef.current ||
       !rumbleOptedInRef.current
     ) {
@@ -265,6 +338,7 @@ export default function ResonancePrototypePage() {
     holdElapsedRef.current = 0;
     setHoldElapsed(0);
     setIsEngaged(engaged);
+    sendNativeHapticEvent(engaged ? "start" : "stop", engaged ? 0.12 : 0);
     if (engaged) {
       startRumble();
     } else {
@@ -273,6 +347,8 @@ export default function ResonancePrototypePage() {
   }, [startRumble, stopRumble]);
 
   const updateRumble = useCallback((power: number) => {
+    sendNativeHapticEvent("update", power);
+
     const context = audioContextRef.current;
     const rumble = rumbleRef.current;
     if (!context || !rumble) return;
@@ -297,12 +373,16 @@ export default function ResonancePrototypePage() {
   }, []);
 
   useEffect(() => {
+    const canUseNativeHaptics = hasNativeHapticBridge();
+    hasNativeHapticsRef.current = canUseNativeHaptics;
+    setHasNativeHaptics(canUseNativeHaptics);
+
     const canVibrate =
       typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
     hasVibrationApiRef.current = canVibrate;
     setHasVibrationApi(canVibrate);
 
-    if (!canVibrate) {
+    if (!canVibrate && !canUseNativeHaptics) {
       try {
         const saved = localStorage.getItem(RUMBLE_OPT_IN_KEY) === "1";
         rumbleOptedInRef.current = saved;
@@ -349,7 +429,11 @@ export default function ResonancePrototypePage() {
         const elapsed = holdStartRef.current === null ? 0 : time - holdStartRef.current;
         holdElapsedRef.current = elapsed;
         setHoldElapsed(elapsed);
-        updateRumble(Math.min(elapsed / FULL_FIELD_HOLD_MS, 1));
+        const power = Math.min(elapsed / FULL_FIELD_HOLD_MS, 1);
+        if (time - lastNativeHapticUpdateRef.current > 90) {
+          lastNativeHapticUpdateRef.current = time;
+          updateRumble(power);
+        }
 
         const index = activeIndexRef.current;
         totalsRef.current = totalsRef.current.map((value, valueIndex) =>
@@ -489,7 +573,9 @@ export default function ResonancePrototypePage() {
     const canPlay = await resumeAudioContext(context);
 
     if (canPlay) {
-      playRumblePreview(context);
+      if (!sendNativeHapticEvent("preview", 0.32)) {
+        playRumblePreview(context);
+      }
     }
 
     if (runStateRef.current !== "playing") {
