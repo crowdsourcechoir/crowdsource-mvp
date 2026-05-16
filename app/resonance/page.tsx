@@ -58,6 +58,7 @@ type BrowserWindow = Window &
 
 type RumbleVoice = {
   gain: GainNode;
+  harmonic: OscillatorNode;
   lfo: OscillatorNode;
   lfoGain: GainNode;
   oscillator: OscillatorNode;
@@ -126,17 +127,23 @@ function playTexture(context: AudioContext, sample: ResonanceSample) {
 function playRumblePreview(context: AudioContext) {
   const now = context.currentTime;
   const oscillator = context.createOscillator();
+  const harmonic = context.createOscillator();
   const gain = context.createGain();
 
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(44, now);
+  oscillator.type = "triangle";
+  harmonic.type = "sine";
+  oscillator.frequency.setValueAtTime(96, now);
+  harmonic.frequency.setValueAtTime(192, now);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.setTargetAtTime(0.05, now, 0.025);
-  gain.gain.setTargetAtTime(0.0001, now + 0.18, 0.035);
+  gain.gain.setTargetAtTime(0.07, now, 0.025);
+  gain.gain.setTargetAtTime(0.0001, now + 0.22, 0.04);
   oscillator.connect(gain);
+  harmonic.connect(gain);
   gain.connect(context.destination);
   oscillator.start(now);
-  oscillator.stop(now + 0.36);
+  harmonic.start(now);
+  oscillator.stop(now + 0.42);
+  harmonic.stop(now + 0.42);
 }
 
 function seconds(ms: number) {
@@ -198,9 +205,11 @@ export default function ResonancePrototypePage() {
     rumble.gain.gain.cancelScheduledValues(now);
     rumble.gain.gain.setTargetAtTime(0.0001, now, 0.03);
     rumble.oscillator.stop(now + 0.12);
+    rumble.harmonic.stop(now + 0.12);
     rumble.lfo.stop(now + 0.12);
     window.setTimeout(() => {
       rumble.oscillator.disconnect();
+      rumble.harmonic.disconnect();
       rumble.lfo.disconnect();
       rumble.lfoGain.disconnect();
       rumble.gain.disconnect();
@@ -222,26 +231,32 @@ export default function ResonancePrototypePage() {
 
     const now = context.currentTime;
     const oscillator = context.createOscillator();
+    const harmonic = context.createOscillator();
     const gain = context.createGain();
     const lfo = context.createOscillator();
     const lfoGain = context.createGain();
 
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(42, now);
+    oscillator.type = "triangle";
+    harmonic.type = "sine";
+    oscillator.frequency.setValueAtTime(88, now);
+    harmonic.frequency.setValueAtTime(176, now);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.setTargetAtTime(0.028, now, 0.035);
+    gain.gain.setTargetAtTime(0.042, now, 0.035);
 
     lfo.type = "sine";
-    lfo.frequency.setValueAtTime(13, now);
-    lfoGain.gain.setValueAtTime(5, now);
+    lfo.frequency.setValueAtTime(18, now);
+    lfoGain.gain.setValueAtTime(9, now);
     lfo.connect(lfoGain);
     lfoGain.connect(oscillator.frequency);
+    lfoGain.connect(harmonic.frequency);
 
     oscillator.connect(gain);
+    harmonic.connect(gain);
     gain.connect(context.destination);
     oscillator.start(now);
+    harmonic.start(now);
     lfo.start(now);
-    rumbleRef.current = { gain, lfo, lfoGain, oscillator };
+    rumbleRef.current = { gain, harmonic, lfo, lfoGain, oscillator };
   }, []);
 
   const setEngagement = useCallback((engaged: boolean) => {
@@ -263,10 +278,12 @@ export default function ResonancePrototypePage() {
     if (!context || !rumble) return;
 
     const now = context.currentTime;
-    rumble.gain.gain.setTargetAtTime(0.024 + power * 0.072, now, 0.05);
-    rumble.oscillator.frequency.setTargetAtTime(42 + power * 20, now, 0.08);
-    rumble.lfo.frequency.setTargetAtTime(13 + power * 8, now, 0.08);
-    rumble.lfoGain.gain.setTargetAtTime(5 + power * 8, now, 0.08);
+    const baseFrequency = 88 + power * 34;
+    rumble.gain.gain.setTargetAtTime(0.038 + power * 0.09, now, 0.05);
+    rumble.oscillator.frequency.setTargetAtTime(baseFrequency, now, 0.08);
+    rumble.harmonic.frequency.setTargetAtTime(baseFrequency * 2, now, 0.08);
+    rumble.lfo.frequency.setTargetAtTime(18 + power * 12, now, 0.08);
+    rumble.lfoGain.gain.setTargetAtTime(9 + power * 16, now, 0.08);
   }, []);
 
   const setRumbleOptIn = useCallback((enabled: boolean) => {
@@ -589,12 +606,12 @@ export default function ResonancePrototypePage() {
 
         {showIphoneRumbleOptIn ? (
           <button type="button" className="rumble-touch" onClick={enableIphoneRumble}>
-            enable iPhone rumble
+            enable sound pulse
           </button>
         ) : null}
 
         {!hasVibrationApi && rumbleOptedIn ? (
-          <p className="rumble-on">iPhone rumble on</p>
+          <p className="rumble-on">sound pulse on</p>
         ) : null}
 
         {audioBlocked ? (
