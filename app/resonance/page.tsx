@@ -49,6 +49,7 @@ const SAMPLES: ResonanceSample[] = [
 const DISSOLVE_MS = 1100;
 const RESUME_TIMEOUT_MS = 700;
 const FULL_FIELD_HOLD_MS = 4200;
+const RUMBLE_OPT_IN_KEY = "csc_resonance_iphone_rumble";
 
 type BrowserWindow = Window &
   typeof globalThis & {
@@ -122,6 +123,22 @@ function playTexture(context: AudioContext, sample: ResonanceSample) {
   lfo.stop(now + duration + 0.08);
 }
 
+function playRumblePreview(context: AudioContext) {
+  const now = context.currentTime;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(44, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.setTargetAtTime(0.05, now, 0.025);
+  gain.gain.setTargetAtTime(0.0001, now + 0.18, 0.035);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.36);
+}
+
 function seconds(ms: number) {
   return (ms / 1000).toFixed(1);
 }
@@ -138,8 +155,10 @@ export default function ResonancePrototypePage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [holdElapsed, setHoldElapsed] = useState(0);
+  const [hasVibrationApi, setHasVibrationApi] = useState(true);
   const [isDissolving, setIsDissolving] = useState(false);
   const [isEngaged, setIsEngaged] = useState(false);
+  const [rumbleOptedIn, setRumbleOptedIn] = useState(false);
   const [runState, setRunState] = useState<"ready" | "playing" | "complete">("ready");
   const [totals, setTotals] = useState<number[]>(() => SAMPLES.map(() => 0));
 
@@ -149,10 +168,12 @@ export default function ResonancePrototypePage() {
   const engagedRef = useRef(false);
   const holdElapsedRef = useRef(0);
   const holdStartRef = useRef<number | null>(null);
+  const hasVibrationApiRef = useRef(true);
   const lastFrameRef = useRef<number | null>(null);
   const pendingStartHoldRef = useRef(false);
   const pointerDownRef = useRef(false);
   const renderFrameRef = useRef(0);
+  const rumbleOptedInRef = useRef(false);
   const rumbleRef = useRef<RumbleVoice | null>(null);
   const runStateRef = useRef(runState);
   const sequenceRef = useRef(0);
@@ -166,6 +187,7 @@ export default function ResonancePrototypePage() {
   const holdEnergy = Math.min(0.22 + holdPower * 0.78, 1);
   const holdPulseMin = holdScale * 0.985;
   const holdPulseMax = holdScale * 1.025;
+  const showIphoneRumbleOptIn = !hasVibrationApi && !rumbleOptedIn;
 
   const stopRumble = useCallback(() => {
     const context = audioContextRef.current;
@@ -188,7 +210,15 @@ export default function ResonancePrototypePage() {
 
   const startRumble = useCallback(() => {
     const context = audioContextRef.current;
-    if (!context || context.state !== "running" || rumbleRef.current) return;
+    if (
+      !context ||
+      context.state !== "running" ||
+      rumbleRef.current ||
+      hasVibrationApiRef.current ||
+      !rumbleOptedInRef.current
+    ) {
+      return;
+    }
 
     const now = context.currentTime;
     const oscillator = context.createOscillator();
@@ -237,6 +267,34 @@ export default function ResonancePrototypePage() {
     rumble.oscillator.frequency.setTargetAtTime(42 + power * 20, now, 0.08);
     rumble.lfo.frequency.setTargetAtTime(13 + power * 8, now, 0.08);
     rumble.lfoGain.gain.setTargetAtTime(5 + power * 8, now, 0.08);
+  }, []);
+
+  const setRumbleOptIn = useCallback((enabled: boolean) => {
+    rumbleOptedInRef.current = enabled;
+    setRumbleOptedIn(enabled);
+    try {
+      localStorage.setItem(RUMBLE_OPT_IN_KEY, enabled ? "1" : "0");
+    } catch {
+      // Ignore storage failures; the in-memory choice still works for this visit.
+    }
+  }, []);
+
+  useEffect(() => {
+    const canVibrate =
+      typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+    hasVibrationApiRef.current = canVibrate;
+    setHasVibrationApi(canVibrate);
+
+    if (!canVibrate) {
+      try {
+        const saved = localStorage.getItem(RUMBLE_OPT_IN_KEY) === "1";
+        rumbleOptedInRef.current = saved;
+        setRumbleOptedIn(saved);
+      } catch {
+        rumbleOptedInRef.current = false;
+        setRumbleOptedIn(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -401,6 +459,27 @@ export default function ResonancePrototypePage() {
     setRunState("complete");
   }, [setEngagement]);
 
+  const enableIphoneRumble = useCallback(async () => {
+    setRumbleOptIn(true);
+
+    const AudioContextConstructor =
+      window.AudioContext || (window as BrowserWindow).webkitAudioContext;
+
+    if (!AudioContextConstructor) return;
+
+    const context = audioContextRef.current ?? new AudioContextConstructor();
+    audioContextRef.current = context;
+    const canPlay = await resumeAudioContext(context);
+
+    if (canPlay) {
+      playRumblePreview(context);
+    }
+
+    if (runStateRef.current !== "playing") {
+      beginExperience();
+    }
+  }, [beginExperience, setRumbleOptIn]);
+
   useEffect(() => {
     beginExperience();
 
@@ -506,6 +585,16 @@ export default function ResonancePrototypePage() {
 
         {runState === "playing" && !audioBlocked ? (
           <p className="whisper">hold what resonates</p>
+        ) : null}
+
+        {showIphoneRumbleOptIn ? (
+          <button type="button" className="rumble-touch" onClick={enableIphoneRumble}>
+            enable iPhone rumble
+          </button>
+        ) : null}
+
+        {!hasVibrationApi && rumbleOptedIn ? (
+          <p className="rumble-on">iPhone rumble on</p>
         ) : null}
 
         {audioBlocked ? (
@@ -730,6 +819,8 @@ export default function ResonancePrototypePage() {
         }
 
         .whisper,
+        .rumble-on,
+        .rumble-touch,
         .start-touch {
           position: absolute;
           bottom: max(2rem, env(safe-area-inset-bottom));
@@ -744,6 +835,28 @@ export default function ResonancePrototypePage() {
         .whisper {
           margin: 0;
           animation: whisper-fade 6200ms ease-in-out infinite;
+        }
+
+        .rumble-on,
+        .rumble-touch {
+          bottom: max(5.4rem, calc(env(safe-area-inset-bottom) + 5.4rem));
+          border-radius: 999rem;
+          backdrop-filter: blur(18px);
+        }
+
+        .rumble-on {
+          margin: 0;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.04);
+          padding: 0.62rem 0.82rem;
+          color: rgba(255, 255, 255, 0.46);
+        }
+
+        .rumble-touch {
+          border: 1px solid color-mix(in srgb, var(--orb-core) 34%, transparent);
+          background: color-mix(in srgb, var(--orb-color) 16%, rgba(255, 255, 255, 0.05));
+          padding: 0.72rem 0.92rem;
+          box-shadow: 0 0 2.2rem color-mix(in srgb, var(--orb-color) 18%, transparent);
         }
 
         .start-touch {
