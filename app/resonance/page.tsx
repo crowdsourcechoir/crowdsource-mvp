@@ -119,6 +119,13 @@ function seconds(ms: number) {
   return (ms / 1000).toFixed(1);
 }
 
+function pulseVibration(pattern: VibratePattern) {
+  if (typeof navigator === "undefined") return false;
+  const vibrate = navigator.vibrate;
+  if (typeof vibrate !== "function") return false;
+  return vibrate.call(navigator, pattern);
+}
+
 export default function ResonancePrototypePage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [audioBlocked, setAudioBlocked] = useState(false);
@@ -135,6 +142,8 @@ export default function ResonancePrototypePage() {
   const holdElapsedRef = useRef(0);
   const holdStartRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number | null>(null);
+  const pendingStartHoldRef = useRef(false);
+  const pointerDownRef = useRef(false);
   const renderFrameRef = useRef(0);
   const runStateRef = useRef(runState);
   const sequenceRef = useRef(0);
@@ -212,25 +221,30 @@ export default function ResonancePrototypePage() {
   }, []);
 
   useEffect(() => {
-    if (!isEngaged || typeof navigator === "undefined" || !("vibrate" in navigator)) {
+    if (!isEngaged || typeof navigator === "undefined") {
       return;
     }
 
-    navigator.vibrate?.([18, 28, 18]);
+    pulseVibration([18, 28, 18]);
     const interval = window.setInterval(() => {
       const power = Math.min(holdElapsedRef.current / FULL_FIELD_HOLD_MS, 1);
       const pulse = Math.round(12 + power * 34);
-      navigator.vibrate?.(power > 0.72 ? [pulse, 26, pulse] : pulse);
+      pulseVibration(power > 0.72 ? [pulse, 26, pulse] : pulse);
     }, 190);
 
     return () => {
       window.clearInterval(interval);
-      navigator.vibrate?.(0);
+      pulseVibration(0);
     };
   }, [isEngaged]);
 
   useEffect(() => {
-    const settle = () => setEngagement(false);
+    const settle = () => {
+      pointerDownRef.current = false;
+      pendingStartHoldRef.current = false;
+      setEngagement(false);
+      pulseVibration(0);
+    };
     const settleWhenHidden = () => {
       if (document.visibilityState === "hidden") settle();
     };
@@ -284,6 +298,11 @@ export default function ResonancePrototypePage() {
       return;
     }
 
+    if (pendingStartHoldRef.current && pointerDownRef.current) {
+      setEngagement(true);
+      pulseVibration([22, 24, 22]);
+    }
+
     for (let index = 0; index < SAMPLES.length; index += 1) {
       if (sequenceRef.current !== sequence) return;
 
@@ -321,13 +340,18 @@ export default function ResonancePrototypePage() {
   const engage = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
+    pointerDownRef.current = true;
 
     if (runStateRef.current !== "playing") {
+      pendingStartHoldRef.current = true;
+      pulseVibration([12, 28, 12]);
       beginExperience();
       setEngagement(false);
       return;
     }
 
+    pendingStartHoldRef.current = false;
+    pulseVibration([22, 24, 22]);
     setEngagement(true);
   };
 
@@ -335,7 +359,10 @@ export default function ResonancePrototypePage() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    pointerDownRef.current = false;
+    pendingStartHoldRef.current = false;
     setEngagement(false);
+    pulseVibration(0);
   };
 
   const orbStyle = {
