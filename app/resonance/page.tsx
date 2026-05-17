@@ -1,60 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  getResonanceField,
+  getResonanceState,
+  recordResonanceHold,
+  type ResonanceField,
+  type ResonanceSignalState,
+} from "@/data/resonanceSignal";
 
-type ResonanceSample = {
-  color: string;
-  core: string;
-  shadow: string;
-  frequencies: number[];
-  durationMs: number;
-  filterHz: number;
-};
-
-const SAMPLES: ResonanceSample[] = [
-  {
-    color: "#9b5cff",
-    core: "#ead8ff",
-    shadow: "rgba(155, 92, 255, 0.38)",
-    frequencies: [146.83, 220, 293.66],
-    durationMs: 6800,
-    filterHz: 820,
-  },
-  {
-    color: "#15d1b3",
-    core: "#cbfff6",
-    shadow: "rgba(21, 209, 179, 0.36)",
-    frequencies: [174.61, 261.63, 392],
-    durationMs: 6800,
-    filterHz: 980,
-  },
-  {
-    color: "#ff8a3d",
-    core: "#ffe0c7",
-    shadow: "rgba(255, 138, 61, 0.34)",
-    frequencies: [130.81, 196, 329.63],
-    durationMs: 6800,
-    filterHz: 720,
-  },
-  {
-    color: "#55a7ff",
-    core: "#d8ecff",
-    shadow: "rgba(85, 167, 255, 0.38)",
-    frequencies: [164.81, 246.94, 369.99],
-    durationMs: 6800,
-    filterHz: 880,
-  },
-];
-
-const DISSOLVE_MS = 1100;
-const RESUME_TIMEOUT_MS = 700;
 const FULL_FIELD_HOLD_MS = 4200;
+const POLL_MS = 850;
 const RUMBLE_OPT_IN_KEY = "csc_resonance_iphone_rumble";
+const DEVICE_ID_KEY = "csc_resonance_device_id";
 
 type BrowserWindow = Window &
   typeof globalThis & {
     CrowdsourceChoirResonanceHaptics?: NativeHapticsBridge;
-    webkitAudioContext?: typeof AudioContext;
     webkit?: {
       messageHandlers?: {
         crowdsourceChoirResonanceHaptics?: {
@@ -85,64 +47,13 @@ type RumbleVoice = {
   oscillator: OscillatorNode;
 };
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function resumeAudioContext(context: AudioContext) {
-  if (context.state === "running") return true;
-
-  const resumeAttempt = context
-    .resume()
-    .then(() => context.state === "running")
-    .catch(() => false);
-
-  return Promise.race([
-    resumeAttempt,
-    wait(RESUME_TIMEOUT_MS).then(() => context.state === "running"),
-  ]);
-}
-
-function playTexture(context: AudioContext, sample: ResonanceSample) {
-  const now = context.currentTime;
-  const duration = sample.durationMs / 1000;
-  const master = context.createGain();
-  const filter = context.createBiquadFilter();
-  const lfo = context.createOscillator();
-  const lfoGain = context.createGain();
-
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(sample.filterHz, now);
-  filter.Q.setValueAtTime(0.72, now);
-
-  lfo.type = "sine";
-  lfo.frequency.setValueAtTime(0.08, now);
-  lfoGain.gain.setValueAtTime(90, now);
-  lfo.connect(lfoGain);
-  lfoGain.connect(filter.frequency);
-
-  master.gain.setValueAtTime(0.0001, now);
-  master.gain.exponentialRampToValueAtTime(0.16, now + 1.4);
-  master.gain.setValueAtTime(0.16, now + Math.max(duration - 1.4, 1.5));
-  master.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-  sample.frequencies.forEach((frequency, index) => {
-    const oscillator = context.createOscillator();
-    const voiceGain = context.createGain();
-    oscillator.type = index === 1 ? "triangle" : "sine";
-    oscillator.frequency.setValueAtTime(frequency, now);
-    oscillator.detune.setValueAtTime(index === 0 ? -4 : index === 2 ? 6 : 0, now);
-    voiceGain.gain.setValueAtTime(index === 1 ? 0.42 : 0.26, now);
-    oscillator.connect(voiceGain);
-    voiceGain.connect(filter);
-    oscillator.start(now);
-    oscillator.stop(now + duration + 0.08);
-  });
-
-  filter.connect(master);
-  master.connect(context.destination);
-  lfo.start(now);
-  lfo.stop(now + duration + 0.08);
+function getOrCreateDeviceId() {
+  if (typeof window === "undefined") return "";
+  const existing = localStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const next = `res_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  localStorage.setItem(DEVICE_ID_KEY, next);
+  return next;
 }
 
 function playRumblePreview(context: AudioContext) {
@@ -214,10 +125,6 @@ function sendNativeHapticEvent(type: NativeHapticEventType, intensity = 0) {
   return false;
 }
 
-function seconds(ms: number) {
-  return (ms / 1000).toFixed(1);
-}
-
 function pulseVibration(pattern: number | number[]) {
   if (typeof navigator === "undefined") return false;
   const vibrate = navigator.vibrate;
@@ -226,46 +133,43 @@ function pulseVibration(pattern: number | number[]) {
   return vibrate.call(navigator, vibrationPattern);
 }
 
-export default function ResonancePrototypePage() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [audioBlocked, setAudioBlocked] = useState(false);
-  const [holdElapsed, setHoldElapsed] = useState(0);
+function seconds(ms: number) {
+  return (ms / 1000).toFixed(1);
+}
+
+export default function ResonanceParticipantPage() {
+  const [activeField, setActiveField] = useState<ResonanceField>(() =>
+    getResonanceField(null)
+  );
+  const [fieldSignal, setFieldSignal] = useState<ResonanceSignalState | null>(null);
   const [hasNativeHaptics, setHasNativeHaptics] = useState(false);
   const [hasVibrationApi, setHasVibrationApi] = useState(true);
+  const [holdElapsed, setHoldElapsed] = useState(0);
   const [isDissolving, setIsDissolving] = useState(false);
   const [isEngaged, setIsEngaged] = useState(false);
   const [rumbleOptedIn, setRumbleOptedIn] = useState(false);
-  const [runState, setRunState] = useState<"ready" | "playing" | "complete">("ready");
-  const [totals, setTotals] = useState<number[]>(() => SAMPLES.map(() => 0));
+  const [totals, setTotals] = useState<Record<string, number>>({});
 
+  const activeSignalRef = useRef<ResonanceSignalState | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const activeIndexRef = useRef(0);
-  const dissolveRef = useRef(false);
+  const deviceIdRef = useRef("");
   const engagedRef = useRef(false);
   const holdElapsedRef = useRef(0);
   const holdStartRef = useRef<number | null>(null);
+  const hasNativeHapticsRef = useRef(false);
   const hasVibrationApiRef = useRef(true);
   const lastFrameRef = useRef<number | null>(null);
   const lastNativeHapticUpdateRef = useRef(0);
-  const hasNativeHapticsRef = useRef(false);
-  const pendingStartHoldRef = useRef(false);
-  const pointerDownRef = useRef(false);
   const renderFrameRef = useRef(0);
   const rumbleOptedInRef = useRef(false);
   const rumbleRef = useRef<RumbleVoice | null>(null);
-  const runStateRef = useRef(runState);
-  const sequenceRef = useRef(0);
-  const totalsRef = useRef<number[]>(SAMPLES.map(() => 0));
 
-  const sample = SAMPLES[activeIndex];
-  const totalHeld = useMemo(() => totals.reduce((sum, value) => sum + value, 0), [totals]);
   const holdPower = Math.min(holdElapsed / FULL_FIELD_HOLD_MS, 1);
   const holdScale = 1 + holdPower * 5.2;
   const holdBloom = Math.min(0.18 + holdPower * 0.82, 1);
-  const holdEnergy = Math.min(0.22 + holdPower * 0.78, 1);
   const holdPulseMin = holdScale * 0.985;
   const holdPulseMax = holdScale * 1.025;
-  const showIphoneRumbleOptIn =
+  const showSoundPulseOptIn =
     !hasNativeHaptics && !hasVibrationApi && !rumbleOptedIn;
 
   const stopRumble = useCallback(() => {
@@ -332,20 +236,6 @@ export default function ResonancePrototypePage() {
     rumbleRef.current = { gain, harmonic, lfo, lfoGain, oscillator };
   }, []);
 
-  const setEngagement = useCallback((engaged: boolean) => {
-    engagedRef.current = engaged;
-    holdStartRef.current = engaged ? performance.now() : null;
-    holdElapsedRef.current = 0;
-    setHoldElapsed(0);
-    setIsEngaged(engaged);
-    sendNativeHapticEvent(engaged ? "start" : "stop", engaged ? 0.12 : 0);
-    if (engaged) {
-      startRumble();
-    } else {
-      stopRumble();
-    }
-  }, [startRumble, stopRumble]);
-
   const updateRumble = useCallback((power: number) => {
     sendNativeHapticEvent("update", power);
 
@@ -362,17 +252,43 @@ export default function ResonancePrototypePage() {
     rumble.lfoGain.gain.setTargetAtTime(9 + power * 16, now, 0.08);
   }, []);
 
-  const setRumbleOptIn = useCallback((enabled: boolean) => {
-    rumbleOptedInRef.current = enabled;
-    setRumbleOptedIn(enabled);
-    try {
-      localStorage.setItem(RUMBLE_OPT_IN_KEY, enabled ? "1" : "0");
-    } catch {
-      // Ignore storage failures; the in-memory choice still works for this visit.
+  const setEngagement = useCallback(
+    (engaged: boolean) => {
+      engagedRef.current = engaged;
+      holdStartRef.current = engaged ? performance.now() : null;
+      holdElapsedRef.current = 0;
+      setHoldElapsed(0);
+      setIsEngaged(engaged);
+      sendNativeHapticEvent(engaged ? "start" : "stop", engaged ? 0.12 : 0);
+      if (engaged) {
+        startRumble();
+      } else {
+        stopRumble();
+      }
+    },
+    [startRumble, stopRumble]
+  );
+
+  const refreshState = useCallback(async () => {
+    const next = await getResonanceState();
+    const previousSignalId = activeSignalRef.current?.signalId;
+    activeSignalRef.current = next;
+    setFieldSignal(next);
+
+    if (next.signalId !== previousSignalId) {
+      setIsDissolving(true);
+      window.setTimeout(() => {
+        setActiveField(getResonanceField(next.activeFieldId));
+        setIsDissolving(false);
+      }, 420);
+    } else {
+      setActiveField(getResonanceField(next.activeFieldId));
     }
   }, []);
 
   useEffect(() => {
+    deviceIdRef.current = getOrCreateDeviceId();
+
     const canUseNativeHaptics = hasNativeHapticBridge();
     hasNativeHapticsRef.current = canUseNativeHaptics;
     setHasNativeHaptics(canUseNativeHaptics);
@@ -395,54 +311,36 @@ export default function ResonancePrototypePage() {
   }, []);
 
   useEffect(() => {
-    runStateRef.current = runState;
-  }, [runState]);
-
-  useEffect(() => {
-    activeIndexRef.current = activeIndex;
-  }, [activeIndex]);
-
-  useEffect(() => {
-    dissolveRef.current = isDissolving;
-  }, [isDissolving]);
-
-  useEffect(() => {
-    engagedRef.current = isEngaged;
-  }, [isEngaged]);
+    refreshState().catch(() => undefined);
+    const interval = window.setInterval(() => {
+      refreshState().catch(() => undefined);
+    }, POLL_MS);
+    return () => window.clearInterval(interval);
+  }, [refreshState]);
 
   useEffect(() => {
     let animationFrame = 0;
 
     const tick = (time: number) => {
-      if (lastFrameRef.current === null) {
-        lastFrameRef.current = time;
-      }
-
+      if (lastFrameRef.current === null) lastFrameRef.current = time;
       const delta = time - lastFrameRef.current;
       lastFrameRef.current = time;
 
-      if (
-        engagedRef.current &&
-        runStateRef.current === "playing" &&
-        !dissolveRef.current
-      ) {
+      if (engagedRef.current) {
         const elapsed = holdStartRef.current === null ? 0 : time - holdStartRef.current;
         holdElapsedRef.current = elapsed;
         setHoldElapsed(elapsed);
+
         const power = Math.min(elapsed / FULL_FIELD_HOLD_MS, 1);
         if (time - lastNativeHapticUpdateRef.current > 90) {
           lastNativeHapticUpdateRef.current = time;
           updateRumble(power);
         }
 
-        const index = activeIndexRef.current;
-        totalsRef.current = totalsRef.current.map((value, valueIndex) =>
-          valueIndex === index ? value + delta : value
-        );
-
+        const fieldId = activeSignalRef.current?.activeFieldId ?? activeField.id;
         if (time - renderFrameRef.current > 90) {
           renderFrameRef.current = time;
-          setTotals([...totalsRef.current]);
+          setTotals((prev) => ({ ...prev, [fieldId]: (prev[fieldId] ?? 0) + delta }));
         }
       }
 
@@ -451,12 +349,10 @@ export default function ResonancePrototypePage() {
 
     animationFrame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [updateRumble]);
+  }, [activeField.id, updateRumble]);
 
   useEffect(() => {
-    if (!isEngaged || typeof navigator === "undefined") {
-      return;
-    }
+    if (!isEngaged || typeof navigator === "undefined") return;
 
     pulseVibration([18, 28, 18]);
     const interval = window.setInterval(() => {
@@ -473,8 +369,6 @@ export default function ResonancePrototypePage() {
 
   useEffect(() => {
     const settle = () => {
-      pointerDownRef.current = false;
-      pendingStartHoldRef.current = false;
       setEngagement(false);
       pulseVibration(0);
     };
@@ -498,134 +392,71 @@ export default function ResonancePrototypePage() {
       window.removeEventListener("touchcancel", settle);
       window.removeEventListener("blur", settle);
       document.removeEventListener("visibilitychange", settleWhenHidden);
+      stopRumble();
     };
-  }, [setEngagement]);
+  }, [setEngagement, stopRumble]);
 
-  const beginExperience = useCallback(async () => {
-    if (runStateRef.current === "playing") return;
-
-    const sequence = sequenceRef.current + 1;
-    sequenceRef.current = sequence;
-    totalsRef.current = SAMPLES.map(() => 0);
-    setTotals([...totalsRef.current]);
-    setRunState("playing");
-    setAudioBlocked(false);
-    setIsDissolving(false);
-
-    const AudioContextConstructor =
-      window.AudioContext || (window as BrowserWindow).webkitAudioContext;
-
-    if (!AudioContextConstructor) {
-      setAudioBlocked(true);
-      setRunState("ready");
-      return;
+  const setRumbleOptIn = useCallback((enabled: boolean) => {
+    rumbleOptedInRef.current = enabled;
+    setRumbleOptedIn(enabled);
+    try {
+      localStorage.setItem(RUMBLE_OPT_IN_KEY, enabled ? "1" : "0");
+    } catch {
+      // The in-memory choice still works for this visit.
     }
+  }, []);
 
-    const context = audioContextRef.current ?? new AudioContextConstructor();
-    audioContextRef.current = context;
-
-    const canPlay = await resumeAudioContext(context);
-    if (!canPlay) {
-      setAudioBlocked(true);
-      setRunState("ready");
-      return;
-    }
-
-    if (pendingStartHoldRef.current && pointerDownRef.current) {
-      setEngagement(true);
-      pulseVibration([22, 24, 22]);
-    }
-
-    for (let index = 0; index < SAMPLES.length; index += 1) {
-      if (sequenceRef.current !== sequence) return;
-
-      activeIndexRef.current = index;
-      setActiveIndex(index);
-      setIsDissolving(false);
-      playTexture(context, SAMPLES[index]);
-      await wait(SAMPLES[index].durationMs);
-
-      if (sequenceRef.current !== sequence) return;
-
-      setTotals([...totalsRef.current]);
-      setIsDissolving(true);
-      await wait(DISSOLVE_MS);
-    }
-
-    if (sequenceRef.current !== sequence) return;
-
-    setEngagement(false);
-    setIsDissolving(false);
-    setTotals([...totalsRef.current]);
-    setRunState("complete");
-  }, [setEngagement]);
-
-  const enableIphoneRumble = useCallback(async () => {
+  const enableSoundPulse = useCallback(async () => {
     setRumbleOptIn(true);
 
     const AudioContextConstructor =
-      window.AudioContext || (window as BrowserWindow).webkitAudioContext;
+      window.AudioContext || (window as Window & typeof globalThis & {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
 
     if (!AudioContextConstructor) return;
-
     const context = audioContextRef.current ?? new AudioContextConstructor();
     audioContextRef.current = context;
-    const canPlay = await resumeAudioContext(context);
-
-    if (canPlay) {
-      if (!sendNativeHapticEvent("preview", 0.32)) {
-        playRumblePreview(context);
-      }
-    }
-
-    if (runStateRef.current !== "playing") {
-      beginExperience();
-    }
-  }, [beginExperience, setRumbleOptIn]);
-
-  useEffect(() => {
-    beginExperience();
-
-    return () => {
-      sequenceRef.current += 1;
-      stopRumble();
-      audioContextRef.current?.close().catch(() => undefined);
-      audioContextRef.current = null;
-    };
-  }, [beginExperience, stopRumble]);
+    await context.resume().catch(() => undefined);
+    if (context.state === "running") playRumblePreview(context);
+  }, [setRumbleOptIn]);
 
   const engage = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
-    pointerDownRef.current = true;
-
-    if (runStateRef.current !== "playing") {
-      pendingStartHoldRef.current = true;
-      pulseVibration([12, 28, 12]);
-      beginExperience();
-      setEngagement(false);
-      return;
-    }
-
-    pendingStartHoldRef.current = false;
     pulseVibration([22, 24, 22]);
     setEngagement(true);
   };
 
-  const release = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const release = async (event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    pointerDownRef.current = false;
-    pendingStartHoldRef.current = false;
+
+    const durationMs = holdElapsedRef.current;
+    const signal = activeSignalRef.current;
     setEngagement(false);
     pulseVibration(0);
+
+    if (signal && durationMs > 80) {
+      await recordResonanceHold({
+        deviceId: deviceIdRef.current,
+        durationMs,
+        fieldId: signal.activeFieldId,
+        signalId: signal.signalId,
+      }).catch(() => undefined);
+    }
   };
 
+  const totalHeld = useMemo(
+    () => Object.values(totals).reduce((sum, value) => sum + value, 0),
+    [totals]
+  );
+
   const orbStyle = {
-    "--orb-color": sample.color,
-    "--orb-core": sample.core,
-    "--orb-shadow": sample.shadow,
+    "--orb-color": activeField.color,
+    "--orb-core": activeField.core,
+    "--orb-shadow": activeField.shadow,
     "--current-one-duration": `${13 - holdPower * 7}s`,
     "--current-two-duration": `${15 - holdPower * 8}s`,
     "--energy-one-blur": `${1.6 - holdPower * 0.6}rem`,
@@ -643,12 +474,10 @@ export default function ResonancePrototypePage() {
     "--flood-saturation": 1 + holdPower * 0.65,
     "--flood-scale": 0.58 + holdPower * 0.72,
     "--hold-bloom": holdBloom,
-    "--hold-energy": holdEnergy,
     "--hold-halo-high": 1.18 + holdPower * 0.9,
     "--hold-halo-low": 1.08 + holdPower * 0.72,
     "--hold-orb-brightness": 1.25 + holdPower * 0.25,
     "--hold-orb-saturation": 1.28 + holdPower * 0.5,
-    "--hold-power": holdPower,
     "--hold-pulse-max": holdPulseMax,
     "--hold-pulse-min": holdPulseMin,
     "--hold-scale": holdScale,
@@ -669,7 +498,6 @@ export default function ResonancePrototypePage() {
           "orb-stage",
           isEngaged ? "is-engaged" : "",
           isDissolving ? "is-dissolving" : "",
-          runState === "complete" ? "is-complete" : "",
         ].join(" ")}
         aria-live="polite"
       >
@@ -686,12 +514,10 @@ export default function ResonancePrototypePage() {
           <span className="orb-halo" />
         </button>
 
-        {runState === "playing" && !audioBlocked ? (
-          <p className="whisper">hold what resonates</p>
-        ) : null}
+        <p className="whisper">hold what resonates</p>
 
-        {showIphoneRumbleOptIn ? (
-          <button type="button" className="rumble-touch" onClick={enableIphoneRumble}>
+        {showSoundPulseOptIn ? (
+          <button type="button" className="rumble-touch" onClick={enableSoundPulse}>
             enable sound pulse
           </button>
         ) : null}
@@ -699,34 +525,32 @@ export default function ResonancePrototypePage() {
         {!hasVibrationApi && rumbleOptedIn ? (
           <p className="rumble-on">sound pulse on</p>
         ) : null}
-
-        {audioBlocked ? (
-          <button type="button" className="start-touch" onClick={beginExperience}>
-            touch to begin
-          </button>
-        ) : null}
       </section>
 
-      {runState === "complete" ? (
+      {totalHeld > 0 ? (
         <section className="trace-panel" aria-label="Internal resonance trace">
           <p className="trace-kicker">internal signal</p>
-          <h1>resonance trace</h1>
           <div className="trace-list">
-            {totals.map((value, index) => (
-              <div className="trace-row" key={index}>
-                <span className="trace-dot" style={{ background: SAMPLES[index].color }} />
-                <span className="trace-name">field {index + 1}</span>
-                <span className="trace-line">
-                  <span
-                    style={{
-                      width:
-                        totalHeld > 0 ? `${Math.max((value / totalHeld) * 100, 4)}%` : "4%",
-                    }}
-                  />
-                </span>
-                <span className="trace-time">{seconds(value)}s</span>
-              </div>
-            ))}
+            {(fieldSignal?.fields ?? [activeField]).map((field) => {
+              const value = totals[field.id] ?? 0;
+              return (
+                <div className="trace-row" key={field.id}>
+                  <span className="trace-dot" style={{ background: field.color }} />
+                  <span className="trace-name">{field.label}</span>
+                  <span className="trace-line">
+                    <span
+                      style={{
+                        width:
+                          totalHeld > 0
+                            ? `${Math.max((value / totalHeld) * 100, 4)}%`
+                            : "4%",
+                      }}
+                    />
+                  </span>
+                  <span className="trace-time">{seconds(value)}s</span>
+                </div>
+              );
+            })}
           </div>
         </section>
       ) : null}
@@ -852,13 +676,6 @@ export default function ResonancePrototypePage() {
           touch-action: none;
         }
 
-        .resonance-orb:focus-visible {
-          box-shadow:
-            0 0 0 0.2rem rgba(255, 255, 255, 0.55),
-            0 0 2.4rem var(--orb-shadow),
-            0 0 8rem color-mix(in srgb, var(--orb-color) 52%, transparent);
-        }
-
         .orb-core,
         .orb-halo {
           position: absolute;
@@ -914,17 +731,9 @@ export default function ResonancePrototypePage() {
           animation: none;
         }
 
-        .is-complete .resonance-orb {
-          opacity: 0.2;
-          transform: scale(0.54);
-          filter: blur(0.4rem) saturate(0.75);
-          animation: none;
-        }
-
         .whisper,
         .rumble-on,
-        .rumble-touch,
-        .start-touch {
+        .rumble-touch {
           position: absolute;
           bottom: max(2rem, env(safe-area-inset-bottom));
           left: 50%;
@@ -962,14 +771,6 @@ export default function ResonancePrototypePage() {
           box-shadow: 0 0 2.2rem color-mix(in srgb, var(--orb-color) 18%, transparent);
         }
 
-        .start-touch {
-          border: 1px solid rgba(255, 255, 255, 0.24);
-          border-radius: 999rem;
-          background: rgba(255, 255, 255, 0.06);
-          padding: 0.8rem 1rem;
-          backdrop-filter: blur(18px);
-        }
-
         .trace-panel {
           position: absolute;
           inset: auto 1.25rem max(1.25rem, env(safe-area-inset-bottom));
@@ -985,18 +786,10 @@ export default function ResonancePrototypePage() {
         }
 
         .trace-kicker {
-          margin: 0 0 0.35rem;
+          margin: 0 0 0.85rem;
           color: rgba(255, 255, 255, 0.46);
           font-size: 0.68rem;
           letter-spacing: 0.24em;
-          text-transform: lowercase;
-        }
-
-        h1 {
-          margin: 0 0 1.15rem;
-          font-size: clamp(1.6rem, 7vw, 2.4rem);
-          font-weight: 300;
-          letter-spacing: -0.04em;
           text-transform: lowercase;
         }
 
