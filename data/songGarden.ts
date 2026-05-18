@@ -59,8 +59,8 @@ export type SongGardenSubmission = {
 export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ahh-c",
-    title: "Ahh on C",
-    instruction: "Sing a warm Ahhh with the guide tone. Hold it steady and gentle.",
+    title: "Sung Ahh",
+    instruction: "We need you to sing Ahh with this tone. Hold it steady and gentle.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "C4",
@@ -72,8 +72,8 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   },
   {
     id: "ohh-g",
-    title: "Ohh on G",
-    instruction: "Sing Ohhh like a rising light. Let it bloom, then fade.",
+    title: "Sung Ohh",
+    instruction: "We need you to sing Ohh with this tone. Let it bloom, then fade.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "G4",
@@ -85,8 +85,8 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   },
   {
     id: "hum-a",
-    title: "Hum on A",
-    instruction: "Hum softly on the tone. Make it feel like a shared drone.",
+    title: "Soft Hum",
+    instruction: "We need you to hum softly with this tone. Keep it calm and steady.",
     soundType: "melodic_phrase",
     assetCategory: "midi_phrases",
     pitch: "A4",
@@ -99,7 +99,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "breath-texture",
     title: "Breath texture",
-    instruction: "Give one airy breath, swell, sigh, or soft wind sound.",
+    instruction: "Give us one soft breath, sigh, or wind-like sound.",
     soundType: "breath_texture",
     assetCategory: "breath_textures",
     maxSeconds: 5,
@@ -109,7 +109,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "rhythm-hey",
     title: "Short rhythm",
-    instruction: "Record a short pulse: hey, ha, mm, clap, click, or stomp.",
+    instruction: "Give us one short rhythmic sound: hey, ha, mm, clap, click, or stomp.",
     soundType: "rhythmic_chop",
     assetCategory: "vocal_chops",
     maxSeconds: 4,
@@ -129,7 +129,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "lyric-text",
     title: "Lyric seed",
-    instruction: "Write one sentence or phrase that should live in the anthem.",
+    instruction: "Write one short line that should live in the anthem.",
     soundType: "lyric_text",
     assetCategory: "text_responses",
     maxSeconds: 0,

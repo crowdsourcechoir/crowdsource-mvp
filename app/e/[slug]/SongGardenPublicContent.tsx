@@ -45,24 +45,19 @@ function playGuideTone(prompt: SongGardenPrompt) {
 
 export default function SongGardenPublicContent({ event }: Props) {
   const config = songGardenConfigFromBrief(event.agentBrief) ?? DEFAULT_SONG_GARDEN_CONFIG;
-  const [activePromptId, setActivePromptId] = useState(config.prompts[0]?.id ?? "");
   const [participantName, setParticipantName] = useState("");
   const [consentStatus, setConsentStatus] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [textResponse, setTextResponse] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submittedPrompt, setSubmittedPrompt] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activePrompt = useMemo(
-    () => config.prompts.find((prompt) => prompt.id === activePromptId) ?? config.prompts[0],
-    [activePromptId, config.prompts]
-  );
+  const activePrompt = useMemo(() => config.prompts[0], [config.prompts]);
 
   async function submitContribution() {
     if (!activePrompt || submitting) return;
     setError(null);
-    setSubmittedPrompt(null);
     if (!consentStatus) {
       setError("Please check the consent box before submitting.");
       return;
@@ -99,7 +94,7 @@ export default function SongGardenPublicContent({ event }: Props) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((body as { error?: string }).error || "Submit failed");
-      setSubmittedPrompt(activePrompt.title);
+      setSubmitted(true);
       setAudioBlob(null);
       setTextResponse("");
     } catch (err) {
@@ -116,7 +111,7 @@ export default function SongGardenPublicContent({ event }: Props) {
     >
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/public-bg.png')" }} aria-hidden />
       <div className="absolute inset-0 bg-black/30" aria-hidden />
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-4xl flex-col px-4 py-6 sm:px-6 sm:py-10">
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-col px-4 py-6 sm:px-6 sm:py-10">
         <a href="https://crowdsourcechoir.com" target="_blank" rel="noopener noreferrer" className="mx-auto mb-8 block w-fit opacity-95">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Crowdsource Choir" className="h-14 w-auto sm:h-20" />
@@ -137,52 +132,25 @@ export default function SongGardenPublicContent({ event }: Props) {
           {event.landingCopy ? <p className="mx-auto mt-2 max-w-xl text-sm text-gray-300">{event.landingCopy}</p> : null}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <section className="rounded-none border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
-            <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-gray-300">Choose a sound</h2>
-            <div className="mt-3 space-y-2">
-              {config.prompts.map((prompt) => (
-                <button
-                  key={prompt.id}
-                  type="button"
-                  onClick={() => {
-                    setActivePromptId(prompt.id);
-                    setAudioBlob(null);
-                    setTextResponse("");
-                    setError(null);
-                    setSubmittedPrompt(null);
-                  }}
-                  className={`w-full border px-4 py-3 text-left transition ${
-                    activePrompt?.id === prompt.id
-                      ? "border-[var(--crowdsource-accent)] bg-[var(--crowdsource-accent)]/10"
-                      : "border-white/10 bg-white/[0.03] hover:border-white/25"
-                  }`}
-                >
-                  <span className="block font-mono text-sm font-semibold text-white">{prompt.title}</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-gray-400">{prompt.instruction}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+        <div className="mx-auto mt-8 w-full max-w-xl">
+          {submitted ? (
+            <section className="rounded-none border border-[var(--crowdsource-accent)]/30 bg-black/35 px-5 py-10 text-center shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-8">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/75">Received</p>
+              <h2 className="mt-4 text-3xl font-semibold text-white">Thank you.</h2>
+              <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-gray-300">
+                Your sound has been planted in this Song Garden. You&apos;re done.
+              </p>
+            </section>
+          ) : activePrompt ? (
+            <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
+                One sound
+              </p>
+              <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
+                {activePrompt.instruction}
+              </h2>
 
-          {activePrompt && (
-            <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/30 p-4 backdrop-blur-sm sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.25em] text-[var(--crowdsource-accent)]/70">
-                    {activePrompt.assetCategory.replace(/_/g, " ")}
-                  </p>
-                  <h2 className="mt-1 text-2xl font-semibold text-white">{activePrompt.title}</h2>
-                </div>
-                {activePrompt.pitch ? (
-                  <span className="rounded-full border border-white/15 px-3 py-1 font-mono text-xs text-gray-300">
-                    {activePrompt.pitch}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-4 text-sm leading-relaxed text-gray-300">{activePrompt.instruction}</p>
-
-              <div className="mt-5 space-y-4">
+              <div className="mt-6 space-y-4">
                 <input
                   type="text"
                   value={participantName}
@@ -197,7 +165,7 @@ export default function SongGardenPublicContent({ event }: Props) {
                     onClick={() => playGuideTone(activePrompt)}
                     className="min-h-[48px] w-full border border-[var(--crowdsource-accent)]/45 px-4 py-3 font-mono text-sm font-semibold text-[var(--crowdsource-accent)] transition hover:bg-[var(--crowdsource-accent)]/10"
                   >
-                    Play guide tone
+                    Play the tone
                   </button>
                 ) : null}
 
@@ -206,7 +174,7 @@ export default function SongGardenPublicContent({ event }: Props) {
                     key={activePrompt.id}
                     maxSeconds={activePrompt.maxSeconds}
                     countdownSeconds={3}
-                    idleLabel="Record this sound"
+                    idleLabel="Record"
                     helperLabel={`(up to ${activePrompt.maxSeconds}s)`}
                     onRecordingReady={setAudioBlob}
                     onClear={() => setAudioBlob(null)}
@@ -218,7 +186,7 @@ export default function SongGardenPublicContent({ event }: Props) {
                     value={textResponse}
                     onChange={(e) => setTextResponse(e.target.value)}
                     rows={3}
-                    placeholder={activePrompt.allowAudio ? "Optional word or note about this sound" : "Write your lyric seed..."}
+                    placeholder={activePrompt.allowAudio ? "Optional note" : "Write your line..."}
                     className="w-full rounded-none border border-white/10 bg-black/20 px-4 py-3 font-mono text-sm text-white placeholder-gray-400 focus:border-[var(--crowdsource-accent)] focus:outline-none"
                   />
                 ) : null}
@@ -234,11 +202,6 @@ export default function SongGardenPublicContent({ event }: Props) {
                 </label>
 
                 {error ? <p className="rounded border border-red-400/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">{error}</p> : null}
-                {submittedPrompt ? (
-                  <p className="rounded border border-[var(--crowdsource-accent)]/35 bg-[var(--crowdsource-accent)]/10 px-3 py-2 text-sm text-[var(--crowdsource-accent)]">
-                    Received: {submittedPrompt}. The garden grew.
-                  </p>
-                ) : null}
 
                 <button
                   type="button"
@@ -246,11 +209,11 @@ export default function SongGardenPublicContent({ event }: Props) {
                   onClick={submitContribution}
                   className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530] disabled:opacity-50"
                 >
-                  {submitting ? "Planting..." : "Plant this sound"}
+                  {submitting ? "Sending..." : "Send"}
                 </button>
               </div>
             </section>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
