@@ -179,7 +179,7 @@ export async function GET(
     "Load Cleaned_Choir_Samples, Vocal_Chops, Breath_Textures, and MIDI folders into the prebuilt Song Garden template.\n"
   );
 
-  const body = await zip.generateAsync({ type: "uint8array" });
+  const body = await zip.generateAsync({ type: "arraybuffer" });
   return new NextResponse(body, {
     headers: {
       "Content-Type": "application/zip",
