@@ -7,6 +7,43 @@ import {
 } from "@/lib/local-events-store";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
+const OPTIONAL_EVENT_COLUMNS = new Set([
+  "hero_image_mode",
+  "landing_headline",
+  "landing_copy",
+  "cta_text",
+  "allow_audio_video_prompt",
+]);
+
+type SupabaseMutationError = {
+  code?: string;
+  message?: string;
+};
+
+function missingOptionalColumn(error: SupabaseMutationError | null): string | null {
+  if (!error?.message) return null;
+  const match = error.message.match(/'([^']+)' column/);
+  const column = match?.[1];
+  return column && OPTIONAL_EVENT_COLUMNS.has(column) ? column : null;
+}
+
+function withoutColumn(row: Record<string, unknown>, column: string): Record<string, unknown> {
+  const next = { ...row };
+  delete next[column];
+  return next;
+}
+
+async function insertEventWithCompatibility(row: Record<string, unknown>) {
+  let current = row;
+  for (let attempt = 0; attempt <= OPTIONAL_EVENT_COLUMNS.size; attempt++) {
+    const result = await supabaseAdmin!.from("events").insert(current).select().single();
+    if (!result.error) return result;
+    const missing = missingOptionalColumn(result.error);
+    if (!missing || !(missing in current)) return result;
+    current = withoutColumn(current, missing);
+  }
+  return supabaseAdmin!.from("events").insert(current).select().single();
+}
 
 export async function GET(request: Request) {
   if (USE_LOCAL_EVENTS) {
@@ -97,7 +134,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const row = eventToRow(body);
-    const { data, error } = await supabaseAdmin.from("events").insert(row).select().single();
+    const { data, error } = await insertEventWithCompatibility(row);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json(rowToEvent(data));
   } catch (err) {
