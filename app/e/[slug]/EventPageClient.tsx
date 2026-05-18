@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import PublicEventContent from "./PublicEventContent";
+import SongGardenPublicContent from "./SongGardenPublicContent";
 import EventNotFound from "./EventNotFound";
 import EventPageLoadingShell from "@/components/EventPageLoadingShell";
+import { songGardenConfigFromBrief } from "@/data/songGarden";
 
 export default function EventPageClient() {
   const params = useParams();
@@ -23,5 +25,6 @@ export default function EventPageClient() {
 
   if (!loaded) return <EventPageLoadingShell />;
   if (!event) return <EventNotFound />;
+  if (songGardenConfigFromBrief(event.agentBrief)) return <SongGardenPublicContent event={event} />;
   return <PublicEventContent event={event} />;
 }

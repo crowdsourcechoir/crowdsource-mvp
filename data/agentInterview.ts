@@ -1,6 +1,7 @@
 "use client";
 
 import type { SongSeedTranscriptIssue } from "@/types/song-seed";
+import type { SongGardenConfig } from "@/data/songGarden";
 
 export type { SongSeedTranscriptIssue };
 
@@ -33,6 +34,7 @@ export type AgentBrief = {
   }>;
   avoid?: string[];
   exampleAnswers?: string[];
+  songGarden?: SongGardenConfig | null;
 };
 
 export type AgentBriefInput = Partial<AgentBrief>;

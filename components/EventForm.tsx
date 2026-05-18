@@ -5,8 +5,14 @@ import AddressMap from "./AddressMap";
 import { getAgentThemes } from "@/data/agentInterview";
 import type { AgentTheme } from "@/data/agentInterview";
 import type { AgentBrief } from "@/data/agentInterview";
+import {
+  DEFAULT_SONG_GARDEN_CONFIG,
+  normalizeSongGardenConfig,
+  type SongGardenConfig,
+} from "@/data/songGarden";
 
 export type EventFormValues = {
+  experienceMode: "agent" | "songGarden";
   title: string;
   slug: string;
   description: string;
@@ -33,6 +39,7 @@ type EventFormProps = {
 };
 
 const initialValues: EventFormValues = {
+  experienceMode: "agent",
   title: "",
   slug: "",
   description: "",
@@ -220,26 +227,48 @@ export default function EventForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitError(null);
-    const normalizedAskAboutItems = (values.agentBrief?.askAboutItems ?? [])
-      .map((item) => ({
-        prompt: item.prompt.trim(),
-        allowAudio: !!item.allowAudio,
-        allowVideo: !!item.allowVideo,
-        requireEmailCaptcha: !!item.requireEmailCaptcha,
-      }))
-      .filter((item) => item.prompt.length > 0);
-    const brief = values.agentBrief
-      ? {
-          eventType: values.agentBrief.eventType,
-          whoWhat: values.agentBrief.whoWhat,
-          emotionalArc: values.agentBrief.emotionalArc,
-          askAboutItems: normalizedAskAboutItems,
-          askAbout: normalizedAskAboutItems.map((item) => item.prompt),
-        }
-      : null;
+    const normalizedAskAboutItems =
+      values.experienceMode === "songGarden"
+        ? []
+        : (values.agentBrief?.askAboutItems ?? [])
+            .map((item) => ({
+              prompt: item.prompt.trim(),
+              allowAudio: !!item.allowAudio,
+              allowVideo: !!item.allowVideo,
+              requireEmailCaptcha: !!item.requireEmailCaptcha,
+            }))
+            .filter((item) => item.prompt.length > 0);
+    const activeSongGarden =
+      values.experienceMode === "songGarden"
+        ? normalizeSongGardenConfig(values.agentBrief?.songGarden) ?? DEFAULT_SONG_GARDEN_CONFIG
+        : null;
+    const brief =
+      values.experienceMode === "songGarden"
+        ? {
+            eventType: "song_garden",
+            whoWhat: values.agentBrief?.whoWhat,
+            emotionalArc: values.agentBrief?.emotionalArc,
+            askAboutItems: [],
+            askAbout: [],
+            songGarden: activeSongGarden,
+          }
+        : values.agentBrief
+        ? {
+            eventType: values.agentBrief.eventType,
+            whoWhat: values.agentBrief.whoWhat,
+            emotionalArc: values.agentBrief.emotionalArc,
+            askAboutItems: normalizedAskAboutItems,
+            askAbout: normalizedAskAboutItems.map((item) => item.prompt),
+            songGarden: null,
+          }
+        : null;
     setIsSubmitting(true);
     try {
-      await onSubmit({ ...values, agentBrief: brief });
+      await onSubmit({
+        ...values,
+        agentThemeId: values.experienceMode === "songGarden" ? null : values.agentThemeId,
+        agentBrief: brief,
+      });
       setSuccess(true);
     } catch (err) {
       setSuccess(false);
@@ -254,6 +283,22 @@ export default function EventForm({
       ...v,
       agentBrief: { ...(v.agentBrief ?? {}), [key]: value } as AgentBrief,
     }));
+  }
+
+  function setSongGarden<K extends keyof SongGardenConfig>(key: K, value: SongGardenConfig[K]) {
+    setValues((v) => {
+      const current = normalizeSongGardenConfig(v.agentBrief?.songGarden) ?? DEFAULT_SONG_GARDEN_CONFIG;
+      return {
+        ...v,
+        experienceMode: "songGarden",
+        agentThemeId: null,
+        agentBrief: {
+          ...(v.agentBrief ?? {}),
+          eventType: "song_garden",
+          songGarden: { ...current, [key]: value },
+        } as AgentBrief,
+      };
+    });
   }
 
   function persistSavedTemplates(next: SavedAgentTemplate[]) {
@@ -335,6 +380,7 @@ export default function EventForm({
   const inputClass =
     "mt-1 block w-full rounded-xl border border-gray-700/60 bg-[#2a2a2a] px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600";
   const labelClass = "block text-sm font-semibold text-gray-300";
+  const activeSongGarden = normalizeSongGardenConfig(values.agentBrief?.songGarden) ?? DEFAULT_SONG_GARDEN_CONFIG;
 
   return (
     <form noValidate onSubmit={handleSubmit} className="mx-auto max-w-xl space-y-6">
@@ -538,6 +584,146 @@ export default function EventForm({
         </div>
       </section>
 
+      <section className="rounded-2xl border border-gray-700/60 bg-[#1f1f1f] p-4 sm:p-6">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Experience Mode</h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Choose the current lyric interview flow or the new audio-first Song Garden flow.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[
+            {
+              id: "agent" as const,
+              title: "Crowdsource Choir",
+              copy: "Collect stories, memories, language, and lyric inspiration.",
+            },
+            {
+              id: "songGarden" as const,
+              title: "Song Garden",
+              copy: "Collect vowels, breaths, rhythms, phrases, and lyric seeds as performance assets.",
+            },
+          ].map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => {
+                if (mode.id === "songGarden") {
+                  setValues((v) => ({
+                    ...v,
+                    experienceMode: "songGarden",
+                    agentThemeId: null,
+                    landingHeadline:
+                      !v.landingHeadline ||
+                      v.landingHeadline === "We're crowdsourcing a song for this event. Want to help create it?"
+                        ? "Add your voice to the Song Garden."
+                        : v.landingHeadline,
+                    landingCopy:
+                      v.landingCopy ||
+                      "Record a short guided sound. Each voice helps grow the shared instrument for this event.",
+                    ctaText: !v.ctaText || v.ctaText === "Let's make an anthem" ? "Enter the Song Garden" : v.ctaText,
+                    agentBrief: {
+                      ...(v.agentBrief ?? {}),
+                      eventType: "song_garden",
+                      songGarden: normalizeSongGardenConfig(v.agentBrief?.songGarden) ?? DEFAULT_SONG_GARDEN_CONFIG,
+                    },
+                  }));
+                } else {
+                  setValues((v) => ({
+                    ...v,
+                    experienceMode: "agent",
+                    agentBrief: {
+                      ...(v.agentBrief ?? {}),
+                      songGarden: null,
+                    },
+                  }));
+                }
+              }}
+              className={`rounded-xl border px-4 py-4 text-left transition ${
+                values.experienceMode === mode.id
+                  ? "border-amber-300/70 bg-amber-300/10 text-white"
+                  : "border-gray-700 bg-[#18181b] text-gray-300 hover:border-gray-500"
+              }`}
+            >
+              <span className="block text-sm font-semibold">{mode.title}</span>
+              <span className="mt-1 block text-xs leading-relaxed text-gray-400">{mode.copy}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {values.experienceMode === "songGarden" && (
+        <section className="rounded-2xl border border-amber-300/25 bg-[#1f1f1f] p-4 sm:p-6">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-200/80">Song Garden V1</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            V1 exports approved recordings into Ableton/MPC-ready folders with a manifest, lyric text, and simple MIDI.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="songGardenBpm" className={labelClass}>
+                Export BPM
+              </label>
+              <input
+                id="songGardenBpm"
+                type="number"
+                min={60}
+                max={180}
+                value={activeSongGarden.exportBpm}
+                onChange={(e) => setSongGarden("exportBpm", Number(e.target.value) || 96)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="songGardenChords" className={labelClass}>
+                Chord progression
+              </label>
+              <input
+                id="songGardenChords"
+                type="text"
+                value={activeSongGarden.chordProgression.join(" - ")}
+                onChange={(e) =>
+                  setSongGarden(
+                    "chordProgression",
+                    e.target.value
+                      .split(/[-,]/)
+                      .map((x) => x.trim())
+                      .filter(Boolean)
+                  )
+                }
+                className={inputClass}
+              />
+            </div>
+          </div>
+          <div className="mt-4">
+            <label htmlFor="songGardenConsent" className={labelClass}>
+              Consent copy
+            </label>
+            <textarea
+              id="songGardenConsent"
+              rows={2}
+              value={activeSongGarden.consentCopy}
+              onChange={(e) => setSongGarden("consentCopy", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div className="mt-4 rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Prompt pack</p>
+            <ul className="space-y-2">
+              {activeSongGarden.prompts.map((prompt) => (
+                <li key={prompt.id} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-gray-200">{prompt.title}</span>
+                    <span className="rounded-full bg-gray-800 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
+                      {prompt.assetCategory.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{prompt.instruction}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {values.experienceMode === "agent" && (
       <section className="rounded-2xl border border-gray-700/60 bg-[#1f1f1f] p-4 sm:p-6">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Agent Interview</h3>
         <p className="mt-1 text-xs text-gray-500">Required. This always powers the public event experience.</p>
@@ -851,6 +1037,7 @@ export default function EventForm({
           }
         </div>
       </section>
+      )}
 
       <button
         type="submit"
