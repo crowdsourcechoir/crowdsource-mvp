@@ -211,9 +211,6 @@ export default function SongGardenPublicContent({ event }: Props) {
               <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
                 Enter your email to begin.
               </h2>
-              <p className="mt-3 text-sm leading-relaxed text-gray-300">
-                This keeps your sounds connected to this gathering.
-              </p>
               <div className="mt-6 space-y-4">
                 <input
                   type="email"
@@ -243,7 +240,7 @@ export default function SongGardenPublicContent({ event }: Props) {
                 One last yes
               </p>
               <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
-                Ready to plant your sounds?
+                Ready to plant your sounds in the Song Garden?
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-gray-300">
                 Your offerings will become source material for this Crowdsource Choir event.
