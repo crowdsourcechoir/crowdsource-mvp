@@ -56,11 +56,18 @@ export type SongGardenSubmission = {
   createdAt: string;
 };
 
+const LEGACY_AHH_INSTRUCTION = "We need you to sing Ahh with this tone. Hold it steady and gentle.";
+const CURRENT_AHH_INSTRUCTION = "Sing Ahh with this tone.";
+const LEGACY_CONSENT_COPY =
+  "I consent to my voice or words being used as source material for this event's Song Garden and performance assets.";
+const CURRENT_CONSENT_COPY =
+  "I consent to my voice, video and words to be used as source material for Crowdsource Choir performance assets.";
+
 export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ahh-c",
     title: "Sung Ahh",
-    instruction: "We need you to sing Ahh with this tone. Hold it steady and gentle.",
+    instruction: CURRENT_AHH_INSTRUCTION,
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "C4",
@@ -142,10 +149,20 @@ export const DEFAULT_SONG_GARDEN_CONFIG: SongGardenConfig = {
   enabled: true,
   exportBpm: 96,
   chordProgression: ["C", "G", "Am", "F"],
-  consentCopy:
-    "I consent to my voice or words being used as source material for this event's Song Garden and performance assets.",
+  consentCopy: CURRENT_CONSENT_COPY,
   prompts: DEFAULT_SONG_GARDEN_PROMPTS,
 };
+
+function normalizePromptInstruction(prompt: SongGardenPrompt): string {
+  if (prompt.id === "ahh-c" && prompt.instruction === LEGACY_AHH_INSTRUCTION) {
+    return CURRENT_AHH_INSTRUCTION;
+  }
+  return prompt.instruction;
+}
+
+function normalizeConsentCopy(copy: string): string {
+  return copy === LEGACY_CONSENT_COPY ? CURRENT_CONSENT_COPY : copy;
+}
 
 export function normalizeSongGardenConfig(input: unknown): SongGardenConfig | null {
   if (!input || typeof input !== "object") return null;
@@ -159,11 +176,14 @@ export function normalizeSongGardenConfig(input: unknown): SongGardenConfig | nu
       Array.isArray(raw.chordProgression) && raw.chordProgression.length > 0
         ? raw.chordProgression.map(String)
         : ["C", "G", "Am", "F"],
-    consentCopy: typeof raw.consentCopy === "string" && raw.consentCopy.trim()
-      ? raw.consentCopy
-      : DEFAULT_SONG_GARDEN_CONFIG.consentCopy,
+    consentCopy: normalizeConsentCopy(
+      typeof raw.consentCopy === "string" && raw.consentCopy.trim()
+        ? raw.consentCopy
+        : DEFAULT_SONG_GARDEN_CONFIG.consentCopy
+    ),
     prompts: prompts.map((prompt) => ({
       ...prompt,
+      instruction: normalizePromptInstruction(prompt),
       maxSeconds: Math.max(0, Math.min(20, Number(prompt.maxSeconds) || 8)),
       allowAudio: !!prompt.allowAudio,
       allowText: !!prompt.allowText,
