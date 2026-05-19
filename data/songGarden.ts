@@ -144,7 +144,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
     assetCategory: "vocal_chops",
     maxSeconds: 4,
     allowAudio: true,
-    allowText: true,
+    allowText: false,
   },
   {
     id: "lyric-text",
