@@ -167,7 +167,7 @@ export const DEFAULT_SONG_GARDEN_CONFIG: SongGardenConfig = {
 };
 
 function normalizePromptInstruction(prompt: SongGardenPrompt): string {
-  if (prompt.id === "ahh-c" && prompt.instruction === LEGACY_AHH_INSTRUCTION) {
+  if (prompt.id === "ahh-c") {
     return CURRENT_AHH_INSTRUCTION;
   }
   return prompt.instruction;

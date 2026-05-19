@@ -16,6 +16,12 @@ type Props = {
   event: Event;
 };
 
+type PendingContribution = {
+  prompt: SongGardenPrompt;
+  audioBlob: Blob | null;
+  textResponse: string | null;
+};
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -54,13 +60,16 @@ async function playGuideTone(prompt: SongGardenPrompt) {
 
 export default function SongGardenPublicContent({ event }: Props) {
   const config = songGardenConfigFromBrief(event.agentBrief) ?? DEFAULT_SONG_GARDEN_CONFIG;
-  const [participantName, setParticipantName] = useState("");
+  const [participantEmail, setParticipantEmail] = useState("");
+  const [emailCaptured, setEmailCaptured] = useState(false);
   const [consentStatus, setConsentStatus] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [textResponse, setTextResponse] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [activePromptIndex, setActivePromptIndex] = useState(0);
+  const [contributions, setContributions] = useState<PendingContribution[]>([]);
   const [guideTonePlaying, setGuideTonePlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,13 +79,22 @@ export default function SongGardenPublicContent({ event }: Props) {
   );
   const totalPrompts = config.prompts.length;
 
-  async function submitContribution() {
-    if (!activePrompt || submitting) return;
+  function validEmail(input: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.trim());
+  }
+
+  function continueFromEmail() {
     setError(null);
-    if (!consentStatus) {
-      setError("Please check the consent box before submitting.");
+    if (!validEmail(participantEmail)) {
+      setError("Enter a valid email address to begin.");
       return;
     }
+    setEmailCaptured(true);
+  }
+
+  function saveCurrentContribution() {
+    if (!activePrompt) return;
+    setError(null);
     if (activePrompt.allowAudio && !audioBlob && !textResponse.trim()) {
       setError("Record your sound before submitting.");
       return;
@@ -86,36 +104,61 @@ export default function SongGardenPublicContent({ event }: Props) {
       return;
     }
 
+    const contribution: PendingContribution = {
+      prompt: activePrompt,
+      audioBlob,
+      textResponse: textResponse.trim() || null,
+    };
+    setContributions((prev) => {
+      const next = [...prev];
+      next[activePromptIndex] = contribution;
+      return next;
+    });
+    setAudioBlob(null);
+    setTextResponse("");
+    if (activePromptIndex < totalPrompts - 1) {
+      setActivePromptIndex((index) => index + 1);
+    } else {
+      setReviewing(true);
+    }
+  }
+
+  async function submitAllContributions() {
+    if (submitting) return;
+    setError(null);
+    if (!consentStatus) {
+      setError("Please check the consent box before submitting.");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
-      const res = await fetch("/api/song-garden/submissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId: event.id,
-          eventSlug: event.slug,
-          participantName,
-          promptId: activePrompt.id,
-          promptTitle: activePrompt.title,
-          soundType: activePrompt.soundType,
-          assetCategory: activePrompt.assetCategory,
-          pitch: activePrompt.pitch ?? null,
-          midiNote: activePrompt.midiNote ?? null,
-          consentStatus,
-          textResponse: textResponse.trim() || null,
-          audioDataUrl,
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body as { error?: string }).error || "Submit failed");
-      setAudioBlob(null);
-      setTextResponse("");
-      if (activePromptIndex < totalPrompts - 1) {
-        setActivePromptIndex((index) => index + 1);
-      } else {
-        setSubmitted(true);
+      for (const contribution of contributions) {
+        if (!contribution) continue;
+        const audioDataUrl = contribution.audioBlob ? await blobToDataUrl(contribution.audioBlob) : null;
+        const res = await fetch("/api/song-garden/submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: event.id,
+            eventSlug: event.slug,
+            participantName: participantEmail.trim().toLowerCase(),
+            participantEmail: participantEmail.trim().toLowerCase(),
+            promptId: contribution.prompt.id,
+            promptTitle: contribution.prompt.title,
+            soundType: contribution.prompt.soundType,
+            assetCategory: contribution.prompt.assetCategory,
+            pitch: contribution.prompt.pitch ?? null,
+            midiNote: contribution.prompt.midiNote ?? null,
+            consentStatus,
+            textResponse: contribution.textResponse,
+            audioDataUrl,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((body as { error?: string }).error || "Submit failed");
       }
+      setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");
     } finally {
@@ -160,6 +203,72 @@ export default function SongGardenPublicContent({ event }: Props) {
                 Your sounds have been planted in this Song Garden. You&apos;re done.
               </p>
             </section>
+          ) : !emailCaptured ? (
+            <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
+                Begin
+              </p>
+              <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
+                Enter your email to begin.
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-gray-300">
+                This connects your sounds to this event.
+              </p>
+              <div className="mt-6 space-y-4">
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={participantEmail}
+                  onChange={(e) => setParticipantEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") continueFromEmail();
+                  }}
+                  placeholder="you@example.com"
+                  className="min-h-[56px] w-full rounded-none border border-white/10 bg-black/20 px-4 py-3 font-mono text-base text-white placeholder-gray-400 focus:border-[var(--crowdsource-accent)] focus:outline-none"
+                />
+                {error ? <p className="rounded border border-red-400/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">{error}</p> : null}
+                <button
+                  type="button"
+                  onClick={continueFromEmail}
+                  className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530]"
+                >
+                  Continue
+                </button>
+              </div>
+            </section>
+          ) : reviewing ? (
+            <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
+                Final step
+              </p>
+              <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
+                Ready to plant your sounds?
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-gray-300">
+                {contributions.filter(Boolean).length} sounds will be added for {participantEmail.trim().toLowerCase()}.
+              </p>
+              <div className="mt-6 space-y-4">
+                <label className="flex gap-3 rounded-none border border-white/10 bg-black/20 p-3 text-left text-xs leading-relaxed text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={consentStatus}
+                    onChange={(e) => setConsentStatus(e.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 accent-[#CFFF81]"
+                  />
+                  <span>{config.consentCopy}</span>
+                </label>
+                {error ? <p className="rounded border border-red-400/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">{error}</p> : null}
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={submitAllContributions}
+                  className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530] disabled:opacity-50"
+                >
+                  {submitting ? "Sending..." : "Submit"}
+                </button>
+              </div>
+            </section>
           ) : activePrompt ? (
             <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
@@ -170,14 +279,6 @@ export default function SongGardenPublicContent({ event }: Props) {
               </h2>
 
               <div className="mt-6 space-y-4">
-                <input
-                  type="text"
-                  value={participantName}
-                  onChange={(e) => setParticipantName(e.target.value)}
-                  placeholder="Your name (optional)"
-                  className="min-h-[48px] w-full rounded-none border border-white/10 bg-black/20 px-4 py-3 font-mono text-sm text-white placeholder-gray-400 focus:border-[var(--crowdsource-accent)] focus:outline-none"
-                />
-
                 {activePrompt.guideToneHz ? (
                   <button
                     type="button"
@@ -221,25 +322,15 @@ export default function SongGardenPublicContent({ event }: Props) {
                   />
                 ) : null}
 
-                <label className="flex gap-3 rounded-none border border-white/10 bg-black/20 p-3 text-left text-xs leading-relaxed text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={consentStatus}
-                    onChange={(e) => setConsentStatus(e.target.checked)}
-                    className="mt-1 h-4 w-4 shrink-0 accent-[#CFFF81]"
-                  />
-                  <span>{config.consentCopy}</span>
-                </label>
-
                 {error ? <p className="rounded border border-red-400/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">{error}</p> : null}
 
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={submitContribution}
+                  onClick={saveCurrentContribution}
                   className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530] disabled:opacity-50"
                 >
-                  {submitting ? "Sending..." : "Send"}
+                  {activePromptIndex < totalPrompts - 1 ? "Next" : "Review"}
                 </button>
               </div>
             </section>
