@@ -706,13 +706,18 @@ export default function EventForm({
           </div>
           <div className="mt-4 rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Prompt pack</p>
+            <p className="mb-3 text-xs leading-relaxed text-gray-500">
+              Lyric-only text is no longer shown to participants. Add any host notes or lyric guidance in the admin event brief instead.
+            </p>
             <ul className="space-y-2">
               {activeSongGarden.prompts.map((prompt) => (
                 <li key={prompt.id} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] px-3 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-gray-200">{prompt.title}</span>
                     <span className="rounded-full bg-gray-800 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
-                      {prompt.assetCategory.replace(/_/g, " ")}
+                      {prompt.id === "say-anything"
+                        ? "choir samples / vocal chops / lyrics"
+                        : prompt.assetCategory.replace(/_/g, " ")}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">{prompt.instruction}</p>
