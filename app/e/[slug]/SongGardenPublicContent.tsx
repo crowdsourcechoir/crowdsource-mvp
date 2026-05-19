@@ -60,10 +60,15 @@ export default function SongGardenPublicContent({ event }: Props) {
   const [textResponse, setTextResponse] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [activePromptIndex, setActivePromptIndex] = useState(0);
   const [guideTonePlaying, setGuideTonePlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activePrompt = useMemo(() => config.prompts[0], [config.prompts]);
+  const activePrompt = useMemo(
+    () => config.prompts[Math.min(activePromptIndex, Math.max(0, config.prompts.length - 1))],
+    [activePromptIndex, config.prompts]
+  );
+  const totalPrompts = config.prompts.length;
 
   async function submitContribution() {
     if (!activePrompt || submitting) return;
@@ -104,9 +109,13 @@ export default function SongGardenPublicContent({ event }: Props) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((body as { error?: string }).error || "Submit failed");
-      setSubmitted(true);
       setAudioBlob(null);
       setTextResponse("");
+      if (activePromptIndex < totalPrompts - 1) {
+        setActivePromptIndex((index) => index + 1);
+      } else {
+        setSubmitted(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");
     } finally {
@@ -148,13 +157,13 @@ export default function SongGardenPublicContent({ event }: Props) {
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/75">Received</p>
               <h2 className="mt-4 text-3xl font-semibold text-white">Thank you.</h2>
               <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-gray-300">
-                Your sound has been planted in this Song Garden. You&apos;re done.
+                Your sounds have been planted in this Song Garden. You&apos;re done.
               </p>
             </section>
           ) : activePrompt ? (
             <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
-                One sound
+                Sound {activePromptIndex + 1} of {totalPrompts}
               </p>
               <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
                 {activePrompt.instruction}

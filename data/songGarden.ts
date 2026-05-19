@@ -66,7 +66,7 @@ const CURRENT_CONSENT_COPY =
 export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ahh-c",
-    title: "Sung Ahh",
+    title: "Sung Ahh 1",
     instruction: CURRENT_AHH_INSTRUCTION,
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
@@ -80,7 +80,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ohh-g",
     title: "Sung Ohh",
-    instruction: "We need you to sing Ohh with this tone. Let it bloom, then fade.",
+    instruction: "Sing Ohh with this tone.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "G4",
@@ -93,12 +93,25 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "hum-a",
     title: "Soft Hum",
-    instruction: "We need you to hum softly with this tone. Keep it calm and steady.",
+    instruction: "Hum with this tone.",
     soundType: "melodic_phrase",
     assetCategory: "midi_phrases",
     pitch: "A4",
     midiNote: 69,
     guideToneHz: 440,
+    maxSeconds: 8,
+    allowAudio: true,
+    allowText: false,
+  },
+  {
+    id: "ahh-f",
+    title: "Sung Ahh 2",
+    instruction: CURRENT_AHH_INSTRUCTION,
+    soundType: "choir_vowel",
+    assetCategory: "choir_samples",
+    pitch: "F4",
+    midiNote: 65,
+    guideToneHz: 349.23,
     maxSeconds: 8,
     allowAudio: true,
     allowText: false,
@@ -169,6 +182,11 @@ export function normalizeSongGardenConfig(input: unknown): SongGardenConfig | nu
   const raw = input as Partial<SongGardenConfig>;
   if (!raw.enabled) return null;
   const prompts = Array.isArray(raw.prompts) && raw.prompts.length > 0 ? raw.prompts : DEFAULT_SONG_GARDEN_PROMPTS;
+  const promptIds = new Set(prompts.map((prompt) => prompt.id));
+  const promptsWithCurrentDefaults = [
+    ...prompts,
+    ...DEFAULT_SONG_GARDEN_PROMPTS.filter((prompt) => !promptIds.has(prompt.id)),
+  ];
   return {
     enabled: true,
     exportBpm: typeof raw.exportBpm === "number" && raw.exportBpm > 0 ? raw.exportBpm : 96,
@@ -181,7 +199,7 @@ export function normalizeSongGardenConfig(input: unknown): SongGardenConfig | nu
         ? raw.consentCopy
         : DEFAULT_SONG_GARDEN_CONFIG.consentCopy
     ),
-    prompts: prompts.map((prompt) => ({
+    prompts: promptsWithCurrentDefaults.map((prompt) => ({
       ...prompt,
       instruction: normalizePromptInstruction(prompt),
       maxSeconds: Math.max(0, Math.min(20, Number(prompt.maxSeconds) || 8)),
