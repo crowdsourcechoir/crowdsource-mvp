@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSongGardenListSubmissions } from "@/lib/local-song-garden-store";
+import {
+  isMissingSongGardenTable,
+  storageListSongGardenSubmissions,
+} from "@/lib/song-garden-supabase-storage";
 import { slugifyAssetPart, type SongGardenSubmission } from "@/data/songGarden";
 
 function rowToSubmission(row: Record<string, unknown>): SongGardenSubmission {
@@ -33,6 +37,7 @@ async function listSubmissions(eventId: string): Promise<SongGardenSubmission[]>
     .eq("event_id", eventId)
     .eq("status", "approved")
     .order("created_at", { ascending: true });
+  if (isMissingSongGardenTable(error)) return storageListSongGardenSubmissions(eventId);
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToSubmission);
 }

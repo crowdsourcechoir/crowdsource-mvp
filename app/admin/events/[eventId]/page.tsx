@@ -271,7 +271,7 @@ export default function EventDetailPage() {
     const res = await fetch(`/api/song-garden/submissions/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ eventId, status }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as any)?.error || "Could not update submission");

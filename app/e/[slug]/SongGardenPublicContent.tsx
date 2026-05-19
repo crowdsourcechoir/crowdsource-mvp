@@ -25,22 +25,31 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-function playGuideTone(prompt: SongGardenPrompt) {
+async function playGuideTone(prompt: SongGardenPrompt) {
   if (!prompt.guideToneHz) return;
   const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextCtor) return;
   const ctx = new AudioContextCtor();
+  if (ctx.state === "suspended") await ctx.resume();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const duration = 2.2;
   osc.frequency.value = prompt.guideToneHz;
   osc.type = "sine";
   gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.03);
-  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.2);
+  gain.gain.exponentialRampToValueAtTime(0.38, ctx.currentTime + 0.04);
+  gain.gain.setValueAtTime(0.38, ctx.currentTime + duration - 0.35);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 1.25);
+  osc.stop(ctx.currentTime + duration);
+  await new Promise<void>((resolve) => {
+    osc.onended = () => {
+      void ctx.close().catch(() => undefined);
+      resolve();
+    };
+  });
 }
 
 export default function SongGardenPublicContent({ event }: Props) {
@@ -51,6 +60,7 @@ export default function SongGardenPublicContent({ event }: Props) {
   const [textResponse, setTextResponse] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [guideTonePlaying, setGuideTonePlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const activePrompt = useMemo(() => config.prompts[0], [config.prompts]);
@@ -162,10 +172,21 @@ export default function SongGardenPublicContent({ event }: Props) {
                 {activePrompt.guideToneHz ? (
                   <button
                     type="button"
-                    onClick={() => playGuideTone(activePrompt)}
+                    disabled={guideTonePlaying}
+                    onClick={async () => {
+                      setError(null);
+                      setGuideTonePlaying(true);
+                      try {
+                        await playGuideTone(activePrompt);
+                      } catch {
+                        setError("Could not play the tone. Turn up your volume and try again.");
+                      } finally {
+                        setGuideTonePlaying(false);
+                      }
+                    }}
                     className="min-h-[48px] w-full border border-[var(--crowdsource-accent)]/45 px-4 py-3 font-mono text-sm font-semibold text-[var(--crowdsource-accent)] transition hover:bg-[var(--crowdsource-accent)]/10"
                   >
-                    Play the tone
+                    {guideTonePlaying ? "Playing..." : "Play the tone"}
                   </button>
                 ) : null}
 

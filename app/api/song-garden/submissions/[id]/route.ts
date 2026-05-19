@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSongGardenUpdateSubmissionStatus } from "@/lib/local-song-garden-store";
+import {
+  isMissingSongGardenTable,
+  storageUpdateSongGardenSubmissionStatus,
+} from "@/lib/song-garden-supabase-storage";
 import type { SongGardenSubmissionStatus } from "@/data/songGarden";
 
 function isStatus(input: unknown): input is SongGardenSubmissionStatus {
@@ -38,6 +42,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Valid status is required." }, { status: 400 });
   }
   const status = (body as { status: SongGardenSubmissionStatus }).status;
+  const eventId = typeof (body as { eventId?: unknown }).eventId === "string" ? (body as { eventId: string }).eventId : "";
 
   if (!supabaseAdmin) {
     const submission = await localSongGardenUpdateSubmissionStatus(id, status);
@@ -51,6 +56,11 @@ export async function PATCH(
     .eq("id", id)
     .select()
     .single();
+  if (isMissingSongGardenTable(error) && eventId) {
+    const submission = await storageUpdateSongGardenSubmissionStatus({ eventId, submissionId: id, status });
+    if (!submission) return NextResponse.json(null, { status: 404 });
+    return NextResponse.json({ submission });
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ submission: rowToSubmission(data) });
 }

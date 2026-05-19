@@ -4,10 +4,14 @@ import {
   localSongGardenCreateSubmission,
   localSongGardenListSubmissions,
 } from "@/lib/local-song-garden-store";
+import {
+  SONG_GARDEN_BUCKET,
+  ensureSongGardenBucket,
+  isMissingSongGardenTable,
+  storageCreateSongGardenSubmission,
+  storageListSongGardenSubmissions,
+} from "@/lib/song-garden-supabase-storage";
 import type { SongGardenAssetCategory, SongGardenSoundType } from "@/data/songGarden";
-
-const MEDIA_BUCKET = process.env.SUPABASE_SONG_GARDEN_BUCKET || "song-garden-media";
-let mediaBucketChecked = false;
 
 function extFromMime(mime: string): string {
   if (mime.includes("webm")) return "webm";
@@ -26,29 +30,19 @@ function decodeDataUrl(dataUrl: string): { bytes: Uint8Array; contentType: strin
   return { bytes, contentType, extension: extFromMime(contentType) };
 }
 
-async function ensureMediaBucket() {
-  if (!supabaseAdmin || mediaBucketChecked) return;
-  mediaBucketChecked = true;
-  const { data: existing, error: listErr } = await supabaseAdmin.storage.listBuckets();
-  if (listErr) return;
-  if (!existing?.some((bucket) => bucket.name === MEDIA_BUCKET)) {
-    await supabaseAdmin.storage.createBucket(MEDIA_BUCKET, { public: true });
-  }
-}
-
 async function persistAudio(eventId: string, promptId: string, dataUrl: string | null): Promise<string | null> {
   if (!dataUrl) return null;
   if (!supabaseAdmin) return dataUrl;
 
-  await ensureMediaBucket();
+  await ensureSongGardenBucket();
   const parsed = decodeDataUrl(dataUrl);
   const filePath = `events/${eventId}/${promptId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${parsed.extension}`;
-  const { error: uploadErr } = await supabaseAdmin.storage.from(MEDIA_BUCKET).upload(filePath, parsed.bytes, {
+  const { error: uploadErr } = await supabaseAdmin.storage.from(SONG_GARDEN_BUCKET).upload(filePath, parsed.bytes, {
     contentType: parsed.contentType,
     upsert: false,
   });
   if (uploadErr) throw new Error("Failed to upload Song Garden audio.");
-  const { data } = supabaseAdmin.storage.from(MEDIA_BUCKET).getPublicUrl(filePath);
+  const { data } = supabaseAdmin.storage.from(SONG_GARDEN_BUCKET).getPublicUrl(filePath);
   return data.publicUrl;
 }
 
@@ -88,6 +82,9 @@ export async function GET(request: Request) {
     .select("*")
     .eq("event_id", eventId)
     .order("created_at", { ascending: true });
+  if (isMissingSongGardenTable(error)) {
+    return NextResponse.json({ submissions: await storageListSongGardenSubmissions(eventId) });
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ submissions: (data ?? []).map(rowToSubmission) });
 }
@@ -160,6 +157,10 @@ export async function POST(request: Request) {
       })
       .select()
       .single();
+    if (isMissingSongGardenTable(error)) {
+      const submission = await storageCreateSongGardenSubmission(submissionInput);
+      return NextResponse.json({ submission });
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ submission: rowToSubmission(data) });
   } catch (err) {
