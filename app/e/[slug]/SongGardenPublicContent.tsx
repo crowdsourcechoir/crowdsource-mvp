@@ -22,6 +22,11 @@ type PendingContribution = {
   textResponse: string | null;
 };
 
+type ReceivedStep = {
+  completedIndex: number;
+  isFinalPrompt: boolean;
+};
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -70,6 +75,7 @@ export default function SongGardenPublicContent({ event }: Props) {
   const [reviewing, setReviewing] = useState(false);
   const [activePromptIndex, setActivePromptIndex] = useState(0);
   const [contributions, setContributions] = useState<PendingContribution[]>([]);
+  const [receivedStep, setReceivedStep] = useState<ReceivedStep | null>(null);
   const [guideTonePlaying, setGuideTonePlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,10 +122,20 @@ export default function SongGardenPublicContent({ event }: Props) {
     });
     setAudioBlob(null);
     setTextResponse("");
-    if (activePromptIndex < totalPrompts - 1) {
-      setActivePromptIndex((index) => index + 1);
-    } else {
+    setReceivedStep({
+      completedIndex: activePromptIndex,
+      isFinalPrompt: activePromptIndex >= totalPrompts - 1,
+    });
+  }
+
+  function continueAfterReceived() {
+    if (!receivedStep) return;
+    if (receivedStep.isFinalPrompt) {
+      setReceivedStep(null);
       setReviewing(true);
+    } else {
+      setActivePromptIndex(receivedStep.completedIndex + 1);
+      setReceivedStep(null);
     }
   }
 
@@ -198,21 +214,21 @@ export default function SongGardenPublicContent({ event }: Props) {
           {submitted ? (
             <section className="rounded-none border border-[var(--crowdsource-accent)]/30 bg-black/35 px-5 py-10 text-center shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-8">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/75">Received</p>
-              <h2 className="mt-4 text-3xl font-semibold text-white">Thank you.</h2>
+              <h2 className="mt-4 text-3xl font-semibold text-white">The garden received you.</h2>
               <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-gray-300">
-                Your sounds have been planted in this Song Garden. You&apos;re done.
+                Your voice is now part of this event&apos;s shared sound.
               </p>
             </section>
           ) : !emailCaptured ? (
             <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
-                Begin
+                Enter the garden
               </p>
               <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
                 Enter your email to begin.
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-gray-300">
-                This connects your sounds to this event.
+                This keeps your sounds connected to this gathering.
               </p>
               <div className="mt-6 space-y-4">
                 <input
@@ -233,20 +249,37 @@ export default function SongGardenPublicContent({ event }: Props) {
                   onClick={continueFromEmail}
                   className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530]"
                 >
-                  Continue
+                  Begin
                 </button>
               </div>
+            </section>
+          ) : receivedStep ? (
+            <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 px-5 py-10 text-center shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-8">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/75">
+                Sound received
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold text-white">The garden has it.</h2>
+              <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-gray-300">
+                Take a breath. When you&apos;re ready, we&apos;ll gather the next sound.
+              </p>
+              <button
+                type="button"
+                onClick={continueAfterReceived}
+                className="mt-8 min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530]"
+              >
+                {receivedStep.isFinalPrompt ? "Finish" : "Continue"}
+              </button>
             </section>
           ) : reviewing ? (
             <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
-                Final step
+                One last yes
               </p>
               <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
                 Ready to plant your sounds?
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-gray-300">
-                {contributions.filter(Boolean).length} sounds will be added for {participantEmail.trim().toLowerCase()}.
+                Your offerings will become source material for this Crowdsource Choir event.
               </p>
               <div className="mt-6 space-y-4">
                 <label className="flex gap-3 rounded-none border border-white/10 bg-black/20 p-3 text-left text-xs leading-relaxed text-gray-300">
@@ -265,14 +298,14 @@ export default function SongGardenPublicContent({ event }: Props) {
                   onClick={submitAllContributions}
                   className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530] disabled:opacity-50"
                 >
-                  {submitting ? "Sending..." : "Submit"}
+                  {submitting ? "Planting..." : "Plant my sounds"}
                 </button>
               </div>
             </section>
           ) : activePrompt ? (
             <section className="rounded-none border border-[var(--crowdsource-accent)]/25 bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
-                Sound {activePromptIndex + 1} of {totalPrompts}
+                Offering {activePromptIndex + 1} of {totalPrompts}
               </p>
               <h2 className="mt-4 text-2xl font-semibold leading-snug text-white sm:text-3xl">
                 {activePrompt.instruction}
@@ -330,7 +363,7 @@ export default function SongGardenPublicContent({ event }: Props) {
                   onClick={saveCurrentContribution}
                   className="min-h-[56px] w-full border border-[var(--crowdsource-accent)] bg-transparent px-6 py-3 font-mono text-base font-medium tracking-wide text-[var(--crowdsource-accent)] transition hover:bg-[#CFFF81] hover:text-[#1a1530] disabled:opacity-50"
                 >
-                  {activePromptIndex < totalPrompts - 1 ? "Next" : "Review"}
+                  Plant this sound
                 </button>
               </div>
             </section>
