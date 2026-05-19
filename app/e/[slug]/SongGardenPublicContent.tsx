@@ -78,6 +78,7 @@ export default function SongGardenPublicContent({ event }: Props) {
     [activePromptIndex, config.prompts]
   );
   const totalPrompts = config.prompts.length;
+  const progressPercent = totalPrompts > 0 ? ((activePromptIndex + 1) / totalPrompts) * 100 : 0;
 
   function validEmail(input: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.trim());
@@ -197,10 +198,9 @@ export default function SongGardenPublicContent({ event }: Props) {
         <div className="mx-auto mt-8 w-full max-w-xl">
           {submitted ? (
             <section className="rounded-none bg-black/35 px-5 py-10 text-center shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-8">
-              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/75">Received</p>
-              <h2 className="mt-4 text-3xl font-semibold text-white">The garden received you.</h2>
+              <h2 className="text-3xl font-semibold text-white">Received.</h2>
               <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-gray-300">
-                Your voice is now part of this event&apos;s shared sound.
+                Your seeds have been planted in the Song Garden.
               </p>
             </section>
           ) : !emailCaptured ? (
@@ -271,6 +271,12 @@ export default function SongGardenPublicContent({ event }: Props) {
             </section>
           ) : activePrompt ? (
             <section className="rounded-none bg-black/35 p-5 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:p-7">
+              <div className="mb-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10" aria-hidden>
+                <div
+                  className="h-full rounded-full bg-[var(--crowdsource-accent)] transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--crowdsource-accent)]/70">
                 Offering {activePromptIndex + 1} of {totalPrompts}
               </p>

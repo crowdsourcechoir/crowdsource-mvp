@@ -60,13 +60,13 @@ export type SongGardenSubmission = {
 const LEGACY_CONSENT_COPY =
   "I consent to my voice or words being used as source material for this event's Song Garden and performance assets.";
 const CURRENT_CONSENT_COPY =
-  "I consent to my voice, video and words to be used as source material for Crowdsource Choir performance assets.";
+  "I consent to my voice, video and words to be used as source material for Crowdsource Choir performance assets, including future Crowdsource Choir events.";
 
 export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ahh-c",
     title: "Sung Ahh (root)",
-    instruction: "Sing Ahh with this tone. Let it bloom, then fade.",
+    instruction: "Sing Ahh with this tone.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "C4",
@@ -79,7 +79,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ahh-g",
     title: "Sung Ahh (5)",
-    instruction: "Sing Ahh with this tone. Let it bloom, then fade.",
+    instruction: "Sing Ahh with this tone.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "G4",
@@ -92,7 +92,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ohh-a",
     title: "Sung Ahh (6)",
-    instruction: "Sing Ohh with this tone. Let it bloom, then fade.",
+    instruction: "Sing Ohh with this tone.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "A4",
@@ -105,7 +105,7 @@ export const DEFAULT_SONG_GARDEN_PROMPTS: SongGardenPrompt[] = [
   {
     id: "ohh-f",
     title: "Sung Ahh (4)",
-    instruction: "Sing Ohh with this tone. Let it bloom, then fade.",
+    instruction: "Sing Ohh with this tone.",
     soundType: "choir_vowel",
     assetCategory: "choir_samples",
     pitch: "F4",
