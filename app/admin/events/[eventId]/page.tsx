@@ -266,6 +266,25 @@ export default function EventDetailPage() {
 
   const songGardenConfig = songGardenConfigFromBrief(event.agentBrief);
   const approvedSongGardenCount = songGardenSubmissions.filter((submission) => submission.status === "approved").length;
+  const approvedSongGardenSubmissions = songGardenSubmissions.filter((submission) => submission.status === "approved");
+  const choirToneGroups = [
+    { promptId: "ahh-c", label: "1 / Root / C", folder: "01_Degree_1_Root_C" },
+    { promptId: "ohh-f", label: "4 / F", folder: "02_Degree_4_F" },
+    { promptId: "ahh-g", label: "5 / G", folder: "03_Degree_5_G" },
+    { promptId: "ohh-a", label: "6 / A", folder: "04_Degree_6_A" },
+  ].map((group) => ({
+    ...group,
+    count: approvedSongGardenSubmissions.filter((submission) => submission.promptId === group.promptId).length,
+  }));
+  const vocalChopGroups = [
+    { promptId: "breath-texture", label: "Breath textures" },
+    { promptId: "rhythm-hey", label: "Short rhythm" },
+    { promptId: "whisper-word", label: "Whisper one word" },
+    { promptId: "say-anything", label: "Open sound seeds" },
+  ].map((group) => ({
+    ...group,
+    count: approvedSongGardenSubmissions.filter((submission) => submission.promptId === group.promptId).length,
+  }));
 
   async function updateSongGardenStatus(id: string, status: SongGardenSubmissionStatus) {
     const res = await fetch(`/api/song-garden/submissions/${encodeURIComponent(id)}`, {
@@ -397,6 +416,39 @@ export default function EventDetailPage() {
             <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-3">
               <p className="text-xs uppercase tracking-wide text-gray-500">Export BPM</p>
               <p className="mt-1 text-2xl font-semibold text-white">{songGardenConfig.exportBpm}</p>
+            </div>
+          </div>
+          <div className="mb-4 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+            <h3 className="text-sm font-semibold text-gray-200">Ableton export map</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Approved clips export into `Ableton_Ready` with choir tones grouped by scale degree and vocal material ready for chopping.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Choir tone folders</p>
+                <ul className="space-y-2">
+                  {choirToneGroups.map((group) => (
+                    <li key={group.promptId} className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-200">{group.label}</span>
+                        <span className="text-xs text-gray-500">{group.count} approved</span>
+                      </div>
+                      <p className="mt-1 font-mono text-[11px] text-gray-500">{group.folder}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Vocal chop folders</p>
+                <ul className="space-y-2">
+                  {vocalChopGroups.map((group) => (
+                    <li key={group.promptId} className="flex items-center justify-between gap-3 rounded border border-gray-700/60 bg-[#18181b] px-3 py-2">
+                      <span className="text-sm text-gray-200">{group.label}</span>
+                      <span className="text-xs text-gray-500">{group.count} approved</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
           {loadingSongGardenSubmissions && <p className="text-gray-500">Loading Song Garden submissions...</p>}

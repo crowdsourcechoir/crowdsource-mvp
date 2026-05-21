@@ -8,6 +8,40 @@ import {
 } from "@/lib/song-garden-supabase-storage";
 import { slugifyAssetPart, type SongGardenSubmission } from "@/data/songGarden";
 
+type ToneGroup = {
+  folder: string;
+  label: string;
+  midiNote: number;
+  pitch: string;
+};
+
+const TONE_GROUPS: Record<string, ToneGroup> = {
+  "ahh-c": {
+    folder: "Ableton_Ready/Choir_Tones/01_Degree_1_Root_C",
+    label: "Degree 1 / Root / C",
+    midiNote: 60,
+    pitch: "C4",
+  },
+  "ohh-f": {
+    folder: "Ableton_Ready/Choir_Tones/02_Degree_4_F",
+    label: "Degree 4 / F",
+    midiNote: 65,
+    pitch: "F4",
+  },
+  "ahh-g": {
+    folder: "Ableton_Ready/Choir_Tones/03_Degree_5_G",
+    label: "Degree 5 / G",
+    midiNote: 67,
+    pitch: "G4",
+  },
+  "ohh-a": {
+    folder: "Ableton_Ready/Choir_Tones/04_Degree_6_A",
+    label: "Degree 6 / A",
+    midiNote: 69,
+    pitch: "A4",
+  },
+};
+
 function rowToSubmission(row: Record<string, unknown>): SongGardenSubmission {
   return {
     id: String(row.id),
@@ -116,6 +150,50 @@ function midiFile(note: number, bpm: number): Buffer {
   ]);
 }
 
+function midiProgressionFile(notes: number[], bpm: number): Buffer {
+  const tempo = Math.round(60_000_000 / Math.max(1, bpm));
+  const tempoBytes = Buffer.from([(tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff]);
+  const events: Buffer[] = [
+    varLen(0),
+    Buffer.from([0xff, 0x51, 0x03]),
+    tempoBytes,
+  ];
+  for (const rawNote of notes) {
+    const note = Math.max(0, Math.min(127, rawNote));
+    events.push(varLen(0), Buffer.from([0x90, note, 0x64]));
+    events.push(varLen(480 * 4), Buffer.from([0x80, note, 0x40]));
+  }
+  events.push(varLen(0), Buffer.from([0xff, 0x2f, 0x00]));
+  const track = Buffer.concat(events);
+  return Buffer.concat([
+    Buffer.from("MThd"),
+    uint32(6),
+    uint16(0),
+    uint16(1),
+    uint16(480),
+    Buffer.from("MTrk"),
+    uint32(track.length),
+    track,
+  ]);
+}
+
+function folderForSubmission(submission: SongGardenSubmission): string {
+  const toneGroup = TONE_GROUPS[submission.promptId];
+  if (toneGroup) return toneGroup.folder;
+  if (submission.promptId === "say-anything") return "Ableton_Ready/Vocal_Chops/Open_Sound_Seeds";
+  if (submission.assetCategory === "vocal_chops") return "Ableton_Ready/Vocal_Chops/One_Shots";
+  if (submission.assetCategory === "breath_textures") return "Ableton_Ready/Vocal_Chops/Breath_Textures";
+  if (submission.assetCategory === "choir_samples") return "Ableton_Ready/Choir_Tones/Unsorted_Choir";
+  return "Ableton_Ready/Source_Audio";
+}
+
+function abletonName(index: number, submission: SongGardenSubmission): string {
+  const toneGroup = TONE_GROUPS[submission.promptId];
+  const prefix = String(index + 1).padStart(3, "0");
+  if (toneGroup) return `${prefix}_${slugifyAssetPart(toneGroup.label)}_${slugifyAssetPart(submission.participantName)}`;
+  return `${prefix}_${slugifyAssetPart(submission.promptTitle)}_${slugifyAssetPart(submission.participantName)}`;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ eventId: string }> }
@@ -126,36 +204,38 @@ export async function GET(
   const submissions = (await listSubmissions(eventId)).filter((submission) => submission.status === "approved");
   const zip = new JSZip();
   const manifest: string[] = [
-    "submission_id,prompt_id,prompt_title,sound_type,asset_category,pitch,status,created_at,filename",
+    "submission_id,prompt_id,prompt_title,sound_type,asset_category,pitch,tone_group,status,created_at,filename",
   ];
+  const toneCounts = new Map<string, number>();
+  const chopCounts = new Map<string, number>();
   const textResponses: string[] = [];
 
   for (let index = 0; index < submissions.length; index++) {
     const submission = submissions[index];
-    const base = `${String(index + 1).padStart(3, "0")}_${slugifyAssetPart(submission.promptTitle)}_${slugifyAssetPart(submission.pitch)}`;
+    const toneGroup = TONE_GROUPS[submission.promptId] ?? null;
+    const base = abletonName(index, submission);
     const audioUrl = submission.processedAudioUrl || submission.rawAudioUrl;
     let filename = "";
 
     if (audioUrl) {
       const ext = extFromAudioUrl(audioUrl);
-      const folder =
-        submission.assetCategory === "choir_samples"
-          ? "Cleaned_Choir_Samples"
-          : submission.assetCategory === "vocal_chops"
-            ? "Vocal_Chops"
-            : submission.assetCategory === "breath_textures"
-              ? "Breath_Textures"
-              : "Ableton_MPC_Ready/Source_Audio";
+      const folder = folderForSubmission(submission);
       filename = `${folder}/${base}.${ext}`;
       try {
         zip.file(filename, await audioToBuffer(audioUrl));
+        if (toneGroup) {
+          toneCounts.set(toneGroup.label, (toneCounts.get(toneGroup.label) ?? 0) + 1);
+        } else if (folder.includes("Vocal_Chops")) {
+          chopCounts.set(submission.promptTitle, (chopCounts.get(submission.promptTitle) ?? 0) + 1);
+        }
       } catch (err) {
         filename = `FETCH_FAILED:${audioUrl.slice(0, 80)}`;
       }
     }
 
-    if (submission.midiNote !== null && submission.assetCategory !== "text_responses") {
-      zip.file(`MIDI/${base}.mid`, midiFile(submission.midiNote, bpm));
+    const midiNote = toneGroup?.midiNote ?? submission.midiNote;
+    if (midiNote !== null && midiNote !== undefined && submission.assetCategory !== "text_responses") {
+      zip.file(`Ableton_Ready/MIDI/Single_Notes/${base}.mid`, midiFile(midiNote, bpm));
     }
 
     if (submission.textResponse) {
@@ -169,7 +249,8 @@ export async function GET(
         submission.promptTitle,
         submission.soundType,
         submission.assetCategory,
-        submission.pitch ?? "",
+        toneGroup?.pitch ?? submission.pitch ?? "",
+        toneGroup?.label ?? "",
         submission.status,
         submission.createdAt,
         filename,
@@ -180,8 +261,35 @@ export async function GET(
   zip.file("manifest.csv", manifest.join("\n"));
   zip.file("Text_Responses/responses.txt", textResponses.join("\n"));
   zip.file(
-    "Ableton_MPC_Ready/README.txt",
-    "Load Cleaned_Choir_Samples, Vocal_Chops, Breath_Textures, and MIDI folders into the prebuilt Song Garden template.\n"
+    "Ableton_Ready/MIDI/Progressions/C_G_A_F_single_notes.mid",
+    midiProgressionFile([60, 67, 69, 65], bpm)
+  );
+  zip.file(
+    "Ableton_Ready/MIDI/Chord_Tones/01_Degree_1_Root_C.mid",
+    midiFile(60, bpm)
+  );
+  zip.file("Ableton_Ready/MIDI/Chord_Tones/02_Degree_4_F.mid", midiFile(65, bpm));
+  zip.file("Ableton_Ready/MIDI/Chord_Tones/03_Degree_5_G.mid", midiFile(67, bpm));
+  zip.file("Ableton_Ready/MIDI/Chord_Tones/04_Degree_6_A.mid", midiFile(69, bpm));
+  zip.file(
+    "Ableton_Ready/README.txt",
+    [
+      "Song Garden Ableton export",
+      "",
+      "Choir_Tones contains one folder per harvested chord tone / scale degree.",
+      "Drag each folder into Sampler, Simpler, or a Drum Rack slot depending on your template.",
+      "Vocal_Chops contains breath, rhythm, whisper, and open sound seed material for slicing.",
+      "MIDI/Chord_Tones contains single-note MIDI clips for each harvested tone.",
+      "MIDI/Progressions/C_G_A_F_single_notes.mid follows the event chord-tone order 1-5-6-4.",
+      "",
+      "Choir tone counts:",
+      ...Object.entries(TONE_GROUPS).map(([, group]) => `- ${group.label}: ${toneCounts.get(group.label) ?? 0}`),
+      "",
+      "Vocal chop counts:",
+      ...(chopCounts.size > 0
+        ? Array.from(chopCounts.entries()).map(([label, count]) => `- ${label}: ${count}`)
+        : ["- none"]),
+    ].join("\n")
   );
 
   const body = await zip.generateAsync({ type: "arraybuffer" });
