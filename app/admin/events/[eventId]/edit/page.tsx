@@ -6,6 +6,7 @@ import { getEventById, updateEvent } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import EventForm, { type EventFormValues } from "@/components/EventForm";
 import { toDateInputValue, toTimeInputValue } from "@/lib/event-datetime-input";
+import { songGardenConfigFromBrief } from "@/data/songGarden";
 
 type LoadStatus = "loading" | "ready" | "notFound";
 
@@ -62,6 +63,7 @@ export default function EditEventPage() {
   }
 
   const initialValues: Partial<EventFormValues> = {
+    experienceMode: songGardenConfigFromBrief(event.agentBrief) ? "songGarden" : "agent",
     title: event.title,
     slug: event.slug,
     description: event.description,

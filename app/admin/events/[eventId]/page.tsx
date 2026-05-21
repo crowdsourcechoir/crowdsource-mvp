@@ -21,6 +21,11 @@ import type { Event } from "@/data/mockEvents";
 import JSZip from "jszip";
 import { dataUrlToWavBlob } from "@/lib/audioToWav";
 import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
+import {
+  songGardenConfigFromBrief,
+  type SongGardenSubmission,
+  type SongGardenSubmissionStatus,
+} from "@/data/songGarden";
 
 type InterviewSubmissionItem = {
   participantName: string;
@@ -156,6 +161,9 @@ export default function EventDetailPage() {
   const [songSeedErrorIssues, setSongSeedErrorIssues] = useState<SongSeedTranscriptIssue[] | null>(null);
   const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
+  const [songGardenSubmissions, setSongGardenSubmissions] = useState<SongGardenSubmission[]>([]);
+  const [loadingSongGardenSubmissions, setLoadingSongGardenSubmissions] = useState(false);
+  const [loadingSongGardenExport, setLoadingSongGardenExport] = useState(false);
 
   useEffect(() => {
     getEventById(eventId)
@@ -164,6 +172,25 @@ export default function EventDetailPage() {
           setEvent(e);
           getSubmissionsForEvent(e.slug).then(setSubmissions);
           if (e.agentThemeId) getSongSeedForEvent(e.id).then(setSongSeed).catch(() => setSongSeed(null));
+          const songGardenConfig = songGardenConfigFromBrief(e.agentBrief);
+
+          if (songGardenConfig) {
+            setLoadingSongGardenSubmissions(true);
+            fetch(`/api/song-garden/submissions?eventId=${encodeURIComponent(e.id)}`)
+              .then(async (r) => {
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error((data as any)?.error || "Failed to load Song Garden submissions");
+                return data;
+              })
+              .then((data) => {
+                const items = (data as any)?.submissions;
+                setSongGardenSubmissions(Array.isArray(items) ? items : []);
+              })
+              .catch(() => setSongGardenSubmissions([]))
+              .finally(() => setLoadingSongGardenSubmissions(false));
+          } else {
+            setSongGardenSubmissions([]);
+          }
 
           if (e.agentThemeId) {
             setLoadingAgentInterviewSubmissions(true);
@@ -237,6 +264,41 @@ export default function EventDetailPage() {
     return prompt;
   }
 
+  const songGardenConfig = songGardenConfigFromBrief(event.agentBrief);
+  const approvedSongGardenCount = songGardenSubmissions.filter((submission) => submission.status === "approved").length;
+  const approvedSongGardenSubmissions = songGardenSubmissions.filter((submission) => submission.status === "approved");
+  const choirToneGroups = [
+    { promptId: "ahh-c", label: "1 / Root / C", folder: "01_Degree_1_Root_C" },
+    { promptId: "ohh-f", label: "4 / F", folder: "02_Degree_4_F" },
+    { promptId: "ahh-g", label: "5 / G", folder: "03_Degree_5_G" },
+    { promptId: "ohh-a", label: "6 / A", folder: "04_Degree_6_A" },
+  ].map((group) => ({
+    ...group,
+    count: approvedSongGardenSubmissions.filter((submission) => submission.promptId === group.promptId).length,
+  }));
+  const vocalChopGroups = [
+    { promptId: "breath-texture", label: "Breath textures" },
+    { promptId: "rhythm-hey", label: "Short rhythm" },
+    { promptId: "whisper-word", label: "Whisper one word" },
+    { promptId: "say-anything", label: "Open sound seeds" },
+  ].map((group) => ({
+    ...group,
+    count: approvedSongGardenSubmissions.filter((submission) => submission.promptId === group.promptId).length,
+  }));
+
+  async function updateSongGardenStatus(id: string, status: SongGardenSubmissionStatus) {
+    const res = await fetch(`/api/song-garden/submissions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.error || "Could not update submission");
+    const updated = (data as any)?.submission as SongGardenSubmission | undefined;
+    if (!updated) return;
+    setSongGardenSubmissions((prev) => prev.map((submission) => (submission.id === id ? updated : submission)));
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-10">
       {/* Public-style event card */}
@@ -306,6 +368,157 @@ export default function EventDetailPage() {
           </div>
         </div>
       </div>
+
+      {songGardenConfig && (
+        <section className="rounded-2xl border border-amber-300/25 bg-[#18181b] p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Song Garden</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Review guided voice/sound submissions and export approved performance assets.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={loadingSongGardenExport || approvedSongGardenCount === 0}
+              onClick={async () => {
+                setLoadingSongGardenExport(true);
+                try {
+                  const res = await fetch(
+                    `/api/song-garden/events/${encodeURIComponent(event.id)}/export?bpm=${encodeURIComponent(songGardenConfig.exportBpm)}`
+                  );
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error((data as any)?.error || "Export failed");
+                  }
+                  const blob = await res.blob();
+                  downloadBlob(blob, `${event.slug}_song_garden_assets.zip`);
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Export failed");
+                } finally {
+                  setLoadingSongGardenExport(false);
+                }
+              }}
+              className="rounded-xl bg-amber-200 px-4 py-2 text-sm font-medium text-gray-950 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {loadingSongGardenExport ? "Exporting..." : "Export Performance Assets"}
+            </button>
+          </div>
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Submissions</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{songGardenSubmissions.length}</p>
+            </div>
+            <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Approved</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{approvedSongGardenCount}</p>
+            </div>
+            <div className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Export BPM</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{songGardenConfig.exportBpm}</p>
+            </div>
+          </div>
+          <div className="mb-4 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+            <h3 className="text-sm font-semibold text-gray-200">Ableton export map</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Approved clips export into `Ableton_Ready` with choir tones grouped by scale degree and vocal material ready for chopping.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Choir tone folders</p>
+                <ul className="space-y-2">
+                  {choirToneGroups.map((group) => (
+                    <li key={group.promptId} className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-200">{group.label}</span>
+                        <span className="text-xs text-gray-500">{group.count} approved</span>
+                      </div>
+                      <p className="mt-1 font-mono text-[11px] text-gray-500">{group.folder}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Vocal chop folders</p>
+                <ul className="space-y-2">
+                  {vocalChopGroups.map((group) => (
+                    <li key={group.promptId} className="flex items-center justify-between gap-3 rounded border border-gray-700/60 bg-[#18181b] px-3 py-2">
+                      <span className="text-sm text-gray-200">{group.label}</span>
+                      <span className="text-xs text-gray-500">{group.count} approved</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+          {loadingSongGardenSubmissions && <p className="text-gray-500">Loading Song Garden submissions...</p>}
+          {!loadingSongGardenSubmissions && songGardenSubmissions.length === 0 && (
+            <p className="text-sm text-gray-500">No Song Garden sounds yet.</p>
+          )}
+          {songGardenSubmissions.length > 0 && (
+            <ul className="space-y-4">
+              {songGardenSubmissions.map((submission) => (
+                <li key={submission.id} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">{submission.promptTitle}</h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {submission.participantName ?? "Anonymous"} · {formatDate(submission.createdAt)} ·{" "}
+                        {submission.assetCategory.replace(/_/g, " ")}
+                        {submission.pitch ? ` · ${submission.pitch}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        submission.status === "approved"
+                          ? "bg-emerald-900/40 text-emerald-200"
+                          : submission.status === "rejected"
+                            ? "bg-red-900/40 text-red-200"
+                            : "bg-amber-900/40 text-amber-100"
+                      }`}
+                    >
+                      {submission.status.replace("_", " ")}
+                    </span>
+                  </div>
+                  {submission.rawAudioUrl && (
+                    <div className="mt-3 max-w-md">
+                      <audio src={submission.rawAudioUrl} controls className="h-9 w-full" preload="metadata" />
+                    </div>
+                  )}
+                  {submission.textResponse && (
+                    <p className="mt-3 rounded border border-gray-700/60 bg-[#18181b] px-3 py-2 text-sm text-gray-300">
+                      {submission.textResponse}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSongGardenStatus(submission.id, "approved").catch((err) => alert(err.message))}
+                      className="rounded border border-emerald-700/60 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/30"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSongGardenStatus(submission.id, "rejected").catch((err) => alert(err.message))}
+                      className="rounded border border-red-800/60 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-100 hover:bg-red-900/30"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSongGardenStatus(submission.id, "needs_review").catch((err) => alert(err.message))}
+                      className="rounded border border-gray-700 bg-gray-800 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-gray-700"
+                    >
+                      Needs review
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {(transcriptOutput || transcriptError) && (
         <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">

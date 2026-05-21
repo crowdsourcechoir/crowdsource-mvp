@@ -6,6 +6,43 @@ import {
 } from "@/lib/local-events-store";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
+const OPTIONAL_EVENT_COLUMNS = new Set([
+  "hero_image_mode",
+  "landing_headline",
+  "landing_copy",
+  "cta_text",
+  "allow_audio_video_prompt",
+]);
+
+type SupabaseMutationError = {
+  code?: string;
+  message?: string;
+};
+
+function missingOptionalColumn(error: SupabaseMutationError | null): string | null {
+  if (!error?.message) return null;
+  const match = error.message.match(/'([^']+)' column/);
+  const column = match?.[1];
+  return column && OPTIONAL_EVENT_COLUMNS.has(column) ? column : null;
+}
+
+function withoutColumn(row: Record<string, unknown>, column: string): Record<string, unknown> {
+  const next = { ...row };
+  delete next[column];
+  return next;
+}
+
+async function updateEventWithCompatibility(id: string, row: Record<string, unknown>) {
+  let current = row;
+  for (let attempt = 0; attempt <= OPTIONAL_EVENT_COLUMNS.size; attempt++) {
+    const result = await supabaseAdmin!.from("events").update(current).eq("id", id).select().single();
+    if (!result.error) return result;
+    const missing = missingOptionalColumn(result.error);
+    if (!missing || !(missing in current)) return result;
+    current = withoutColumn(current, missing);
+  }
+  return supabaseAdmin!.from("events").update(current).eq("id", id).select().single();
+}
 
 function rowToEvent(row: Record<string, unknown>) {
   return {
@@ -119,7 +156,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.agentThemeId !== undefined) row.agent_theme_id = body.agentThemeId;
     if (body.agentBrief !== undefined) row.agent_brief = body.agentBrief;
 
-    const { data, error } = await supabaseAdmin.from("events").update(row).eq("id", id).select().single();
+    const { data, error } = await updateEventWithCompatibility(id, row);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json(rowToEvent(data));
   } catch (err) {

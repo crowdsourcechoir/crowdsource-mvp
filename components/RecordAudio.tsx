@@ -9,12 +9,24 @@ type RecordAudioProps = {
   onRecordingReady?: (blob: Blob) => void;
   onClear?: () => void;
   className?: string;
+  maxSeconds?: number;
+  countdownSeconds?: number;
+  idleLabel?: string;
+  helperLabel?: string;
 };
 
-export default function RecordAudio({ onRecordingReady, onClear, className = "" }: RecordAudioProps) {
+export default function RecordAudio({
+  onRecordingReady,
+  onClear,
+  className = "",
+  maxSeconds = MAX_SECONDS,
+  countdownSeconds = COUNTDOWN_SECONDS,
+  idleLabel = "Record audio",
+  helperLabel,
+}: RecordAudioProps) {
   const [status, setStatus] = useState<"idle" | "countdown" | "recording" | "recorded">("idle");
-  const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
-  const [secondsLeft, setSecondsLeft] = useState(MAX_SECONDS);
+  const [countdown, setCountdown] = useState(countdownSeconds);
+  const [secondsLeft, setSecondsLeft] = useState(maxSeconds);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -57,7 +69,7 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
 
     recorder.start();
     setStatus("recording");
-    setSecondsLeft(MAX_SECONDS);
+    setSecondsLeft(maxSeconds);
 
     timerRef.current = setInterval(() => {
       setSecondsLeft((s) => {
@@ -68,7 +80,7 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
         return s - 1;
       });
     }, 1000);
-  }, [onRecordingReady, stopRecording]);
+  }, [maxSeconds, onRecordingReady, stopRecording]);
 
   useEffect(() => {
     if (status !== "countdown") return;
@@ -85,7 +97,7 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      setCountdown(COUNTDOWN_SECONDS);
+      setCountdown(countdownSeconds);
       setStatus("countdown");
     } catch (err) {
       setError("Microphone access is needed to record.");
@@ -98,8 +110,8 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setStatus("idle");
-    setCountdown(COUNTDOWN_SECONDS);
-  }, []);
+    setCountdown(countdownSeconds);
+  }, [countdownSeconds]);
 
   const handleStop = () => {
     stopRecording();
@@ -121,8 +133,8 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
           className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-none border border-[#CFFF81]/35 bg-[#1a0f2d]/45 px-6 py-4 font-mono text-base font-medium tracking-wide text-[#CFFF81] shadow-[0_10px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl transition hover:border-[#CFFF81]/55 hover:bg-[#CFFF81]/12 hover:text-[#f4ffc8] active:bg-[#CFFF81]/20 sm:min-h-[64px]"
         >
           {MicIcon}
-          <span>Record audio</span>
-          <span className="text-sm text-current/80">(up to {MAX_SECONDS}s)</span>
+          <span>{idleLabel}</span>
+          <span className="text-sm text-current/80">{helperLabel ?? `(up to ${maxSeconds}s)`}</span>
         </button>
       )}
       {status === "countdown" && (
