@@ -5,6 +5,8 @@ import {
   listRecentResonanceHolds,
 } from "@/lib/resonance-signal-store";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const resonanceState = await getResonanceSignalState();
