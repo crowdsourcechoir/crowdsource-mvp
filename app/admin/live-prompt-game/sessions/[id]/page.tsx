@@ -25,8 +25,8 @@ import {
   type PhraseCard,
   type ResponseType,
 } from "@/data/livePromptGame";
-import { parsePromptBlock } from "@/data/signalPromptBlock";
-import { signalCatalogGrouped, type SignalCatalogEntry } from "@/data/signalPromptCatalog";
+import { compositionBriefAdminUrl } from "@/data/compositionClient";
+import { DEFAULT_SIGNAL_HARMONIC_BLOCK, parsePromptBlock } from "@/data/signalPromptBlock";
 
 const POLL_MS = 2500;
 const VOTING_SECONDS_PER_ROUND = 10;
@@ -146,16 +146,16 @@ export default function HostControlRoomPage({
     }
   };
 
-  const handleSignalCatalogRound = async (entry: SignalCatalogEntry) => {
+  const handleSignalHarmonicRound = async () => {
     if (!sessionId) return;
     setSending(true);
     try {
       const round = await createRound(sessionId, {
-        prompt_text: entry.promptText,
+        prompt_text: "Where should the harmonic world drift next?",
         response_type: "short_phrase",
         character_limit: 80,
         timer_seconds: null,
-        prompt_block: entry.block,
+        prompt_block: DEFAULT_SIGNAL_HARMONIC_BLOCK,
       });
       setRounds((prev) => [...prev, round]);
       setSession((prev) =>
@@ -563,7 +563,7 @@ export default function HostControlRoomPage({
                 {session.name === "Game" || session.name === "Live Prompt Game"
                   ? "Live Prompt Mode is custom prompts. Pre-Populated Mode generates a fast category queue."
                   : session.name === "Signal"
-                    ? "Signal: collective emotional choices map to stub Ableton trigger IDs (OSC/MIDI later). Start any preset below while WAITING."
+                    ? "Signal: collective emotional choices map to stub Ableton trigger IDs (OSC/MIDI later). Use Harmonic round to prototype one voting screen."
                     : "This session is using the same Game-flow host controls for now. Fishbowl setup will be customized next."}
               </p>
             </div>
@@ -594,34 +594,22 @@ export default function HostControlRoomPage({
             <>
               {session.name === "Signal" && (
                 <div className="mt-4 rounded-xl border border-amber-900/40 bg-amber-950/25 p-4">
-                  <h3 className="text-sm font-semibold text-amber-200">Signal voting presets</h3>
+                  <h3 className="text-sm font-semibold text-amber-200">Signal prototype</h3>
                   <p className="mt-1 text-xs text-gray-400">
-                    Each button opens one collective vote (4 choices). Audience sees only the question and choices.
-                    Stub trigger IDs log on this host view for Ableton later.
+                    One voting round: harmonic worlds (Ocean / Fire / Night / Sunrise). Opens immediately in VOTING.
+                    Stub trigger IDs are logged for future Ableton; audience only sees emotional labels.
                   </p>
-                  <div className="mt-4 space-y-4">
-                    {signalCatalogGrouped().map(({ layer, title, entries }) => (
-                      <div key={layer}>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-500/90">{title}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {entries.map((entry) => (
-                            <button
-                              key={entry.id}
-                              type="button"
-                              disabled={sending || session.state !== "WAITING"}
-                              onClick={() => handleSignalCatalogRound(entry)}
-                              className="min-h-[40px] rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-900/50 disabled:opacity-40 sm:text-sm"
-                            >
-                              {sending ? "…" : entry.buttonLabel}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    disabled={sending || session.state !== "WAITING"}
+                    onClick={handleSignalHarmonicRound}
+                    className="mt-3 min-h-[44px] rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500 disabled:opacity-40"
+                  >
+                    {sending ? "Starting…" : "Start harmonic world vote"}
+                  </button>
                   {session.state !== "WAITING" && (
-                    <p className="mt-3 text-xs text-gray-500">
-                      Finish the current round (Stage or Controls) to return to WAITING, then launch another preset.
+                    <p className="mt-2 text-xs text-gray-500">
+                      End the current stage (close voting → waiting) before launching another prototype round.
                     </p>
                   )}
                 </div>
@@ -794,7 +782,7 @@ export default function HostControlRoomPage({
                     </button>
                     <p className="max-w-xl text-sm text-gray-400">
                       Ends voting and sends everyone to <span className="text-gray-200">waiting</span>. Then use{" "}
-                      <span className="text-gray-200">a voting preset</span> or{" "}
+                      <span className="text-gray-200">Start harmonic world vote</span> or{" "}
                       <span className="text-gray-200">Send Prompt Live</span> for the next moment.
                     </p>
                   </div>
@@ -947,6 +935,15 @@ export default function HostControlRoomPage({
           >
             Download Song Pack
           </button>
+          <Link
+            href={compositionBriefAdminUrl({
+              sessionId,
+              eventId: session.linked_event_id,
+            })}
+            className="min-h-[44px] inline-flex items-center rounded-xl border border-violet-700/60 bg-violet-950/40 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/40"
+          >
+            Composition Brief →
+          </Link>
         </div>
       </section>
     </div>

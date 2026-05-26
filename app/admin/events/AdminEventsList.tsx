@@ -81,7 +81,7 @@ export default function AdminEventsList() {
   const showFullSkeleton = loading && events.length === 0;
 
   return (
-    <div className="relative min-h-screen bg-[#0c0c0e] text-white">
+    <div className="relative w-full text-white">
       {loading && <AdminIndeterminateProgress />}
 
       {eventsLoadError && (
@@ -141,7 +141,8 @@ export default function AdminEventsList() {
       {showFullSkeleton ? (
         <AdminEventsLoadingSkeleton />
       ) : (
-        <ul className="space-y-4 sm:space-y-5">
+        <div className="overflow-hidden rounded-lg border border-gray-700/60 bg-[#18181b]">
+          <ul className="divide-y divide-gray-800/80">
           {filtered.map((event) => {
             const theme = event.agentThemeId ? themes.find((t) => t.id === event.agentThemeId) : null;
             const badgeLabel =
@@ -151,12 +152,13 @@ export default function AdminEventsList() {
                   ? "Fundraiser"
                   : "Other";
             return (
-              <li key={event.id}>
+              <li key={event.id} className="p-1 sm:p-2">
                 <AdminEventCard event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </div>
       )}
 
       {!loading && !eventsLoadError && filtered.length === 0 && (

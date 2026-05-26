@@ -40,7 +40,7 @@ export default function EditEventPage() {
 
   if (status === "loading") {
     return (
-      <div className="mx-auto max-w-6xl rounded-lg border border-gray-700 bg-[#18181b] p-6">
+      <div className="w-full rounded-lg border border-gray-700 bg-[#18181b] p-6">
         <p className="text-gray-400">Loading event…</p>
       </div>
     );
@@ -76,12 +76,16 @@ export default function EditEventPage() {
       event.landingHeadline ?? "We're crowdsourcing a song for this event. Want to help create it?",
     landingCopy: event.landingCopy ?? "",
     ctaText: event.ctaText ?? "Let's make an anthem",
+    anthemCompletionMessage:
+      event.anthemCompletionMessage ??
+      "Thanks! Your answers will help shape the song we're making.",
     agentThemeId: event.agentThemeId ?? null,
     agentBrief: event.agentBrief ?? null,
+    songGardenConfig: event.songGardenConfig ?? undefined,
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <h2 className="mb-6 text-2xl font-semibold text-white">Edit Event</h2>
       <EventForm
         key={event.id}

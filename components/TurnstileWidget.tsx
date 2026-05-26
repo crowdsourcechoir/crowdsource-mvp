@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -55,9 +55,11 @@ type TurnstileWidgetProps = {
 export default function TurnstileWidget({ siteKey, onTokenChange }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadError(null);
 
     if (!siteKey || !containerRef.current) return;
 
@@ -73,6 +75,7 @@ export default function TurnstileWidget({ siteKey, onTokenChange }: TurnstileWid
         });
       })
       .catch(() => {
+        setLoadError("Could not load verification. Check your connection or Turnstile site key.");
         onTokenChange(null);
       });
 
@@ -83,6 +86,10 @@ export default function TurnstileWidget({ siteKey, onTokenChange }: TurnstileWid
       }
     };
   }, [siteKey, onTokenChange]);
+
+  if (loadError) {
+    return <p className="font-mono text-xs text-red-300">{loadError}</p>;
+  }
 
   return <div ref={containerRef} />;
 }

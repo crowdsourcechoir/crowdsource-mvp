@@ -13,6 +13,8 @@ function titleFromPath(pathname: string): string {
   if (pathname === "/admin/live") return "";
   if (pathname.startsWith("/admin/conductor/")) return "";
   if (pathname.startsWith("/admin/live-prompt-game")) return "";
+  if (pathname.startsWith("/admin/composition")) return "";
+  if (pathname.startsWith("/admin/songgarden/")) return "";
   if (pathname.includes("/edit")) return "";
   if (/^\/admin\/events\/[^/]+$/.test(pathname)) return "";
   return "Admin";

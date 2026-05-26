@@ -71,3 +71,14 @@ export async function dataUrlToWavBlob(dataUrl: string): Promise<Blob> {
 
   return new Blob([buffer], { type: "audio/wav" });
 }
+
+/** Convert any decodable audio blob to 16-bit PCM WAV (browser only). */
+export async function blobToWavBlob(blob: Blob): Promise<Blob> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read audio"));
+    reader.readAsDataURL(blob);
+  });
+  return dataUrlToWavBlob(dataUrl);
+}

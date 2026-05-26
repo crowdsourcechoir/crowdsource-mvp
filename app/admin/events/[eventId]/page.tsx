@@ -16,6 +16,12 @@ import {
   type SongSeed,
   type GenerateSongSeedError,
 } from "@/data/agentInterview";
+import { compositionBriefAdminUrl } from "@/data/compositionClient";
+import {
+  finalizeEventMemory,
+  getEventMemory,
+  type EventMemoryRecord,
+} from "@/data/memoryClient";
 import type { SongSeedTranscriptIssue } from "@/types/song-seed";
 import type { Event } from "@/data/mockEvents";
 import JSZip from "jszip";
@@ -124,7 +130,6 @@ function SubmissionVideoPlayer({ dataUrl }: { dataUrl: string }) {
       src={src}
       controls
       playsInline
-      muted
       className="h-full w-full object-contain"
       onError={() => setFailed(true)}
     />
@@ -156,6 +161,9 @@ export default function EventDetailPage() {
   const [songSeedErrorIssues, setSongSeedErrorIssues] = useState<SongSeedTranscriptIssue[] | null>(null);
   const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
+  const [memoryRecord, setMemoryRecord] = useState<EventMemoryRecord | null>(null);
+  const [loadingMemory, setLoadingMemory] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
 
   useEffect(() => {
     getEventById(eventId)
@@ -164,6 +172,7 @@ export default function EventDetailPage() {
           setEvent(e);
           getSubmissionsForEvent(e.slug).then(setSubmissions);
           if (e.agentThemeId) getSongSeedForEvent(e.id).then(setSongSeed).catch(() => setSongSeed(null));
+          getEventMemory(e.id).then(setMemoryRecord).catch(() => setMemoryRecord(null));
 
           if (e.agentThemeId) {
             setLoadingAgentInterviewSubmissions(true);
@@ -203,7 +212,7 @@ export default function EventDetailPage() {
 
   if (!loaded) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-12">
+      <div className="w-full px-4 py-12">
         <p className="text-gray-400">Loading…</p>
       </div>
     );
@@ -211,7 +220,7 @@ export default function EventDetailPage() {
 
   if (!event) {
     return (
-      <div className="mx-auto max-w-2xl rounded-xl border border-gray-700 bg-[#18181b] p-6">
+      <div className="w-full rounded-xl border border-gray-700 bg-[#18181b] p-6">
         <p className="text-gray-400">Event not found.</p>
         <p className="mt-2 text-sm text-gray-500">
           With local events (USE_LOCAL_EVENTS=true), events live in the dev server&apos;s memory. If you just created this event, run only one dev server (stop any other terminal running <code className="rounded bg-gray-800 px-1">npm run dev</code>) and try creating again.
@@ -238,7 +247,7 @@ export default function EventDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-10">
+    <div className="w-full space-y-10">
       {/* Public-style event card */}
       <div className="overflow-hidden rounded-2xl border border-gray-700/60 bg-[#18181b]">
         <div className="border-b border-gray-700/60">
@@ -301,7 +310,19 @@ export default function EventDetailPage() {
               href={`/e/${event.slug}`}
               className="min-h-[44px] rounded-xl border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
             >
-              View public page
+              View page
+            </Link>
+            <Link
+              href={`/e/${event.slug}?panel=songgarden`}
+              className="min-h-[44px] rounded-xl border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
+            >
+              View Song Garden
+            </Link>
+            <Link
+              href={`/admin/songgarden/${event.id}`}
+              className="min-h-[44px] rounded-xl border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+            >
+              Song Garden canvas
             </Link>
           </div>
         </div>
@@ -460,6 +481,12 @@ export default function EventDetailPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-white">Song Seed (from Agent Interviews)</h2>
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={compositionBriefAdminUrl({ eventId: event.id })}
+                className="rounded-xl border border-violet-700/60 bg-violet-950/40 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/40"
+              >
+                Composition Brief →
+              </Link>
               <button
                 type="button"
                 disabled={loadingSongSeed}
@@ -603,6 +630,171 @@ export default function EventDetailPage() {
           )}
         </section>
       )}
+
+      <section className="rounded-2xl border border-emerald-900/40 bg-[#18181b] p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Memory Archive</h2>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              Layer 4 — consent-scoped snapshot of this event for future shows. Finalize when the live
+              experience is complete.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {memoryRecord && (
+              <button
+                type="button"
+                onClick={() => {
+                  const blob = new Blob([JSON.stringify(memoryRecord, null, 2)], {
+                    type: "application/json",
+                  });
+                  downloadBlob(blob, `memory-${event.slug}-v${memoryRecord.version}.json`);
+                }}
+                className="rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700"
+              >
+                Export JSON
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={loadingMemory}
+              onClick={async () => {
+                setLoadingMemory(true);
+                setMemoryError(null);
+                try {
+                  const record = await finalizeEventMemory(event.id);
+                  setMemoryRecord(record);
+                } catch (err) {
+                  setMemoryError(err instanceof Error ? err.message : "Finalize failed");
+                } finally {
+                  setLoadingMemory(false);
+                }
+              }}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {loadingMemory
+                ? "Archiving…"
+                : memoryRecord
+                  ? "Regenerate archive"
+                  : "Finalize archive"}
+            </button>
+          </div>
+        </div>
+
+        {memoryError && (
+          <div className="mb-4 rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-sm text-red-200">
+            {memoryError}
+          </div>
+        )}
+
+        {memoryRecord ? (
+          <div className="space-y-6">
+            <p className="text-xs text-gray-500">
+              Version {memoryRecord.version} · Finalized {formatDate(memoryRecord.finalizedAt)}
+            </p>
+
+            {memoryRecord.emotionalProfile.summary && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Emotional summary</h3>
+                <p className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
+                  {memoryRecord.emotionalProfile.summary}
+                </p>
+              </div>
+            )}
+
+            {memoryRecord.emotionalProfile.themes.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Themes</h3>
+                <p className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
+                  {memoryRecord.emotionalProfile.themes.join(" · ")}
+                </p>
+              </div>
+            )}
+
+            {memoryRecord.anthemFragments.hooks.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Hook candidates (reusable)</h3>
+                <ul className="list-inside list-disc space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
+                  {memoryRecord.anthemFragments.hooks.map((line, i) => (
+                    <li key={i}>
+                      &quot;{line.text}&quot;
+                      <span className="ml-2 text-xs text-gray-500">({line.tier})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {memoryRecord.anthemFragments.chantableLines.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Chantable lines</h3>
+                <ul className="list-inside list-disc space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
+                  {memoryRecord.anthemFragments.chantableLines.map((line, i) => (
+                    <li key={i}>&quot;{line.text}&quot;</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {memoryRecord.signalProfile.resolutions.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Signal profile</h3>
+                <ul className="space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
+                  {memoryRecord.signalProfile.resolutions.map((r) => (
+                    <li key={r.roundId}>
+                      {r.layer}: <span className="text-emerald-300/90">{r.label}</span>
+                      <span className="text-gray-500"> ({r.voteCount} votes)</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {memoryRecord.compositionArtifacts.sunoPrompts.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Suno prompts</h3>
+                <div className="space-y-3">
+                  {memoryRecord.compositionArtifacts.sunoPrompts.map((prompt, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200"
+                    >
+                      <p className="whitespace-pre-wrap">{prompt}</p>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(prompt)}
+                        className="mt-2 text-xs text-amber-400 hover:underline"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-lg border border-gray-700/40 bg-[#1a1a1a] p-4 text-xs text-gray-500">
+              <p>
+                Reusable export: {memoryRecord.reusableExport.length} lines · Internal transcript refs:{" "}
+                {memoryRecord.voiceSamples.transcriptRefs.length} · Media refs (internal only):{" "}
+                {memoryRecord.voiceSamples.mediaRefs.length}
+              </p>
+              <p className="mt-1">
+                Sources — interviews: {memoryRecord.sourceCounts.interviewTurns}, live:{" "}
+                {memoryRecord.sourceCounts.liveSubmissions}, signal rounds:{" "}
+                {memoryRecord.sourceCounts.signalRounds}
+              </p>
+            </div>
+          </div>
+        ) : (
+          !loadingMemory &&
+          !memoryError && (
+            <p className="text-sm text-gray-500">
+              No archive yet. Finalize after interviews, live sessions, or composition work is complete.
+            </p>
+          )
+        )}
+      </section>
 
       <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

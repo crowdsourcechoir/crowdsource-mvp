@@ -1,4 +1,5 @@
 import type { AgentBrief } from "./agentInterview";
+import type { SongGardenConfig } from "@/lib/songgarden/config";
 
 export type Event = {
   id: string;
@@ -15,6 +16,8 @@ export type Event = {
   landingHeadline?: string;
   landingCopy?: string;
   ctaText?: string;
+  anthemCompletionMessage?: string;
+  songGardenConfig?: SongGardenConfig | null;
   allowAudioVideoPrompt?: boolean;
   agentThemeId?: string | null;
   agentBrief?: AgentBrief | null;

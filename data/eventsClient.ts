@@ -113,8 +113,10 @@ export async function addEvent(values: Omit<Event, "id">): Promise<Event> {
     landingHeadline: values.landingHeadline,
     landingCopy: values.landingCopy,
     ctaText: values.ctaText,
+    anthemCompletionMessage: values.anthemCompletionMessage,
     agentThemeId: values.agentThemeId,
     agentBrief: values.agentBrief,
+    songGardenConfig: values.songGardenConfig,
   });
 }
 

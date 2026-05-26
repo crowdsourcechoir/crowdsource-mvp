@@ -7,11 +7,13 @@ import {
   localGetConversation,
   localInsertTurn,
   localGetParticipant,
-  localUpdateParticipantName,
   localUpdateParticipantEmail,
+  localUpdateParticipantName,
 } from "@/lib/local-agent-interview-store";
 import { scheduleTranscriptionIfMediaPresent } from "@/lib/agent-post-submit-transcribe";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { isEmailCaptchaPrompt, type AskAboutItemLike } from "@/lib/agent-brief-email-captcha";
+import { isNameQuestionPrompt } from "@/lib/agent-name-question";
+import { isTurnstileServerConfigured, verifyTurnstileToken } from "@/lib/turnstile";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -30,7 +32,6 @@ function rowToTurn(row: Record<string, unknown>) {
   };
 }
 
-const FIRST_QUESTION = "What's your name?";
 const DEFAULT_THEME = {
   system_prompt_template:
     "You are a warm, friendly host at an event. Ask one short, casual question at a time. Draw out memories, shoutouts, and wishes. Use the event context and brief to personalize. Keep it conversational and do not collect sensitive personal info.",
@@ -44,18 +45,44 @@ function validEmail(input: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
 }
 
+async function verifyEmailStepCaptcha(
+  request: Request,
+  captchaToken: string | null | undefined
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isTurnstileServerConfigured()) {
+    return {
+      ok: false,
+      error: "Turnstile is not configured on the server. Add TURNSTILE_SECRET_KEY to .env.local.",
+    };
+  }
+  if (!captchaToken) {
+    return { ok: false, error: "Complete verification before submitting your email." };
+  }
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const remoteIp = forwardedFor?.split(",")[0]?.trim() || request.headers.get("cf-connecting-ip");
+  const captcha = await verifyTurnstileToken({ token: captchaToken, remoteIp });
+  if (!captcha.ok) {
+    return { ok: false, error: captcha.error ?? "Captcha verification failed." };
+  }
+  return { ok: true };
+}
+
 function requiresEmailCaptcha(
   brief: Record<string, unknown> | null,
   lastAgentContent: string
 ): boolean {
-  const items = Array.isArray(brief?.askAboutItems)
-    ? (brief?.askAboutItems as Array<Record<string, unknown>>)
+  const raw = Array.isArray(brief?.askAboutItems)
+    ? (brief.askAboutItems as Array<{ prompt?: string; requireEmailCaptcha?: boolean }>)
     : [];
-  return items.some(
-    (item) =>
-      String(item.prompt ?? "").trim() === lastAgentContent.trim() &&
-      Boolean(item.requireEmailCaptcha)
-  );
+  const items: AskAboutItemLike[] = raw
+    .filter((item): item is { prompt: string; requireEmailCaptcha?: boolean } =>
+      typeof item?.prompt === "string" && item.prompt.trim().length > 0
+    )
+    .map((item) => ({
+      prompt: item.prompt.trim(),
+      requireEmailCaptcha: item.requireEmailCaptcha,
+    }));
+  return isEmailCaptchaPrompt(items, lastAgentContent);
 }
 
 function extFromMime(mime: string): string {
@@ -145,11 +172,6 @@ export async function POST(
 
       const isVoiceVideoQuestion = /record/.test(lastAgentContent) && /voice|video/.test(lastAgentContent);
 
-      const isNameQuestion =
-        !isFirstMessage &&
-        existingTurns.length === 1 &&
-        existingTurns[0].role === "agent" &&
-        /name/i.test(lastAgentContent);
       const brief = eventData.agent_brief as Record<string, unknown> | null;
       const needsEmailCaptcha = requiresEmailCaptcha(brief, lastAgentContent);
 
@@ -174,90 +196,28 @@ export async function POST(
       } | null = null;
 
       if (isFirstMessage) {
-        const firstAgentTurn = await localInsertTurn({
-          conversationId,
-          turnIndex: 0,
-          role: "agent",
-          content: FIRST_QUESTION,
-        });
-
-        if (content === "") {
-          // Important: the client triggers the first agent turn by calling sendMessage(..., "").
-          // That call should NOT be treated as "skip name"—it should only initialize the name question.
-          return NextResponse.json({
-            turn: null,
-            nextMessage: {
-              agentMessage: FIRST_QUESTION,
-              suggestedAnswerTypes: ["text"],
-              extractedTags: undefined,
-              stopReason: "continue",
-            },
-            agentTurn: {
-              id: firstAgentTurn.id,
-              conversationId: firstAgentTurn.conversationId,
-              turnIndex: firstAgentTurn.turnIndex,
-              role: "agent",
-              content: firstAgentTurn.content,
-              audioUrl: firstAgentTurn.audioUrl,
-              videoUrl: firstAgentTurn.videoUrl,
-              audioTranscript: firstAgentTurn.audioTranscript,
-              videoTranscript: firstAgentTurn.videoTranscript,
-              createdAt: firstAgentTurn.createdAt,
-            },
-          });
+        if (content !== "") {
+          return NextResponse.json({ error: "Unexpected message before interview started." }, { status: 400 });
         }
-
-        // User sent their name (or any text): add user turn and return the next question.
-        const userInserted = await localInsertTurn({
-          conversationId,
-          turnIndex: 1,
-          role: "user",
-          content,
-          audioUrl: audioDataUrl,
-          videoUrl: videoDataUrl,
-        });
-        scheduleTranscriptionIfMediaPresent({
-          turnId: userInserted.id,
-          audioUrl: audioDataUrl,
-          videoUrl: videoDataUrl,
-          mode: "local",
-        });
-        userTurn = {
-          id: userInserted.id,
-          conversationId,
-          turnIndex: userInserted.turnIndex,
-          role: "user",
-          content: userInserted.content,
-          audioUrl: userInserted.audioUrl,
-          videoUrl: userInserted.videoUrl,
-          audioTranscript: userInserted.audioTranscript,
-          videoTranscript: userInserted.videoTranscript,
-          createdAt: userInserted.createdAt,
-        };
-
-        await localUpdateParticipantName({ participantId: local.conversation.participantId, name: content });
 
         const nextResult = await getNextAgentMessage(new OpenAI({ apiKey }), {
           theme: DEFAULT_THEME,
           brief: eventData.agent_brief ? (eventData.agent_brief as any) : null,
           eventTitle: eventData.title,
-          conversationHistory: [
-            { role: "agent" as const, content: FIRST_QUESTION },
-            { role: "user" as const, content },
-          ],
-          participantName: content,
-          currentStep: 2,
+          conversationHistory: [],
+          participantName: null,
+          currentStep: 1,
         });
 
-        const nextAgentTurn = await localInsertTurn({
+        const firstAgentTurn = await localInsertTurn({
           conversationId,
-          turnIndex: 2,
+          turnIndex: 0,
           role: "agent",
           content: nextResult.agentMessage,
         });
 
         return NextResponse.json({
-          turn: userTurn,
+          turn: null,
           nextMessage: {
             agentMessage: nextResult.agentMessage,
             suggestedAnswerTypes: nextResult.suggestedAnswerTypes,
@@ -265,57 +225,54 @@ export async function POST(
             stopReason: nextResult.stopReason,
           },
           agentTurn: {
-            id: nextAgentTurn.id,
-            conversationId: nextAgentTurn.conversationId,
-            turnIndex: nextAgentTurn.turnIndex,
+            id: firstAgentTurn.id,
+            conversationId: firstAgentTurn.conversationId,
+            turnIndex: firstAgentTurn.turnIndex,
             role: "agent",
-            content: nextAgentTurn.content,
-            audioUrl: nextAgentTurn.audioUrl,
-            videoUrl: nextAgentTurn.videoUrl,
-            audioTranscript: nextAgentTurn.audioTranscript,
-            videoTranscript: nextAgentTurn.videoTranscript,
-            createdAt: nextAgentTurn.createdAt,
+            content: firstAgentTurn.content,
+            audioUrl: firstAgentTurn.audioUrl,
+            videoUrl: firstAgentTurn.videoUrl,
+            audioTranscript: firstAgentTurn.audioTranscript,
+            videoTranscript: firstAgentTurn.videoTranscript,
+            createdAt: firstAgentTurn.createdAt,
           },
         });
       }
 
       // Subsequent user messages.
+      const isNameQuestion = isNameQuestionPrompt(brief as Record<string, unknown>, lastAgentContent);
+      if (isNameQuestion && !content) {
+        return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
+      }
       if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
-        if (!isNameQuestion) {
-          // Empty submit: no error banner — just keep the same question visible.
-          return NextResponse.json({
-            turn: null,
-            nextMessage: {
-              agentMessage: lastAgentContent,
-              suggestedAnswerTypes: ["text"],
-              extractedTags: undefined,
-              stopReason: "continue",
-            },
-            agentTurn: null,
-          });
-        }
-        return NextResponse.json({ error: "Display name is required." }, { status: 400 });
+        return NextResponse.json({
+          turn: null,
+          nextMessage: {
+            agentMessage: lastAgentContent,
+            suggestedAnswerTypes: ["text"],
+            extractedTags: undefined,
+            stopReason: "continue",
+          },
+          agentTurn: null,
+        });
       }
       if (needsEmailCaptcha) {
         if (!validEmail(content)) {
           return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
         }
-        if (!captchaToken) {
-          return NextResponse.json({ error: "Captcha is required." }, { status: 400 });
-        }
-        const forwardedFor = request.headers.get("x-forwarded-for");
-        const remoteIp =
-          forwardedFor?.split(",")[0]?.trim() || request.headers.get("cf-connecting-ip");
-        const captcha = await verifyTurnstileToken({ token: captchaToken, remoteIp });
+        const captcha = await verifyEmailStepCaptcha(request, captchaToken);
         if (!captcha.ok) {
-          return NextResponse.json(
-            { error: captcha.error ?? "Captcha verification failed." },
-            { status: 400 }
-          );
+          return NextResponse.json({ error: captcha.error }, { status: 400 });
         }
         await localUpdateParticipantEmail({
           participantId: local.conversation.participantId,
           email: content.toLowerCase(),
+        });
+      }
+      if (isNameQuestion && content) {
+        await localUpdateParticipantName({
+          participantId: local.conversation.participantId,
+          name: content.trim(),
         });
       }
 
@@ -441,11 +398,6 @@ export async function POST(
       : "";
     const isVoiceVideoQuestion =
       /record/.test(lastAgentContent) && (/voice|video/.test(lastAgentContent));
-    const isNameQuestion =
-      !isFirstMessage &&
-      existingTurns.length === 1 &&
-      existingTurns[0].role === "agent" &&
-      /name/i.test(lastAgentContent);
     const { data: eventBriefRow } = await supabaseAdmin
       .from("events")
       .select("agent_brief")
@@ -458,93 +410,35 @@ export async function POST(
     let userTurn: Record<string, unknown> | null = null;
 
     if (isFirstMessage) {
-      /* First question is always the name question */
-      const { data: agentTurnRow, error: eAgent } = await supabaseAdmin
-        .from("agent_conversation_turns")
-        .insert({
-          conversation_id: conversationId,
-          turn_index: 0,
-          role: "agent",
-          content: FIRST_QUESTION,
-        })
-        .select()
-        .single();
-      if (eAgent || !agentTurnRow) {
-        return NextResponse.json({ error: eAgent?.message ?? "Failed to save." }, { status: 400 });
+      if (content !== "") {
+        return NextResponse.json({ error: "Unexpected message before interview started." }, { status: 400 });
       }
-      await supabaseAdmin
-        .from("agent_conversations")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", conversationId);
-
-      /* Important: the client triggers the first agent turn by calling sendMessage(..., "").
-         That call should NOT be treated as "skip name"—it should only initialize the name question. */
-      if (content === "") {
-        return NextResponse.json({
-          turn: null,
-          nextMessage: {
-            agentMessage: FIRST_QUESTION,
-            suggestedAnswerTypes: ["text"],
-            extractedTags: undefined,
-            stopReason: "continue",
-          },
-          agentTurn: rowToTurn(agentTurnRow),
-        });
-      }
-
-      /* User sent their name (or any text): add user turn and return next question */
-      const { data: userTurnRow, error: eUser } = await supabaseAdmin
-        .from("agent_conversation_turns")
-        .insert({
-          conversation_id: conversationId,
-          turn_index: 1,
-          role: "user",
-          content,
-          audio_url: storedAudioUrl,
-          video_url: storedVideoUrl,
-        })
-        .select()
-        .single();
-      if (eUser || !userTurnRow) {
-        return NextResponse.json({
-          turn: null,
-          nextMessage: {
-            agentMessage: FIRST_QUESTION,
-            suggestedAnswerTypes: ["text"],
-            extractedTags: undefined,
-            stopReason: "continue",
-          },
-          agentTurn: rowToTurn(agentTurnRow),
-        });
-      }
-      scheduleTranscriptionIfMediaPresent({
-        turnId: userTurnRow.id as string,
-        audioUrl: storedAudioUrl,
-        videoUrl: storedVideoUrl,
-        mode: "supabase",
-      });
-      await supabaseAdmin
-        .from("agent_participants")
-        .update({ name: content })
-        .eq("id", conv.participant_id);
 
       const { data: eventRow } = await supabaseAdmin
         .from("events")
         .select("id, title, agent_theme_id, agent_brief")
         .eq("id", conv.event_id)
         .single();
-      let eventData: { id: string; title: string; agent_theme_id: string | null; agent_brief: unknown } | null = eventRow as typeof eventRow;
+      let eventData: { id: string; title: string; agent_theme_id: string | null; agent_brief: unknown } | null =
+        eventRow as typeof eventRow;
       if (USE_LOCAL_EVENTS && (conv.local_event_id || !eventData)) {
         const localId = conv.local_event_id ?? conv.event_id;
         if (localId) {
           const local = localEventsGetById(localId);
-          if (local)
-            eventData = { id: local.id, title: local.title, agent_theme_id: local.agent_theme_id, agent_brief: local.agent_brief };
+          if (local) {
+            eventData = {
+              id: local.id,
+              title: local.title,
+              agent_theme_id: local.agent_theme_id,
+              agent_brief: local.agent_brief,
+            };
+          }
         }
       }
       if (!eventData) {
         return NextResponse.json({ error: "Event not found." }, { status: 404 });
       }
+
       const { data: themeRow } = await supabaseAdmin
         .from("agent_themes")
         .select("system_prompt_template, max_questions, do_dont_rules")
@@ -558,100 +452,98 @@ export async function POST(
           }
         : DEFAULT_THEME;
       const brief = eventData.agent_brief as Record<string, unknown> | null;
+
       const nextResult = await getNextAgentMessage(new OpenAI({ apiKey }), {
         theme,
-        brief: brief ? {
-          eventName: brief.eventName as string | undefined,
-          eventType: brief.eventType as string | undefined,
-          whoWhat: brief.whoWhat as string | undefined,
-          emotionalArc: brief.emotionalArc as string | undefined,
-          askAbout: brief.askAbout as string[] | undefined,
-          askAboutItems: brief.askAboutItems as Array<{
-            prompt: string;
-            allowAudio?: boolean;
-            allowVideo?: boolean;
-            allowMedia?: boolean;
-          }> | undefined,
-          avoid: brief.avoid as string[] | undefined,
-          exampleAnswers: brief.exampleAnswers as string[] | undefined,
-        } : null,
+        brief: brief
+          ? {
+              eventName: brief.eventName as string | undefined,
+              eventType: brief.eventType as string | undefined,
+              whoWhat: brief.whoWhat as string | undefined,
+              emotionalArc: brief.emotionalArc as string | undefined,
+              askAbout: brief.askAbout as string[] | undefined,
+              askAboutItems: brief.askAboutItems as Array<{
+                prompt: string;
+                allowAudio?: boolean;
+                allowVideo?: boolean;
+                allowMedia?: boolean;
+                requireEmailCaptcha?: boolean;
+              }> | undefined,
+              collectName: brief.collectName as boolean | undefined,
+              nameQuestionPrompt: brief.nameQuestionPrompt as string | undefined,
+              avoid: brief.avoid as string[] | undefined,
+              exampleAnswers: brief.exampleAnswers as string[] | undefined,
+            }
+          : null,
         eventTitle: eventData.title ?? "",
-        conversationHistory: [
-          { role: "agent" as const, content: FIRST_QUESTION },
-          { role: "user" as const, content },
-        ],
-        participantName: content,
-        currentStep: 2,
+        conversationHistory: [],
+        participantName: null,
+        currentStep: 1,
       });
-      const { data: nextAgentRow, error: eNext } = await supabaseAdmin
+
+      const { data: agentTurnRow, error: eAgent } = await supabaseAdmin
         .from("agent_conversation_turns")
         .insert({
           conversation_id: conversationId,
-          turn_index: 2,
+          turn_index: 0,
           role: "agent",
           content: nextResult.agentMessage,
         })
         .select()
         .single();
-      if (eNext || !nextAgentRow) {
-        return NextResponse.json({
-          turn: rowToTurn(userTurnRow),
-          nextMessage: nextResult,
-          agentTurn: null,
-        });
+      if (eAgent || !agentTurnRow) {
+        return NextResponse.json({ error: eAgent?.message ?? "Failed to save." }, { status: 400 });
       }
       await supabaseAdmin
         .from("agent_conversations")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", conversationId);
+
       return NextResponse.json({
-        turn: rowToTurn(userTurnRow),
+        turn: null,
         nextMessage: {
           agentMessage: nextResult.agentMessage,
           suggestedAnswerTypes: nextResult.suggestedAnswerTypes,
           extractedTags: nextResult.extractedTags,
           stopReason: nextResult.stopReason,
         },
-        agentTurn: rowToTurn(nextAgentRow),
+        agentTurn: rowToTurn(agentTurnRow),
       });
     }
     if (!isFirstMessage) {
+      const isNameQuestion = isNameQuestionPrompt(briefForValidation, lastAgentContent);
+      if (isNameQuestion && !content) {
+        return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
+      }
       if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
-        if (!isNameQuestion) {
-          // Empty submit: no error banner — just keep the same question visible.
-          return NextResponse.json({
-            turn: null,
-            nextMessage: {
-              agentMessage: lastAgentContent,
-              suggestedAnswerTypes: ["text"],
-              extractedTags: undefined,
-              stopReason: "continue",
-            },
-            agentTurn: null,
-          });
-        }
-        return NextResponse.json({ error: "Display name is required." }, { status: 400 });
+        return NextResponse.json({
+          turn: null,
+          nextMessage: {
+            agentMessage: lastAgentContent,
+            suggestedAnswerTypes: ["text"],
+            extractedTags: undefined,
+            stopReason: "continue",
+          },
+          agentTurn: null,
+        });
       }
       if (needsEmailCaptcha) {
         if (!validEmail(content)) {
           return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
         }
-        if (!captchaToken) {
-          return NextResponse.json({ error: "Captcha is required." }, { status: 400 });
-        }
-        const forwardedFor = request.headers.get("x-forwarded-for");
-        const remoteIp =
-          forwardedFor?.split(",")[0]?.trim() || request.headers.get("cf-connecting-ip");
-        const captcha = await verifyTurnstileToken({ token: captchaToken, remoteIp });
+        const captcha = await verifyEmailStepCaptcha(request, captchaToken);
         if (!captcha.ok) {
-          return NextResponse.json(
-            { error: captcha.error ?? "Captcha verification failed." },
-            { status: 400 }
-          );
+          return NextResponse.json({ error: captcha.error }, { status: 400 });
         }
         await supabaseAdmin
           .from("agent_participants")
           .update({ email: content.toLowerCase() })
+          .eq("id", conv.participant_id);
+      }
+      if (isNameQuestion && content) {
+        await supabaseAdmin
+          .from("agent_participants")
+          .update({ name: content.trim(), display_name: content.trim() })
           .eq("id", conv.participant_id);
       }
       const nextIndex = existingTurns.length;
@@ -677,12 +569,6 @@ export async function POST(
         videoUrl: storedVideoUrl,
         mode: "supabase",
       });
-      if (isNameQuestion && content) {
-        await supabaseAdmin
-          .from("agent_participants")
-          .update({ name: content })
-          .eq("id", conv.participant_id);
-      }
     }
 
     const history = existingTurns.map((t) => ({ role: t.role as "agent" | "user", content: t.content }));
@@ -690,7 +576,7 @@ export async function POST(
       history.push({ role: "user" as const, content });
     }
 
-    /* currentStep = which agent message we're generating (1 = name, 2 = first scripted Q, ... then done) */
+    /* currentStep = which agent message we're generating next (1 = first scripted Q, ... then done) */
     const agentCount = existingTurns.filter((t) => t.role === "agent").length;
     const currentStep = agentCount + 1;
 
@@ -746,6 +632,8 @@ export async function POST(
           allowVideo?: boolean;
           allowMedia?: boolean;
         }> | undefined,
+        collectName: brief.collectName as boolean | undefined,
+        nameQuestionPrompt: brief.nameQuestionPrompt as string | undefined,
         avoid: brief.avoid as string[] | undefined,
         exampleAnswers: brief.exampleAnswers as string[] | undefined,
       } : null,

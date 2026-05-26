@@ -15,6 +15,7 @@ create table if not exists public.events (
   landing_headline text not null default 'We''re crowdsourcing a song for this event. Want to help create it?',
   landing_copy text not null default '',
   cta_text text not null default 'Let''s make an anthem',
+  anthem_completion_message text not null default 'Thanks! Your answers will help shape the song we''re making.',
   allow_audio_video_prompt boolean not null default true,
   created_at timestamptz default now()
 );
@@ -27,5 +28,7 @@ alter table public.events
   add column if not exists landing_copy text not null default '';
 alter table public.events
   add column if not exists cta_text text not null default 'Let''s make an anthem';
+alter table public.events
+  add column if not exists anthem_completion_message text not null default 'Thanks! Your answers will help shape the song we''re making.';
 alter table public.events
   add column if not exists allow_audio_video_prompt boolean not null default true;

@@ -23,6 +23,14 @@ export type AgentBrief = {
   eventType?: string;
   whoWhat?: string;
   emotionalArc?: string;
+  /** When true (default), ask for name as the first interview question. */
+  collectName?: boolean;
+  /** Prompt for the name question in the interview chat. */
+  nameQuestionPrompt?: string;
+  /** When true (default), require consent checkbox on landing before starting. */
+  requireContributionConsent?: boolean;
+  /** Label for the landing-page contribution consent checkbox. */
+  contributionConsentText?: string;
   askAbout?: string[];
   askAboutItems?: Array<{
     prompt: string;

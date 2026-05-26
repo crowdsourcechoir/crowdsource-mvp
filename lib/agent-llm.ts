@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import { normalizeAskAboutEmailCaptcha } from "@/lib/agent-brief-email-captcha";
+import {
+  collectsNameFromBrief,
+  resolveNameQuestionPrompt,
+} from "@/lib/agent-name-question";
 
 const MAX_TURNS = 12;
 const MAX_TOKENS_RESPONSE = 256;
@@ -24,6 +29,8 @@ export type AgentBriefRow = {
   eventType?: string;
   whoWhat?: string;
   emotionalArc?: string;
+  collectName?: boolean;
+  nameQuestionPrompt?: string;
   askAbout?: string[];
   askAboutItems?: Array<{
     prompt: string;
@@ -72,7 +79,7 @@ function getScriptedQuestions(brief: AgentBriefRow, who: string): ScriptedQuesti
         .filter((x): x is ScriptedQuestion => !!x)
     : [];
 
-  if (fromItems.length > 0) return fromItems;
+  if (fromItems.length > 0) return normalizeAskAboutEmailCaptcha(fromItems);
 
   const fromStrings = Array.isArray(brief?.askAbout)
     ? brief.askAbout
@@ -123,9 +130,9 @@ export async function getNextAgentMessage(
     || "them";
 
   const scriptedQuestions = getScriptedQuestions(brief, who);
+  const nameSteps = collectsNameFromBrief(brief) ? 1 : 0;
+  const FINISH_STEP = 1 + nameSteps + scriptedQuestions.length;
 
-  // Step 0 = name (handled by send route). Step 2 = first scripted question.
-  const FINISH_STEP = 2 + scriptedQuestions.length;
   if (currentStep >= FINISH_STEP) {
     return {
       agentMessage: "Thanks so much for sharing! That's all for now.",
@@ -134,8 +141,15 @@ export async function getNextAgentMessage(
     };
   }
 
-  // Steps 2..N: scripted questions from event brief, falling back to defaults.
-  const questionIndex = currentStep - 2;
+  if (nameSteps === 1 && currentStep === 1) {
+    return {
+      agentMessage: resolveNameQuestionPrompt(brief),
+      suggestedAnswerTypes: ["text"],
+      stopReason: "continue",
+    };
+  }
+
+  const questionIndex = currentStep - 1 - nameSteps;
   if (questionIndex >= 0 && questionIndex < scriptedQuestions.length) {
     const question = scriptedQuestions[questionIndex];
     const suggestedAnswerTypes: NextMessageResult["suggestedAnswerTypes"] = ["text"];
@@ -154,7 +168,7 @@ export async function getNextAgentMessage(
 
   // Fallback: if still in scripted range, return the next scripted question instead of trusting LLM.
   if (currentStep >= 1 && currentStep < FINISH_STEP) {
-    const idx = Math.max(0, currentStep - 2);
+    const idx = Math.max(0, currentStep - 1 - nameSteps);
     const q = scriptedQuestions[Math.min(idx, scriptedQuestions.length - 1)];
     const suggestedAnswerTypes: NextMessageResult["suggestedAnswerTypes"] = ["text"];
     if (q.allowAudio) suggestedAnswerTypes.push("voice");

@@ -11,7 +11,13 @@ alter table public.events
 alter table public.events
   add column if not exists cta_text text not null default 'Let''s make an anthem';
 alter table public.events
+  add column if not exists anthem_completion_message text not null default 'Thanks! Your answers will help shape the song we''re making.';
+alter table public.events
   add column if not exists allow_audio_video_prompt boolean not null default true;
+alter table public.events
+  add column if not exists song_garden_config jsonb default null;
+
+comment on column public.events.song_garden_config is 'Song Garden journey: transition message + ordered sound step prompts';
 
 -- For agent interview columns (agent_theme_id, agent_brief), run after agent_themes exists:
 --   supabase/agent-interview-tables.sql

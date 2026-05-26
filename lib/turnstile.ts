@@ -1,5 +1,20 @@
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
+export const TURNSTILE_SITE_KEY =
+  typeof process !== "undefined" ? process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "" : "";
+
+export function isTurnstileClientConfigured(): boolean {
+  return TURNSTILE_SITE_KEY.length > 0;
+}
+
+export function isTurnstileServerConfigured(): boolean {
+  return !!process.env.TURNSTILE_SECRET_KEY;
+}
+
+export function isTurnstileReady(): boolean {
+  return isTurnstileClientConfigured() && isTurnstileServerConfigured();
+}
+
 type TurnstileVerifyResult = {
   success: boolean;
   "error-codes"?: string[];

@@ -10,6 +10,7 @@
     "fresh": "rm -rf .next && npm run build && rm -rf .next-dev && WATCHPACK_POLLING=true WATCHPACK_POLLING_INTERVAL=1000 next dev -p 3000",
     "reboot": "rm -rf node_modules .next .next-dev && npm install && next dev -p 3000",
     "build": "next build",
+    "preflight": "node scripts/prod-preflight.mjs",
     "start": "next start",
     "lint": "next lint"
   },

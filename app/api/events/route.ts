@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import type { SongGardenConfig } from "@/lib/songgarden/config";
 import {
   localEventsGetAll,
   localEventsGetBySlug,
@@ -78,9 +79,13 @@ export async function POST(request: Request) {
           "We're crowdsourcing a song for this event. Want to help create it?",
         landing_copy: (row.landing_copy as string) ?? "",
         cta_text: (row.cta_text as string) ?? "Let's make an anthem",
+        anthem_completion_message:
+          (row.anthem_completion_message as string) ??
+          "Thanks! Your answers will help shape the song we're making.",
         allow_audio_video_prompt: (row.allow_audio_video_prompt as boolean) ?? true,
         agent_theme_id: row.agent_theme_id as string | null,
         agent_brief: row.agent_brief,
+        song_garden_config: row.song_garden_config ?? null,
       });
       return NextResponse.json(rowToEvent(created));
     } catch (err) {
@@ -122,9 +127,13 @@ function eventToRow(e: Record<string, unknown>) {
       "We're crowdsourcing a song for this event. Want to help create it?",
     landing_copy: (e as { landingCopy?: string }).landingCopy ?? "",
     cta_text: (e as { ctaText?: string }).ctaText ?? "Let's make an anthem",
+    anthem_completion_message:
+      (e as { anthemCompletionMessage?: string }).anthemCompletionMessage ??
+      "Thanks! Your answers will help shape the song we're making.",
     allow_audio_video_prompt: (e as { allowAudioVideoPrompt?: boolean }).allowAudioVideoPrompt ?? true,
     agent_theme_id: (e as { agentThemeId?: string | null }).agentThemeId ?? null,
     agent_brief: (e as { agentBrief?: unknown }).agentBrief ?? null,
+    song_garden_config: (e as { songGardenConfig?: unknown }).songGardenConfig ?? null,
   };
 }
 
@@ -146,8 +155,12 @@ function rowToEvent(row: Record<string, unknown>) {
       "We're crowdsourcing a song for this event. Want to help create it?",
     landingCopy: (row.landing_copy as string) ?? "",
     ctaText: (row.cta_text as string) ?? "Let's make an anthem",
+    anthemCompletionMessage:
+      (row.anthem_completion_message as string) ??
+      "Thanks! Your answers will help shape the song we're making.",
     allowAudioVideoPrompt: (row.allow_audio_video_prompt as boolean) ?? true,
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
+    songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
   };
 }

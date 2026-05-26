@@ -13,7 +13,7 @@ export default function TopBar({ title }: TopBarProps) {
   const activeLive = pathname?.startsWith("/admin/live") || pathname?.startsWith("/admin/live-prompt-game");
 
   return (
-    <header className="sticky top-0 z-10 flex min-h-[3.5rem] items-center justify-between border-b border-gray-800 bg-[#0c0c0e] px-4 sm:px-6">
+    <header className="sticky top-0 z-10 flex min-h-[3.5rem] w-full items-center justify-between border-b border-gray-800 bg-[#0c0c0e] px-4 sm:px-6 lg:px-8">
       <div className="flex items-center gap-4">
         {title ? (
           <h1 className="truncate text-base font-semibold text-white sm:text-lg">{title}</h1>

@@ -7,6 +7,8 @@ import {
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
+import type { SongGardenConfig } from "@/lib/songgarden/config";
+
 function rowToEvent(row: Record<string, unknown>) {
   return {
     id: row.id,
@@ -25,9 +27,13 @@ function rowToEvent(row: Record<string, unknown>) {
       "We're crowdsourcing a song for this event. Want to help create it?",
     landingCopy: (row.landing_copy as string) ?? "",
     ctaText: (row.cta_text as string) ?? "Let's make an anthem",
+    anthemCompletionMessage:
+      (row.anthem_completion_message as string) ??
+      "Thanks! Your answers will help shape the song we're making.",
     allowAudioVideoPrompt: (row.allow_audio_video_prompt as boolean) ?? true,
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
+    songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
   };
 }
 
@@ -77,11 +83,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (body.landingHeadline !== undefined) updates.landing_headline = body.landingHeadline;
       if (body.landingCopy !== undefined) updates.landing_copy = body.landingCopy;
       if (body.ctaText !== undefined) updates.cta_text = body.ctaText;
+      if (body.anthemCompletionMessage !== undefined) {
+        updates.anthem_completion_message = body.anthemCompletionMessage;
+      }
       if (body.allowAudioVideoPrompt !== undefined) {
         updates.allow_audio_video_prompt = body.allowAudioVideoPrompt;
       }
       if (body.agentThemeId !== undefined) updates.agent_theme_id = body.agentThemeId;
       if (body.agentBrief !== undefined) updates.agent_brief = body.agentBrief;
+      if (body.songGardenConfig !== undefined) updates.song_garden_config = body.songGardenConfig;
       const updated = localEventsUpdate(id, updates as Partial<import("@/lib/local-events-store").EventRow>);
       if (!updated) return NextResponse.json(null, { status: 404 });
       return NextResponse.json(rowToEvent(updated));
@@ -113,11 +123,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.landingHeadline !== undefined) row.landing_headline = body.landingHeadline;
     if (body.landingCopy !== undefined) row.landing_copy = body.landingCopy;
     if (body.ctaText !== undefined) row.cta_text = body.ctaText;
+    if (body.anthemCompletionMessage !== undefined) {
+      row.anthem_completion_message = body.anthemCompletionMessage;
+    }
     if (body.allowAudioVideoPrompt !== undefined) {
       row.allow_audio_video_prompt = body.allowAudioVideoPrompt;
     }
     if (body.agentThemeId !== undefined) row.agent_theme_id = body.agentThemeId;
     if (body.agentBrief !== undefined) row.agent_brief = body.agentBrief;
+    if (body.songGardenConfig !== undefined) row.song_garden_config = body.songGardenConfig;
 
     const { data, error } = await supabaseAdmin.from("events").update(row).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

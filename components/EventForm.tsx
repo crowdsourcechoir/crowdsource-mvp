@@ -5,6 +5,15 @@ import AddressMap from "./AddressMap";
 import { getAgentThemes } from "@/data/agentInterview";
 import type { AgentTheme } from "@/data/agentInterview";
 import type { AgentBrief } from "@/data/agentInterview";
+import { normalizeAskAboutEmailCaptcha } from "@/lib/agent-brief-email-captcha";
+import { DEFAULT_NAME_QUESTION_PROMPT } from "@/lib/participant-journey/steps";
+import { DEFAULT_CONTRIBUTION_CONSENT_TEXT } from "@/lib/participant-journey/contribution-consent";
+import {
+  defaultSongGardenConfig,
+  GARDEN_SLOT_ADMIN_LABELS,
+  normalizeSongGardenConfig,
+  type SongGardenConfig,
+} from "@/lib/songgarden/config";
 
 export type EventFormValues = {
   title: string;
@@ -20,6 +29,8 @@ export type EventFormValues = {
   landingHeadline: string;
   landingCopy: string;
   ctaText: string;
+  anthemCompletionMessage: string;
+  songGardenConfig: SongGardenConfig;
   agentThemeId: string | null;
   agentBrief: AgentBrief | null;
 };
@@ -48,6 +59,8 @@ const initialValues: EventFormValues = {
   landingHeadline: "We're crowdsourcing a song for this event. Want to help create it?",
   landingCopy: "",
   ctaText: "Let's make an anthem",
+  anthemCompletionMessage: "Thanks! Your answers will help shape the song we're making.",
+  songGardenConfig: defaultSongGardenConfig(),
   agentThemeId: null,
   agentBrief: null,
 };
@@ -109,6 +122,8 @@ type SavedAgentTemplate = {
   eventType: "birthday" | "fundraiser" | "other" | string;
   whoWhat?: string;
   emotionalArc?: string;
+  collectName?: boolean;
+  nameQuestionPrompt?: string;
   askAboutItems: Array<{
     prompt: string;
     allowAudio?: boolean;
@@ -133,13 +148,18 @@ export default function EventForm({
   submitLabel = "Create Event",
   submitSuccessMessage = "Event created.",
 }: EventFormProps) {
-  const [values, setValues] = useState<EventFormValues>({ ...initialValues, ...initialProp });
+  const [values, setValues] = useState<EventFormValues>(() => ({
+    ...initialValues,
+    ...initialProp,
+    songGardenConfig: normalizeSongGardenConfig(
+      initialProp?.songGardenConfig ?? initialValues.songGardenConfig
+    ),
+  }));
   const [success, setSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [themes, setThemes] = useState<AgentTheme[]>([]);
-  const [customMode, setCustomMode] = useState(false);
   const [themeError, setThemeError] = useState<string | null>(null);
   const [savedTemplates, setSavedTemplates] = useState<SavedAgentTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
@@ -177,18 +197,19 @@ export default function EventForm({
 
   useEffect(() => {
     if (values.agentBrief) return;
-    const d = TEMPLATE_DEFAULTS.other;
     setValues((v) => ({
       ...v,
       agentBrief: {
-        ...(v.agentBrief ?? {}),
-        eventType: d.eventType,
-        emotionalArc: d.emotionalArc,
-        askAboutItems: d.askAboutItems,
-        askAbout: d.askAboutItems.map((q) => q.prompt),
+        eventType: "custom",
+        collectName: true,
+        nameQuestionPrompt: DEFAULT_NAME_QUESTION_PROMPT,
+        requireContributionConsent: true,
+        contributionConsentText: DEFAULT_CONTRIBUTION_CONSENT_TEXT,
+        askAboutItems: [{ prompt: "", allowAudio: false, allowVideo: false, requireEmailCaptcha: false }],
+        askAbout: [""],
       },
     }));
-    // Intentionally run once to ensure fields are editable immediately.
+    // Intentionally run once so new events start in custom mode with an empty question row.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -220,26 +241,38 @@ export default function EventForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitError(null);
-    const normalizedAskAboutItems = (values.agentBrief?.askAboutItems ?? [])
-      .map((item) => ({
-        prompt: item.prompt.trim(),
-        allowAudio: !!item.allowAudio,
-        allowVideo: !!item.allowVideo,
-        requireEmailCaptcha: !!item.requireEmailCaptcha,
-      }))
-      .filter((item) => item.prompt.length > 0);
+    const normalizedAskAboutItems = normalizeAskAboutEmailCaptcha(
+      (values.agentBrief?.askAboutItems ?? [])
+        .map((item) => ({
+          prompt: item.prompt.trim(),
+          allowAudio: !!item.allowAudio,
+          allowVideo: !!item.allowVideo,
+          requireEmailCaptcha: !!item.requireEmailCaptcha,
+        }))
+        .filter((item) => item.prompt.length > 0)
+    );
     const brief = values.agentBrief
       ? {
           eventType: values.agentBrief.eventType,
           whoWhat: values.agentBrief.whoWhat,
           emotionalArc: values.agentBrief.emotionalArc,
+          collectName: values.agentBrief.collectName !== false,
+          nameQuestionPrompt:
+            values.agentBrief.nameQuestionPrompt?.trim() || DEFAULT_NAME_QUESTION_PROMPT,
+          requireContributionConsent: values.agentBrief.requireContributionConsent !== false,
+          contributionConsentText:
+            values.agentBrief.contributionConsentText?.trim() || DEFAULT_CONTRIBUTION_CONSENT_TEXT,
           askAboutItems: normalizedAskAboutItems,
           askAbout: normalizedAskAboutItems.map((item) => item.prompt),
         }
       : null;
     setIsSubmitting(true);
     try {
-      await onSubmit({ ...values, agentBrief: brief });
+      await onSubmit({
+        ...values,
+        agentBrief: brief,
+        songGardenConfig: normalizeSongGardenConfig(values.songGardenConfig),
+      });
       setSuccess(true);
     } catch (err) {
       setSuccess(false);
@@ -254,6 +287,12 @@ export default function EventForm({
       ...v,
       agentBrief: { ...(v.agentBrief ?? {}), [key]: value } as AgentBrief,
     }));
+  }
+
+  function setAskAboutItems(items: NonNullable<AgentBrief["askAboutItems"]>) {
+    const normalized = normalizeAskAboutEmailCaptcha(items);
+    setBrief("askAboutItems", normalized);
+    setBrief("askAbout", normalized.map((x) => x.prompt));
   }
 
   function persistSavedTemplates(next: SavedAgentTemplate[]) {
@@ -275,11 +314,31 @@ export default function EventForm({
         eventType: tpl.eventType,
         whoWhat: tpl.whoWhat,
         emotionalArc: tpl.emotionalArc,
+        collectName: tpl.collectName,
+        nameQuestionPrompt: tpl.nameQuestionPrompt,
         askAboutItems: tpl.askAboutItems,
         askAbout: tpl.askAboutItems.map((item) => item.prompt),
       },
     }));
-    setCustomMode(true);
+  }
+
+  function applyCustomBrief() {
+    setThemeError(null);
+    setValues((v) => ({
+      ...v,
+      agentBrief: {
+        ...(v.agentBrief ?? {}),
+        eventType: "custom",
+        askAboutItems:
+          (v.agentBrief?.askAboutItems ?? []).length > 0
+            ? v.agentBrief!.askAboutItems!
+            : [{ prompt: "", allowAudio: false, allowVideo: false, requireEmailCaptcha: false }],
+        askAbout:
+          (v.agentBrief?.askAboutItems ?? []).length > 0
+            ? v.agentBrief!.askAboutItems!.map((item) => item.prompt)
+            : [""],
+      },
+    }));
   }
 
   function saveCurrentAsTemplate() {
@@ -288,14 +347,16 @@ export default function EventForm({
       setThemeError("Add a template name before saving.");
       return;
     }
-    const askAboutItems = (values.agentBrief?.askAboutItems ?? [])
-      .map((x) => ({
-        prompt: x.prompt.trim(),
-        allowAudio: !!x.allowAudio,
-        allowVideo: !!x.allowVideo,
-        requireEmailCaptcha: !!x.requireEmailCaptcha,
-      }))
-      .filter((x) => x.prompt.length > 0);
+    const askAboutItems = normalizeAskAboutEmailCaptcha(
+      (values.agentBrief?.askAboutItems ?? [])
+        .map((x) => ({
+          prompt: x.prompt.trim(),
+          allowAudio: !!x.allowAudio,
+          allowVideo: !!x.allowVideo,
+          requireEmailCaptcha: !!x.requireEmailCaptcha,
+        }))
+        .filter((x) => x.prompt.length > 0)
+    );
     if (askAboutItems.length === 0) {
       setThemeError("Add at least one question topic before saving a template.");
       return;
@@ -311,11 +372,24 @@ export default function EventForm({
       eventType: normalizedType,
       whoWhat: values.agentBrief?.whoWhat,
       emotionalArc: values.agentBrief?.emotionalArc,
+      collectName: values.agentBrief?.collectName !== false,
+      nameQuestionPrompt:
+        values.agentBrief?.nameQuestionPrompt?.trim() || DEFAULT_NAME_QUESTION_PROMPT,
       askAboutItems,
     };
     persistSavedTemplates([tpl, ...savedTemplates]);
     setTemplateName("");
     setThemeError(null);
+  }
+
+  function setSongGardenSteps(steps: SongGardenConfig["steps"]) {
+    setValues((v) => ({
+      ...v,
+      songGardenConfig: normalizeSongGardenConfig({
+        ...v.songGardenConfig,
+        steps,
+      }),
+    }));
   }
 
   function handleSlugChange(next: string) {
@@ -337,7 +411,7 @@ export default function EventForm({
   const labelClass = "block text-sm font-semibold text-gray-300";
 
   return (
-    <form noValidate onSubmit={handleSubmit} className="mx-auto max-w-xl space-y-6">
+    <form noValidate onSubmit={handleSubmit} className="w-full space-y-6">
       {submitError && (
         <div className="rounded-xl border border-red-800/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
           {submitError}
@@ -517,6 +591,53 @@ export default function EventForm({
               className={inputClass}
             />
           </div>
+          <div>
+            <label htmlFor="anthemCompletionMessage" className={labelClass}>
+              Anthem completion message
+            </label>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Shown after someone finishes the interview — before &quot;Let&apos;s do it again&quot;.
+            </p>
+            <textarea
+              id="anthemCompletionMessage"
+              rows={2}
+              value={values.anthemCompletionMessage}
+              onChange={(e) => setValues((v) => ({ ...v, anthemCompletionMessage: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+          <div className="rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={values.agentBrief?.requireContributionConsent !== false}
+                onChange={(e) => setBrief("requireContributionConsent", e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-600 bg-[#1f1f1f] text-blue-500 focus:ring-blue-500"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-200">Require contribution consent</span>
+                <span className="mt-0.5 block text-xs text-gray-500">
+                  Checkbox on the landing page before participants start — covers lyrics, sounds, and recordings.
+                </span>
+              </span>
+            </label>
+            {values.agentBrief?.requireContributionConsent !== false && (
+              <div className="mt-3">
+                <label htmlFor="contributionConsentText" className={labelClass}>
+                  Consent checkbox text
+                </label>
+                <textarea
+                  id="contributionConsentText"
+                  rows={2}
+                  value={
+                    values.agentBrief?.contributionConsentText ?? DEFAULT_CONTRIBUTION_CONSENT_TEXT
+                  }
+                  onChange={(e) => setBrief("contributionConsentText", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="heroImageMode" className={labelClass}>
@@ -544,24 +665,34 @@ export default function EventForm({
         <div className="mt-4 space-y-4">
           <div className="space-y-3">
             <label className={labelClass}>Template</label>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-xs text-gray-500">
+              Starts in Custom mode — build your own questions. Pick a template to load preset topics.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
               {(
                 [
+                  { id: "custom", label: "Custom", themeKey: null },
                   { id: "birthday", label: "Birthday", themeKey: "birthday" },
                   { id: "fundraiser", label: "Fundraiser", themeKey: "fundraiser" },
                   { id: "other", label: "Other", themeKey: "conference" },
                 ] as const
               ).map((opt) => {
-                const selectedTemplate = (values.agentBrief?.eventType ?? "").toLowerCase();
+                const eventType = (values.agentBrief?.eventType ?? "custom").toLowerCase();
                 const active =
-                  selectedTemplate === opt.id ||
-                  themes.find((t) => t.id === values.agentThemeId)?.key === opt.themeKey;
-                const themeForOpt = themes.find((t) => t.key === (opt.themeKey ?? ""));
+                  opt.id === "custom"
+                    ? eventType === "custom"
+                    : eventType === opt.id ||
+                      themes.find((t) => t.id === values.agentThemeId)?.key === opt.themeKey;
+                const themeForOpt = opt.themeKey ? themes.find((t) => t.key === opt.themeKey) : null;
                 return (
                   <button
                     key={opt.id}
                     type="button"
                     onClick={async () => {
+                      if (opt.id === "custom") {
+                        applyCustomBrief();
+                        return;
+                      }
                       // If themes haven't finished loading yet, re-fetch them once so
                       // template clicks still work reliably.
                       let theme: AgentTheme | null = themeForOpt ?? null;
@@ -588,7 +719,6 @@ export default function EventForm({
                           agentBrief: {
                             ...(prevBrief ?? {}),
                             eventType: local.eventType,
-                            // Always preload template defaults when template is clicked.
                             askAboutItems: nextAskAboutItems,
                             askAbout: nextAskAboutItems.map((item) => item.prompt),
                             emotionalArc: nextEmotionalArc,
@@ -600,7 +730,7 @@ export default function EventForm({
                       active
                         ? "bg-gray-800 text-white"
                         : "border border-gray-700 bg-[#1f1f1f] text-gray-400 hover:text-gray-200"
-                    } ${!themeForOpt ? "opacity-80" : ""}`}
+                    } ${opt.id !== "custom" && !themeForOpt ? "opacity-80" : ""}`}
                   >
                     {opt.label}
                   </button>
@@ -608,24 +738,6 @@ export default function EventForm({
               })}
             </div>
             {themeError && <p className="text-xs text-amber-300">{themeError}</p>}
-
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-700/60 bg-[#18181b] px-3 py-3">
-              <div>
-                <div className="text-sm font-semibold text-white">Custom Mode</div>
-                <div className="text-xs text-gray-400">
-                  Disable template auto-load and build your question topics freely.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCustomMode((v) => !v)}
-                className={`min-h-[44px] min-w-[120px] rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  customMode ? "bg-white text-gray-900" : "bg-gray-800 text-gray-200 hover:bg-gray-700"
-                }`}
-              >
-                {customMode ? "On" : "Off"}
-              </button>
-            </div>
 
             <div className="rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
               <label htmlFor="saveTemplateName" className={labelClass}>
@@ -680,38 +792,45 @@ export default function EventForm({
 
           {
             <>
-              <div>
-                <label htmlFor="briefWhoWhat" className={labelClass}>
-                  Who / what it&apos;s for
+              <div className="rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={values.agentBrief?.collectName !== false}
+                    onChange={(e) => setBrief("collectName", e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-gray-600 bg-[#1f1f1f] text-blue-500 focus:ring-blue-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-200">Ask for participant name</span>
+                    <span className="mt-0.5 block text-xs text-gray-500">
+                      First interview question — used for crediting contributions. Counts as step 1 in progress.
+                    </span>
+                  </span>
                 </label>
-                <input
-                  id="briefWhoWhat"
-                  type="text"
-                  placeholder="e.g. honoree name, org name, mission"
-                  value={values.agentBrief?.whoWhat ?? ""}
-                  onChange={(e) => setBrief("whoWhat", e.target.value || undefined)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="briefEmotionalArc" className={labelClass}>
-                  Emotional arc
-                </label>
-                <input
-                  id="briefEmotionalArc"
-                  type="text"
-                  placeholder="e.g. fun → heartfelt → celebratory"
-                  value={values.agentBrief?.emotionalArc ?? ""}
-                  onChange={(e) => setBrief("emotionalArc", e.target.value || undefined)}
-                  className={inputClass}
-                />
+                {values.agentBrief?.collectName !== false && (
+                  <div className="mt-3">
+                    <label htmlFor="nameQuestionPrompt" className={labelClass}>
+                      Name question
+                    </label>
+                    <input
+                      id="nameQuestionPrompt"
+                      type="text"
+                      value={values.agentBrief?.nameQuestionPrompt ?? DEFAULT_NAME_QUESTION_PROMPT}
+                      onChange={(e) => setBrief("nameQuestionPrompt", e.target.value)}
+                      className={inputClass}
+                      placeholder={DEFAULT_NAME_QUESTION_PROMPT}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
                 <label htmlFor="briefAskAbout" className={labelClass}>
                   Question topics (in order)
                 </label>
-                <p className="mt-0.5 text-xs text-gray-500">Editable list. Reorder with ↑/↓. One topic per item.</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Editable list. Reorder with ↑/↓. Turn on Email+Captcha only on the last question — spam protection without blocking early engagement.
+                </p>
 
                 <div className="mt-3 space-y-3">
                   {(values.agentBrief?.askAboutItems ?? []).map((item, idx) => (
@@ -727,8 +846,7 @@ export default function EventForm({
                               const tmp = next[idx - 1];
                               next[idx - 1] = next[idx];
                               next[idx] = tmp;
-                              setBrief("askAboutItems", next);
-                              setBrief("askAbout", next.map((x) => x.prompt));
+                              setAskAboutItems(next);
                             }}
                             className="rounded-lg border border-gray-700 bg-[#1f1f1f] px-2 py-1 text-xs font-semibold text-gray-300 disabled:opacity-40"
                           >
@@ -742,8 +860,7 @@ export default function EventForm({
                               const tmp = next[idx + 1];
                               next[idx + 1] = next[idx];
                               next[idx] = tmp;
-                              setBrief("askAboutItems", next);
-                              setBrief("askAbout", next.map((x) => x.prompt));
+                              setAskAboutItems(next);
                             }}
                             className="rounded-lg border border-gray-700 bg-[#1f1f1f] px-2 py-1 text-xs font-semibold text-gray-300 disabled:opacity-40"
                           >
@@ -753,8 +870,7 @@ export default function EventForm({
                             type="button"
                             onClick={() => {
                               const next = [...(values.agentBrief?.askAboutItems ?? [])].filter((_, i) => i !== idx);
-                              setBrief("askAboutItems", next);
-                              setBrief("askAbout", next.map((x) => x.prompt));
+                              setAskAboutItems(next);
                             }}
                             className="rounded-lg border border-red-800/60 bg-red-950/30 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-900/30"
                           >
@@ -792,25 +908,26 @@ export default function EventForm({
                           >
                             {item.allowVideo ? "Video: On" : "Video: Off"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = [...(values.agentBrief?.askAboutItems ?? [])];
-                              next[idx] = {
-                                ...next[idx],
-                                requireEmailCaptcha: !next[idx]?.requireEmailCaptcha,
-                              };
-                              setBrief("askAboutItems", next);
-                              setBrief("askAbout", next.map((x) => x.prompt));
-                            }}
-                            className={`rounded-lg px-2 py-1 text-xs font-semibold ${
-                              item.requireEmailCaptcha
-                                ? "border border-emerald-600/70 bg-emerald-900/30 text-emerald-200"
-                                : "border border-gray-700 bg-[#1f1f1f] text-gray-300"
-                            }`}
-                          >
-                            {item.requireEmailCaptcha ? "Email+Captcha: On" : "Email+Captcha: Off"}
-                          </button>
+                          {idx === (values.agentBrief?.askAboutItems ?? []).length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = [...(values.agentBrief?.askAboutItems ?? [])];
+                                next[idx] = {
+                                  ...next[idx],
+                                  requireEmailCaptcha: !next[idx]?.requireEmailCaptcha,
+                                };
+                                setAskAboutItems(next);
+                              }}
+                              className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+                                item.requireEmailCaptcha
+                                  ? "border border-emerald-600/70 bg-emerald-900/30 text-emerald-200"
+                                  : "border border-gray-700 bg-[#1f1f1f] text-gray-300"
+                              }`}
+                            >
+                              {item.requireEmailCaptcha ? "Email+Captcha: On" : "Email+Captcha: Off"}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <input
@@ -838,8 +955,7 @@ export default function EventForm({
                         allowVideo: false,
                         requireEmailCaptcha: false,
                       });
-                      setBrief("askAboutItems", next);
-                      setBrief("askAbout", next.map((x) => x.prompt));
+                      setAskAboutItems(next);
                     }}
                     className="min-h-[44px] w-full rounded-xl border border-gray-700 bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-[#2a2a2a]"
                   >
@@ -851,7 +967,150 @@ export default function EventForm({
           }
         </div>
       </section>
+<section className="rounded-2xl border border-gray-700/60 bg-[#1f1f1f] p-4 sm:p-6">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Song Garden</h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Sound recording prompts after lyric questions. Reorder with ↑/↓, toggle steps on/off, edit copy.
+        </p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="soundTransitionMessage" className={labelClass}>
+              Transition to sounds
+            </label>
+            <input
+              id="soundTransitionMessage"
+              type="text"
+              value={values.songGardenConfig.soundTransitionMessage}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...v.songGardenConfig,
+                    soundTransitionMessage: e.target.value,
+                  },
+                }))
+              }
+              className={inputClass}
+            />
+          </div>
 
+          <div className="space-y-3">
+            {values.songGardenConfig.steps.map((step, idx) => {
+              const meta = GARDEN_SLOT_ADMIN_LABELS[step.slotId];
+              return (
+                <div key={step.slotId} className="rounded-xl border border-gray-700/60 bg-[#18181b] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-semibold text-gray-400">#{idx + 1}</span>
+                      <span className="ml-2 text-sm font-medium text-gray-200">{meta.name}</span>
+                      <span className="ml-2 text-xs text-gray-500">{meta.group}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => {
+                          const next = [...values.songGardenConfig.steps];
+                          const tmp = next[idx - 1];
+                          next[idx - 1] = next[idx];
+                          next[idx] = tmp;
+                          setSongGardenSteps(next);
+                        }}
+                        className="rounded-lg border border-gray-700 bg-[#1f1f1f] px-2 py-1 text-xs font-semibold text-gray-300 disabled:opacity-40"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === values.songGardenConfig.steps.length - 1}
+                        onClick={() => {
+                          const next = [...values.songGardenConfig.steps];
+                          const tmp = next[idx + 1];
+                          next[idx + 1] = next[idx];
+                          next[idx] = tmp;
+                          setSongGardenSteps(next);
+                        }}
+                        className="rounded-lg border border-gray-700 bg-[#1f1f1f] px-2 py-1 text-xs font-semibold text-gray-300 disabled:opacity-40"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...values.songGardenConfig.steps];
+                          next[idx] = { ...next[idx], enabled: !next[idx].enabled };
+                          setSongGardenSteps(next);
+                        }}
+                        className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+                          step.enabled
+                            ? "border border-emerald-600/70 bg-emerald-900/30 text-emerald-200"
+                            : "border border-gray-700 bg-[#1f1f1f] text-gray-400"
+                        }`}
+                      >
+                        {step.enabled ? "On" : "Off"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs text-gray-500">Section label</span>
+                      <input
+                        type="text"
+                        value={step.phaseLabel}
+                        onChange={(e) => {
+                          const next = [...values.songGardenConfig.steps];
+                          next[idx] = { ...next[idx], phaseLabel: e.target.value };
+                          setSongGardenSteps(next);
+                        }}
+                        className="mt-1 w-full rounded-xl border border-gray-600 bg-[#1f1f1f] px-4 py-2 text-sm text-gray-100"
+                      />
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs text-gray-500">Prompt</span>
+                      <textarea
+                        rows={2}
+                        value={step.prompt}
+                        onChange={(e) => {
+                          const next = [...values.songGardenConfig.steps];
+                          next[idx] = { ...next[idx], prompt: e.target.value };
+                          setSongGardenSteps(next);
+                        }}
+                        className="mt-1 w-full rounded-xl border border-gray-600 bg-[#1f1f1f] px-4 py-2 text-sm text-gray-100"
+                      />
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs text-gray-500">Button label (optional)</span>
+                      <input
+                        type="text"
+                        value={step.buttonLabel ?? ""}
+                        onChange={(e) => {
+                          const next = [...values.songGardenConfig.steps];
+                          next[idx] = { ...next[idx], buttonLabel: e.target.value || undefined };
+                          setSongGardenSteps(next);
+                        }}
+                        placeholder="Defaults to slot name"
+                        className="mt-1 w-full rounded-xl border border-gray-600 bg-[#1f1f1f] px-4 py-2 text-sm text-gray-100"
+                      />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setValues((v) => ({ ...v, songGardenConfig: defaultSongGardenConfig() }))
+            }
+            className="rounded-xl border border-gray-700 bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-[#2a2a2a]"
+          >
+            Reset Song Garden to defaults
+          </button>
+        </div>
+      </section>
+
+      
       <button
         type="submit"
         disabled={isSubmitting}

@@ -11,7 +11,7 @@ export default function AdminShell({ children, title }: AdminShellProps) {
     <div className="min-h-screen bg-[#0c0c0e]">
       <TopBar title={title} />
       <main className="flex-1 overflow-auto bg-[#0c0c0e] text-gray-100">
-        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</div>
+        <div className="w-full px-4 py-6 sm:px-6 lg:px-8">{children}</div>
       </main>
     </div>
   );

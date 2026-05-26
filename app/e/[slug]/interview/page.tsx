@@ -205,7 +205,7 @@ export default function InterviewPage() {
                 </p>
               ) : (
                 <div key={t.id} className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl border border-gray-600/60 bg-[#252528] px-4 py-3 text-gray-100">
+                  <div className="crowdsource-field-panel max-w-[85%] px-4 py-3 text-gray-100">
                     <p className="text-[15px]">{t.content}</p>
                   </div>
                 </div>
@@ -217,7 +217,7 @@ export default function InterviewPage() {
               </p>
             )}
             {sending && !finished && (
-              <div className="rounded-xl border border-gray-700/50 bg-[#252528]/60 px-4 py-3">
+              <div className="crowdsource-field-panel px-4 py-3">
                 <QuestionLoadingIndicator />
               </div>
             )}
@@ -236,7 +236,7 @@ export default function InterviewPage() {
               <label htmlFor="reply" className="block text-sm font-medium text-gray-400 mb-2">
                 {isVoiceVideoQuestion ? "Your response (text optional)" : "Your answer"}
               </label>
-              <div className="flex gap-2 rounded-2xl border border-gray-600/60 bg-[#252528] px-3 py-2.5 shadow-sm">
+              <div className="crowdsource-field-panel flex gap-2 px-3 py-2.5">
                 <input
                   id="reply"
                   type="text"

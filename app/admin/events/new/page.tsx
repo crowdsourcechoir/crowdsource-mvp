@@ -26,8 +26,10 @@ export default function NewEventPage() {
         landingHeadline: values.landingHeadline,
         landingCopy: values.landingCopy,
         ctaText: values.ctaText,
+        anthemCompletionMessage: values.anthemCompletionMessage,
         agentThemeId: values.agentThemeId ?? null,
         agentBrief: values.agentBrief ?? null,
+        songGardenConfig: values.songGardenConfig,
       });
       if (created) {
         /* Redirect to list first so the list refetches from the same server that created the event; user can click the new event to open it. Avoids "Event not found" when multiple dev servers or caching is involved. */
@@ -46,7 +48,7 @@ export default function NewEventPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <h2 className="mb-6 text-2xl font-semibold text-white">Create Event</h2>
       {error && (
         <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200">

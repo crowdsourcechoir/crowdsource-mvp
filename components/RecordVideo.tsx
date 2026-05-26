@@ -11,6 +11,24 @@ type RecordVideoProps = {
   className?: string;
 };
 
+function pickVideoMimeType(hasAudio: boolean): string {
+  const candidates = hasAudio
+    ? [
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm;codecs=h264,opus",
+        "video/mp4",
+        "video/webm;codecs=vp9",
+        "video/webm",
+      ]
+    : ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+
+  for (const mime of candidates) {
+    if (MediaRecorder.isTypeSupported(mime)) return mime;
+  }
+  return "video/webm";
+}
+
 export default function RecordVideo({ onRecordingReady, onClear, className = "" }: RecordVideoProps) {
   const [status, setStatus] = useState<"idle" | "preview" | "countdown" | "recording" | "recorded">("idle");
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
@@ -22,21 +40,41 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordedMimeRef = useRef("video/webm");
 
-  const stopRecording = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
+  const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
   }, []);
 
-  useEffect(() => () => stopRecording(), [stopRecording]);
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const finalizeRecording = useCallback(() => {
+    stopTimer();
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+      return;
+    }
+    releaseStream();
+  }, [releaseStream, stopTimer]);
+
+  useEffect(
+    () => () => {
+      stopTimer();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      releaseStream();
+    },
+    [releaseStream, stopTimer]
+  );
 
   const showPreview = status === "preview" || status === "countdown" || status === "recording";
   useEffect(() => {
@@ -45,49 +83,50 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
     video.srcObject = streamRef.current;
     video.muted = true;
     video.play().catch(() => {});
-  }, [showPreview, status]); // re-attach when status changes (e.g. countdown → recording mounts a new <video>)
+  }, [showPreview, status]);
 
   const startActualRecording = useCallback(() => {
     const stream = streamRef.current;
     if (!stream) return;
 
-    const mimeType = MediaRecorder.isTypeSupported("video/mp4")
-      ? "video/mp4"
-      : MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-        ? "video/webm;codecs=vp9,opus"
-        : "video/webm";
+    const hasAudio = stream.getAudioTracks().length > 0;
+    const mimeType = pickVideoMimeType(hasAudio);
+    recordedMimeRef.current = mimeType;
+    chunksRef.current = [];
+
     const recorder = new MediaRecorder(stream, {
-      // Keep payload size low enough for serverless API limits.
-      videoBitsPerSecond: 500000,
-      audioBitsPerSecond: 64000,
       mimeType,
+      videoBitsPerSecond: 500_000,
+      ...(hasAudio ? { audioBitsPerSecond: 64_000 } : {}),
     });
+    mediaRecorderRef.current = recorder;
 
     recorder.ondataavailable = (e) => {
       if (e.data.size) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
-      const b = new Blob(chunksRef.current, { type: mimeType });
+      const b = new Blob(chunksRef.current, { type: recordedMimeRef.current });
+      mediaRecorderRef.current = null;
+      releaseStream();
       setBlob(b);
       setStatus("recorded");
       onRecordingReady?.(b);
-      if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
     };
 
-    recorder.start();
+    recorder.start(1000);
     setStatus("recording");
     setSecondsLeft(MAX_SECONDS);
 
     timerRef.current = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
-          stopRecording();
+          finalizeRecording();
           return 0;
         }
         return s - 1;
       });
     }, 1000);
-  }, [onRecordingReady, stopRecording]);
+  }, [finalizeRecording, onRecordingReady, releaseStream]);
 
   useEffect(() => {
     if (status !== "countdown") return;
@@ -108,16 +147,33 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         height: { ideal: 360, max: 540 },
         frameRate: { ideal: 20, max: 24 },
       };
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: true,
-      }).catch(() =>
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      );
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+      const stream = await navigator.mediaDevices
+        .getUserMedia({
+          video: videoConstraints,
+          audio: audioConstraints,
+        })
+        .catch(() =>
+          navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          })
+        );
+
+      if (stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach((t) => t.stop());
+        setError("Microphone access is needed to record video with sound.");
+        return;
+      }
+
       streamRef.current = stream;
       setStatus("preview");
-    } catch (err) {
-      setError("Camera access is needed to record video.");
+    } catch {
+      setError("Camera and microphone access are needed to record video.");
     }
   };
 
@@ -127,17 +183,18 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
   };
 
   const cancelPreviewOrCountdown = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+    stopTimer();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    releaseStream();
     setStatus("idle");
     setCountdown(COUNTDOWN_SECONDS);
-  }, []);
+  }, [releaseStream, stopTimer]);
 
   const handleStop = () => {
-    stopRecording();
+    finalizeRecording();
   };
 
   const VideoIcon = (
@@ -153,7 +210,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
         <button
           type="button"
           onClick={requestPreview}
-          className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-none border border-[#CFFF81]/35 bg-[#1a0f2d]/45 px-6 py-4 font-mono text-base font-medium tracking-wide text-[#CFFF81] shadow-[0_10px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl transition hover:border-[#CFFF81]/55 hover:bg-[#CFFF81]/12 hover:text-[#f4ffc8] active:bg-[#CFFF81]/20 sm:min-h-[64px]"
+          className="crowdsource-btn-outline gap-3 sm:min-h-[64px]"
         >
           {VideoIcon}
           <span>Record video</span>
@@ -224,7 +281,7 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             className="max-h-64 w-full rounded-2xl border border-fuchsia-300/25 bg-black object-contain ring-1 ring-white/10"
             style={{ transform: "scaleX(-1)" }}
           />
-          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fuchsia-300/35 bg-[#1a0f2d]/45 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl">
+          <div className="crowdsource-field-panel flex flex-wrap items-center justify-center gap-3 p-4">
             <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
             <span className="text-sm text-white/85">Recording… {secondsLeft}s left</span>
             <button
@@ -243,10 +300,9 @@ export default function RecordVideo({ onRecordingReady, onClear, className = "" 
             src={URL.createObjectURL(blob)}
             controls
             playsInline
-            muted
             className="max-h-64 w-full rounded-2xl border border-fuchsia-300/25 bg-black object-contain ring-1 ring-white/10"
           />
-          <span className="text-sm text-gray-400">Recorded</span>
+          <span className="text-sm text-gray-400">Recorded — use controls to play with sound</span>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"

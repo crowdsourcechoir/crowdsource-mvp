@@ -9,9 +9,16 @@ type RecordAudioProps = {
   onRecordingReady?: (blob: Blob) => void;
   onClear?: () => void;
   className?: string;
+  variant?: "default" | "plain";
 };
 
-export default function RecordAudio({ onRecordingReady, onClear, className = "" }: RecordAudioProps) {
+export default function RecordAudio({
+  onRecordingReady,
+  onClear,
+  className = "",
+  variant = "default",
+}: RecordAudioProps) {
+  const plain = variant === "plain";
   const [status, setStatus] = useState<"idle" | "countdown" | "recording" | "recorded">("idle");
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [secondsLeft, setSecondsLeft] = useState(MAX_SECONDS);
@@ -118,56 +125,77 @@ export default function RecordAudio({ onRecordingReady, onClear, className = "" 
         <button
           type="button"
           onClick={requestAndCountdown}
-          className="flex min-h-[56px] w-full min-w-0 items-center justify-center gap-3 rounded-none border border-[#CFFF81]/35 bg-[#1a0f2d]/45 px-6 py-4 font-mono text-base font-medium tracking-wide text-[#CFFF81] shadow-[0_10px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl transition hover:border-[#CFFF81]/55 hover:bg-[#CFFF81]/12 hover:text-[#f4ffc8] active:bg-[#CFFF81]/20 sm:min-h-[64px]"
+          className={
+            plain
+              ? "crowdsource-btn-outline gap-2"
+              : "crowdsource-btn-outline gap-3 sm:min-h-[64px]"
+          }
         >
           {MicIcon}
-          <span>Record audio</span>
-          <span className="text-sm text-current/80">(up to {MAX_SECONDS}s)</span>
+          <span>{plain ? "Tap to record" : "Record audio"}</span>
+          {!plain && <span className="text-sm text-current/80">(up to {MAX_SECONDS}s)</span>}
         </button>
       )}
       {status === "countdown" && (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-fuchsia-300/30 bg-[#1a0f2d]/50 px-6 py-8 shadow-[0_12px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl">
-          <p className="text-center text-sm text-gray-200/95">Get ready… recording starts in</p>
-          <p className="text-5xl font-bold tabular-nums text-white drop-shadow-sm">{countdown}</p>
+        <div
+          className={
+            plain
+              ? "crowdsource-field-panel flex flex-col items-center gap-4 px-6 py-8"
+              : "crowdsource-field-panel flex flex-col items-center gap-4 px-6 py-8"
+          }
+        >
+          <p className="text-center text-sm text-gray-200">Starting in</p>
+          <p className="text-4xl tabular-nums text-white">{countdown}</p>
           <button
             type="button"
             onClick={cancelCountdown}
-            className="text-sm font-medium text-gray-400 underline hover:text-gray-300"
+            className="text-xs text-gray-400 underline hover:text-gray-200"
           >
             Cancel
           </button>
         </div>
       )}
       {status === "recording" && (
-        <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fuchsia-300/35 bg-[#1a0f2d]/45 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-xl">
-          <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
-          <span className="text-sm text-white/85">Recording… {secondsLeft}s left</span>
+        <div
+          className={
+            plain
+              ? "crowdsource-field-panel flex flex-wrap items-center justify-center gap-3 p-4"
+              : "crowdsource-field-panel flex flex-wrap items-center justify-center gap-3 p-4"
+          }
+        >
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-400" />
+          <span className="text-sm text-gray-200">Recording · {secondsLeft}s</span>
           <button
             type="button"
             onClick={handleStop}
-            className="min-h-[44px] rounded-xl bg-red-600 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-sm transition hover:bg-red-500 active:bg-red-700"
+            className={
+              plain
+                ? "border border-white/30 px-4 py-2 text-xs tracking-wide text-gray-100 hover:border-white/50"
+                : "min-h-[44px] rounded-xl bg-red-600 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-sm transition hover:bg-red-500 active:bg-red-700"
+            }
           >
             Stop
           </button>
         </div>
       )}
       {status === "recorded" && blob && (
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col items-center gap-3">
           <audio src={URL.createObjectURL(blob)} controls className="h-10 w-full max-w-full" />
-          <span className="text-sm text-gray-400">Recorded</span>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setBlob(null);
-                setStatus("idle");
-                onClear?.();
-              }}
-              className="rounded-xl border border-fuchsia-300/35 bg-[#1a0f2d]/45 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-[0_8px_28px_rgba(0,0,0,0.3)] ring-1 ring-white/10 backdrop-blur-xl transition hover:bg-[#2d1f42]/55"
-            >
-              Re-record
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setBlob(null);
+              setStatus("idle");
+              onClear?.();
+            }}
+            className={
+              plain
+                ? "text-xs text-gray-300 underline hover:text-white"
+                : "rounded-xl border border-fuchsia-300/35 bg-[#1a0f2d]/45 px-4 py-2 font-mono text-base font-medium tracking-wide text-white shadow-[0_8px_28px_rgba(0,0,0,0.3)] ring-1 ring-white/10 backdrop-blur-xl transition hover:bg-[#2d1f42]/55"
+            }
+          >
+            Re-record
+          </button>
         </div>
       )}
     </div>

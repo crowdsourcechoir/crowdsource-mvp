@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  buildLocationQuery,
+  googleMapsEmbedUrl,
+  googleMapsSearchUrl,
+  isGoogleMapsEmbedConfigured,
+} from "@/lib/google-maps";
+
+export { googleMapsSearchUrl } from "@/lib/google-maps";
 
 type AddressMapProps = {
   venue: string;
@@ -8,24 +16,16 @@ type AddressMapProps = {
   className?: string;
 };
 
-const GEOCODE_DEBOUNCE_MS = 400;
-
-export function googleMapsSearchUrl(venue: string, address: string): string {
-  const query = [venue, address].filter(Boolean).join(", ");
-  if (!query.trim()) return "";
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-}
+const EMBED_DEBOUNCE_MS = 400;
 
 export default function AddressMap({ venue, address, className = "" }: AddressMapProps) {
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const query = [venue, address].filter(Boolean).join(", ").trim();
+  const query = buildLocationQuery(venue, address);
+  const [embedQuery, setEmbedQuery] = useState(query);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!query) {
-      setCoords(null);
-      setLoading(false);
+      setEmbedQuery("");
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
@@ -36,53 +36,52 @@ export default function AddressMap({ venue, address, className = "" }: AddressMa
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
-      setLoading(true);
-      fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
-        {
-          headers: { Accept: "application/json", "User-Agent": "CrowdsourceChoirMVP/1.0" },
-        }
-      )
-        .then((r) => r.json())
-        .then((arr: { lat: string; lon: string }[]) => {
-          if (arr?.[0]) setCoords({ lat: parseFloat(arr[0].lat), lon: parseFloat(arr[0].lon) });
-          else setCoords(null);
-        })
-        .catch(() => setCoords(null))
-        .finally(() => setLoading(false));
-    }, GEOCODE_DEBOUNCE_MS);
+      setEmbedQuery(query);
+    }, EMBED_DEBOUNCE_MS);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query]);
 
-  const mapUrl = googleMapsSearchUrl(venue, address);
-
   if (!query) return null;
+
+  const mapUrl = googleMapsSearchUrl(venue, address);
+  const embedUrl = googleMapsEmbedUrl(embedQuery);
+  const updating = query !== embedQuery;
 
   return (
     <div className={className}>
-      <a
-        href={mapUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-sm font-medium text-gray-400 hover:text-gray-300 hover:underline"
-      >
-        View on map
-      </a>
-      <div className="mt-2 flex h-52 w-full overflow-hidden rounded-xl border border-gray-700/60 bg-[#1f1f1f]">
-        {loading && (
-          <div className="flex h-full w-full items-center justify-center text-gray-500">
-            Locating…
-          </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <a
+          href={mapUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-medium text-gray-400 hover:text-gray-300 hover:underline"
+        >
+          Open in Google Maps
+        </a>
+        {!isGoogleMapsEmbedConfigured() && (
+          <span className="text-xs text-gray-500">
+            Add <code className="text-gray-400">NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY</code> for official embeds
+          </span>
         )}
-        {coords && !loading && (
+      </div>
+      <div className="relative mt-2 flex h-52 w-full overflow-hidden rounded-xl border border-gray-700/60 bg-[#1f1f1f]">
+        {embedUrl && (
           <iframe
-            title="Map"
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${coords.lon - 0.02},${coords.lat - 0.02},${coords.lon + 0.02},${coords.lat + 0.02}&layer=mapnik&marker=${coords.lat},${coords.lon}`}
+            title="Google Map"
+            src={embedUrl}
             className="h-full w-full flex-1 border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            allowFullScreen
           />
+        )}
+        {updating && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#1f1f1f]/70 text-sm text-gray-400">
+            Updating map…
+          </div>
         )}
       </div>
     </div>

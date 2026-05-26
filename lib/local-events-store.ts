@@ -21,9 +21,11 @@ export type EventRow = {
   landing_headline: string;
   landing_copy: string;
   cta_text: string;
+  anthem_completion_message: string;
   allow_audio_video_prompt: boolean;
   agent_theme_id: string | null;
   agent_brief: unknown;
+  song_garden_config: unknown;
 };
 
 const store: EventRow[] = [];
