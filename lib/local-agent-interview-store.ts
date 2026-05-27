@@ -221,3 +221,19 @@ export async function localGetEventTranscripts(eventId: string): Promise<
   return results;
 }
 
+export async function localDeleteConversation(conversationId: string): Promise<boolean> {
+  const store = await loadStore();
+  const conversation = store.conversations.find((c) => c.id === conversationId) ?? null;
+  if (!conversation) return false;
+
+  const participantId = conversation.participantId;
+  store.conversations = store.conversations.filter((c) => c.id !== conversationId);
+  store.turns = store.turns.filter((t) => t.conversationId !== conversationId);
+  store.participants = store.participants.filter(
+    (p) => p.id !== participantId || store.conversations.some((c) => c.participantId === p.id)
+  );
+
+  await saveStore(store);
+  return true;
+}
+

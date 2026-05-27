@@ -161,6 +161,7 @@ export default function EventDetailPage() {
   const [songSeedErrorIssues, setSongSeedErrorIssues] = useState<SongSeedTranscriptIssue[] | null>(null);
   const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
+  const [deletingInterviewId, setDeletingInterviewId] = useState<string | null>(null);
   const [memoryRecord, setMemoryRecord] = useState<EventMemoryRecord | null>(null);
   const [loadingMemory, setLoadingMemory] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
@@ -209,6 +210,34 @@ export default function EventDetailPage() {
     });
     return parts.join("\n").trim();
   }, [agentInterviewSubmissions]);
+
+  async function handleDeleteInterviewSubmission(conversationId: string, participantName: string) {
+    const label = participantName?.trim() || "this submission";
+    if (
+      !window.confirm(
+        `Delete ${label}'s interview answers? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingInterviewId(conversationId);
+    try {
+      const res = await fetch(`/api/agent/conversations/${encodeURIComponent(conversationId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Delete failed");
+      }
+      setAgentInterviewSubmissions((prev) =>
+        prev.filter((item) => item.conversationId !== conversationId)
+      );
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not delete submission.");
+    } finally {
+      setDeletingInterviewId(null);
+    }
+  }
 
   if (!loaded) {
     return (
@@ -968,9 +997,24 @@ export default function EventDetailPage() {
                   <li key={item.conversationId} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm text-gray-400">{item.participantName}</span>
-                      <span className="text-xs text-gray-500">
-                        Conversation {item.conversationId.slice(0, 6)}…
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-gray-500">
+                          Conversation {item.conversationId.slice(0, 6)}…
+                        </span>
+                        <button
+                          type="button"
+                          disabled={deletingInterviewId === item.conversationId}
+                          onClick={() =>
+                            void handleDeleteInterviewSubmission(
+                              item.conversationId,
+                              item.participantName
+                            )
+                          }
+                          className="rounded-lg border border-red-800/60 bg-red-950/30 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+                        >
+                          {deletingInterviewId === item.conversationId ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
                     </div>
                     {item.answers.length === 0 ? (
                       <p className="text-sm text-gray-500">No answers recorded.</p>

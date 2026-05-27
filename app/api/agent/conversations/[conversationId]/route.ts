@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { localGetConversation } from "@/lib/local-agent-interview-store";
+import { localGetConversation, localDeleteConversation } from "@/lib/local-agent-interview-store";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -91,6 +91,45 @@ export async function GET(
       turns: (turns ?? []).map(rowToTurn),
     });
   } catch (err) {
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ conversationId: string }> }
+) {
+  const { conversationId } = await params;
+
+  if (USE_LOCAL_EVENTS) {
+    const deleted = await localDeleteConversation(conversationId);
+    if (!deleted) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
+  }
+
+  try {
+    const { data: conv, error: eConv } = await supabaseAdmin
+      .from("agent_conversations")
+      .select("id, participant_id")
+      .eq("id", conversationId)
+      .single();
+    if (eConv || !conv) {
+      if (eConv?.code === "PGRST116") return NextResponse.json({ error: "Not found." }, { status: 404 });
+      return NextResponse.json({ error: eConv?.message ?? "Not found" }, { status: 500 });
+    }
+
+    const { error: eDelete } = await supabaseAdmin
+      .from("agent_participants")
+      .delete()
+      .eq("id", conv.participant_id);
+    if (eDelete) return NextResponse.json({ error: eDelete.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
