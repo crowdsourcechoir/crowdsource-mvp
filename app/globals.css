@@ -58,6 +58,8 @@ input[type="checkbox"] {
     @apply touch-manipulation font-mono text-[1.0625rem] leading-snug transition focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-lg;
     font-weight: 400;
     letter-spacing: normal;
+    -webkit-appearance: none;
+    appearance: none;
   }
 
   .crowdsource-btn:focus-visible {
@@ -77,7 +79,7 @@ input[type="checkbox"] {
 
   .crowdsource-btn-primary:disabled {
     opacity: 1;
-    background-color: transparent;
+    background-color: #2d1f42;
     border-color: var(--crowdsource-accent, #cfff81);
     color: rgb(207 255 129 / 0.55);
   }
@@ -116,6 +118,31 @@ input[type="checkbox"] {
 .crowdsource-field-panel {
   border: 1px solid var(--crowdsource-accent, #cfff81);
   background: #2d1f42;
+}
+
+/* Sticky/fixed chat input on participant journey — one surface, safe-area fill */
+.crowdsource-journey-input-dock {
+  border: 1px solid var(--crowdsource-accent, #cfff81);
+  background: #2d1f42;
+  padding: 0.75rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 639px) {
+  .crowdsource-journey-input-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    margin-top: 0;
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow: 0 -12px 40px rgba(26, 15, 45, 0.92);
+  }
 }
 
 .crowdsource-field {

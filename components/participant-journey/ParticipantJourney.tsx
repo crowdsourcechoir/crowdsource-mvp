@@ -564,7 +564,7 @@ export default function ParticipantJourney({
       )}
 
       {position.phase === "lyric" && (
-        <div className="flex flex-col">
+        <div className="flex flex-col pb-[calc(11rem+env(safe-area-inset-bottom,0px))] sm:pb-0">
           {chatError && (
             <p className="mb-4 rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
               {chatError}
@@ -589,25 +589,24 @@ export default function ParticipantJourney({
           <form
             onSubmit={handleChatSubmit}
             aria-busy={sending}
-            className="sticky bottom-0 z-10 mt-4 bg-[#1a0f2d] pt-3 sm:static sm:bg-transparent sm:pt-0"
+            className="crowdsource-journey-input-dock mt-4 w-full space-y-3 sm:static sm:mt-4 sm:shadow-none"
           >
             {captchaSetupRequired && (
-              <div className="mb-4 rounded-none border border-amber-500/40 bg-amber-950/30 px-4 py-3">
+              <div className="rounded-none border border-amber-500/40 bg-amber-950/30 px-4 py-3">
                 <p className="font-mono text-xs leading-relaxed text-amber-100">
                   Email captcha requires Turnstile keys in .env.local.
                 </p>
               </div>
             )}
-            <div className="crowdsource-field-panel w-full space-y-3 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3">
-              {captchaGateActive && (
-                <div className="flex flex-col items-center gap-2 pb-1">
-                  <p className="font-mono text-base font-medium tracking-wide text-gray-300">
-                    Quick verification — then submit your email.
-                  </p>
-                  <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
-                </div>
-              )}
-              <div className="flex w-full flex-col gap-3 sm:flex-row sm:gap-2">
+            {captchaGateActive && (
+              <div className="flex flex-col items-center gap-2 pb-1">
+                <p className="font-mono text-base font-medium tracking-wide text-gray-300">
+                  Quick verification — then submit your email.
+                </p>
+                <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
+              </div>
+            )}
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:gap-2">
                 <textarea
                   ref={responseInputRef}
                   value={inputValue}
@@ -649,26 +648,25 @@ export default function ParticipantJourney({
                 >
                   {sending ? "Sending…" : "Submit"}
                 </button>
-              </div>
-              {allowsMediaResponse && (
-                <>
-                  <p className="text-center font-mono text-base font-medium tracking-wide text-gray-300">or</p>
-                  <p className="font-mono text-base font-medium tracking-wide text-gray-300">
-                    Record a message (optional)
-                  </p>
-                  {allowAudioResponse && (
-                    <RecordAudio
-                      variant="plain"
-                      onRecordingReady={setAudioBlob}
-                      onClear={() => setAudioBlob(null)}
-                    />
-                  )}
-                  {allowVideoResponse && (
-                    <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
-                  )}
-                </>
-              )}
             </div>
+            {allowsMediaResponse && (
+              <>
+                <p className="text-center font-mono text-base font-medium tracking-wide text-gray-300">or</p>
+                <p className="font-mono text-base font-medium tracking-wide text-gray-300">
+                  Record a message (optional)
+                </p>
+                {allowAudioResponse && (
+                  <RecordAudio
+                    variant="plain"
+                    onRecordingReady={setAudioBlob}
+                    onClear={() => setAudioBlob(null)}
+                  />
+                )}
+                {allowVideoResponse && (
+                  <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
+                )}
+              </>
+            )}
           </form>
         </div>
       )}
