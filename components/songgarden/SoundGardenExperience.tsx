@@ -16,7 +16,7 @@ import {
 } from "@/lib/songgarden/garden-slots";
 import { prepareWavFromBlob } from "@/lib/songgarden/prepare-audio";
 import { playAudioBlob, playRecordStartCue, prefetchMicStream, startQuickRecord } from "@/lib/songgarden/quick-record";
-import { playReferenceTone } from "@/lib/songgarden/reference-tones";
+import { playReferenceTone, unlockReferenceTones } from "@/lib/songgarden/reference-tones";
 import { runPadCountdown } from "@/lib/songgarden/pad-countdown";
 import { sanitizeSoundFilename } from "@/lib/songgarden/categories";
 import { loadDoneSlots, saveDoneSlot, clearDoneSlots } from "@/lib/songgarden/garden-storage";
@@ -352,6 +352,14 @@ export default function SoundGardenExperience({
     ]
   );
 
+  const invokeRunSlot = useCallback(
+    (slot: GardenSlotDef, options?: { playTone?: boolean; ignoreReviewBlock?: boolean }) => {
+      unlockReferenceTones();
+      void runSlot(slot, options);
+    },
+    [runSlot]
+  );
+
   const retryTake = useCallback(() => {
     if (!reviewSlot) return;
     const slot = gardenSlotById(reviewSlot);
@@ -360,8 +368,8 @@ export default function SoundGardenExperience({
     stopPlayback();
     setReview(null);
     setPad(slotId, "idle");
-    void runSlot(slot, { playTone: !!slot.harmonyDegree, ignoreReviewBlock: true });
-  }, [reviewSlot, runSlot, setPad, stopPlayback]);
+    invokeRunSlot(slot, { playTone: !!slot.harmonyDegree, ignoreReviewBlock: true });
+  }, [reviewSlot, invokeRunSlot, setPad, stopPlayback]);
 
   const resetGarden = useCallback(() => {
     if (busy) return;
@@ -419,7 +427,12 @@ export default function SoundGardenExperience({
       onPreview: () => void previewTake(),
       onRetry: () => retryTake(),
       onKeep: () => void keepTake(),
-      onPlayTone: slot?.harmonyDegree ? () => void playReviewTone() : undefined,
+      onPlayTone: slot?.harmonyDegree
+        ? () => {
+            unlockReferenceTones();
+            void playReviewTone();
+          }
+        : undefined,
       previewPlaying: playingReview,
     };
   };
@@ -460,9 +473,7 @@ export default function SoundGardenExperience({
             {...padReviewProps(singleSlot.id)}
             disabled={padDisabled(singleSlot.id)}
             recordingHint={isChoir ? "● sing OHH" : "● rec"}
-            onClick={() =>
-              void runSlot(singleSlot, { playTone: isChoir })
-            }
+            onClick={() => invokeRunSlot(singleSlot, { playTone: isChoir })}
           />
           {isAnythingElse && (
             <>
@@ -544,7 +555,7 @@ export default function SoundGardenExperience({
               {...padRecordProps(slot.id)}
               {...padReviewProps(slot.id)}
               disabled={padDisabled(slot.id)}
-              onClick={() => void runSlot(slot)}
+              onClick={() => invokeRunSlot(slot)}
             />
           ))}
         </div>
@@ -569,7 +580,7 @@ export default function SoundGardenExperience({
               {...padReviewProps(slot.id)}
               recordingHint="● sing OHH"
               disabled={padDisabled(slot.id)}
-              onClick={() => void runSlot(slot, { playTone: true })}
+              onClick={() => invokeRunSlot(slot, { playTone: true })}
             />
           ))}
         </div>
@@ -592,7 +603,7 @@ export default function SoundGardenExperience({
             {...padRecordProps("one_word")}
             {...padReviewProps("one_word")}
             disabled={padDisabled("one_word")}
-            onClick={() => void runSlot(ONE_WORD_SLOT)}
+            onClick={() => invokeRunSlot(ONE_WORD_SLOT)}
           />
         </div>
       </section>
@@ -615,7 +626,7 @@ export default function SoundGardenExperience({
             {...padRecordProps("anything_else")}
             {...padReviewProps("anything_else")}
             disabled={padDisabled("anything_else")}
-            onClick={() => void runSlot(ANYTHING_ELSE_SLOT)}
+            onClick={() => invokeRunSlot(ANYTHING_ELSE_SLOT)}
           />
           <p className="text-center text-xs tracking-wide text-gray-400">or</p>
           <PadButton

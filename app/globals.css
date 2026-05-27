@@ -143,11 +143,6 @@ input[type="checkbox"] {
     z-index: 30;
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
     background-color: transparent;
-    pointer-events: none;
-  }
-
-  .crowdsource-journey-chat-form > * {
-    pointer-events: auto;
   }
 }
 
@@ -235,6 +230,87 @@ input[type="checkbox"] {
   font-weight: 600;
   letter-spacing: 0.02em;
   box-shadow: 0 4px 24px rgb(207 255 129 / 0.28);
+}
+
+.crowdsource-journey-consent {
+  width: 100%;
+  border: 2px solid rgb(207 255 129 / 0.5);
+  border-radius: 0.75rem;
+  background-color: #1a0f2d;
+  padding: 1rem 1.125rem;
+  text-align: left;
+  box-shadow:
+    0 0 0 1px rgb(207 255 129 / 0.08),
+    0 0 28px rgb(207 255 129 / 0.1);
+}
+
+.crowdsource-journey-consent.is-pending {
+  animation: crowdsource-consent-attention 2.2s ease-in-out infinite;
+}
+
+.crowdsource-journey-consent.is-checked {
+  border-color: var(--crowdsource-accent, #cfff81);
+  background-color: #2d1f42;
+  animation: none;
+  box-shadow: 0 0 20px rgb(207 255 129 / 0.14);
+}
+
+.crowdsource-journey-consent-heading {
+  margin: 0 0 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--crowdsource-accent, #cfff81);
+  letter-spacing: 0.02em;
+}
+
+.crowdsource-journey-consent-heading.is-checked {
+  margin-bottom: 0.625rem;
+  font-size: 0.875rem;
+  opacity: 0.95;
+}
+
+.crowdsource-journey-consent-label {
+  display: flex;
+  min-height: 44px;
+  cursor: pointer;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
+
+.crowdsource-journey-consent-checkbox {
+  margin-top: 0.125rem;
+  height: 1.375rem;
+  width: 1.375rem;
+  flex-shrink: 0;
+  accent-color: var(--crowdsource-accent, #cfff81);
+  cursor: pointer;
+}
+
+.crowdsource-journey-consent-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: rgb(229 231 235);
+}
+
+@keyframes crowdsource-consent-attention {
+  0%,
+  100% {
+    border-color: rgb(207 255 129 / 0.45);
+    box-shadow:
+      0 0 0 1px rgb(207 255 129 / 0.08),
+      0 0 20px rgb(207 255 129 / 0.08);
+  }
+
+  50% {
+    border-color: rgb(207 255 129 / 0.95);
+    box-shadow:
+      0 0 0 1px rgb(207 255 129 / 0.2),
+      0 0 32px rgb(207 255 129 / 0.22);
+  }
 }
 
 .crowdsource-field {

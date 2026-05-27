@@ -50,6 +50,7 @@ import {
 } from "@/lib/participant-journey/contribution-consent";
 import ContributionConsentCheckbox from "@/components/participant-journey/ContributionConsentCheckbox";
 import { questionResponseHint } from "@/lib/participant-journey/example-words";
+import { unlockReferenceTones } from "@/lib/songgarden/reference-tones";
 import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile";
 
 type ParticipantJourneyProps = {
@@ -236,6 +237,7 @@ export default function ParticipantJourney({
 
   async function handleStartJourney(e: FormEvent) {
     e.preventDefault();
+    unlockReferenceTones();
     if (journeyStarted) return;
     if (requireContributionConsent && !contributionConsentAgreed) {
       setChatError("Please confirm how your contributions may be used.");
@@ -377,6 +379,7 @@ export default function ParticipantJourney({
 
   async function handleChatSubmit(e: FormEvent) {
     e.preventDefault();
+    unlockReferenceTones();
     if (!conversationId || sending || chatFinished || position.phase !== "lyric") return;
     if (requiresEmailResponse && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputValue.trim())) {
       setChatError("Please enter a valid email address.");
@@ -559,7 +562,6 @@ export default function ParticipantJourney({
                 checked={contributionConsentAgreed}
                 onChange={setContributionConsentAgreed}
                 text={contributionConsentLabel}
-                className="px-1"
               />
             )}
             <button
@@ -568,9 +570,19 @@ export default function ParticipantJourney({
                 sending || (requireContributionConsent && !contributionConsentAgreed)
               }
               className="crowdsource-btn-primary"
+              aria-describedby={
+                requireContributionConsent && !contributionConsentAgreed
+                  ? "contribution-consent-heading"
+                  : undefined
+              }
             >
               {sending ? "Starting…" : event.ctaText || DEFAULT_CTA_TEXT}
             </button>
+            {requireContributionConsent && !contributionConsentAgreed && !sending && (
+              <p className="text-center font-mono text-xs tracking-wide text-gray-400">
+                The button unlocks after you check the box.
+              </p>
+            )}
           </form>
           {chatError && (
             <p className="mt-4 rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
@@ -582,7 +594,7 @@ export default function ParticipantJourney({
 
       {position.phase === "lyric" && (
         <>
-          <div className="relative z-10 pointer-events-none">
+          <div className="relative z-10">
           {chatError && (
             <p className="mb-4 rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300 pointer-events-auto">
               {chatError}
