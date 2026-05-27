@@ -442,7 +442,7 @@ export default function SoundGardenExperience({
       <div className="mx-auto w-full max-w-lg space-y-6 font-mono text-left">
         <div>
           {phaseLabel ? (
-            <p className="text-[10px] font-medium tracking-[0.2em] text-[var(--crowdsource-accent)]">
+            <p className="text-center text-[10px] font-medium tracking-[0.2em] text-[var(--crowdsource-accent)]">
               {phaseLabel}
             </p>
           ) : null}
@@ -530,7 +530,7 @@ export default function SoundGardenExperience({
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-sm font-medium tracking-[0.2em] text-[var(--crowdsource-accent)]">
+          <h2 className="text-center text-sm font-medium tracking-[0.2em] text-[var(--crowdsource-accent)]">
             BUILD THE BEAT
           </h2>
           <p className="mt-1 text-xs text-gray-300">Add a few sounds to tonight&apos;s rhythm.</p>

@@ -201,8 +201,8 @@ export default function PadButton({
       )}
       {inCountdown ? (
         <>
-          <span className="text-3xl font-medium tabular-nums leading-none text-white">{countdown}</span>
-          <span className="mt-2 text-[10px] tracking-normal text-gray-300">get ready…</span>
+          <span className="text-3xl font-medium tabular-nums leading-none text-[var(--crowdsource-accent,#CFFF81)]">{countdown}</span>
+          <span className="mt-2 text-[10px] tracking-normal text-[var(--crowdsource-accent,#CFFF81)]">get ready…</span>
         </>
       ) : state === "captured" ? (
         <>
