@@ -15,6 +15,15 @@ export function parseLocalDate(dateStr: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** True when the event calendar day is today or later (local timezone). */
+export function isEventUpcoming(dateStr: string): boolean {
+  const eventDay = parseLocalDate(dateStr);
+  if (!eventDay) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return eventDay >= today;
+}
+
 export function formatTimelineDate(dateStr: string): { short: string; dayOfWeek: string } {
   const d = parseLocalDate(dateStr);
   if (!d) return { short: dateStr, dayOfWeek: "" };

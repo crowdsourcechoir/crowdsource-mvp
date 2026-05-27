@@ -9,10 +9,12 @@ import AdminEventCard from "@/components/AdminEventCard";
 import { getAgentThemes, type AgentTheme } from "@/data/agentInterview";
 import AdminIndeterminateProgress from "@/components/AdminIndeterminateProgress";
 import AdminEventsLoadingSkeleton from "@/components/AdminEventsLoadingSkeleton";
+import { isEventUpcoming } from "@/lib/formatDate";
+
+const LAST_CREATED_EVENT_KEY = "csc_last_created_event";
 
 function isUpcoming(event: Event): boolean {
-  const eventDate = new Date(`${event.date}T23:59:59`);
-  return eventDate >= new Date();
+  return isEventUpcoming(event.date);
 }
 
 export default function AdminEventsList() {
@@ -22,7 +24,7 @@ export default function AdminEventsList() {
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoadError, setEventsLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
+  const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
   const [baseUrl, setBaseUrl] = useState("https://app.crowdsourcechoir.com");
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const showCreatedBanner = searchParams.get("created") === "1";
@@ -37,7 +39,22 @@ export default function AdminEventsList() {
     const [eventsResult, themesResult] = await Promise.allSettled([getAllEvents(), getAgentThemes()]);
     if (eventsResult.status === "fulfilled") {
       setEventsLoadError(null);
-      setEvents(Array.isArray(eventsResult.value) ? eventsResult.value : []);
+      let list = Array.isArray(eventsResult.value) ? eventsResult.value : [];
+      if (typeof window !== "undefined") {
+        const raw = sessionStorage.getItem(LAST_CREATED_EVENT_KEY);
+        if (raw) {
+          try {
+            const created = JSON.parse(raw) as Event;
+            sessionStorage.removeItem(LAST_CREATED_EVENT_KEY);
+            if (created?.id && !list.some((e) => e.id === created.id)) {
+              list = [created, ...list];
+            }
+          } catch {
+            sessionStorage.removeItem(LAST_CREATED_EVENT_KEY);
+          }
+        }
+      }
+      setEvents(list);
     } else {
       const msg =
         eventsResult.reason instanceof Error ? eventsResult.reason.message : "Could not load events.";
@@ -58,6 +75,13 @@ export default function AdminEventsList() {
   }, [pathname, loadData]);
 
   useEffect(() => {
+    if (!showCreatedBanner) return;
+    loadData();
+    const retry = window.setTimeout(loadData, 800);
+    return () => window.clearTimeout(retry);
+  }, [showCreatedBanner, loadData]);
+
+  useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible" && pathname === "/admin/events") loadData();
     };
@@ -70,11 +94,14 @@ export default function AdminEventsList() {
   }
 
   const filtered = useMemo(() => {
-    const list = events.filter((e) => (filter === "upcoming" ? isUpcoming(e) : !isUpcoming(e)));
+    const list =
+      filter === "all"
+        ? [...events]
+        : events.filter((e) => (filter === "upcoming" ? isUpcoming(e) : !isUpcoming(e)));
     return list.sort((a, b) => {
       const dA = new Date(a.date).getTime();
       const dB = new Date(b.date).getTime();
-      return filter === "upcoming" ? dA - dB : dB - dA;
+      return filter === "past" ? dB - dA : dA - dB;
     });
   }, [events, filter]);
 
@@ -128,6 +155,15 @@ export default function AdminEventsList() {
             >
               Past
             </button>
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={`min-h-[44px] rounded-lg px-5 py-2 text-sm font-medium transition ${
+                filter === "all" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              All
+            </button>
           </div>
           <Link
             href="/admin/events/new"
@@ -167,10 +203,14 @@ export default function AdminEventsList() {
             {events.length === 0
               ? filter === "upcoming"
                 ? "No upcoming events."
-                : "No past events."
+                : filter === "past"
+                  ? "No past events."
+                  : "No events yet."
               : filter === "upcoming"
-                ? "No upcoming events — your event date may already be in the past."
-                : "No past events — try the Upcoming tab."}
+                ? "No upcoming events — check the Past or All tab, or set the event date to today or later."
+                : filter === "past"
+                  ? "No past events — try Upcoming or All."
+                  : "No events found."}
           </p>
           {events.length > 0 && filter === "upcoming" && (
             <p className="text-sm text-gray-400">

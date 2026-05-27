@@ -7,6 +7,10 @@ import {
   localEventsCreate,
 } from "@/lib/local-events-store";
 
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { headers: { "Cache-Control": "no-store" } };
+
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
 export async function GET(request: Request) {
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
       const e = rowToEvent(row);
       return { ...e, agentBrief: null };
     });
-    return NextResponse.json(list);
+    return NextResponse.json(list, NO_STORE);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

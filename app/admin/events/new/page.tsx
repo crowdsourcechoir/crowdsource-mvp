@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import EventForm, { type EventFormValues } from "@/components/EventForm";
 import { addEvent } from "@/data/eventsClient";
 
+const LAST_CREATED_EVENT_KEY = "csc_last_created_event";
+
 export default function NewEventPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,7 @@ export default function NewEventPage() {
         songGardenConfig: values.songGardenConfig,
       });
       if (created) {
+        sessionStorage.setItem(LAST_CREATED_EVENT_KEY, JSON.stringify(created));
         /* Redirect to list first so the list refetches from the same server that created the event; user can click the new event to open it. Avoids "Event not found" when multiple dev servers or caching is involved. */
         router.push("/admin/events?created=1");
       }
