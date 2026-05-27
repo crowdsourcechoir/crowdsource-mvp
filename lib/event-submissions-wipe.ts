@@ -20,8 +20,48 @@ async function countRows(
     .from(table)
     .select("*", { count: "exact", head: true })
     .eq(column, value);
-  if (error) return 0;
+  if (error) {
+    if (isMissingTableError(error)) return 0;
+    throw new Error(error.message);
+  }
   return count ?? 0;
+}
+
+function isMissingTableError(error: { message?: string; code?: string }): boolean {
+  const msg = (error.message ?? "").toLowerCase();
+  return (
+    error.code === "PGRST205" ||
+    msg.includes("could not find the table") ||
+    msg.includes("schema cache")
+  );
+}
+
+/** Delete rows from a table; skip quietly if the table was never migrated in prod. */
+async function deleteRowsIfTableExists(
+  table: string,
+  column: string,
+  value: string
+): Promise<number> {
+  if (!supabaseAdmin) return 0;
+  const count = await countRows(table, column, value);
+  const { error } = await supabaseAdmin.from(table).delete().eq(column, value);
+  if (error) {
+    if (isMissingTableError(error)) return 0;
+    throw new Error(error.message);
+  }
+  return count;
+}
+
+async function deleteRowsRequired(
+  table: string,
+  column: string,
+  value: string
+): Promise<number> {
+  const count = await countRows(table, column, value);
+  if (!supabaseAdmin) return 0;
+  const { error } = await supabaseAdmin.from(table).delete().eq(column, value);
+  if (error) throw new Error(error.message);
+  return count;
 }
 
 export async function wipeEventSubmissions(eventId: string): Promise<EventWipeCounts> {
@@ -43,37 +83,11 @@ export async function wipeEventSubmissions(eventId: string): Promise<EventWipeCo
     throw new Error("Database not configured.");
   }
 
-  deleted.agentInterviews = await countRows("agent_participants", "event_id", eventId);
-  const { error: agentErr } = await supabaseAdmin
-    .from("agent_participants")
-    .delete()
-    .eq("event_id", eventId);
-  if (agentErr) throw new Error(agentErr.message);
-
-  deleted.songgardenClips = await countRows("songgarden_clips", "event_id", eventId);
-  const { error: sgErr } = await supabaseAdmin
-    .from("songgarden_clips")
-    .delete()
-    .eq("event_id", eventId);
-  if (sgErr) throw new Error(sgErr.message);
-
-  deleted.songSeeds = await countRows("song_seeds", "event_id", eventId);
-  const { error: seedErr } = await supabaseAdmin.from("song_seeds").delete().eq("event_id", eventId);
-  if (seedErr) throw new Error(seedErr.message);
-
-  deleted.memoryRecords = await countRows("event_memory_records", "event_id", eventId);
-  const { error: memErr } = await supabaseAdmin
-    .from("event_memory_records")
-    .delete()
-    .eq("event_id", eventId);
-  if (memErr) throw new Error(memErr.message);
-
-  deleted.liveSessions = await countRows("prompt_game_sessions", "linked_event_id", eventId);
-  const { error: liveErr } = await supabaseAdmin
-    .from("prompt_game_sessions")
-    .delete()
-    .eq("linked_event_id", eventId);
-  if (liveErr) throw new Error(liveErr.message);
+  deleted.agentInterviews = await deleteRowsRequired("agent_participants", "event_id", eventId);
+  deleted.songgardenClips = await deleteRowsRequired("songgarden_clips", "event_id", eventId);
+  deleted.songSeeds = await deleteRowsIfTableExists("song_seeds", "event_id", eventId);
+  deleted.memoryRecords = await deleteRowsIfTableExists("event_memory_records", "event_id", eventId);
+  deleted.liveSessions = await deleteRowsIfTableExists("prompt_game_sessions", "linked_event_id", eventId);
 
   return deleted;
 }
