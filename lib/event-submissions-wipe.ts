@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { isMissingTableError } from "@/lib/supabase-table-errors";
 import { localWipeEventAgentData } from "@/lib/local-agent-interview-store";
 import { localSonggardenWipeEvent } from "@/lib/local-songgarden-store";
 
@@ -27,15 +28,6 @@ async function countRows(
   return count ?? 0;
 }
 
-function isMissingTableError(error: { message?: string; code?: string }): boolean {
-  const msg = (error.message ?? "").toLowerCase();
-  return (
-    error.code === "PGRST205" ||
-    msg.includes("could not find the table") ||
-    msg.includes("schema cache")
-  );
-}
-
 /** Delete rows from a table; skip quietly if the table was never migrated in prod. */
 async function deleteRowsIfTableExists(
   table: string,
@@ -43,13 +35,20 @@ async function deleteRowsIfTableExists(
   value: string
 ): Promise<number> {
   if (!supabaseAdmin) return 0;
-  const count = await countRows(table, column, value);
-  const { error } = await supabaseAdmin.from(table).delete().eq(column, value);
-  if (error) {
-    if (isMissingTableError(error)) return 0;
-    throw new Error(error.message);
+  try {
+    const count = await countRows(table, column, value);
+    const { error } = await supabaseAdmin.from(table).delete().eq(column, value);
+    if (error) {
+      if (isMissingTableError(error)) return 0;
+      throw new Error(error.message);
+    }
+    return count;
+  } catch (err) {
+    if (isMissingTableError(err) || (err instanceof Error && isMissingTableError({ message: err.message }))) {
+      return 0;
+    }
+    throw err;
   }
-  return count;
 }
 
 async function deleteRowsRequired(

@@ -3,6 +3,7 @@ import { assembleEventMemoryRecord } from "@/lib/memory/assemble-record";
 import type { EventMemoryRecord, FinalizeMemoryOptions } from "@/lib/memory/types";
 import { localGetLatestMemoryForEvent, localUpsertMemoryRecord } from "@/lib/local-memory-store";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { isMissingTableError } from "@/lib/supabase-table-errors";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -15,7 +16,10 @@ async function nextVersion(db: SupabaseClient, eventId: string): Promise<number>
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error)) return 1;
+    throw new Error(error.message);
+  }
   const prior = typeof data?.version === "number" ? data.version : 0;
   return prior + 1;
 }
@@ -56,7 +60,14 @@ export async function finalizeEventMemory(
     .select("id, payload, finalized_at, finalized_by, version")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error)) {
+      throw new Error(
+        "Memory archive is not set up in the database. Run supabase/memory-layer-tables.sql in Supabase."
+      );
+    }
+    throw new Error(error.message);
+  }
 
   return {
     ...(data.payload as EventMemoryRecord),
@@ -85,7 +96,10 @@ export async function getLatestEventMemory(
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error)) return null;
+    throw new Error(error.message);
+  }
   if (!data?.payload) return null;
 
   return {
@@ -121,7 +135,10 @@ export async function listEventMemoryRecords(
     .order("finalized_at", { ascending: false })
     .limit(limit);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    throw new Error(error.message);
+  }
 
   let records = (data ?? []).map((row) => ({
     ...(row.payload as EventMemoryRecord),
