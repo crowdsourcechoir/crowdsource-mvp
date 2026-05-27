@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localGetEventTranscripts } from "@/lib/local-agent-interview-store";
+import {
+  AGENT_PARTICIPANT_IDENTITY_SELECT,
+  participantDisplayName,
+} from "@/lib/agent-participant-db";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -65,15 +69,15 @@ export async function GET(request: Request) {
     const participantIds = convs.map((c: any) => c.participant_id);
     const { data: participants, error: eParticipants } = await supabaseAdmin
       .from("agent_participants")
-      .select("id, name, display_name, email")
+      .select(AGENT_PARTICIPANT_IDENTITY_SELECT)
       .in("id", participantIds);
 
     const identityById = new Map<string, { name: string; email: string | null }>(
-      (participants ?? []).map((p: any) => [
+      (participants ?? []).map((p: { id: string; name: string | null; display_name?: string | null }) => [
         p.id,
         {
-          name: p.display_name ?? p.name ?? "Anonymous",
-          email: p.email ?? null,
+          name: participantDisplayName(p) ?? "Anonymous",
+          email: null,
         },
       ])
     );

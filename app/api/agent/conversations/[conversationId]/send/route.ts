@@ -14,6 +14,10 @@ import { scheduleTranscriptionIfMediaPresent } from "@/lib/agent-post-submit-tra
 import { isEmailCaptchaPrompt, type AskAboutItemLike } from "@/lib/agent-brief-email-captcha";
 import { isNameQuestionPrompt } from "@/lib/agent-name-question";
 import { isTurnstileServerConfigured, verifyTurnstileToken } from "@/lib/turnstile";
+import {
+  participantDisplayName,
+  participantNameUpdatePayload,
+} from "@/lib/agent-participant-db";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -535,15 +539,12 @@ export async function POST(
         if (!captcha.ok) {
           return NextResponse.json({ error: captcha.error }, { status: 400 });
         }
-        await supabaseAdmin
-          .from("agent_participants")
-          .update({ email: content.toLowerCase() })
-          .eq("id", conv.participant_id);
+        // Email is stored on the user turn below; participant.email column may not exist yet in prod.
       }
       if (isNameQuestion && content) {
         await supabaseAdmin
           .from("agent_participants")
-          .update({ name: content.trim(), display_name: content.trim() })
+          .update(participantNameUpdatePayload(content))
           .eq("id", conv.participant_id);
       }
       const nextIndex = existingTurns.length;
@@ -613,7 +614,7 @@ export async function POST(
 
     const { data: participantRow } = await supabaseAdmin
       .from("agent_participants")
-      .select("display_name, name")
+      .select("name")
       .eq("id", conv.participant_id)
       .single();
 
@@ -639,9 +640,7 @@ export async function POST(
       } : null,
       eventTitle: eventData.title ?? "",
       conversationHistory: history,
-      participantName: (participantRow as { display_name?: string | null; name?: string | null } | null)?.display_name
-        ?? (participantRow as { display_name?: string | null; name?: string | null } | null)?.name
-        ?? null,
+      participantName: participantDisplayName(participantRow) ?? null,
       currentStep,
     });
 

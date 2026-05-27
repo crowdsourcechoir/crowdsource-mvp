@@ -6,6 +6,10 @@ import {
   type SignalPromptBlock,
 } from "@/data/signalPromptBlock";
 import { localGetEventTranscripts } from "@/lib/local-agent-interview-store";
+import {
+  AGENT_PARTICIPANT_IDENTITY_SELECT,
+  participantDisplayName,
+} from "@/lib/agent-participant-db";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import type {
   CompositionGatherResult,
@@ -147,12 +151,12 @@ async function gatherInterviewInputs(
   const participantIds = convs.map((c) => c.participant_id);
   const { data: participants } = await supabaseAdmin
     .from("agent_participants")
-    .select("id, name, display_name")
+    .select(AGENT_PARTICIPANT_IDENTITY_SELECT)
     .in("id", participantIds);
   const labelByParticipantId = new Map(
-    (participants ?? []).map((p: { id: string; name: string | null; display_name: string | null }) => [
+    (participants ?? []).map((p: { id: string; name: string | null; display_name?: string | null }) => [
       p.id,
-      (p.display_name ?? p.name ?? "Anonymous").trim() || "Anonymous",
+      (participantDisplayName(p) ?? "Anonymous").trim() || "Anonymous",
     ])
   );
 

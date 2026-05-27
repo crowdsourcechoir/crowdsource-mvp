@@ -118,25 +118,31 @@ async function testSupabase() {
       console.log("✓ songgarden_clips table OK");
     }
 
-    const ap = await fetch(
+    const ap = await fetch(`${url}/rest/v1/agent_participants?select=name&limit=1`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!ap.ok) {
+      if (ap.status === 404 || ap.status === 406) {
+        errors.push("agent_participants table missing — run supabase/agent-interview-tables.sql");
+        console.log("❌ agent_participants table not found");
+      } else {
+        const body = await ap.text();
+        errors.push(`agent_participants check failed (${ap.status}): ${body.slice(0, 120)}`);
+        console.log(`❌ agent_participants check: HTTP ${ap.status}`);
+      }
+    } else {
+      console.log("✓ agent_participants.name column OK");
+    }
+
+    const apDisplay = await fetch(
       `${url}/rest/v1/agent_participants?select=display_name&limit=1`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` } }
     );
-    if (!ap.ok) {
-      const body = await ap.text();
-      if (body.includes("display_name") || ap.status === 400) {
-        errors.push(
-          "agent_participants.display_name missing — run supabase/prod-patch-agent-participants.sql in Supabase SQL Editor"
-        );
-        console.log("❌ agent_participants.display_name column missing");
-        console.log("   → run supabase/prod-patch-agent-participants.sql");
-      } else if (ap.status === 404 || ap.status === 406) {
-        warnings.push("agent_participants table missing — run supabase/agent-interview-tables.sql");
-        console.log("⚠ agent_participants table not found");
-      } else {
-        warnings.push(`agent_participants check returned HTTP ${ap.status}`);
-        console.log(`⚠ agent_participants check: HTTP ${ap.status}`);
-      }
+    if (!apDisplay.ok) {
+      warnings.push(
+        "agent_participants.display_name missing — optional; run supabase/prod-patch-agent-participants.sql for email/display_name columns"
+      );
+      console.log("⚠ agent_participants.display_name column missing (app falls back to name)");
     } else {
       console.log("✓ agent_participants.display_name column OK");
     }

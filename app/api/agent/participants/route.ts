@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localEventsGetById } from "@/lib/local-events-store";
 import { localCreateOrGetParticipantAndConversation } from "@/lib/local-agent-interview-store";
+import {
+  participantDisplayName,
+  participantInsertPayload,
+  participantNameUpdatePayload,
+} from "@/lib/agent-participant-db";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -10,7 +15,7 @@ function rowToParticipant(row: Record<string, unknown>) {
   return {
     id: row.id,
     eventId,
-    displayName: row.display_name ?? row.name ?? null,
+    displayName: participantDisplayName(row),
     email: row.email ?? null,
     sessionToken: row.session_token,
     createdAt: row.created_at,
@@ -110,7 +115,7 @@ export async function POST(request: Request) {
       if (normalizedDisplayName || normalizedEmail) {
         await supabaseAdmin
           .from("agent_participants")
-          .update({ name: normalizedDisplayName, display_name: normalizedDisplayName, email: normalizedEmail })
+          .update(participantNameUpdatePayload(normalizedDisplayName ?? ""))
           .eq("id", existingParticipant.id);
       }
       const { data: conv } = await supabaseAdmin
@@ -135,14 +140,14 @@ export async function POST(request: Request) {
 
     const { data: participant, error: errP } = await supabaseAdmin
       .from("agent_participants")
-      .insert({
-        event_id: isLocalEvent ? null : eventId,
-        local_event_id: isLocalEvent ? eventId : null,
-        name: normalizedDisplayName,
-        display_name: normalizedDisplayName,
-        email: normalizedEmail,
-        session_token: sessionToken,
-      })
+      .insert(
+        participantInsertPayload({
+          eventId: isLocalEvent ? null : eventId,
+          localEventId: isLocalEvent ? eventId : null,
+          displayName: normalizedDisplayName,
+          sessionToken,
+        })
+      )
       .select()
       .single();
     if (errP || !participant) {
