@@ -110,6 +110,7 @@ input[type="checkbox"] {
 .crowdsource-journey-surface {
   border: 1px solid var(--crowdsource-accent, #cfff81);
   background: #2d1f42;
+  color: var(--crowdsource-accent, #cfff81);
 }
 
 .crowdsource-field-panel {

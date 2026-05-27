@@ -43,6 +43,10 @@ const reviewKeepClass =
 const journeyReviewShellClass =
   "crowdsource-journey-surface relative flex w-full min-h-[108px] flex-col items-center px-4 py-3 font-mono text-[var(--crowdsource-accent)]";
 
+const journeyAccentText = "text-[var(--crowdsource-accent,#CFFF81)]";
+
+const journeyHintText = "mt-1 text-[10px] tracking-normal text-[var(--crowdsource-accent,#CFFF81)]";
+
 function LevelBars({ level }: { level: number }) {
   return (
     <div className="flex h-4 items-end justify-center gap-0.5" aria-hidden>
@@ -119,7 +123,13 @@ export default function PadButton({
             : `${shellClass} min-h-[108px] border-[var(--crowdsource-accent)]/60 bg-[var(--crowdsource-accent)]/10 py-3 text-[var(--crowdsource-accent)]`
         }
       >
-        <span className={journeyStyle ? "text-[1.0625rem] leading-snug sm:text-lg" : "text-[10px] tracking-[0.2em]"}>
+        <span
+          className={
+            journeyStyle
+              ? `${journeyAccentText} text-[1.0625rem] leading-snug sm:text-lg`
+              : "text-[10px] tracking-[0.2em]"
+          }
+        >
           {label}
         </span>
         <div className="mt-2 grid w-full grid-cols-2 gap-2 sm:gap-1.5">
@@ -185,7 +195,7 @@ export default function PadButton({
                 : "border-red-400 bg-red-950/70 text-red-50 shadow-[0_0_28px_rgba(248,113,113,0.35)] songgarden-rec-pulse"
             : isActive
               ? journeyStyle
-                ? "crowdsource-journey-surface border-[var(--crowdsource-accent)]/60 text-white"
+                ? "crowdsource-journey-surface border-[var(--crowdsource-accent)]/60 text-[var(--crowdsource-accent,#CFFF81)]"
                 : "border-[var(--crowdsource-accent)] bg-[var(--crowdsource-accent)]/15 text-[var(--crowdsource-accent)] shadow-[0_0_20px_rgba(207,255,129,0.2)]"
               : state === "error"
                 ? "border-red-400/50 bg-red-400/10 text-red-200"
@@ -201,13 +211,13 @@ export default function PadButton({
       )}
       {inCountdown ? (
         <>
-          <span className="text-3xl font-medium tabular-nums leading-none text-[var(--crowdsource-accent,#CFFF81)]">{countdown}</span>
-          <span className="mt-2 text-[10px] tracking-normal text-[var(--crowdsource-accent,#CFFF81)]">get ready…</span>
+          <span className={`text-3xl font-medium tabular-nums leading-none ${journeyAccentText}`}>{countdown}</span>
+          <span className={journeyHintText}>get ready…</span>
         </>
       ) : state === "captured" ? (
         <>
-          <span className="text-lg font-medium tracking-[0.12em]">GOT IT</span>
-          <span className="mt-1 text-[10px] tracking-normal text-gray-300">nice</span>
+          <span className={`text-lg font-medium tracking-[0.12em] ${journeyStyle ? journeyAccentText : ""}`}>GOT IT</span>
+          <span className={journeyStyle ? journeyHintText : "mt-1 text-[10px] tracking-normal text-gray-300"}>nice</span>
         </>
       ) : inRecording ? (
         <div className="flex w-full flex-col items-center gap-1.5 px-1">
@@ -240,19 +250,19 @@ export default function PadButton({
         </div>
       ) : (
         <>
-          <span>{label}</span>
+          <span className={journeyStyle ? journeyAccentText : undefined}>{label}</span>
           {isDone && (
-            <span className="mt-1 text-[9px] font-normal tracking-normal text-[#CFFF81]/90">
+            <span className={journeyStyle ? journeyHintText : "mt-1 text-[9px] font-normal tracking-normal text-[#CFFF81]/90"}>
               tap to redo
             </span>
           )}
         </>
       )}
       {state === "active" && (
-        <span className="mt-1 text-[10px] tracking-normal text-gray-300">listen to tone</span>
+        <span className={journeyHintText}>listen to tone</span>
       )}
       {state === "uploading" && (
-        <span className="mt-1 text-[10px] tracking-normal text-gray-300">adding…</span>
+        <span className={journeyStyle ? journeyHintText : "mt-1 text-[10px] tracking-normal text-gray-300"}>adding…</span>
       )}
     </button>
   );
