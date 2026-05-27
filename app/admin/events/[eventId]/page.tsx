@@ -8,6 +8,7 @@ import { googleMapsSearchUrl } from "@/components/AddressMap";
 import {
   getSubmissionsForEvent,
   updateSubmissionTranscript,
+  clearSubmissionsForEvent,
   type StoredSubmission,
 } from "@/data/submissionsClient";
 import {
@@ -162,6 +163,7 @@ export default function EventDetailPage() {
   const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
   const [deletingInterviewId, setDeletingInterviewId] = useState<string | null>(null);
+  const [wipingAllSubmissions, setWipingAllSubmissions] = useState(false);
   const [memoryRecord, setMemoryRecord] = useState<EventMemoryRecord | null>(null);
   const [loadingMemory, setLoadingMemory] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
@@ -236,6 +238,45 @@ export default function EventDetailPage() {
       window.alert(err instanceof Error ? err.message : "Could not delete submission.");
     } finally {
       setDeletingInterviewId(null);
+    }
+  }
+
+  async function handleWipeAllTestData() {
+    if (!event) return;
+    if (
+      !window.confirm(
+        "Wipe ALL test submissions for this event?\n\nThis removes:\n• Agent interview answers\n• Song Garden audio clips\n• Song seeds\n• Memory archive\n• Linked live game sessions\n\nBrowser-stored clips on this device are cleared too.\n\nThe event itself is kept. This cannot be undone."
+      )
+    ) {
+      return;
+    }
+    setWipingAllSubmissions(true);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(event.id)}/submissions`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Wipe failed");
+      }
+      await clearSubmissionsForEvent(event.slug);
+      setSubmissions([]);
+      setAgentInterviewSubmissions([]);
+      setSongSeed(null);
+      setMemoryRecord(null);
+      setTranscriptOutput(null);
+      setTranscriptError(null);
+      setSongSeedError(null);
+      setMemoryError(null);
+      const deleted = (data as { deleted?: Record<string, number> }).deleted;
+      const summary = deleted
+        ? `Removed ${deleted.agentInterviews ?? 0} interview(s), ${deleted.songgardenClips ?? 0} Song Garden clip(s), ${deleted.songSeeds ?? 0} song seed(s), ${deleted.memoryRecords ?? 0} memory record(s), ${deleted.liveSessions ?? 0} live session(s).`
+        : "All server submissions cleared.";
+      window.alert(`Test data wiped.\n\n${summary}`);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not wipe submissions.");
+    } finally {
+      setWipingAllSubmissions(false);
     }
   }
 
@@ -833,6 +874,14 @@ export default function EventDetailPage() {
               Agent interviews are saved on the server and appear under &quot;Agent interviews&quot; below. Older &quot;browser-stored&quot;
               clips are legacy and only exist on the device that recorded them.
             </p>
+            <button
+              type="button"
+              disabled={wipingAllSubmissions}
+              onClick={() => void handleWipeAllTestData()}
+              className="mt-3 rounded-lg border border-red-800/60 bg-red-950/30 px-3 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+            >
+              {wipingAllSubmissions ? "Wiping…" : "Wipe all test submissions"}
+            </button>
           </div>
           {submissions.length > 0 && (
             <>

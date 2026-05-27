@@ -164,3 +164,22 @@ export async function updateSubmissionTranscript(
     // ignore
   }
 }
+
+/** Remove legacy browser-stored clips for this event slug (admin device only). */
+export async function clearSubmissionsForEvent(slug: string): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  if (idbAvailable()) {
+    try {
+      await idbSetSubmissions(slug, []);
+    } catch {
+      // fall through
+    }
+  }
+
+  try {
+    localStorage.removeItem(storageKey(slug));
+  } catch {
+    // ignore
+  }
+}

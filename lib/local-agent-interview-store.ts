@@ -221,6 +221,22 @@ export async function localGetEventTranscripts(eventId: string): Promise<
   return results;
 }
 
+export async function localWipeEventAgentData(eventId: string): Promise<number> {
+  const store = await loadStore();
+  const convsForEvent = store.conversations.filter((c) => c.eventId === eventId);
+  const convIds = new Set(convsForEvent.map((c) => c.id));
+  const participantIds = new Set(convsForEvent.map((c) => c.participantId));
+
+  store.conversations = store.conversations.filter((c) => c.eventId !== eventId);
+  store.turns = store.turns.filter((t) => !convIds.has(t.conversationId));
+  store.participants = store.participants.filter(
+    (p) => !participantIds.has(p.id) || store.conversations.some((c) => c.participantId === p.id)
+  );
+
+  await saveStore(store);
+  return participantIds.size;
+}
+
 export async function localDeleteConversation(conversationId: string): Promise<boolean> {
   const store = await loadStore();
   const conversation = store.conversations.find((c) => c.id === conversationId) ?? null;

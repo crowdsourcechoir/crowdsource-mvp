@@ -137,3 +137,14 @@ export async function localSonggardenReadAudio(
     return null;
   }
 }
+
+export async function localSonggardenWipeEvent(eventId: string): Promise<number> {
+  const clips = await readManifest(eventId);
+  const count = clips.length;
+  try {
+    await fs.rm(eventDir(eventId), { recursive: true, force: true });
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
+  }
+  return count;
+}
