@@ -150,9 +150,9 @@ console.log("   USE_LOCAL_EVENTS=false  (or omit entirely)");
 console.log("   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
 console.log("   OPENAI_API_KEY, ROOT_PAGE_PASSWORD");
 console.log("   NEXT_PUBLIC_TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY");
-console.log("   Add your production domain to Turnstile allowed hostnames.");
+console.log("   Add app.crowdsourcechoir.com to Turnstile allowed hostnames.");
 
-console.log("\n--- Post-deploy smoke test ---");
+console.log("\n--- Post-deploy smoke test (https://app.crowdsourcechoir.com) ---");
 console.log("   1. /admin/events — list loads from Supabase");
 console.log("   2. /e/<slug> — participant journey (lyric + garden)");
 console.log("   3. /api/turnstile/status — turnstile configured");

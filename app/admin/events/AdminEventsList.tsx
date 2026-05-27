@@ -23,7 +23,7 @@ export default function AdminEventsList() {
   const [eventsLoadError, setEventsLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"upcoming" | "past">("upcoming");
-  const [baseUrl, setBaseUrl] = useState("https://crowdsource-mvp.vercel.app");
+  const [baseUrl, setBaseUrl] = useState("https://app.crowdsourcechoir.com");
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const showCreatedBanner = searchParams.get("created") === "1";
 
