@@ -15,10 +15,14 @@ function parseDataImage(dataUrl: string): { mime: string; buffer: Buffer } | nul
   }
 }
 
+function bufferToBody(buffer: Buffer, mime: string): Blob {
+  return new Blob([new Uint8Array(buffer)], { type: mime });
+}
+
 async function fallbackLogo(): Promise<NextResponse> {
   const logoPath = path.join(process.cwd(), "public", "logo.png");
   const buffer = await readFile(logoPath);
-  return new NextResponse(buffer, {
+  return new NextResponse(bufferToBody(buffer, "image/png"), {
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": "public, max-age=86400",
@@ -37,7 +41,7 @@ export async function GET(_request: Request, { params }: { params: { slug: strin
   if (hero.startsWith("data:image/")) {
     const parsed = parseDataImage(hero);
     if (parsed) {
-      return new NextResponse(parsed.buffer, {
+      return new NextResponse(bufferToBody(parsed.buffer, parsed.mime), {
         headers: {
           "Content-Type": parsed.mime,
           "Cache-Control": "public, max-age=86400",
