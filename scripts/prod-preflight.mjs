@@ -117,6 +117,29 @@ async function testSupabase() {
     } else {
       console.log("✓ songgarden_clips table OK");
     }
+
+    const ap = await fetch(
+      `${url}/rest/v1/agent_participants?select=display_name&limit=1`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+    );
+    if (!ap.ok) {
+      const body = await ap.text();
+      if (body.includes("display_name") || ap.status === 400) {
+        errors.push(
+          "agent_participants.display_name missing — run supabase/prod-patch-agent-participants.sql in Supabase SQL Editor"
+        );
+        console.log("❌ agent_participants.display_name column missing");
+        console.log("   → run supabase/prod-patch-agent-participants.sql");
+      } else if (ap.status === 404 || ap.status === 406) {
+        warnings.push("agent_participants table missing — run supabase/agent-interview-tables.sql");
+        console.log("⚠ agent_participants table not found");
+      } else {
+        warnings.push(`agent_participants check returned HTTP ${ap.status}`);
+        console.log(`⚠ agent_participants check: HTTP ${ap.status}`);
+      }
+    } else {
+      console.log("✓ agent_participants.display_name column OK");
+    }
   } catch (e) {
     errors.push(`Supabase unreachable: ${e instanceof Error ? e.message : String(e)}`);
     console.log(`❌ Supabase unreachable: ${e instanceof Error ? e.message : e}`);
@@ -138,6 +161,7 @@ console.log("\n--- Supabase SQL (run in SQL Editor if not done) ---");
 const sqlFiles = [
   "supabase/events-table.sql",
   "supabase/prod-patch-events-columns.sql",
+  "supabase/prod-patch-agent-participants.sql",
   "supabase/agent-interview-tables.sql",
   "supabase/agent-turn-transcripts.sql",
   "supabase/songgarden-tables.sql",
