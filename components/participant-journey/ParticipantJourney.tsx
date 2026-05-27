@@ -589,7 +589,7 @@ export default function ParticipantJourney({
           <form
             onSubmit={handleChatSubmit}
             aria-busy={sending}
-            className="sticky bottom-0 z-10 mt-4 space-y-3 bg-gradient-to-t from-[#1a0f2d] from-70% to-transparent pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:static sm:bg-transparent sm:pb-0 sm:pt-0"
+            className="sticky bottom-0 z-10 mt-4 bg-[#1a0f2d] pt-3 sm:static sm:bg-transparent sm:pt-0"
           >
             {captchaSetupRequired && (
               <div className="mb-4 rounded-none border border-amber-500/40 bg-amber-950/30 px-4 py-3">
@@ -598,7 +598,7 @@ export default function ParticipantJourney({
                 </p>
               </div>
             )}
-            <div className="crowdsource-field-panel w-full space-y-3 p-3">
+            <div className="crowdsource-field-panel w-full space-y-3 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3">
               {captchaGateActive && (
                 <div className="flex flex-col items-center gap-2 pb-1">
                   <p className="font-mono text-base font-medium tracking-wide text-gray-300">

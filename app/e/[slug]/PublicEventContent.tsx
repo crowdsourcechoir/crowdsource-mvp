@@ -33,7 +33,9 @@ export default function PublicEventContent({
 
   return (
     <div
-      className="relative min-h-[100dvh] overflow-x-hidden overflow-y-auto text-gray-100 [color-scheme:dark] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
+      className={`relative min-h-[100dvh] overflow-x-hidden overflow-y-auto text-gray-100 [color-scheme:dark] pt-[env(safe-area-inset-top)] ${
+        journeyActive ? "pb-0" : "pb-[env(safe-area-inset-bottom)]"
+      }`}
       style={{ ["--crowdsource-accent" as string]: "#CFFF81" }}
     >
       <div
