@@ -70,6 +70,10 @@ export function soundTransitionMessage(event: Event): string {
   return resolveSongGardenConfig(event).soundTransitionMessage;
 }
 
+export function completedChatStepCount(event: Event): number {
+  return journeyNameStepCount(event) + lyricQuestionCount(event);
+}
+
 export function journeyProgress(
   event: Event,
   position: JourneyPosition,
@@ -91,7 +95,8 @@ export function journeyProgress(
       completed = 0;
       break;
     case "lyric":
-      completed = nameSteps + lyricQuestionIndex;
+      // lyricQuestionIndex is 1-based across name + lyric prompts (no extra nameSteps offset)
+      completed = lyricQuestionIndex;
       break;
     case "sound_transition":
       completed = nameSteps + lyrics;

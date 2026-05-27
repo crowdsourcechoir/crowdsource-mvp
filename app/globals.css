@@ -79,9 +79,9 @@ input[type="checkbox"] {
 
   .crowdsource-btn-primary:disabled {
     opacity: 1;
-    background-color: #2d1f42;
-    border-color: var(--crowdsource-accent, #cfff81);
-    color: rgb(207 255 129 / 0.55);
+    background-color: rgb(207 255 129 / 0.35);
+    border-color: rgb(207 255 129 / 0.5);
+    color: rgb(26 21 48 / 0.55);
   }
 
   .crowdsource-btn-outline {
@@ -95,6 +95,10 @@ input[type="checkbox"] {
     color: #1a1530;
   }
 
+  .crowdsource-btn-outline:hover:not(:disabled) span {
+    color: inherit;
+  }
+
   @media (hover: none) {
     .crowdsource-btn-outline:hover:not(:disabled) {
       background-color: transparent;
@@ -104,6 +108,10 @@ input[type="checkbox"] {
     .crowdsource-btn-outline:active:not(:disabled) {
       background-color: var(--crowdsource-accent, #cfff81);
       color: #1a1530;
+    }
+
+    .crowdsource-btn-outline:active:not(:disabled) span {
+      color: inherit;
     }
   }
 }
@@ -120,29 +128,113 @@ input[type="checkbox"] {
   background: #2d1f42;
 }
 
-/* Sticky/fixed chat input on participant journey — one surface, safe-area fill */
-.crowdsource-journey-input-dock {
-  border: 1px solid var(--crowdsource-accent, #cfff81);
-  background: #2d1f42;
-  padding: 0.75rem;
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+/* Participant journey chat — field + separate submit (no nested boxes) */
+.crowdsource-journey-chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 @media (max-width: 639px) {
-  .crowdsource-journey-input-dock {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 20;
-    margin-top: 0;
-    padding-left: max(1rem, env(safe-area-inset-left, 0px));
-    padding-right: max(1rem, env(safe-area-inset-right, 0px));
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    box-shadow: 0 -12px 40px rgba(26, 15, 45, 0.92);
+  .crowdsource-journey-chat-form {
+    position: relative;
+    z-index: 30;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    background-color: transparent;
+    pointer-events: none;
   }
+
+  .crowdsource-journey-chat-form > * {
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 639px) and (max-height: 640px) {
+  .crowdsource-journey-chat-form {
+    margin-top: 1rem;
+  }
+}
+
+.crowdsource-journey-question {
+  position: relative;
+  z-index: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(1.25rem, 4.5vw, 1.5rem);
+  line-height: 1.35;
+  font-weight: 500;
+  color: rgb(255 255 255);
+  letter-spacing: -0.01em;
+}
+
+.crowdsource-journey-hint {
+  margin-top: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9375rem;
+  color: var(--crowdsource-accent, #cfff81);
+  opacity: 0.92;
+}
+
+.crowdsource-journey-answer-field {
+  width: 100%;
+  min-height: 3.25rem;
+  max-height: 11.25rem;
+  resize: none;
+  border: 2px solid rgb(207 255 129 / 0.55);
+  border-radius: 0.75rem;
+  background-color: #1a0f2d;
+  color: rgb(255 255 255);
+  padding: 0.875rem 1rem 0.875rem 2.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow:
+    0 0 0 1px rgb(207 255 129 / 0.08),
+    0 0 28px rgb(207 255 129 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+.crowdsource-journey-answer-wrap {
+  position: relative;
+  width: 100%;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.crowdsource-journey-answer-wrap::before {
+  content: "✦";
+  position: absolute;
+  left: 1rem;
+  top: 0.95rem;
+  font-size: 0.875rem;
+  color: rgb(207 255 129 / 0.7);
+  pointer-events: none;
+}
+
+.crowdsource-journey-answer-field::placeholder {
+  color: rgb(156 163 175 / 0.9);
+}
+
+.crowdsource-journey-answer-field:focus {
+  outline: none;
+  border-color: var(--crowdsource-accent, #cfff81);
+  box-shadow:
+    0 0 0 1px var(--crowdsource-accent, #cfff81),
+    0 0 36px rgb(207 255 129 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.crowdsource-journey-next-btn {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 24px rgb(207 255 129 / 0.28);
 }
 
 .crowdsource-field {

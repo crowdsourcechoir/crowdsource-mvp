@@ -38,6 +38,7 @@ import {
   firstIncompleteGardenIndex,
   getEnabledGardenSteps,
   journeyProgress,
+  completedChatStepCount,
   soundTransitionMessage,
   type JourneyPosition,
 } from "@/lib/participant-journey/steps";
@@ -48,6 +49,7 @@ import {
   requiresContributionConsent,
 } from "@/lib/participant-journey/contribution-consent";
 import ContributionConsentCheckbox from "@/components/participant-journey/ContributionConsentCheckbox";
+import { questionResponseHint } from "@/lib/participant-journey/example-words";
 import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile";
 
 type ParticipantJourneyProps = {
@@ -171,6 +173,11 @@ export default function ParticipantJourney({
 
   const progress = journeyProgress(event, position, lyricQuestionIndex);
   const showProgress = journeyStarted && position.phase !== "final";
+
+  const enterSoundTransition = useCallback(() => {
+    setLyricQuestionIndex(completedChatStepCount(event));
+    setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
+  }, [event, setPositionPersisted]);
   const showComposition =
     position.phase === "sound_transition" ||
     position.phase === "garden" ||
@@ -186,6 +193,16 @@ export default function ParticipantJourney({
   const captchaGateActive = requiresCaptchaResponse && isTurnstileClientConfigured();
   const captchaSetupRequired = requiresCaptchaResponse && !isTurnstileClientConfigured();
   const allowsMediaResponse = allowAudioResponse || allowVideoResponse;
+
+  const isNameQuestion = isNameQuestionPrompt(event.agentBrief, currentMessage);
+  const responseHint = useMemo(
+    () =>
+      questionResponseHint(currentMessage, {
+        isName: isNameQuestion,
+        isEmail: requiresEmailResponse,
+      }),
+    [currentMessage, isNameQuestion, requiresEmailResponse]
+  );
 
   function focusResponseInput() {
     requestAnimationFrame(() => responseInputRef.current?.focus());
@@ -269,7 +286,7 @@ export default function ParticipantJourney({
                   gardenSlotIndex: Math.max(0, gardenSteps.length - 1),
                 });
               } else if (position.phase === "lyric") {
-              setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
+              enterSoundTransition();
             }
           } else {
             setPositionPersisted({ phase: "lyric", gardenSlotIndex: 0 });
@@ -280,7 +297,7 @@ export default function ParticipantJourney({
         setChatError(err instanceof Error ? err.message : "Failed to load progress");
       })
       .finally(() => setSending(false));
-  }, [conversationId, event, gardenSteps.length, interviewVersion, position.phase, setPositionPersisted, startAtGarden]);
+  }, [conversationId, event, gardenSteps.length, interviewVersion, position.phase, setPositionPersisted, startAtGarden, enterSoundTransition]);
 
   // First agent message
   useEffect(() => {
@@ -305,7 +322,7 @@ export default function ParticipantJourney({
         setLyricQuestionIndex(1);
         if (res.nextMessage.stopReason === "finished") {
           setChatFinished(true);
-          setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
+          enterSoundTransition();
         }
       } catch (err) {
         if (cancelled) return;
@@ -323,7 +340,7 @@ export default function ParticipantJourney({
           }
           if (lastAgent?.content === THANKS_MESSAGE) {
             setChatFinished(true);
-            setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
+            enterSoundTransition();
           }
         } catch {
           // ignore
@@ -338,7 +355,7 @@ export default function ParticipantJourney({
     return () => {
       cancelled = true;
     };
-  }, [conversationId, currentMessage, event, position.phase, setPositionPersisted]);
+  }, [conversationId, currentMessage, enterSoundTransition, event, position.phase, setPositionPersisted]);
 
   useEffect(() => {
     setEmailCaptchaToken(null);
@@ -406,7 +423,7 @@ export default function ParticipantJourney({
       if (res.nextMessage.stopReason === "finished") {
         setChatFinished(true);
         setCurrentMessage(null);
-        setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
+        enterSoundTransition();
       } else {
         setLyricQuestionIndex((n) => n + 1);
         setCurrentMessage(res.nextMessage.agentMessage);
@@ -493,7 +510,7 @@ export default function ParticipantJourney({
     event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-lg text-left">
+    <div className="mx-auto flex w-full min-w-0 max-w-lg min-h-0 flex-1 flex-col text-left">
       {showProgress && (
         <div className="mb-3 sm:mb-5">
           <div className="h-1 overflow-hidden bg-white/10">
@@ -564,91 +581,98 @@ export default function ParticipantJourney({
       )}
 
       {position.phase === "lyric" && (
-        <div className="flex flex-col pb-[calc(11rem+env(safe-area-inset-bottom,0px))] sm:pb-0">
+        <>
+          <div className="relative z-10 pointer-events-none">
           {chatError && (
-            <p className="mb-4 rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+            <p className="mb-4 rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300 pointer-events-auto">
               {chatError}
             </p>
           )}
-          <div className="mx-auto w-full min-h-[4.5rem] py-2 sm:min-h-[100px] sm:py-4">
-            <p className="mx-auto max-w-xl text-center font-mono text-[1.0625rem] leading-snug text-gray-200 sm:text-left sm:text-lg">
-              {sending && !currentMessage ? (
-                <QuestionLoadingIndicator size="lg" />
-              ) : currentMessage ? (
-                <TypewriterText
-                  key={currentMessage}
-                  text={displayPrompt(currentMessage)}
-                  speed={9}
-                  className="inline"
-                />
-              ) : (
-                <QuestionLoadingIndicator size="lg" />
-              )}
-            </p>
+          <div className="mx-auto w-full py-2 text-center sm:py-4">
+            {sending && !currentMessage ? (
+              <QuestionLoadingIndicator size="lg" />
+            ) : currentMessage ? (
+              <>
+                <p className="crowdsource-journey-question mx-auto max-w-xl">
+                  <TypewriterText
+                    key={currentMessage}
+                    text={displayPrompt(currentMessage)}
+                    speed={9}
+                    className="inline"
+                  />
+                </p>
+                {responseHint && (
+                  <p className="crowdsource-journey-hint mx-auto max-w-xl">{responseHint}</p>
+                )}
+              </>
+            ) : (
+              <QuestionLoadingIndicator size="lg" />
+            )}
           </div>
+
           <form
             onSubmit={handleChatSubmit}
             aria-busy={sending}
-            className="crowdsource-journey-input-dock mt-4 w-full space-y-3 sm:static sm:mt-4 sm:shadow-none"
+            className="crowdsource-journey-chat-form mt-5 w-full sm:mt-6"
           >
             {captchaSetupRequired && (
-              <div className="rounded-none border border-amber-500/40 bg-amber-950/30 px-4 py-3">
+              <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3">
                 <p className="font-mono text-xs leading-relaxed text-amber-100">
                   Email captcha requires Turnstile keys in .env.local.
                 </p>
               </div>
             )}
             {captchaGateActive && (
-              <div className="flex flex-col items-center gap-2 pb-1">
+              <div className="flex flex-col items-center gap-2">
                 <p className="font-mono text-base font-medium tracking-wide text-gray-300">
                   Quick verification — then submit your email.
                 </p>
                 <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
               </div>
             )}
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:gap-2">
-                <textarea
-                  ref={responseInputRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      e.currentTarget.form?.requestSubmit();
-                    }
-                  }}
-                  onInput={(e) => {
-                    const el = e.currentTarget;
-                    el.style.height = "auto";
-                    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-                  }}
-                  placeholder={requiresEmailResponse ? "you@example.com" : "Type your answer…"}
-                  disabled={sending}
-                  rows={1}
-                  enterKeyHint="send"
-                  autoComplete={
-                    requiresEmailResponse
-                      ? "email"
-                      : isNameQuestionPrompt(event.agentBrief, currentMessage)
-                        ? "given-name"
-                        : "off"
+            <div className="crowdsource-journey-answer-wrap">
+              <textarea
+                ref={responseInputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
                   }
-                  inputMode={requiresEmailResponse ? "email" : "text"}
-                  className="min-h-[48px] max-h-[180px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-3 font-mono text-base font-medium tracking-wide leading-6 text-white placeholder-gray-300 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={
-                    sending ||
-                    captchaSetupRequired ||
-                    (captchaGateActive && !emailCaptchaToken) ||
-                    (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse)
-                  }
-                  className="crowdsource-btn-primary sm:min-w-[5.5rem] sm:w-auto"
-                >
-                  {sending ? "Sending…" : "Submit"}
-                </button>
+                }}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+                }}
+                placeholder={requiresEmailResponse ? "you@example.com" : "Type your answer…"}
+                disabled={sending}
+                rows={1}
+                enterKeyHint="send"
+                autoComplete={
+                  requiresEmailResponse
+                    ? "email"
+                    : isNameQuestion
+                      ? "given-name"
+                      : "off"
+                }
+                inputMode={requiresEmailResponse ? "email" : "text"}
+                className="crowdsource-journey-answer-field min-w-0 overflow-y-auto font-medium tracking-wide"
+              />
             </div>
+            <button
+              type="submit"
+              disabled={
+                sending ||
+                captchaSetupRequired ||
+                (captchaGateActive && !emailCaptchaToken) ||
+                (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse)
+              }
+              className="crowdsource-btn-primary crowdsource-journey-next-btn w-full"
+            >
+              {sending ? "Sending…" : "Next →"}
+            </button>
             {allowsMediaResponse && (
               <>
                 <p className="text-center font-mono text-base font-medium tracking-wide text-gray-300">or</p>
@@ -668,7 +692,8 @@ export default function ParticipantJourney({
               </>
             )}
           </form>
-        </div>
+          </div>
+        </>
       )}
 
       {position.phase === "sound_transition" && (

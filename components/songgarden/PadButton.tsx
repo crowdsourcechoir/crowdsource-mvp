@@ -250,16 +250,16 @@ export default function PadButton({
         </div>
       ) : (
         <>
-          <span className={journeyStyle ? journeyAccentText : undefined}>{label}</span>
+          <span className={journeyStyle ? "text-inherit" : undefined}>{label}</span>
           {isDone && (
-            <span className={journeyStyle ? journeyHintText : "mt-1 text-[9px] font-normal tracking-normal text-[#CFFF81]/90"}>
+            <span className={journeyStyle ? `${journeyHintText} text-inherit` : "mt-1 text-[9px] font-normal tracking-normal text-[#CFFF81]/90"}>
               tap to redo
             </span>
           )}
         </>
       )}
       {state === "active" && (
-        <span className={journeyHintText}>listen to tone</span>
+        <span className={`${journeyHintText} text-inherit`}>listen to tone</span>
       )}
       {state === "uploading" && (
         <span className={journeyStyle ? journeyHintText : "mt-1 text-[10px] tracking-normal text-gray-300"}>adding…</span>

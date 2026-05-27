@@ -43,7 +43,10 @@ export default function PublicEventContent({
         style={{ backgroundImage: "url('/public-bg.png')" }}
         aria-hidden
       />
-      <div className="absolute inset-0 bg-black/20" aria-hidden />
+      <div
+        className={`absolute inset-0 ${journeyActive ? "bg-black/45" : "bg-black/20"}`}
+        aria-hidden
+      />
 
       <div
         className={`relative z-10 mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-3xl flex-col px-[max(1rem,env(safe-area-inset-left))] text-center sm:px-5 ${
@@ -90,7 +93,7 @@ export default function PublicEventContent({
           </>
         )}
 
-        <div className={compactHeader ? "flex w-full min-w-0 flex-1 flex-col" : "mt-6 w-full min-w-0 space-y-6 pt-2"}>
+        <div className={compactHeader ? "flex w-full min-w-0 min-h-0 flex-1 flex-col" : "mt-6 w-full min-w-0 space-y-6 pt-2"}>
           <ParticipantJourney
             event={event}
             startAtGarden={startAtGarden}

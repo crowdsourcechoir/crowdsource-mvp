@@ -446,7 +446,7 @@ export default function SoundGardenExperience({
               {phaseLabel}
             </p>
           ) : null}
-          <p className="mt-3 text-center font-mono text-[1.0625rem] leading-snug text-gray-200 sm:text-left sm:text-lg">
+          <p className="mt-3 text-center font-mono text-[1.0625rem] leading-snug text-gray-200 sm:text-lg">
             {promptText}
           </p>
         </div>
