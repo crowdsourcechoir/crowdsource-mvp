@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSonggardenReadAudio } from "@/lib/local-songgarden-store";
+import { decodeSupabaseBytea } from "@/lib/supabase-bytea";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -41,7 +42,11 @@ export async function GET(
       .single();
     if (error || !data) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-    const buffer = Buffer.from(data.audio_data as ArrayBuffer);
+    const buffer = decodeSupabaseBytea(data.audio_data);
+    if (buffer.length === 0) {
+      return NextResponse.json({ error: "Audio data is empty." }, { status: 404 });
+    }
+
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": (data.mime_type as string) || "audio/wav",
