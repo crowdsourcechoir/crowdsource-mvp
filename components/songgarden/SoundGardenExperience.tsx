@@ -21,7 +21,6 @@ import { runPadCountdown } from "@/lib/songgarden/pad-countdown";
 import { sanitizeSoundFilename } from "@/lib/songgarden/categories";
 import { loadDoneSlots, saveDoneSlot, clearDoneSlots } from "@/lib/songgarden/garden-storage";
 import type { ResolvedGardenStep } from "@/lib/songgarden/config";
-import UploadConsentCheckbox from "@/components/songgarden/UploadConsentCheckbox";
 
 type SoundGardenExperienceProps = {
   eventId: string;
@@ -100,10 +99,8 @@ export default function SoundGardenExperience({
   const [activeRecordingSlot, setActiveRecordingSlot] = useState<GardenSlotId | null>(null);
   const [review, setReview] = useState<{ slotId: GardenSlotId; clip: Blob } | null>(null);
   const [playingReview, setPlayingReview] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const playbackRef = useRef<HTMLAudioElement | null>(null);
   const recordStopRef = useRef<(() => void) | null>(null);
-  const [uploadConsentAgreed, setUploadConsentAgreed] = useState(false);
 
   const inReview = review != null;
   const reviewSlot = review?.slotId ?? null;
@@ -386,30 +383,6 @@ export default function SoundGardenExperience({
     setPadStates(emptyPadStates());
   }, [busy, eventId, stopPlayback]);
 
-  async function handleUpload(file: File) {
-    if (busy) return;
-    if (!uploadConsentAgreed) {
-      setError("Please confirm you have permission to share this recording.");
-      return;
-    }
-    if (!file.type.startsWith("audio/")) {
-      setError("Please choose an audio file.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setPad("anything_else", "uploading");
-    try {
-      await submitSlot(ANYTHING_ELSE_SLOT, file);
-    } catch (err) {
-      setPad("anything_else", "error");
-      setError(err instanceof Error ? err.message : "Upload failed.");
-      window.setTimeout(() => setPad("anything_else", "idle"), 2000);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const padRecordProps = (id: GardenSlotId) => ({
     countdown: countdownByPad[id],
     recordSecondsLeft: recordSecondsByPad[id],
@@ -475,36 +448,7 @@ export default function SoundGardenExperience({
             recordingHint={isChoir ? "● sing OHH" : "● rec"}
             onClick={() => invokeRunSlot(singleSlot, { playTone: isChoir })}
           />
-          {isAnythingElse && (
-            <>
-              <p className="text-center text-xs tracking-wide text-gray-400">or</p>
-              <PadButton
-                label="UPLOAD"
-                fullWidth
-                journeyStyle
-                state={padStates.anything_else === "done" ? "done" : "idle"}
-                disabled={busy || !uploadConsentAgreed}
-                onClick={() => fileInputRef.current?.click()}
-              />
-              <UploadConsentCheckbox
-                checked={uploadConsentAgreed}
-                onChange={setUploadConsentAgreed}
-                className="px-1"
-              />
-            </>
-          )}
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="audio/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void handleUpload(file);
-            e.target.value = "";
-          }}
-        />
         {error && <p className="text-center text-sm text-red-300">{error}</p>}
       </div>
     );
@@ -628,32 +572,7 @@ export default function SoundGardenExperience({
             disabled={padDisabled("anything_else")}
             onClick={() => invokeRunSlot(ANYTHING_ELSE_SLOT)}
           />
-          <p className="text-center text-xs tracking-wide text-gray-400">or</p>
-          <PadButton
-            label="UPLOAD"
-            fullWidth
-            journeyStyle
-            state={padStates.anything_else === "done" ? "done" : "idle"}
-            disabled={busy || !uploadConsentAgreed}
-            onClick={() => fileInputRef.current?.click()}
-          />
-          <UploadConsentCheckbox
-            checked={uploadConsentAgreed}
-            onChange={setUploadConsentAgreed}
-            className="px-1"
-          />
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="audio/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void handleUpload(file);
-            e.target.value = "";
-          }}
-        />
       </section>
 
       {isComplete && (

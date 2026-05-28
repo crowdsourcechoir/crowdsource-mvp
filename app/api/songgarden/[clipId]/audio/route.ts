@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSonggardenReadAudio } from "@/lib/local-songgarden-store";
-import { decodeSupabaseBytea } from "@/lib/supabase-bytea";
+import { decodeSupabaseBytea, encodeSupabaseBytea } from "@/lib/supabase-bytea";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -54,7 +54,11 @@ export async function GET(
         "Cache-Control": "public, max-age=3600",
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  } catch (err) {
+    console.error("Songgarden audio GET error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Server error" },
+      { status: 500 }
+    );
   }
 }

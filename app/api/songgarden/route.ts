@@ -230,7 +230,7 @@ export async function POST(request: Request) {
         device_id: deviceId,
         session_token: sessionToken,
         ip_hash: ipHash,
-        audio_data: buffer,
+        audio_data: encodeSupabaseBytea(buffer),
       })
       .select(
         "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
