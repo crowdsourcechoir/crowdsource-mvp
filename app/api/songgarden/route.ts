@@ -12,6 +12,7 @@ import {
   hashClientIp,
 } from "@/lib/songgarden/rate-limit";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
+import { encodeSupabaseBytea } from "@/lib/supabase-bytea";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 const MAX_BYTES = 12 * 1024 * 1024;
