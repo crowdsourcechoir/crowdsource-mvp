@@ -13,13 +13,16 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const eventId = searchParams.get("eventId");
 
+  const jsonError = (error: string, status: number) =>
+    NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
+
   if (!eventId) {
-    return NextResponse.json({ error: "eventId is required." }, { status: 400 });
+    return jsonError("eventId is required.", 400);
   }
 
   if (USE_LOCAL_EVENTS) {
     const result = await localSonggardenReadAudio(eventId, clipId);
-    if (!result) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!result) return jsonError("Not found.", 404);
     return new NextResponse(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": result.clip.mimeType || "audio/wav",
@@ -30,7 +33,7 @@ export async function GET(
   }
 
   if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
+    return jsonError("Database not configured.", 503);
   }
 
   try {
@@ -40,11 +43,11 @@ export async function GET(
       .eq("id", clipId)
       .eq("event_id", eventId)
       .single();
-    if (error || !data) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (error || !data) return jsonError("Not found.", 404);
 
     const buffer = decodeSupabaseBytea(data.audio_data);
     if (buffer.length === 0) {
-      return NextResponse.json({ error: "Audio data is empty." }, { status: 404 });
+      return jsonError("Audio data is empty.", 404);
     }
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -56,9 +59,6 @@ export async function GET(
     });
   } catch (err) {
     console.error("Songgarden audio GET error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Server error" },
-      { status: 500 }
-    );
+    return jsonError(err instanceof Error ? err.message : "Server error", 500);
   }
 }

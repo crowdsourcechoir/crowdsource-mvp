@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  fetchClipFile,
-  songgardenAudioUrl,
-  type SonggardenClip,
-} from "@/data/songgardenClient";
+import { fetchClipFile, type SonggardenClip } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 
 type DraggableAudioClipProps = {
@@ -33,12 +29,38 @@ export default function DraggableAudioClip({
 }: DraggableAudioClipProps) {
   const [dragging, setDragging] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(true);
   const fileCacheRef = useRef<File | null>(null);
 
   useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
     fileCacheRef.current = null;
     setAudioError(false);
-  }, [clip.id]);
+    setAudioLoading(true);
+    setAudioSrc(null);
+
+    void fetchClipFile(eventId, clip)
+      .then((file) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(file);
+        fileCacheRef.current = file;
+        setAudioSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setAudioError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAudioLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [eventId, clip.id, clip.submittedAt]);
 
   async function ensureFile(): Promise<File> {
     if (fileCacheRef.current) return fileCacheRef.current;
@@ -112,9 +134,13 @@ export default function DraggableAudioClip({
         <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
           Could not load audio for this clip.
         </p>
+      ) : audioLoading || !audioSrc ? (
+        <div className="flex h-9 items-center rounded-lg border border-gray-700/70 bg-black/20 px-3 text-xs text-gray-500">
+          Loading preview…
+        </div>
       ) : (
         <audio
-          src={songgardenAudioUrl(eventId, clip.id)}
+          src={audioSrc}
           controls
           preload="metadata"
           className="h-9 w-full"

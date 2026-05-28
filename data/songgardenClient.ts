@@ -6,8 +6,19 @@ const DEVICE_ID_KEY = "csc_songgarden_device_id";
 const SESSION_PREFIX = "csc_songgarden_session_";
 const ACCESS_PREFIX = "csc_songgarden_access_";
 
-export function songgardenAudioUrl(eventId: string, clipId: string): string {
-  return `/api/songgarden/${clipId}/audio?eventId=${encodeURIComponent(eventId)}`;
+export function songgardenAudioUrl(
+  eventId: string,
+  clipId: string,
+  cacheKey?: string | null
+): string {
+  const params = new URLSearchParams({ eventId });
+  if (cacheKey) {
+    const version = Number.isFinite(Date.parse(cacheKey))
+      ? String(Date.parse(cacheKey))
+      : cacheKey;
+    params.set("v", version);
+  }
+  return `/api/songgarden/${clipId}/audio?${params.toString()}`;
 }
 
 export function getOrCreateSonggardenDeviceId(): string {
@@ -99,7 +110,9 @@ export function setSonggardenContributorName(eventId: string, name: string): voi
 }
 
 export async function fetchClipFile(eventId: string, clip: SonggardenClip): Promise<File> {
-  const res = await fetch(songgardenAudioUrl(eventId, clip.id));
+  const res = await fetch(songgardenAudioUrl(eventId, clip.id, clip.submittedAt), {
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error("Failed to fetch audio");
   const blob = await res.blob();
   return new File([blob], clip.filename, { type: clip.mimeType || blob.type || "audio/wav" });
