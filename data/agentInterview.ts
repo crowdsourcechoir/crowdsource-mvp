@@ -108,14 +108,32 @@ export type AgentNextMessageResponse = {
   stopReason: "continue" | "finished";
 };
 
+async function parseJsonSafe(res: Response): Promise<unknown> {
+  const text = await res.text().catch(() => "");
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function readError(body: unknown, status: number): string {
+  if (body && typeof body === "object" && "error" in body) {
+    const e = (body as { error?: unknown }).error;
+    if (typeof e === "string" && e) return e;
+  }
+  return `Request failed (${status})`;
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (res.status === 404) throw new Error("NOT_FOUND");
+  const body = await parseJsonSafe(res);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || "Request failed");
+    throw new Error(readError(body, res.status));
   }
-  return res.json();
+  return body as T;
 }
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -124,11 +142,11 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  const parsed = await parseJsonSafe(res);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || "Request failed");
+    throw new Error(readError(parsed, res.status));
   }
-  return res.json();
+  return parsed as T;
 }
 
 export async function getAgentThemes(): Promise<AgentTheme[]> {

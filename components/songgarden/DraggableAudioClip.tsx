@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchClipFile, type SonggardenClip } from "@/data/songgardenClient";
+import {
+  fetchClipFile,
+  songgardenAudioUrl,
+  type SonggardenClip,
+} from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 
 type DraggableAudioClipProps = {
@@ -17,6 +21,14 @@ function formatDuration(ms: number | null): string {
   if (ms == null || !Number.isFinite(ms)) return "";
   const s = Math.round(ms / 1000);
   return `${s}s`;
+}
+
+/** Build a clean, DAW-friendly `.wav` filename. */
+export function wavFilename(clip: SonggardenClip): string {
+  const base =
+    (clip.label || clip.filename || "clip").replace(/\.[^.]+$/, "").trim() || "clip";
+  const who = clip.contributorName ? `${clip.contributorName}-` : "";
+  return `${who}${base}`.replace(/[^\w.-]+/g, "_").replace(/_+/g, "_") + ".wav";
 }
 
 export default function DraggableAudioClip({
@@ -69,15 +81,41 @@ export default function DraggableAudioClip({
     return file;
   }
 
-  async function startDrag(dataTransfer: DataTransfer) {
-    const file = await ensureFile();
-    dataTransfer.effectAllowed = "copy";
-    dataTransfer.items.add(file);
+  function handleCardDragStart(e: React.DragEvent<HTMLDivElement>) {
+    setDragging(true);
+    e.dataTransfer.effectAllowed = "copy";
+
+    const name = wavFilename(clip);
+
+    // Native apps (Ableton, Finder, etc.) only accept the DownloadURL format,
+    // which points at an absolute URL the OS downloads as a real .wav file.
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const absoluteUrl = origin + songgardenAudioUrl(eventId, clip.id, clip.submittedAt);
+    e.dataTransfer.setData("DownloadURL", `audio/wav:${name}:${absoluteUrl}`);
+    e.dataTransfer.setData("text/uri-list", absoluteUrl);
+
+    // Browser drop targets: attach the already-fetched File when available.
+    const cached = fileCacheRef.current;
+    if (cached) {
+      try {
+        const wavFile =
+          cached.name === name
+            ? cached
+            : new File([cached], name, { type: "audio/wav" });
+        e.dataTransfer.items.add(wavFile);
+      } catch {
+        // items.add can throw in some browsers; DownloadURL still works.
+      }
+    }
   }
 
   return (
     <div
-      className={`group relative flex flex-col rounded-xl border bg-[#14141a] p-3 transition ${
+      draggable
+      onDragStart={handleCardDragStart}
+      onDragEnd={() => setDragging(false)}
+      title="Drag into Ableton, Suno, or Finder"
+      className={`group relative flex cursor-grab flex-col rounded-xl border bg-[#14141a] p-3 transition active:cursor-grabbing ${
         selected
           ? "border-[#CFFF81] ring-1 ring-[#CFFF81]/40"
           : "border-gray-700/70 hover:border-gray-500"
@@ -102,25 +140,6 @@ export default function DraggableAudioClip({
           </p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <button
-            type="button"
-            draggable
-            title="Drag to Ableton, Suno, or Finder"
-            aria-label={`Drag ${clip.label || clip.filename} to your DAW`}
-            onClick={(e) => e.stopPropagation()}
-            onDragStart={async (e) => {
-              setDragging(true);
-              try {
-                await startDrag(e.dataTransfer);
-              } catch {
-                e.preventDefault();
-              }
-            }}
-            onDragEnd={() => setDragging(false)}
-            className="cursor-grab rounded-md border border-gray-600 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 hover:border-[#CFFF81]/50 hover:text-[#CFFF81] active:cursor-grabbing"
-          >
-            Drag
-          </button>
           <input
             type="checkbox"
             checked={selected}
@@ -143,13 +162,18 @@ export default function DraggableAudioClip({
           src={audioSrc}
           controls
           preload="metadata"
+          draggable={false}
+          onDragStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
           className="h-9 w-full"
           onPlay={onPlayed}
           onError={() => setAudioError(true)}
         />
       )}
       <p className="mt-2 text-[10px] uppercase tracking-wide text-gray-600 group-hover:text-gray-400">
-        Use player to preview · drag handle to export
+        Drag this card into your DAW · use player to preview
       </p>
     </div>
   );
@@ -162,7 +186,10 @@ export async function dragClipsToDesktop(
 ): Promise<void> {
   dataTransfer.effectAllowed = "copy";
   for (const clip of clips) {
-    const file = await fetchClipFile(eventId, clip);
+    const source = await fetchClipFile(eventId, clip);
+    const name = wavFilename(clip);
+    const file =
+      source.name === name ? source : new File([source], name, { type: "audio/wav" });
     dataTransfer.items.add(file);
   }
 }
