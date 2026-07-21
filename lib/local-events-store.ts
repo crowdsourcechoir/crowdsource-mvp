@@ -26,6 +26,7 @@ export type EventRow = {
   agent_theme_id: string | null;
   agent_brief: unknown;
   song_garden_config: unknown;
+  world_config?: unknown;
 };
 
 const store: EventRow[] = [];

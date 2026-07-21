@@ -394,6 +394,14 @@ export default function EventDetailPage() {
             >
               Song Garden canvas
             </Link>
+            <Link
+              href={`/e/${event.slug}/world`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-[44px] rounded-xl border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+            >
+              Preview Song Garden V2 (world)
+            </Link>
           </div>
         </div>
       </div>

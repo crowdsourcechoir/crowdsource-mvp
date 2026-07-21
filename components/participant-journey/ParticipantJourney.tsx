@@ -177,8 +177,14 @@ export default function ParticipantJourney({
 
   const enterSoundTransition = useCallback(() => {
     setLyricQuestionIndex(completedChatStepCount(event));
+    // No sound-garden slots enabled for this event — skip straight to
+    // completion instead of stranding the participant on an empty moment.
+    if (gardenSteps.length === 0) {
+      setPositionPersisted({ phase: "final", gardenSlotIndex: 0 });
+      return;
+    }
     setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
-  }, [event, setPositionPersisted]);
+  }, [event, gardenSteps.length, setPositionPersisted]);
   const showComposition =
     position.phase === "sound_transition" ||
     position.phase === "garden" ||
@@ -186,6 +192,15 @@ export default function ParticipantJourney({
 
   const activeGardenStep =
     position.phase === "garden" ? gardenSteps[position.gardenSlotIndex] : null;
+
+  // Safety net: if we ever land in "garden" with no enabled steps (e.g. a
+  // stale persisted position from before steps were disabled in admin), fall
+  // through to completion rather than getting stuck.
+  useEffect(() => {
+    if (position.phase === "garden" && gardenSteps.length === 0) {
+      setPositionPersisted({ phase: "final", gardenSlotIndex: 0 });
+    }
+  }, [position.phase, gardenSteps.length, setPositionPersisted]);
 
   const allowAudioResponse = currentSuggestedAnswerTypes.includes("voice");
   const allowVideoResponse = currentSuggestedAnswerTypes.includes("video");
@@ -459,6 +474,10 @@ export default function ParticipantJourney({
   function handleSoundTransitionContinue() {
     const done = loadDoneSlots(event.id);
     setDoneSlots(done);
+    if (gardenSteps.length === 0) {
+      setPositionPersisted({ phase: "final", gardenSlotIndex: 0 });
+      return;
+    }
     setPositionPersisted({
       phase: "garden",
       gardenSlotIndex: firstIncompleteGardenIndex(event, done),

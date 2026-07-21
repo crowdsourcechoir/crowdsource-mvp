@@ -14,6 +14,11 @@ import {
   normalizeSongGardenConfig,
   type SongGardenConfig,
 } from "@/lib/songgarden/config";
+import {
+  normalizeWorldConfigInput,
+  WORLD_ANIMATION_PRESETS,
+  type WorldConfig,
+} from "@/lib/song-garden-v2/world-config";
 
 export type EventFormValues = {
   title: string;
@@ -33,6 +38,19 @@ export type EventFormValues = {
   songGardenConfig: SongGardenConfig;
   agentThemeId: string | null;
   agentBrief: AgentBrief | null;
+  /** Song Garden V2 world config. Optional — every field falls back to a derived default when empty. */
+  worldConfig: WorldConfig | null;
+};
+
+const EMPTY_WORLD_CONFIG_FORM: WorldConfig = {
+  title: "",
+  heroArtworkUrl: null,
+  logoUrl: null,
+  primaryColor: "#1a0f2d",
+  accentColor: "#CFFF81",
+  animationPreset: "particles",
+  ambientSoundtrackUrl: null,
+  aiArtworkPrompt: null,
 };
 
 type EventFormProps = {
@@ -63,6 +81,7 @@ const initialValues: EventFormValues = {
   songGardenConfig: defaultSongGardenConfig(),
   agentThemeId: null,
   agentBrief: null,
+  worldConfig: null,
 };
 
 const MONTH_ABBREV = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -154,6 +173,7 @@ export default function EventForm({
     songGardenConfig: normalizeSongGardenConfig(
       initialProp?.songGardenConfig ?? initialValues.songGardenConfig
     ),
+    worldConfig: initialProp?.worldConfig ?? initialValues.worldConfig,
   }));
   const [success, setSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -272,6 +292,7 @@ export default function EventForm({
         ...values,
         agentBrief: brief,
         songGardenConfig: normalizeSongGardenConfig(values.songGardenConfig),
+        worldConfig: normalizeWorldConfigInput(values.worldConfig),
       });
       setSuccess(true);
     } catch (err) {
@@ -380,6 +401,13 @@ export default function EventForm({
     persistSavedTemplates([tpl, ...savedTemplates]);
     setTemplateName("");
     setThemeError(null);
+  }
+
+  function setWorldConfigField<K extends keyof WorldConfig>(key: K, value: WorldConfig[K]) {
+    setValues((v) => ({
+      ...v,
+      worldConfig: { ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM), [key]: value },
+    }));
   }
 
   function setSongGardenSteps(steps: SongGardenConfig["steps"]) {
@@ -1110,7 +1138,95 @@ export default function EventForm({
         </div>
       </section>
 
-      
+      <section className="rounded-2xl border border-gray-700/60 bg-[#1f1f1f] p-4 sm:p-6">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          World (Song Garden V2 preview)
+        </h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Optional. Every field falls back to a sensible default (event title, hero image, the
+          existing lime accent) — fill in only what you want to override. Preview at{" "}
+          <code className="text-gray-400">/e/{values.slug || "your-slug"}/world</code>.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="block sm:col-span-2">
+            <span className={labelClass}>World title override</span>
+            <input
+              type="text"
+              value={values.worldConfig?.title ?? ""}
+              onChange={(e) => setWorldConfigField("title", e.target.value)}
+              placeholder={values.title || "Defaults to event title"}
+              className={inputClass}
+            />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className={labelClass}>Hero artwork URL</span>
+            <input
+              type="text"
+              value={values.worldConfig?.heroArtworkUrl ?? ""}
+              onChange={(e) => setWorldConfigField("heroArtworkUrl", e.target.value || null)}
+              placeholder={values.heroImage || "Defaults to event hero image"}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className={labelClass}>Primary color</span>
+            <input
+              type="text"
+              value={values.worldConfig?.primaryColor ?? EMPTY_WORLD_CONFIG_FORM.primaryColor}
+              onChange={(e) => setWorldConfigField("primaryColor", e.target.value)}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className={labelClass}>Accent color</span>
+            <input
+              type="text"
+              value={values.worldConfig?.accentColor ?? EMPTY_WORLD_CONFIG_FORM.accentColor}
+              onChange={(e) => setWorldConfigField("accentColor", e.target.value)}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className={labelClass}>Animation preset</span>
+            <select
+              value={values.worldConfig?.animationPreset ?? "particles"}
+              onChange={(e) =>
+                setWorldConfigField(
+                  "animationPreset",
+                  e.target.value as WorldConfig["animationPreset"]
+                )
+              }
+              className={inputClass}
+            >
+              {WORLD_ANIMATION_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className={labelClass}>Ambient soundtrack URL</span>
+            <input
+              type="text"
+              value={values.worldConfig?.ambientSoundtrackUrl ?? ""}
+              onChange={(e) => setWorldConfigField("ambientSoundtrackUrl", e.target.value || null)}
+              placeholder="Optional looping .mp3/.wav URL"
+              className={inputClass}
+            />
+          </label>
+        </div>
+        {values.worldConfig && (
+          <button
+            type="button"
+            onClick={() => setValues((v) => ({ ...v, worldConfig: null }))}
+            className="mt-4 rounded-xl border border-gray-700 bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-[#2a2a2a]"
+          >
+            Reset world to defaults
+          </button>
+        )}
+      </section>
+
       <button
         type="submit"
         disabled={isSubmitting}

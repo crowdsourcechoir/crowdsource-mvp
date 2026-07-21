@@ -8,6 +8,7 @@ import {
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
 import type { SongGardenConfig } from "@/lib/songgarden/config";
+import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
 
 function rowToEvent(row: Record<string, unknown>) {
   return {
@@ -34,6 +35,7 @@ function rowToEvent(row: Record<string, unknown>) {
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
     songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
+    worldConfig: (row.world_config as WorldConfig | null) ?? null,
   };
 }
 
@@ -92,6 +94,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (body.agentThemeId !== undefined) updates.agent_theme_id = body.agentThemeId;
       if (body.agentBrief !== undefined) updates.agent_brief = body.agentBrief;
       if (body.songGardenConfig !== undefined) updates.song_garden_config = body.songGardenConfig;
+      if (body.worldConfig !== undefined) updates.world_config = body.worldConfig;
       const updated = localEventsUpdate(id, updates as Partial<import("@/lib/local-events-store").EventRow>);
       if (!updated) return NextResponse.json(null, { status: 404 });
       return NextResponse.json(rowToEvent(updated));
@@ -132,6 +135,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.agentThemeId !== undefined) row.agent_theme_id = body.agentThemeId;
     if (body.agentBrief !== undefined) row.agent_brief = body.agentBrief;
     if (body.songGardenConfig !== undefined) row.song_garden_config = body.songGardenConfig;
+    if (body.worldConfig !== undefined) row.world_config = body.worldConfig;
 
     const { data, error } = await supabaseAdmin.from("events").update(row).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

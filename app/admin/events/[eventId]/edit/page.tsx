@@ -82,6 +82,7 @@ export default function EditEventPage() {
     agentThemeId: event.agentThemeId ?? null,
     agentBrief: event.agentBrief ?? null,
     songGardenConfig: event.songGardenConfig ?? undefined,
+    worldConfig: event.worldConfig ?? null,
   };
 
   return (

@@ -11,6 +11,7 @@ export default function TopBar({ title }: TopBarProps) {
   const pathname = usePathname();
   const activeEvents = pathname?.startsWith("/admin/events") || pathname?.startsWith("/admin/conductor");
   const activeLive = pathname?.startsWith("/admin/live") || pathname?.startsWith("/admin/live-prompt-game");
+  const activeSales = pathname?.startsWith("/admin/sales");
 
   return (
     <header className="sticky top-0 z-10 flex min-h-[3.5rem] w-full items-center justify-between border-b border-gray-800 bg-[#0c0c0e] px-4 sm:px-6 lg:px-8">
@@ -40,6 +41,14 @@ export default function TopBar({ title }: TopBarProps) {
             }`}
           >
             Events
+          </Link>
+          <Link
+            href="/admin/sales"
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeSales ? "bg-gray-800 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            }`}
+          >
+            Sales
           </Link>
         </nav>
       </div>

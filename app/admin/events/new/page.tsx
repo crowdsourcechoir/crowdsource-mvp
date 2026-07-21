@@ -32,6 +32,7 @@ export default function NewEventPage() {
         agentThemeId: values.agentThemeId ?? null,
         agentBrief: values.agentBrief ?? null,
         songGardenConfig: values.songGardenConfig,
+        worldConfig: values.worldConfig ?? null,
       });
       if (created) {
         sessionStorage.setItem(LAST_CREATED_EVENT_KEY, JSON.stringify(created));

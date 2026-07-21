@@ -1,5 +1,6 @@
 import type { AgentBrief } from "./agentInterview";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
+import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
 
 export type Event = {
   id: string;
@@ -18,6 +19,8 @@ export type Event = {
   ctaText?: string;
   anthemCompletionMessage?: string;
   songGardenConfig?: SongGardenConfig | null;
+  /** Song Garden V2 participant-experience world config. Additive/optional — see lib/song-garden-v2. */
+  worldConfig?: WorldConfig | null;
   allowAudioVideoPrompt?: boolean;
   agentThemeId?: string | null;
   agentBrief?: AgentBrief | null;

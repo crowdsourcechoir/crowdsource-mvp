@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
+import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
 import {
   localEventsGetAll,
   localEventsGetBySlug,
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
         agent_theme_id: row.agent_theme_id as string | null,
         agent_brief: row.agent_brief,
         song_garden_config: row.song_garden_config ?? null,
+        world_config: row.world_config ?? null,
       });
       return NextResponse.json(rowToEvent(created));
     } catch (err) {
@@ -138,6 +140,7 @@ function eventToRow(e: Record<string, unknown>) {
     agent_theme_id: (e as { agentThemeId?: string | null }).agentThemeId ?? null,
     agent_brief: (e as { agentBrief?: unknown }).agentBrief ?? null,
     song_garden_config: (e as { songGardenConfig?: unknown }).songGardenConfig ?? null,
+    world_config: (e as { worldConfig?: unknown }).worldConfig ?? null,
   };
 }
 
@@ -166,5 +169,6 @@ function rowToEvent(row: Record<string, unknown>) {
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
     songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
+    worldConfig: (row.world_config as WorldConfig | null) ?? null,
   };
 }

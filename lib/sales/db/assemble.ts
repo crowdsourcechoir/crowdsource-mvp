@@ -1,0 +1,78 @@
+import { requireSupabaseAdmin } from "./client";
+import { getOpportunity } from "./opportunities";
+import { getOrganization } from "./organizations";
+import { getContact } from "./contacts";
+import { getDraft } from "./outreach";
+import { listFindingsWithSourcesForOpportunity } from "./research";
+import { getQueueItemByOpportunity } from "./queue";
+import type { QueueItemDetail } from "../types";
+
+/** Everything the review UI needs for one opportunity, assembled in one call so no extra navigation is required. */
+export async function assembleQueueItemDetail(opportunityId: string): Promise<QueueItemDetail | null> {
+  const db = requireSupabaseAdmin();
+  const [opportunity, queueItem] = await Promise.all([getOpportunity(opportunityId), getQueueItemByOpportunity(opportunityId)]);
+  if (!opportunity) return null;
+
+  const [organization, findings] = await Promise.all([
+    getOrganization(opportunity.organizationId),
+    listFindingsWithSourcesForOpportunity(opportunity.organizationId, opportunity.id),
+  ]);
+  if (!organization) return null;
+
+  const draft = queueItem?.outreachDraftId ? await getDraft(queueItem.outreachDraftId) : null;
+  const contact = draft?.contactId ? await getContact(draft.contactId) : null;
+
+  let score = null;
+  if (queueItem?.prospectScoreId) {
+    const { data } = await db.from("prospect_scores").select("*").eq("id", queueItem.prospectScoreId).maybeSingle();
+    if (data) {
+      score = {
+        id: data.id,
+        opportunityId: data.opportunity_id,
+        pipelineRunId: data.pipeline_run_id,
+        totalScore: Number(data.total_score),
+        componentScores: data.component_scores,
+        rationale: data.rationale,
+        confidence: data.confidence,
+        missingInformation: data.missing_information ?? [],
+        model: data.model,
+        createdAt: data.created_at,
+      };
+    }
+  }
+
+  let opportunityTypeLabel: string | null = null;
+  if (opportunity.opportunityTypeId) {
+    const { data } = await db.from("opportunity_types").select("label").eq("id", opportunity.opportunityTypeId).maybeSingle();
+    opportunityTypeLabel = data?.label ?? null;
+  }
+  let organizationTypeLabel: string | null = null;
+  if (organization.organizationTypeId) {
+    const { data } = await db.from("organization_types").select("label").eq("id", organization.organizationTypeId).maybeSingle();
+    organizationTypeLabel = data?.label ?? null;
+  }
+
+  return {
+    queueItem: queueItem ?? {
+      id: "",
+      opportunityId: opportunity.id,
+      outreachDraftId: null,
+      prospectScoreId: null,
+      duplicateWarning: false,
+      status: "pending",
+      decisionNotes: null,
+      decidedBy: null,
+      decidedAt: null,
+      deferredUntil: null,
+      createdAt: opportunity.createdAt,
+    },
+    opportunity,
+    opportunityTypeLabel,
+    organization,
+    organizationTypeLabel,
+    contact,
+    score,
+    draft,
+    findings,
+  };
+}
