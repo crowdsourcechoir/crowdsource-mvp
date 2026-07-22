@@ -25,10 +25,10 @@ export default function CelebrationBurst({ active, accentColor, message }: Celeb
       {active && (
         <motion.div
           className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.15 }}
           aria-hidden
         >
           <motion.span
@@ -57,7 +57,7 @@ export default function CelebrationBurst({ active, accentColor, message }: Celeb
             <motion.p
               className="relative font-mono text-sm font-medium tracking-wide"
               style={{ color: accentColor }}
-              initial={{ opacity: 0, y: 6, scale: 0.9 }}
+              initial={{ opacity: 1, y: -20, scale: 1 }}
               animate={{ opacity: 1, y: -36, scale: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: seconds * 0.8, ease: "easeOut" }}

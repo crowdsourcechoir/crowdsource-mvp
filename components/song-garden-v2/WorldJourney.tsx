@@ -157,6 +157,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const requireContributionConsent = requiresContributionConsent(event);
   const contributionConsentLabel = contributionConsentText(event);
   const [worldUnlocked, setWorldUnlocked] = useState(false);
+  const [burstMessage, setBurstMessage] = useState("Got it");
   const [growthNodes, setGrowthNodes] = useState<WorldGrowthNode[]>(() => loadGrowthNodes(event.id));
 
   const growNode = useCallback(
@@ -389,6 +390,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
       growNode(videoDataUrl ? "video" : audioDataUrl ? "voice" : "text");
       pulseHaptic();
+      setBurstMessage("Got it");
 
       celebration.celebrate(() => {
         goToStep(stepIndex + 1);
@@ -405,11 +407,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     const category = activeSound.slot.category;
     growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
     pulseHaptic();
+    setBurstMessage("Added to the song garden");
 
     celebration.celebrate(() => {
       goToStep(stepIndex + 1);
     });
-  }, [activeSound, celebration, event.id, goToStep, growNode, stepIndex]);
+  }, [activeSound, celebration, goToStep, growNode, stepIndex]);
 
   function handleParticipateAgain() {
     clearJourneySession(event, interviewVersion, activeSessionToken);
@@ -489,165 +492,170 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         )}
       </header>
 
-      <MomentOverlay momentKey={momentKey} eyebrow={eyebrow} accentColor={world.accentColor}>
-        {position.phase === "landing" && (
-          <div className="space-y-5 text-center">
-            <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-              {event.landingHeadline || DEFAULT_OPENING_PROMPT}
-            </p>
-            {!!event.landingCopy && (
-              <p className="mx-auto max-w-xl font-mono text-sm text-gray-300">{event.landingCopy}</p>
-            )}
-            <form onSubmit={handleStartJourney} className="space-y-4">
-              {requireContributionConsent && (
-                <label className="flex items-start gap-3 rounded-2xl border border-white/15 bg-black/20 px-4 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    checked={contributionConsentAgreed}
-                    onChange={(e) => setContributionConsentAgreed(e.target.checked)}
-                    className="mt-1 h-5 w-5 shrink-0"
-                    style={{ accentColor: world.accentColor }}
-                  />
-                  <span className="font-mono text-sm text-gray-200">{contributionConsentLabel}</span>
-                </label>
-              )}
-              <button
-                type="submit"
-                disabled={sending || (requireContributionConsent && !contributionConsentAgreed)}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
-                style={{
-                  borderColor: world.accentColor,
-                  color: world.accentColor,
-                  background: `${world.accentColor}1f`,
-                }}
-              >
-                {sending ? "Starting…" : event.ctaText || DEFAULT_CTA_TEXT}
-              </button>
-            </form>
-            {chatError && <p className="text-center font-mono text-sm text-red-300">{chatError}</p>}
-          </div>
-        )}
-
-        {position.phase === "step" && (activeStep?.kind === "name" || activeStep?.kind === "text") && (
-          <div className="space-y-5">
-            {chatError && (
-              <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
-                {chatError}
+      {/* Hide prompt UI instantly while celebrating so the burst isn't overlaid on the question. */}
+      {!celebration.active ? (
+        <MomentOverlay momentKey={momentKey} eyebrow={eyebrow} accentColor={world.accentColor}>
+          {position.phase === "landing" && (
+            <div className="space-y-5 text-center">
+              <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
+                {event.landingHeadline || DEFAULT_OPENING_PROMPT}
               </p>
-            )}
-            <div className="min-h-[3rem] text-center">
-              {sending && !conversationReady ? (
-                <SpinnerDots accentColor={world.accentColor} />
-              ) : (
-                <>
-                  <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-white sm:text-lg">
-                    {displayPrompt(promptText)}
-                  </p>
-                  {responseHint && (
-                    <p className="mt-2 font-mono text-sm" style={{ color: world.accentColor }}>
-                      {responseHint}
-                    </p>
-                  )}
-                </>
+              {!!event.landingCopy && (
+                <p className="mx-auto max-w-xl font-mono text-sm text-gray-300">{event.landingCopy}</p>
               )}
+              <form onSubmit={handleStartJourney} className="space-y-4">
+                {requireContributionConsent && (
+                  <label className="flex items-start gap-3 rounded-2xl border border-white/15 bg-black/20 px-4 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={contributionConsentAgreed}
+                      onChange={(e) => setContributionConsentAgreed(e.target.checked)}
+                      className="mt-1 h-5 w-5 shrink-0"
+                      style={{ accentColor: world.accentColor }}
+                    />
+                    <span className="font-mono text-sm text-gray-200">{contributionConsentLabel}</span>
+                  </label>
+                )}
+                <button
+                  type="submit"
+                  disabled={sending || (requireContributionConsent && !contributionConsentAgreed)}
+                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{
+                    borderColor: world.accentColor,
+                    color: world.accentColor,
+                    background: `${world.accentColor}1f`,
+                  }}
+                >
+                  {sending ? "Starting…" : event.ctaText || DEFAULT_CTA_TEXT}
+                </button>
+              </form>
+              {chatError && <p className="text-center font-mono text-sm text-red-300">{chatError}</p>}
             </div>
+          )}
 
-            <form onSubmit={handleTextSubmit} aria-busy={sending} className="space-y-4">
-              {captchaSetupRequired && (
-                <p className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 font-mono text-xs text-amber-100">
-                  Email captcha requires Turnstile keys in .env.local.
+          {position.phase === "step" && (activeStep?.kind === "name" || activeStep?.kind === "text") && (
+            <div className="space-y-5">
+              {chatError && (
+                <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                  {chatError}
                 </p>
               )}
-              {captchaGateActive && (
-                <div className="flex flex-col items-center gap-2">
-                  <p className="font-mono text-sm text-gray-300">Quick verification — then submit your email.</p>
-                  <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
-                </div>
-              )}
+              <div className="min-h-[3rem] text-center">
+                {sending && !conversationReady ? (
+                  <SpinnerDots accentColor={world.accentColor} />
+                ) : (
+                  <>
+                    <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-white sm:text-lg">
+                      {displayPrompt(promptText)}
+                    </p>
+                    {responseHint && (
+                      <p className="mt-2 font-mono text-sm" style={{ color: world.accentColor }}>
+                        {responseHint}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <form onSubmit={handleTextSubmit} aria-busy={sending} className="space-y-4">
+                {captchaSetupRequired && (
+                  <p className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 font-mono text-xs text-amber-100">
+                    Email captcha requires Turnstile keys in .env.local.
+                  </p>
+                )}
+                {captchaGateActive && (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="font-mono text-sm text-gray-300">Quick verification — then submit your email.</p>
+                    <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
+                  </div>
+                )}
+                <ContributionTextField
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={() => responseInputRef.current?.form?.requestSubmit()}
+                  placeholder={requiresEmailResponse ? "you@example.com" : "Type your answer…"}
+                  disabled={sending}
+                  submitDisabled={
+                    sending ||
+                    captchaSetupRequired ||
+                    (captchaGateActive && !emailCaptchaToken) ||
+                    (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse)
+                  }
+                  submitLabel={sending ? "Sending…" : "Continue →"}
+                  accentColor={world.accentColor}
+                  inputMode={requiresEmailResponse ? "email" : "text"}
+                  autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
+                  inputRef={(el) => (responseInputRef.current = el)}
+                />
+                {allowsMediaResponse && (
+                  <div className="space-y-2 text-center">
+                    <p className="font-mono text-sm text-gray-300">or record a message (optional)</p>
+                    {allowAudioResponse && (
+                      <RecordAudio variant="plain" onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
+                    )}
+                    {allowVideoResponse && (
+                      <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
+                    )}
+                  </div>
+                )}
+              </form>
+            </div>
+          )}
+
+          {position.phase === "step" && activeStep?.kind === "sound" && needsNameGate && (
+            <div className="space-y-4">
+              <p className="text-center font-mono text-base text-gray-100">
+                What name should we credit on your sounds?
+              </p>
               <ContributionTextField
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={() => responseInputRef.current?.form?.requestSubmit()}
-                placeholder={requiresEmailResponse ? "you@example.com" : "Type your answer…"}
-                disabled={sending}
-                submitDisabled={
-                  sending ||
-                  captchaSetupRequired ||
-                  (captchaGateActive && !emailCaptchaToken) ||
-                  (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse)
-                }
-                submitLabel={sending ? "Sending…" : "Continue →"}
+                value={nameGateValue}
+                onChange={setNameGateValue}
+                onSubmit={handleNameGateContinue}
+                placeholder="First name"
+                autoComplete="given-name"
+                submitLabel="Continue"
                 accentColor={world.accentColor}
-                inputMode={requiresEmailResponse ? "email" : "text"}
-                autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
-                inputRef={(el) => (responseInputRef.current = el)}
               />
-              {allowsMediaResponse && (
-                <div className="space-y-2 text-center">
-                  <p className="font-mono text-sm text-gray-300">or record a message (optional)</p>
-                  {allowAudioResponse && (
-                    <RecordAudio variant="plain" onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
-                  )}
-                  {allowVideoResponse && (
-                    <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
-                  )}
-                </div>
-              )}
-            </form>
-          </div>
-        )}
+              {chatError && <p className="text-center text-sm text-red-300">{chatError}</p>}
+            </div>
+          )}
 
-        {position.phase === "step" && activeStep?.kind === "sound" && needsNameGate && (
-          <div className="space-y-4">
-            <p className="text-center font-mono text-base text-gray-100">
-              What name should we credit on your sounds?
-            </p>
-            <ContributionTextField
-              value={nameGateValue}
-              onChange={setNameGateValue}
-              onSubmit={handleNameGateContinue}
-              placeholder="First name"
-              autoComplete="given-name"
-              submitLabel="Continue"
+          {position.phase === "step" && activeStep?.kind === "sound" && !needsNameGate && activeSound && (
+            <SoundMomentPad
+              key={activeSound.slot.id}
+              eventId={event.id}
+              slot={activeSound.slot}
+              promptText={activeSound.prompt}
+              buttonLabel={activeSound.buttonLabel}
+              contributorName={contributorName.trim() || null}
               accentColor={world.accentColor}
+              alternateSlots={activeSound.alternateSlots}
+              onSubmitted={handleSlotSubmitted}
             />
-            {chatError && <p className="text-center text-sm text-red-300">{chatError}</p>}
-          </div>
-        )}
+          )}
 
-        {position.phase === "step" && activeStep?.kind === "sound" && !needsNameGate && activeSound && (
-          <SoundMomentPad
-            key={activeSound.slot.id}
-            eventId={event.id}
-            slot={activeSound.slot}
-            promptText={activeSound.prompt}
-            buttonLabel={activeSound.buttonLabel}
-            contributorName={contributorName.trim() || null}
-            accentColor={world.accentColor}
-            alternateSlots={activeSound.alternateSlots}
-            onSubmitted={handleSlotSubmitted}
-          />
-        )}
-
-        {position.phase === "final" && (
-          <div className="space-y-6 text-center">
-            <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-100 sm:text-lg">{finalMessage}</p>
-            <button
-              type="button"
-              onClick={handleParticipateAgain}
-              className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
-              style={{ borderColor: world.accentColor, color: world.accentColor }}
-            >
-              Let&apos;s do it again
-            </button>
-          </div>
-        )}
-      </MomentOverlay>
+          {position.phase === "final" && (
+            <div className="space-y-6 text-center">
+              <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-100 sm:text-lg">{finalMessage}</p>
+              <button
+                type="button"
+                onClick={handleParticipateAgain}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
+                style={{ borderColor: world.accentColor, color: world.accentColor }}
+              >
+                Let&apos;s do it again
+              </button>
+            </div>
+          )}
+        </MomentOverlay>
+      ) : (
+        <div className="mx-auto w-full min-h-0 max-w-lg flex-1" aria-hidden />
+      )}
 
       <CelebrationBurst
         active={celebration.active}
         accentColor={world.accentColor}
-        message={activeStep?.kind === "sound" ? "Added to the song garden" : "Got it"}
+        message={burstMessage}
       />
     </WorldStage>
   );
