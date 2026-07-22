@@ -16,7 +16,7 @@ component already implements every backend concern the product brief assumes exi
 | Concern | Existing implementation | Reused as-is |
 |---|---|---|
 | Event management | `data/mockEvents.ts` `Event` type, `app/api/events/**`, Supabase `events` table | ✅ |
-| Question/prompt management | `AgentBrief.askAboutItems` (AI interview questions) + `SongGardenConfig.steps` (admin-configurable sound-pad prompts, `lib/songgarden/config.ts`) | ✅ |
+| Question/prompt management | Unified `journeySteps` (name / text / sound in any order) via `lib/songgarden/journey-steps.ts`; syncs legacy `askAboutItems` + `songGardenConfig.steps` for V1/APIs | ✅ |
 | Participant registration | `AgentParticipant` + session tokens (`data/agentInterview.ts`, `lib/participant-journey/interview-helpers.ts`) | ✅ |
 | Contribution storage | `AgentConversationTurn` rows (text/voice/video answers) + `songgarden_clips` table (audio pad clips) | ✅ |
 | Multiple input types | text, voice, video (interview turns), audio pads (Song Garden slots) | ✅ |
@@ -26,19 +26,25 @@ component already implements every backend concern the product brief assumes exi
 The **only** new data added is a small, additive, nullable `world_config` JSON column
 on `events` (see §5) — everything else rides on the existing schema and APIs.
 
-### Existing phase model (kept)
+### Journey model
 
-`ParticipantJourney` already drives a linear phase machine:
+**V1** (`ParticipantJourney`) still uses a fixed two-block pipeline:
 
 ```
-landing → lyric (AI interview, N questions) → sound_transition → garden (N sound-pad slots) → final
+landing → lyric (text questions) → sound_transition → garden (sound pads) → final
 ```
 
-Song Garden V2 keeps this exact phase machine and all its data calls
-(`startAgentInterview`, `sendMessage`, `submitSonggardenClip`, `saveDoneSlot`, …).
-What changes is **only** the presentation layer: instead of a scrolling
-form-like page, every phase now renders as an overlay on top of a persistent,
-animated "world," with a celebration between every submission.
+**V2** (`WorldJourney` on `/e/[slug]/world`) runs a **unified ordered journey**:
+
+```
+landing → step[0..n] (each step is name | text | sound) → final
+```
+
+Admin edits one Journey list (Event details → World → Journey). Source of truth is
+`event.journeySteps` (also persisted inside `song_garden_config.journeySteps`).
+On save, legacy `agentBrief.askAboutItems` and `songGardenConfig.steps` are synced
+so interview persistence and V1 keep working. Sound slots are no longer
+auto-filled from the full pad catalog — only steps you add exist.
 
 ## 2. New concepts
 
@@ -388,3 +394,28 @@ event without any manual video editing.
   AI". Successful/partial results populate the same `worldStoryboard` form
   state as manual entry — nothing is written to the event until the admin
   hits the form's own Save.
+- **Prompt length**: Runway caps `promptText` at 1000 characters. Admins
+  naturally paste full creative briefs (not literal prompts), so
+  `condenseVibePrompt()` truncates on a word boundary to leave room for the
+  per-frame intensity modifier + fixed motion-style suffix — always logging
+  the exact Runway validation error server-side (`[runway] ...`) if a future
+  field ever exceeds a limit, rather than surfacing only a generic message.
+- **Timing note**: 6 sequential `gen4_turbo` frames took ~5 minutes end-to-end
+  in testing — right at the edge of typical serverless function limits (this
+  route sets `maxDuration = 300`). Fine for local dev; a production
+  deployment on Vercel should move this to an async/background job (queue +
+  poll) rather than one long synchronous request once it's used for real.
+
+## 11. Sound-step choice ("add a stomp, clap, or snap")
+
+To avoid forcing participants through every enabled beat/choir slot
+sequentially, `SongGardenStepConfig` gained an optional `alternateSlotIds`
+field (`lib/songgarden/config.ts`): the participant is shown all of
+`[slotId, ...alternateSlotIds]` as buttons and picks exactly one to perform.
+`SoundMomentPad.tsx` renders that chooser as a `"choose"` pad phase, then
+proceeds through the normal countdown/record/review flow using whichever
+slot was picked (its own `recordMs`/`category`/`label` for the actual
+recording) — but always calls `saveDoneSlot()` with the step's original,
+configured `slotId`, since `firstIncompleteGardenIndex`/
+`allEnabledGardenSlotsDone` key progress off that nominal id regardless of
+which alternate the participant actually chose.

@@ -35,6 +35,9 @@ function rowToEvent(row: Record<string, unknown>) {
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
     songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
+    journeySteps:
+      ((row.song_garden_config as SongGardenConfig | null)?.journeySteps as unknown[] | undefined) ??
+      null,
     worldConfig: (row.world_config as WorldConfig | null) ?? null,
   };
 }
@@ -93,7 +96,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       if (body.agentThemeId !== undefined) updates.agent_theme_id = body.agentThemeId;
       if (body.agentBrief !== undefined) updates.agent_brief = body.agentBrief;
-      if (body.songGardenConfig !== undefined) updates.song_garden_config = body.songGardenConfig;
+      if (body.songGardenConfig !== undefined || body.journeySteps !== undefined) {
+        const base =
+          (body.songGardenConfig as SongGardenConfig | null | undefined) ??
+          ({} as SongGardenConfig);
+        updates.song_garden_config = {
+          ...base,
+          ...(Array.isArray(body.journeySteps) ? { journeySteps: body.journeySteps } : {}),
+        };
+      }
       if (body.worldConfig !== undefined) updates.world_config = body.worldConfig;
       const updated = localEventsUpdate(id, updates as Partial<import("@/lib/local-events-store").EventRow>);
       if (!updated) return NextResponse.json(null, { status: 404 });
@@ -134,7 +145,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (body.agentThemeId !== undefined) row.agent_theme_id = body.agentThemeId;
     if (body.agentBrief !== undefined) row.agent_brief = body.agentBrief;
-    if (body.songGardenConfig !== undefined) row.song_garden_config = body.songGardenConfig;
+    if (body.songGardenConfig !== undefined || body.journeySteps !== undefined) {
+      const base =
+        (body.songGardenConfig as SongGardenConfig | null | undefined) ??
+        ({} as SongGardenConfig);
+      row.song_garden_config = {
+        ...base,
+        ...(Array.isArray(body.journeySteps) ? { journeySteps: body.journeySteps } : {}),
+      };
+    }
     if (body.worldConfig !== undefined) row.world_config = body.worldConfig;
 
     const { data, error } = await supabaseAdmin.from("events").update(row).eq("id", id).select().single();

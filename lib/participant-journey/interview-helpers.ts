@@ -30,6 +30,8 @@ export function eventInterviewVersion(event: Event): string {
     title: event.title,
     theme: event.agentThemeId ?? null,
     brief: event.agentBrief ?? null,
+    journeySteps: event.journeySteps ?? event.songGardenConfig?.journeySteps ?? null,
+    songGardenSteps: event.songGardenConfig?.steps ?? null,
   });
   return stableHash(payload);
 }

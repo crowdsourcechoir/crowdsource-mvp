@@ -309,7 +309,7 @@ export default function SoundMomentPad({
             className="col-span-2 min-h-[44px] select-none rounded-xl px-3 py-2 font-mono text-xs font-semibold [touch-action:manipulation] disabled:opacity-50"
             style={{ background: accentColor, color: "#1a1530" }}
           >
-            ✓ Add it to the world
+            ✓ Add it to the song garden
           </button>
         </motion.div>
       )}

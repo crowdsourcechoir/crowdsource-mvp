@@ -139,7 +139,15 @@ function eventToRow(e: Record<string, unknown>) {
     allow_audio_video_prompt: (e as { allowAudioVideoPrompt?: boolean }).allowAudioVideoPrompt ?? true,
     agent_theme_id: (e as { agentThemeId?: string | null }).agentThemeId ?? null,
     agent_brief: (e as { agentBrief?: unknown }).agentBrief ?? null,
-    song_garden_config: (e as { songGardenConfig?: unknown }).songGardenConfig ?? null,
+    song_garden_config: (() => {
+      const garden = (e as { songGardenConfig?: SongGardenConfig | null }).songGardenConfig ?? null;
+      const journeySteps = (e as { journeySteps?: unknown }).journeySteps;
+      if (!garden && !journeySteps) return null;
+      return {
+        ...(garden ?? { soundTransitionMessage: "", steps: [] }),
+        ...(Array.isArray(journeySteps) ? { journeySteps } : {}),
+      };
+    })(),
     world_config: (e as { worldConfig?: unknown }).worldConfig ?? null,
   };
 }
@@ -169,6 +177,9 @@ function rowToEvent(row: Record<string, unknown>) {
     agentThemeId: row.agent_theme_id ?? null,
     agentBrief: row.agent_brief ?? null,
     songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
+    journeySteps:
+      ((row.song_garden_config as SongGardenConfig | null)?.journeySteps as unknown[] | undefined) ??
+      null,
     worldConfig: (row.world_config as WorldConfig | null) ?? null,
   };
 }

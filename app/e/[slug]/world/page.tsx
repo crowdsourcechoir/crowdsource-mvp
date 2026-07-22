@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import EventPageLoadingShell from "@/components/EventPageLoadingShell";
+import WorldLoadingShell from "@/components/song-garden-v2/WorldLoadingShell";
 import WorldPageClient from "./WorldPageClient";
 
 /**
@@ -8,7 +8,7 @@ import WorldPageClient from "./WorldPageClient";
  */
 export default function WorldPage() {
   return (
-    <Suspense fallback={<EventPageLoadingShell />}>
+    <Suspense fallback={<WorldLoadingShell />}>
       <WorldPageClient />
     </Suspense>
   );

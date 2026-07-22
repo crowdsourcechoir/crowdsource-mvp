@@ -99,9 +99,11 @@ function extFromMime(mime: string): string {
 }
 
 function decodeDataUrl(dataUrl: string): { bytes: Uint8Array; contentType: string; extension: string } {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
+  // MediaRecorder often emits types like "video/webm;codecs=vp9,opus" — allow MIME params
+  // between the type and ";base64," instead of requiring a bare type.
+  const match = dataUrl.match(/^data:([^,]+);base64,(.+)$/);
   if (!match) throw new Error("Invalid media format.");
-  const contentType = match[1];
+  const contentType = match[1].split(";")[0].trim() || "application/octet-stream";
   const bytes = Buffer.from(match[2], "base64");
   return { bytes, contentType, extension: extFromMime(contentType) };
 }

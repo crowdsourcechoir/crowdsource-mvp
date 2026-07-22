@@ -17,7 +17,11 @@ import {
   setSonggardenContributorName,
 } from "@/data/songgardenClient";
 import { loadDoneSlots, clearDoneSlots } from "@/lib/songgarden/garden-storage";
-import type { GardenSlotId } from "@/lib/songgarden/garden-slots";
+import {
+  resolveJourneySteps,
+  resolveSoundStep,
+  type JourneyStep,
+} from "@/lib/songgarden/journey-steps";
 import {
   blobToDataUrl,
   conversationIdKey,
@@ -28,20 +32,13 @@ import {
   getOrCreateSessionToken,
   journeyPositionKey,
   sessionTokenKey,
-  suggestedTypesForMessage,
-  THANKS_MESSAGE,
   withTimeout,
 } from "@/lib/participant-journey/interview-helpers";
 import {
-  allGardenSlotsDone,
   DEFAULT_JOURNEY_FINAL_MESSAGE,
-  firstIncompleteGardenIndex,
-  getEnabledGardenSteps,
   journeyProgress,
-  soundTransitionMessage,
   type JourneyPosition,
 } from "@/lib/participant-journey/steps";
-import { isNameQuestionPrompt } from "@/lib/agent-name-question";
 import {
   contributionConsentText,
   requiresContributionConsent,
@@ -62,7 +59,6 @@ import {
   COMPLETION_MOMENT_LABEL,
   LYRIC_MOMENT_LABEL,
   NAME_MOMENT_LABEL,
-  TRANSITION_MOMENT_LABEL,
   WELCOME_MOMENT_LABEL,
   gardenSlotMomentLabel,
 } from "@/lib/song-garden-v2/moment-labels";
@@ -85,6 +81,10 @@ function loadJourneyPosition(eventId: string, interviewVersion: string): Journey
     if (!raw) return null;
     const saved = JSON.parse(raw) as JourneyPosition;
     if (saved.interviewVersion !== interviewVersion) return null;
+    // Migrate legacy lyric/garden positions → restart landing (version bump usually handles this).
+    if (saved.phase === "lyric" || saved.phase === "garden" || saved.phase === "sound_transition") {
+      return null;
+    }
     return saved;
   } catch {
     return null;
@@ -112,42 +112,47 @@ function clearJourneySession(event: Event, interviewVersion: string, sessionToke
   }
 }
 
+function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["suggestedAnswerTypes"] {
+  if (step.kind === "name") return ["text"];
+  if (step.kind === "sound") return ["text"];
+  const types: AgentNextMessageResponse["suggestedAnswerTypes"] = ["text"];
+  if (step.allowAudio) types.push("voice");
+  if (step.allowVideo) types.push("video");
+  if (step.requireEmailCaptcha) {
+    types.push("email");
+    types.push("captcha");
+  }
+  return types;
+}
+
 /**
- * Song Garden V2 participant orchestrator. Same phase machine and backend calls as
- * components/participant-journey/ParticipantJourney.tsx — only the presentation
- * layer (World Stage + Interaction Engine + Celebration) is new.
+ * Song Garden V2 participant orchestrator — runs a unified ordered journey
+ * (name / text / sound in any order).
  */
 export default function WorldJourney({ event }: WorldJourneyProps) {
   const world = useMemo(() => resolveWorldConfig(event), [event]);
   const interviewVersion = eventInterviewVersion(event);
-  const gardenSteps = useMemo(() => getEnabledGardenSteps(event), [event]);
+  const journeySteps = useMemo(() => resolveJourneySteps(event), [event]);
 
   const [position, setPosition] = useState<JourneyPosition>(() => {
     const saved = loadJourneyPosition(event.id, interviewVersion);
     if (saved) return saved;
-    return { phase: "landing", gardenSlotIndex: 0, interviewVersion };
+    return { phase: "landing", gardenSlotIndex: 0, stepIndex: 0, interviewVersion };
   });
-  const [lyricQuestionIndex, setLyricQuestionIndex] = useState(0);
-  const [doneSlots, setDoneSlots] = useState<Set<GardenSlotId>>(() => loadDoneSlots(event.id));
 
   const [journeyStarted, setJourneyStarted] = useState(position.phase !== "landing");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [activeSessionToken, setActiveSessionToken] = useState<string | null>(null);
-  const [currentMessage, setCurrentMessage] = useState<string | null>(null);
-  const [chatFinished, setChatFinished] = useState(false);
-  const [currentSuggestedAnswerTypes, setCurrentSuggestedAnswerTypes] = useState<
-    AgentNextMessageResponse["suggestedAnswerTypes"]
-  >(["text"]);
-  const [inputValue, setInputValue] = useState("");
+  const [conversationReady, setConversationReady] = useState(false);
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [emailCaptchaToken, setEmailCaptchaToken] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [inputValue, setInputValue] = useState("");
   const [contributorName, setContributorName] = useState(
     () => getSonggardenContributorName(event.id) ?? ""
   );
-  const [nameGateValue, setNameGateValue] = useState("");
   const [contributionConsentAgreed, setContributionConsentAgreed] = useState(false);
   const requireContributionConsent = requiresContributionConsent(event);
   const contributionConsentLabel = contributionConsentText(event);
@@ -161,9 +166,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     [event.id]
   );
 
-  const firstMessageRequested = useRef(false);
   const responseInputRef = useRef<HTMLTextAreaElement | null>(null);
-
+  const ensuringConversation = useRef(false);
   const celebration = useCelebration();
 
   const setPositionPersisted = useCallback(
@@ -179,32 +183,18 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     grantSonggardenAccess(event.id);
   }, [event.id]);
 
-  const progress = journeyProgress(event, position, lyricQuestionIndex);
+  const stepIndex = position.stepIndex ?? 0;
+  const activeStep =
+    position.phase === "step" && stepIndex >= 0 && stepIndex < journeySteps.length
+      ? journeySteps[stepIndex]
+      : null;
+  const activeSound = activeStep?.kind === "sound" ? resolveSoundStep(activeStep) : null;
+
+  const progress = journeyProgress(event, position);
   const energyLevel = progress.total > 0 ? Math.min(1, progress.completed / progress.total) : 0;
   const showProgress = journeyStarted && position.phase !== "final";
 
-  const enterSoundTransition = useCallback(() => {
-    // No sound-garden slots enabled for this event — skip the transition/garden
-    // moments entirely rather than stranding the participant on an empty overlay.
-    if (gardenSteps.length === 0) {
-      setPositionPersisted({ phase: "final", gardenSlotIndex: 0 });
-      return;
-    }
-    setPositionPersisted({ phase: "sound_transition", gardenSlotIndex: 0 });
-  }, [gardenSteps.length, setPositionPersisted]);
-
-  const activeGardenStep = position.phase === "garden" ? gardenSteps[position.gardenSlotIndex] : null;
-
-  // Safety net: if we ever land in "garden" with no enabled steps (e.g. a
-  // stale persisted position from before steps were disabled in admin, or a
-  // race in the transitions above), fall through to completion instead of
-  // showing a permanently empty moment overlay.
-  useEffect(() => {
-    if (position.phase === "garden" && gardenSteps.length === 0) {
-      setPositionPersisted({ phase: "final", gardenSlotIndex: 0 });
-    }
-  }, [position.phase, gardenSteps.length, setPositionPersisted]);
-
+  const currentSuggestedAnswerTypes = activeStep ? suggestedTypesForStep(activeStep) : ["text"];
   const allowAudioResponse = currentSuggestedAnswerTypes.includes("voice");
   const allowVideoResponse = currentSuggestedAnswerTypes.includes("video");
   const requiresEmailResponse = currentSuggestedAnswerTypes.includes("email");
@@ -212,40 +202,110 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const captchaGateActive = requiresCaptchaResponse && isTurnstileClientConfigured();
   const captchaSetupRequired = requiresCaptchaResponse && !isTurnstileClientConfigured();
   const allowsMediaResponse = allowAudioResponse || allowVideoResponse;
+  const isNameStep = activeStep?.kind === "name";
 
-  const isNameQuestion = isNameQuestionPrompt(event.agentBrief, currentMessage);
+  const promptText = useMemo(() => {
+    if (!activeStep) return "";
+    if (activeStep.kind === "name") {
+      return activeStep.prompt?.trim() || "What should we call you?";
+    }
+    if (activeStep.kind === "text" || activeStep.kind === "sound") {
+      return activeStep.prompt;
+    }
+    return "";
+  }, [activeStep]);
+
   const responseHint = useMemo(
-    () => questionResponseHint(currentMessage, { isName: isNameQuestion, isEmail: requiresEmailResponse }),
-    [currentMessage, isNameQuestion, requiresEmailResponse]
+    () => questionResponseHint(promptText, { isName: isNameStep, isEmail: requiresEmailResponse }),
+    [promptText, isNameStep, requiresEmailResponse]
   );
 
-  function focusResponseInput() {
-    requestAnimationFrame(() => responseInputRef.current?.focus());
-  }
+  const goToStep = useCallback(
+    (index: number) => {
+      if (index >= journeySteps.length) {
+        setPositionPersisted({ phase: "final", gardenSlotIndex: 0, stepIndex: Math.max(0, journeySteps.length - 1) });
+        return;
+      }
+      const step = journeySteps[index];
+      if (step?.kind === "sound") unlockReferenceTones();
+      setPositionPersisted({ phase: "step", gardenSlotIndex: 0, stepIndex: index });
+      setInputValue("");
+      setAudioBlob(null);
+      setVideoBlob(null);
+      setEmailCaptchaToken(null);
+      setChatError(null);
+    },
+    [journeySteps, setPositionPersisted]
+  );
 
-  const beginLyricPhase = useCallback(async () => {
-    setChatError(null);
-    firstMessageRequested.current = false;
-    setLyricQuestionIndex(0);
+  const ensureConversation = useCallback(async (): Promise<string | null> => {
+    if (conversationId && conversationReady) return conversationId;
+    if (ensuringConversation.current) return conversationId;
+    ensuringConversation.current = true;
     setSending(true);
     try {
       const token = getOrCreateSessionToken(event.id, interviewVersion);
+      setActiveSessionToken(token);
+
+      const savedId = findSavedConversationId(event.id, token);
+      if (savedId) {
+        setConversationId(savedId);
+        try {
+          const { turns } = await getConversation(savedId);
+          const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
+          // Prime agent if empty conversation
+          if (!lastAgent) {
+            await withTimeout(sendMessage(savedId, ""), 20000, "Timed out priming conversation.");
+          }
+          setConversationReady(true);
+          return savedId;
+        } catch {
+          // fall through to new conversation
+        }
+      }
+
       const { conversation } = await withTimeout(
         startAgentInterview(event.id, { sessionToken: token }),
         15000,
         "Timed out while starting. Please try again."
       );
       setConversationId(conversation.id);
-      setActiveSessionToken(token);
-      setJourneyStarted(true);
-      setPositionPersisted({ phase: "lyric", gardenSlotIndex: 0 });
       localStorage.setItem(conversationIdKey(event.id, token), conversation.id);
+      await withTimeout(sendMessage(conversation.id, ""), 20000, "Timed out while starting the first question.");
+      setConversationReady(true);
+      return conversation.id;
     } catch (err) {
       setChatError(err instanceof Error ? err.message : "Couldn't start");
+      return null;
     } finally {
+      ensuringConversation.current = false;
       setSending(false);
     }
-  }, [event.id, interviewVersion, setPositionPersisted]);
+  }, [conversationId, conversationReady, event.id, interviewVersion]);
+
+  // When landing on a text/name step, ensure agent conversation exists for persistence.
+  useEffect(() => {
+    if (position.phase !== "step" || !activeStep) return;
+    if (activeStep.kind !== "name" && activeStep.kind !== "text") return;
+    if (conversationReady) return;
+    void ensureConversation();
+  }, [position.phase, activeStep, conversationReady, ensureConversation]);
+
+  // Skip already-completed sound steps when resuming.
+  useEffect(() => {
+    if (position.phase !== "step" || !activeStep || activeStep.kind !== "sound") return;
+    const done = loadDoneSlots(event.id);
+    if (done.has(activeStep.slotId)) {
+      goToStep(stepIndex + 1);
+    }
+  }, [position.phase, activeStep, event.id, goToStep, stepIndex]);
+
+  // Empty journey → final
+  useEffect(() => {
+    if (position.phase === "step" && journeySteps.length === 0) {
+      setPositionPersisted({ phase: "final", gardenSlotIndex: 0, stepIndex: 0 });
+    }
+  }, [position.phase, journeySteps.length, setPositionPersisted]);
 
   async function handleStartJourney(e: FormEvent) {
     e.preventDefault();
@@ -257,122 +317,28 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       setChatError("Please confirm how your contributions may be used.");
       return;
     }
-    await beginLyricPhase();
-  }
-
-  // Rehydrate conversation after refresh.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (conversationId || position.phase === "landing" || position.phase === "final") return;
-    if (position.phase === "garden" || position.phase === "sound_transition") return;
-
-    const token = getOrCreateSessionToken(event.id, interviewVersion);
-    const savedConversationId = findSavedConversationId(event.id, token);
-    if (!savedConversationId) {
-      if (position.phase === "lyric") {
-        setPositionPersisted({ phase: "landing", gardenSlotIndex: 0 });
-        setJourneyStarted(false);
-        firstMessageRequested.current = false;
-      }
-      return;
-    }
-
-    setConversationId(savedConversationId);
-    setActiveSessionToken(token);
-    setJourneyStarted(true);
     setChatError(null);
-    setSending(true);
-
-    getConversation(savedConversationId)
-      .then(({ turns }) => {
-        const agentTurns = turns.filter((t) => t.role === "agent").length;
-        setLyricQuestionIndex(agentTurns);
-        const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
-        if (lastAgent) {
-          setCurrentMessage(lastAgent.content);
-          setCurrentSuggestedAnswerTypes(suggestedTypesForMessage(event, lastAgent.content));
-          if (lastAgent.content === THANKS_MESSAGE) {
-            setChatFinished(true);
-            const done = loadDoneSlots(event.id);
-            if (allGardenSlotsDone(event, done)) {
-              setPositionPersisted({ phase: "final", gardenSlotIndex: Math.max(0, gardenSteps.length - 1) });
-            } else if (position.phase === "lyric") {
-              enterSoundTransition();
-            }
-          } else {
-            setPositionPersisted({ phase: "lyric", gardenSlotIndex: 0 });
-          }
-        }
-      })
-      .catch((err) => setChatError(err instanceof Error ? err.message : "Failed to load progress"))
-      .finally(() => setSending(false));
-  }, [conversationId, event, gardenSteps.length, interviewVersion, position.phase, setPositionPersisted, enterSoundTransition]);
-
-  // First agent message.
-  useEffect(() => {
-    if (position.phase !== "lyric") return;
-    if (!conversationId) return;
-    if (currentMessage !== null) return;
-    if (firstMessageRequested.current) return;
-
-    firstMessageRequested.current = true;
-    let cancelled = false;
-    setSending(true);
-    (async () => {
-      try {
-        const res = await withTimeout(sendMessage(conversationId, ""), 20000, "Timed out while starting the first question.");
-        if (cancelled) return;
-        setCurrentMessage(res.nextMessage.agentMessage);
-        setCurrentSuggestedAnswerTypes(res.nextMessage.suggestedAnswerTypes ?? ["text"]);
-        setLyricQuestionIndex(1);
-        if (res.nextMessage.stopReason === "finished") {
-          setChatFinished(true);
-          enterSoundTransition();
-        }
-      } catch (err) {
-        if (cancelled) return;
-        setChatError(err instanceof Error ? err.message : "Failed to start");
-        let recovered = false;
-        try {
-          const { turns } = await getConversation(conversationId);
-          const agentTurns = turns.filter((t) => t.role === "agent").length;
-          setLyricQuestionIndex(agentTurns || 1);
-          const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
-          if (lastAgent?.content) {
-            setCurrentMessage(lastAgent.content);
-            setCurrentSuggestedAnswerTypes(suggestedTypesForMessage(event, lastAgent.content));
-            recovered = true;
-          }
-          if (lastAgent?.content === THANKS_MESSAGE) {
-            setChatFinished(true);
-            enterSoundTransition();
-          }
-        } catch {
-          // ignore
-        }
-        if (!recovered) firstMessageRequested.current = false;
-      } finally {
-        if (!cancelled) setSending(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [conversationId, currentMessage, enterSoundTransition, event, position.phase]);
+    setJourneyStarted(true);
+    goToStep(0);
+  }
 
   useEffect(() => {
     setEmailCaptchaToken(null);
-  }, [currentMessage]);
+  }, [stepIndex]);
 
   useEffect(() => {
-    if (position.phase !== "lyric" || chatFinished || sending) return;
-    focusResponseInput();
-  }, [position.phase, currentMessage, chatFinished, sending]);
+    if (position.phase !== "step" || !activeStep) return;
+    if (activeStep.kind !== "name" && activeStep.kind !== "text") return;
+    if (sending) return;
+    requestAnimationFrame(() => responseInputRef.current?.focus());
+  }, [position.phase, activeStep, sending, stepIndex]);
 
-  async function handleChatSubmit(e: FormEvent) {
+  async function handleTextSubmit(e: FormEvent) {
     e.preventDefault();
     unlockReferenceTones();
-    if (!conversationId || sending || chatFinished || position.phase !== "lyric") return;
+    if (!activeStep || (activeStep.kind !== "name" && activeStep.kind !== "text")) return;
+    if (sending) return;
+
     if (requiresEmailResponse && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputValue.trim())) {
       setChatError("Please enter a valid email address.");
       return;
@@ -385,23 +351,28 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       setChatError("Complete the quick verification check, then submit.");
       return;
     }
-    if (isNameQuestionPrompt(event.agentBrief, currentMessage) && !inputValue.trim()) {
+    if (isNameStep && !inputValue.trim()) {
       setChatError("Please enter a name.");
       return;
     }
     if (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse) return;
 
     const content = inputValue.trim();
-    const answeredNameQuestion = isNameQuestionPrompt(event.agentBrief, currentMessage);
     setInputValue("");
     if (responseInputRef.current) responseInputRef.current.style.height = "auto";
     setChatError(null);
     setSending(true);
 
     try {
+      const convId = await ensureConversation();
+      if (!convId) {
+        setSending(false);
+        return;
+      }
+
       const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
       const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
-      const res = await sendMessage(conversationId, content, {
+      await sendMessage(convId, content || "(recording)", {
         audioDataUrl,
         videoDataUrl,
         captchaToken: captchaGateActive ? emailCaptchaToken : null,
@@ -411,7 +382,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       setEmailCaptchaToken(null);
       setSending(false);
 
-      if (answeredNameQuestion && content) {
+      if (isNameStep && content) {
         setSonggardenContributorName(event.id, content);
         setContributorName(content);
       }
@@ -420,35 +391,52 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       pulseHaptic();
 
       celebration.celebrate(() => {
-        if (res.nextMessage.stopReason === "finished") {
-          setChatFinished(true);
-          setCurrentMessage(null);
-          enterSoundTransition();
-        } else {
-          setLyricQuestionIndex((n) => n + 1);
-          setCurrentMessage(res.nextMessage.agentMessage);
-          setCurrentSuggestedAnswerTypes(res.nextMessage.suggestedAnswerTypes ?? ["text"]);
-        }
+        goToStep(stepIndex + 1);
       });
     } catch (err) {
       setChatError(err instanceof Error ? err.message : "Submit failed");
       setSending(false);
-    } finally {
-      if (!chatFinished) focusResponseInput();
     }
   }
 
-  function handleSoundTransitionContinue() {
-    unlockReferenceTones();
-    const done = loadDoneSlots(event.id);
-    setDoneSlots(done);
-    if (gardenSteps.length === 0) {
-      setPositionPersisted({ phase: "final", gardenSlotIndex: 0 });
-      return;
-    }
-    setPositionPersisted({ phase: "garden", gardenSlotIndex: firstIncompleteGardenIndex(event, done) });
+  const handleSlotSubmitted = useCallback(() => {
+    if (!activeSound) return;
+
+    const category = activeSound.slot.category;
+    growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
+    pulseHaptic();
+
+    celebration.celebrate(() => {
+      goToStep(stepIndex + 1);
+    });
+  }, [activeSound, celebration, event.id, goToStep, growNode, stepIndex]);
+
+  function handleParticipateAgain() {
+    clearJourneySession(event, interviewVersion, activeSessionToken);
+    clearDoneSlots(event.id);
+    clearGrowthNodes(event.id);
+    setGrowthNodes([]);
+    ensuringConversation.current = false;
+    setJourneyStarted(false);
+    setPosition({ phase: "landing", gardenSlotIndex: 0, stepIndex: 0, interviewVersion });
+    setContributionConsentAgreed(false);
+    setConversationId(null);
+    setActiveSessionToken(null);
+    setConversationReady(false);
+    setChatError(null);
+    setInputValue("");
+    setSending(false);
+    setAudioBlob(null);
+    setVideoBlob(null);
   }
 
+  // Sound step without contributor name — brief name gate
+  const needsNameGate =
+    position.phase === "step" &&
+    activeStep?.kind === "sound" &&
+    !contributorName.trim();
+
+  const [nameGateValue, setNameGateValue] = useState("");
   function handleNameGateContinue() {
     const trimmed = nameGateValue.trim();
     if (!trimmed) {
@@ -460,60 +448,19 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     setChatError(null);
   }
 
-  const handleSlotSubmitted = useCallback(() => {
-    if (!activeGardenStep) return;
-    const updated = loadDoneSlots(event.id);
-    setDoneSlots(updated);
-    const currentIndex = gardenSteps.findIndex((step) => step.slot.id === activeGardenStep.slot.id);
-    const nextIndex = currentIndex + 1;
-
-    const category = activeGardenStep.slot.category;
-    growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
-    pulseHaptic();
-
-    celebration.celebrate(() => {
-      if (nextIndex >= gardenSteps.length) {
-        setPositionPersisted({ phase: "final", gardenSlotIndex: Math.max(0, gardenSteps.length - 1) });
-      } else {
-        setPositionPersisted({ phase: "garden", gardenSlotIndex: nextIndex });
-      }
-    });
-  }, [activeGardenStep, celebration, event.id, gardenSteps, growNode, setPositionPersisted]);
-
-  function handleParticipateAgain() {
-    clearJourneySession(event, interviewVersion, activeSessionToken);
-    clearDoneSlots(event.id);
-    clearGrowthNodes(event.id);
-    setGrowthNodes([]);
-    firstMessageRequested.current = false;
-    setJourneyStarted(false);
-    setPosition({ phase: "landing", gardenSlotIndex: 0, interviewVersion });
-    setLyricQuestionIndex(0);
-    setContributionConsentAgreed(false);
-    setConversationId(null);
-    setActiveSessionToken(null);
-    setCurrentMessage(null);
-    setCurrentSuggestedAnswerTypes(["text"]);
-    setChatFinished(false);
-    setChatError(null);
-    setInputValue("");
-    setSending(false);
-    setAudioBlob(null);
-    setVideoBlob(null);
-    setDoneSlots(new Set());
-  }
-
   const finalMessage = event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
-  const needsNameGate = position.phase === "garden" && !contributorName.trim();
-  const momentKey = needsNameGate ? "name-gate" : `${position.phase}:${position.gardenSlotIndex}:${lyricQuestionIndex}:${currentMessage ?? ""}`;
+  const momentKey = needsNameGate
+    ? "name-gate"
+    : `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
 
   let eyebrow: string | undefined;
   if (position.phase === "landing") eyebrow = WELCOME_MOMENT_LABEL;
   else if (needsNameGate) eyebrow = NAME_MOMENT_LABEL;
-  else if (position.phase === "lyric") eyebrow = isNameQuestion ? NAME_MOMENT_LABEL : LYRIC_MOMENT_LABEL;
-  else if (position.phase === "sound_transition") eyebrow = TRANSITION_MOMENT_LABEL;
-  else if (position.phase === "garden" && activeGardenStep) eyebrow = gardenSlotMomentLabel(activeGardenStep.slot.id);
-  else if (position.phase === "final") eyebrow = COMPLETION_MOMENT_LABEL;
+  else if (activeStep?.kind === "name") eyebrow = NAME_MOMENT_LABEL;
+  else if (activeStep?.kind === "text") eyebrow = LYRIC_MOMENT_LABEL;
+  else if (activeStep?.kind === "sound" && activeSound) {
+    eyebrow = gardenSlotMomentLabel(activeSound.slot.id);
+  } else if (position.phase === "final") eyebrow = COMPLETION_MOMENT_LABEL;
 
   return (
     <WorldStage
@@ -567,8 +514,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
               <button
                 type="submit"
                 disabled={sending || (requireContributionConsent && !contributionConsentAgreed)}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ background: world.accentColor, color: "#1a1530" }}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
+                style={{
+                  borderColor: world.accentColor,
+                  color: world.accentColor,
+                  background: `${world.accentColor}1f`,
+                }}
               >
                 {sending ? "Starting…" : event.ctaText || DEFAULT_CTA_TEXT}
               </button>
@@ -577,16 +528,20 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           </div>
         )}
 
-        {position.phase === "lyric" && (
+        {position.phase === "step" && (activeStep?.kind === "name" || activeStep?.kind === "text") && (
           <div className="space-y-5">
-            {chatError && <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">{chatError}</p>}
+            {chatError && (
+              <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                {chatError}
+              </p>
+            )}
             <div className="min-h-[3rem] text-center">
-              {sending && !currentMessage ? (
+              {sending && !conversationReady ? (
                 <SpinnerDots accentColor={world.accentColor} />
-              ) : currentMessage ? (
+              ) : (
                 <>
                   <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-white sm:text-lg">
-                    {displayPrompt(currentMessage)}
+                    {displayPrompt(promptText)}
                   </p>
                   {responseHint && (
                     <p className="mt-2 font-mono text-sm" style={{ color: world.accentColor }}>
@@ -594,12 +549,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     </p>
                   )}
                 </>
-              ) : (
-                <SpinnerDots accentColor={world.accentColor} />
               )}
             </div>
 
-            <form onSubmit={handleChatSubmit} aria-busy={sending} className="space-y-4">
+            <form onSubmit={handleTextSubmit} aria-busy={sending} className="space-y-4">
               {captchaSetupRequired && (
                 <p className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 font-mono text-xs text-amber-100">
                   Email captcha requires Turnstile keys in .env.local.
@@ -626,7 +579,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 submitLabel={sending ? "Sending…" : "Continue →"}
                 accentColor={world.accentColor}
                 inputMode={requiresEmailResponse ? "email" : "text"}
-                autoComplete={requiresEmailResponse ? "email" : isNameQuestion ? "given-name" : "off"}
+                autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
                 inputRef={(el) => (responseInputRef.current = el)}
               />
               {allowsMediaResponse && (
@@ -644,23 +597,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           </div>
         )}
 
-        {position.phase === "sound_transition" && (
-          <div className="space-y-6 text-center">
-            <p className="mx-auto max-w-xl font-mono text-base leading-snug text-gray-100 sm:text-lg">
-              {soundTransitionMessage(event)}
-            </p>
-            <button
-              type="button"
-              onClick={handleSoundTransitionContinue}
-              className="flex min-h-[52px] w-full items-center justify-center rounded-2xl px-6 py-3 font-mono text-base font-semibold tracking-wide"
-              style={{ background: world.accentColor, color: "#1a1530" }}
-            >
-              Next →
-            </button>
-          </div>
-        )}
-
-        {position.phase === "garden" && needsNameGate && (
+        {position.phase === "step" && activeStep?.kind === "sound" && needsNameGate && (
           <div className="space-y-4">
             <p className="text-center font-mono text-base text-gray-100">
               What name should we credit on your sounds?
@@ -678,16 +615,16 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           </div>
         )}
 
-        {position.phase === "garden" && !needsNameGate && activeGardenStep && (
+        {position.phase === "step" && activeStep?.kind === "sound" && !needsNameGate && activeSound && (
           <SoundMomentPad
-            key={activeGardenStep.slot.id}
+            key={activeSound.slot.id}
             eventId={event.id}
-            slot={activeGardenStep.slot}
-            promptText={activeGardenStep.prompt}
-            buttonLabel={activeGardenStep.buttonLabel}
+            slot={activeSound.slot}
+            promptText={activeSound.prompt}
+            buttonLabel={activeSound.buttonLabel}
             contributorName={contributorName.trim() || null}
             accentColor={world.accentColor}
-            alternateSlots={activeGardenStep.alternateSlots}
+            alternateSlots={activeSound.alternateSlots}
             onSubmitted={handleSlotSubmitted}
           />
         )}
@@ -707,18 +644,13 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         )}
       </MomentOverlay>
 
-      <CelebrationBurst active={celebration.active} accentColor={world.accentColor} message={celebrationMessage(position.phase)} />
+      <CelebrationBurst
+        active={celebration.active}
+        accentColor={world.accentColor}
+        message={activeStep?.kind === "sound" ? "Added to the song garden" : "Got it"}
+      />
     </WorldStage>
   );
-}
-
-function celebrationMessage(phase: JourneyPosition["phase"]): string {
-  switch (phase) {
-    case "garden":
-      return "Added to the world";
-    default:
-      return "Got it";
-  }
 }
 
 function SpinnerDots({ accentColor }: { accentColor: string }) {

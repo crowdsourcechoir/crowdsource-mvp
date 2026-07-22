@@ -32,6 +32,7 @@ export default function NewEventPage() {
         agentThemeId: values.agentThemeId ?? null,
         agentBrief: values.agentBrief ?? null,
         songGardenConfig: values.songGardenConfig,
+        journeySteps: values.journeySteps,
         worldConfig: values.worldConfig ?? null,
       });
       if (created) {
@@ -52,8 +53,8 @@ export default function NewEventPage() {
   }
 
   return (
-    <div className="w-full">
-      <h2 className="mb-6 text-2xl font-semibold text-white">Create Event</h2>
+    <div className="mx-auto w-full max-w-3xl">
+      <h2 className="mb-4 text-xl font-semibold text-white">Create Event</h2>
       {error && (
         <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}

@@ -3,13 +3,11 @@ import {
   BEAT_SLOTS,
   CHOIR_SLOTS,
   gardenSlotById,
-  JOURNEY_GARDEN_SLOT_IDS,
   type BeatSlotId,
   type ChoirSlotId,
   type GardenSlotDef,
   type GardenSlotId,
 } from "@/lib/songgarden/garden-slots";
-
 export type SongGardenStepConfig = {
   slotId: GardenSlotId;
   enabled: boolean;
@@ -28,6 +26,8 @@ export type SongGardenStepConfig = {
 export type SongGardenConfig = {
   soundTransitionMessage: string;
   steps: SongGardenStepConfig[];
+  /** Unified ordered journey (V2). When present, source of truth for WorldJourney. */
+  journeySteps?: unknown[];
 };
 
 export type ResolvedGardenStep = SongGardenStepConfig & {
@@ -50,7 +50,7 @@ export const GARDEN_SLOT_ADMIN_LABELS: Record<GardenSlotId, { name: string; grou
   anything_else: { name: "World sound", group: "World" },
 };
 
-function defaultPhaseLabel(slotId: GardenSlotId): string {
+export function defaultPhaseLabelForSlot(slotId: GardenSlotId): string {
   switch (slotId) {
     case "stomp":
     case "clap":
@@ -71,7 +71,7 @@ function defaultPhaseLabel(slotId: GardenSlotId): string {
   }
 }
 
-function defaultPrompt(slotId: GardenSlotId): string {
+export function defaultPromptForSlot(slotId: GardenSlotId): string {
   switch (slotId) {
     case "stomp":
       return "Add a stomp.";
@@ -97,7 +97,7 @@ function defaultPrompt(slotId: GardenSlotId): string {
   }
 }
 
-function defaultButtonLabel(slotId: GardenSlotId): string | undefined {
+export function defaultButtonLabelForSlot(slotId: GardenSlotId): string | undefined {
   if (slotId === "one_word") return "SING IT";
   return undefined;
 }
@@ -106,16 +106,23 @@ function defaultStep(slotId: GardenSlotId): SongGardenStepConfig {
   return {
     slotId,
     enabled: true,
-    prompt: defaultPrompt(slotId),
-    phaseLabel: defaultPhaseLabel(slotId),
-    buttonLabel: defaultButtonLabel(slotId),
+    prompt: defaultPromptForSlot(slotId),
+    phaseLabel: defaultPhaseLabelForSlot(slotId),
+    buttonLabel: defaultButtonLabelForSlot(slotId),
   };
 }
 
+/** Short default — only what you add. No full pad catalog. */
 export function defaultSongGardenConfig(): SongGardenConfig {
   return {
     soundTransitionMessage: DEFAULT_SOUND_TRANSITION_MESSAGE,
-    steps: JOURNEY_GARDEN_SLOT_IDS.map((slotId) => defaultStep(slotId)),
+    steps: [
+      {
+        ...defaultStep("stomp"),
+        prompt: "Add a stomp, clap, or snap.",
+        alternateSlotIds: ["clap", "snap"],
+      },
+    ],
   };
 }
 
@@ -123,40 +130,50 @@ export function normalizeSongGardenConfig(
   input: Partial<SongGardenConfig> | null | undefined
 ): SongGardenConfig {
   const defaults = defaultSongGardenConfig();
-  if (!input?.steps?.length) return defaults;
+  if (!input?.steps?.length) {
+    return {
+      ...defaults,
+      ...(Array.isArray(input?.journeySteps) ? { journeySteps: input.journeySteps } : {}),
+      soundTransitionMessage:
+        input?.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
+    };
+  }
 
-  const defaultBySlot = new Map(defaults.steps.map((step) => [step.slotId, step]));
   const seen = new Set<GardenSlotId>();
   const steps: SongGardenStepConfig[] = [];
 
   for (const raw of input.steps) {
-    if (!raw?.slotId || !defaultBySlot.has(raw.slotId) || seen.has(raw.slotId)) continue;
+    if (!raw?.slotId || !GARDEN_SLOT_ADMIN_LABELS[raw.slotId] || seen.has(raw.slotId)) continue;
     seen.add(raw.slotId);
-    const def = defaultBySlot.get(raw.slotId)!;
     const alternateSlotIds = Array.isArray(raw.alternateSlotIds)
       ? raw.alternateSlotIds.filter(
-          (id): id is GardenSlotId => typeof id === "string" && id !== raw.slotId && defaultBySlot.has(id)
+          (id): id is GardenSlotId =>
+            typeof id === "string" && id !== raw.slotId && Boolean(GARDEN_SLOT_ADMIN_LABELS[id as GardenSlotId])
         )
       : undefined;
     steps.push({
       slotId: raw.slotId,
       enabled: raw.enabled !== false,
-      prompt: raw.prompt?.trim() || def.prompt,
-      phaseLabel: raw.phaseLabel?.trim() || def.phaseLabel,
-      buttonLabel: raw.buttonLabel?.trim() || def.buttonLabel,
+      prompt: raw.prompt?.trim() || defaultPromptForSlot(raw.slotId),
+      phaseLabel: raw.phaseLabel?.trim() || defaultPhaseLabelForSlot(raw.slotId),
+      buttonLabel: raw.buttonLabel?.trim() || defaultButtonLabelForSlot(raw.slotId),
       ...(alternateSlotIds?.length ? { alternateSlotIds } : {}),
     });
   }
 
-  for (const slotId of JOURNEY_GARDEN_SLOT_IDS) {
-    if (!seen.has(slotId)) {
-      steps.push(defaultBySlot.get(slotId)!);
-    }
+  if (steps.length === 0) {
+    return {
+      ...defaults,
+      ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
+      soundTransitionMessage:
+        input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
+    };
   }
 
   return {
     soundTransitionMessage: input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
     steps,
+    ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
   };
 }
 
@@ -165,6 +182,57 @@ export function resolveSongGardenConfig(event: Event | null | undefined): SongGa
 }
 
 export function getEnabledGardenSteps(event: Event | null | undefined): ResolvedGardenStep[] {
+  // Prefer unified journey sound order when present (avoids legacy full-catalog noise).
+  try {
+    // Lazy import avoided — resolve via songGardenConfig.journeySteps or event.journeySteps inline.
+    const rawJourney =
+      (event as Event & { journeySteps?: unknown })?.journeySteps ??
+      event?.songGardenConfig?.journeySteps;
+    if (Array.isArray(rawJourney) && rawJourney.length > 0) {
+      const fromJourney: ResolvedGardenStep[] = [];
+      const seen = new Set<GardenSlotId>();
+      for (const item of rawJourney) {
+        if (!item || typeof item !== "object") continue;
+        if ((item as { kind?: string }).kind !== "sound") continue;
+        const slotId = (item as { slotId?: GardenSlotId }).slotId;
+        if (!slotId || !GARDEN_SLOT_ADMIN_LABELS[slotId] || seen.has(slotId)) continue;
+        seen.add(slotId);
+        const slot = gardenSlotById(slotId);
+        if (!slot) continue;
+        const alternateSlotIds = Array.isArray((item as { alternateSlotIds?: GardenSlotId[] }).alternateSlotIds)
+          ? (item as { alternateSlotIds: GardenSlotId[] }).alternateSlotIds.filter(
+              (id) => id !== slotId && GARDEN_SLOT_ADMIN_LABELS[id]
+            )
+          : undefined;
+        const alternateSlots = alternateSlotIds
+          ?.map((id) => gardenSlotById(id))
+          .filter((s): s is GardenSlotDef => s != null);
+        fromJourney.push({
+          slotId,
+          enabled: true,
+          prompt:
+            (typeof (item as { prompt?: string }).prompt === "string" &&
+              (item as { prompt: string }).prompt.trim()) ||
+            defaultPromptForSlot(slotId),
+          phaseLabel:
+            (typeof (item as { phaseLabel?: string }).phaseLabel === "string" &&
+              (item as { phaseLabel: string }).phaseLabel.trim()) ||
+            defaultPhaseLabelForSlot(slotId),
+          buttonLabel:
+            (typeof (item as { buttonLabel?: string }).buttonLabel === "string" &&
+              (item as { buttonLabel: string }).buttonLabel.trim()) ||
+            defaultButtonLabelForSlot(slotId),
+          ...(alternateSlotIds?.length ? { alternateSlotIds } : {}),
+          slot,
+          ...(alternateSlots?.length ? { alternateSlots } : {}),
+        });
+      }
+      if (fromJourney.length > 0) return fromJourney;
+    }
+  } catch {
+    // fall through to legacy steps
+  }
+
   const config = resolveSongGardenConfig(event);
   return config.steps
     .filter((step) => step.enabled)

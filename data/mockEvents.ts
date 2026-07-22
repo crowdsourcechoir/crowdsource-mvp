@@ -1,5 +1,6 @@
 import type { AgentBrief } from "./agentInterview";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
+import type { JourneyStep } from "@/lib/songgarden/journey-steps";
 import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
 
 export type Event = {
@@ -21,6 +22,11 @@ export type Event = {
   songGardenConfig?: SongGardenConfig | null;
   /** Song Garden V2 participant-experience world config. Additive/optional — see lib/song-garden-v2. */
   worldConfig?: WorldConfig | null;
+  /**
+   * Unified ordered participant prompts (name / text / sound).
+   * Also persisted inside songGardenConfig.journeySteps for DB compatibility.
+   */
+  journeySteps?: JourneyStep[] | null;
   allowAudioVideoPrompt?: boolean;
   agentThemeId?: string | null;
   agentBrief?: AgentBrief | null;

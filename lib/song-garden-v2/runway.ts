@@ -60,6 +60,8 @@ async function runwayFetch(path: string, init: RequestInit = {}): Promise<Respon
     } catch {
       // non-JSON error body — fall through with raw text
     }
+    // eslint-disable-next-line no-console
+    console.error(`[runway] ${res.status} ${path} ->`, bodyText);
     const message = parsed?.error || parsed?.message || bodyText || `Runway request failed (${res.status}).`;
     const lower = message.toLowerCase();
 
@@ -110,6 +112,39 @@ export type ImageToVideoOptions = {
   model?: "gen4_turbo" | "gen4.5";
 };
 
+export type RunwayReferenceImage = {
+  /** HTTPS URL, data: URI, or runway:// URI. */
+  uri: string;
+  /** Tag referenced in promptText as @Tag (e.g. tag "ref" → "@ref"). */
+  tag: string;
+};
+
+export type TextToImageOptions = {
+  promptText: string;
+  ratio?: string;
+  model?: "gen4_image" | "gen4_image_turbo";
+  /** Optional reference photo(s) — guides composition/place without recycling the photo as the world itself. */
+  referenceImages?: RunwayReferenceImage[];
+};
+
+async function startTextToImage(opts: TextToImageOptions): Promise<string> {
+  const body: Record<string, unknown> = {
+    model: opts.model ?? "gen4_image",
+    promptText: opts.promptText,
+    ratio: opts.ratio ?? "1920:1080",
+  };
+  if (opts.referenceImages?.length) {
+    body.referenceImages = opts.referenceImages;
+  }
+  const res = await runwayFetch("/v1/text_to_image", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!data?.id) throw new RunwayError("api_error", "Runway did not return a task id for text_to_image.");
+  return data.id as string;
+}
+
 async function startImageToVideo(opts: ImageToVideoOptions): Promise<string> {
   const res = await runwayFetch("/v1/image_to_video", {
     method: "POST",
@@ -118,7 +153,7 @@ async function startImageToVideo(opts: ImageToVideoOptions): Promise<string> {
       promptImage: opts.promptImage,
       promptText: opts.promptText,
       ratio: opts.ratio ?? "1280:720",
-      duration: opts.duration ?? 5,
+      duration: opts.duration ?? 10,
     }),
   });
   const data = await res.json();
@@ -128,7 +163,7 @@ async function startImageToVideo(opts: ImageToVideoOptions): Promise<string> {
 
 async function waitForTask(
   taskId: string,
-  { timeoutMs = 5 * 60 * 1000, intervalMs = 4000 }: { timeoutMs?: number; intervalMs?: number } = {}
+  { timeoutMs = 8 * 60 * 1000, intervalMs = 4000 }: { timeoutMs?: number; intervalMs?: number } = {}
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -159,5 +194,15 @@ async function waitForTask(
  */
 export async function generateVideoFromImage(opts: ImageToVideoOptions): Promise<string> {
   const taskId = await startImageToVideo(opts);
+  return waitForTask(taskId);
+}
+
+/**
+ * Generates a brand-new still from a text prompt (no source photo). Used as the base
+ * "world plate" for each storyboard frame before animating it — so the garden is invented
+ * from the vibe brief rather than recycling the event hero image.
+ */
+export async function generateImageFromText(opts: TextToImageOptions): Promise<string> {
+  const taskId = await startTextToImage(opts);
   return waitForTask(taskId);
 }

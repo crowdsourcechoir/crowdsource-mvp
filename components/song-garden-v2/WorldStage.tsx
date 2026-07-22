@@ -9,6 +9,7 @@ import {
 } from "@/lib/song-garden-v2/world-config";
 import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
 import { useAmbientTilt } from "@/lib/song-garden-v2/tilt";
+import LoopingVideo from "./LoopingVideo";
 import ParticleField from "./ParticleField";
 import WorldEnergyField from "./WorldEnergyField";
 import WorldGrowthLayer from "./WorldGrowthLayer";
@@ -50,7 +51,8 @@ export default function WorldStage({
   );
   const baseOpacity = 0.4 + energyLevel * 0.18;
   const baseIntensity = storyboardFrame?.energy ?? energyLevel;
-  const tilt = useAmbientTilt(16);
+  // Strong enough to feel on phone tilt / mouse move — 16px was too subtle under the UI card.
+  const tilt = useAmbientTilt(32);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -71,7 +73,7 @@ export default function WorldStage({
       }}
     >
       {/* Oversized + tilt-shifted so the 2.5D drift never reveals an edge. */}
-      <motion.div className="absolute -inset-[5%]" style={{ x: tilt.x, y: tilt.y }}>
+      <motion.div className="absolute -inset-[8%]" style={{ x: tilt.x, y: tilt.y }}>
         {storyboardFrame ? (
           <StoryboardBackground frame={storyboardFrame.frame} opacity={baseOpacity} />
         ) : blend ? (
@@ -163,20 +165,15 @@ function StoryboardBackground({
 }) {
   if (frame.videoUrl) {
     return (
-      <motion.video
+      <motion.div
         key={frame.videoUrl}
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{ opacity, filter: "saturate(1.05)" }}
+        className="absolute inset-0"
         initial={{ opacity: 0 }}
-        animate={{ opacity }}
+        animate={{ opacity: 1 }}
         transition={{ duration: 1.2, ease: "easeInOut" }}
-        src={frame.videoUrl}
-        poster={frame.sceneUrl ?? undefined}
-        autoPlay
-        loop
-        muted
-        playsInline
-      />
+      >
+        <LoopingVideo src={frame.videoUrl} poster={frame.sceneUrl ?? undefined} opacity={opacity} />
+      </motion.div>
     );
   }
   if (frame.sceneUrl) {

@@ -271,7 +271,7 @@ export default function ParticipantJourney({
     const token = getOrCreateSessionToken(event.id, interviewVersion);
     const savedConversationId = findSavedConversationId(event.id, token);
     if (!savedConversationId) {
-      if (position.phase === "lyric" || position.phase === "sound_transition") {
+      if (position.phase === "lyric") {
         setPositionPersisted({ phase: "landing", gardenSlotIndex: 0 });
         setJourneyStarted(false);
         firstMessageRequested.current = false;

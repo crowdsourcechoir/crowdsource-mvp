@@ -82,12 +82,13 @@ export default function EditEventPage() {
     agentThemeId: event.agentThemeId ?? null,
     agentBrief: event.agentBrief ?? null,
     songGardenConfig: event.songGardenConfig ?? undefined,
+    journeySteps: event.journeySteps ?? undefined,
     worldConfig: event.worldConfig ?? null,
   };
 
   return (
-    <div className="w-full">
-      <h2 className="mb-6 text-2xl font-semibold text-white">Edit Event</h2>
+    <div className="mx-auto w-full max-w-3xl">
+      <h2 className="mb-4 text-xl font-semibold text-white">Edit Event</h2>
       <EventForm
         key={event.id}
         initialValues={initialValues}

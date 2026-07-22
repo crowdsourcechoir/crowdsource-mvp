@@ -117,6 +117,7 @@ export async function addEvent(values: Omit<Event, "id">): Promise<Event> {
     agentThemeId: values.agentThemeId,
     agentBrief: values.agentBrief,
     songGardenConfig: values.songGardenConfig,
+    journeySteps: values.journeySteps,
     worldConfig: values.worldConfig,
   });
 }

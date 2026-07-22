@@ -8,6 +8,7 @@ import {
   resolveSongGardenConfig,
   type ResolvedGardenStep,
 } from "@/lib/songgarden/config";
+import { journeyStepCount } from "@/lib/songgarden/journey-steps";
 
 export {
   allEnabledGardenSlotsDone as allGardenSlotsDone,
@@ -57,11 +58,20 @@ export function lyricQuestionCount(event: Event): number {
   return DEFAULT_LYRIC_COUNT;
 }
 
-export type JourneyPhase = "landing" | "lyric" | "sound_transition" | "garden" | "final";
+export type JourneyPhase =
+  | "landing"
+  | "lyric"
+  | "sound_transition"
+  | "garden"
+  | "final"
+  /** Unified V2 journey — index into resolveJourneySteps(event). */
+  | "step";
 
 export type JourneyPosition = {
   phase: JourneyPhase;
   gardenSlotIndex: number;
+  /** Index into resolveJourneySteps(event) when phase === "step". */
+  stepIndex?: number;
   /** Bumped when interview config changes; invalidates stale saved progress. */
   interviewVersion?: string;
 };
@@ -84,6 +94,17 @@ export function journeyProgress(
   total: number;
   pct: number;
 } {
+  // Unified V2 path (WorldJourney phase "step").
+  if (position.phase === "step") {
+    const total = Math.max(1, journeyStepCount(event));
+    const completed = Math.min(total, (position.stepIndex ?? 0) + 1);
+    return {
+      completed,
+      total,
+      pct: Math.round((completed / total) * 100),
+    };
+  }
+
   const lyrics = lyricQuestionCount(event);
   const garden = gardenStepCount(event);
   const nameSteps = journeyNameStepCount(event);

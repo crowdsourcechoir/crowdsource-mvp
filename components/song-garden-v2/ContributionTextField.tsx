@@ -71,8 +71,12 @@ export default function ContributionTextField({
         onClick={onSubmit}
         disabled={disabled || submitDisabled}
         whileTap={{ scale: 0.97 }}
-        className="flex min-h-[52px] w-full items-center justify-center rounded-2xl px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
-        style={{ background: accentColor, color: "#1a1530" }}
+        className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
+        style={{
+          borderColor: accentColor,
+          color: accentColor,
+          background: `${accentColor}1f`,
+        }}
       >
         {submitLabel}
       </motion.button>
