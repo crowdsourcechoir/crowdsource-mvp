@@ -10,15 +10,35 @@
   "crons": [
     {
       "path": "/api/sales/cron/discovery",
-      "schedule": "0 9 * * *"
+      "schedule": "0 9 * * 1-5"
     },
     {
       "path": "/api/sales/cron/pipeline",
-      "schedule": "20 9 * * *"
+      "schedule": "5 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/pipeline",
+      "schedule": "15 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/pipeline",
+      "schedule": "25 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/pipeline",
+      "schedule": "35 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/pipeline",
+      "schedule": "45 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/pipeline",
+      "schedule": "55 9 * * *"
     },
     {
       "path": "/api/sales/cron/digest",
-      "schedule": "0 10 * * *"
+      "schedule": "10 10 * * *"
     }
   ]
 }
