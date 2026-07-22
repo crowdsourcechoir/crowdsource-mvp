@@ -34,7 +34,7 @@ on `events` (see §5) — everything else rides on the existing schema and APIs.
 landing → lyric (text questions) → sound_transition → garden (sound pads) → final
 ```
 
-**V2** (`WorldJourney` on `/e/[slug]/world`) runs a **unified ordered journey**:
+**V2** (`WorldJourney` on `/e/[slug]` — the public event link) runs a **unified ordered journey**:
 
 ```
 landing → step[0..n] (each step is name | text | sound) → final
@@ -146,7 +146,7 @@ the admin event editor and Song Garden admin canvas.
 `ParticipantJourney.tsx` and `SoundGardenExperience.tsx` is not edited — instead a
 parallel presentation-only orchestrator, `WorldJourney.tsx`, is added under
 `components/song-garden-v2/`, reusing the same phase state machine shape and the
-same backend calls, mounted from a new route (`app/e/[slug]/world/page.tsx`) so the
+same backend calls, mounted from the public event route (`app/e/[slug]/page.tsx`) so the
 existing production participant route (`/e/[slug]`) is completely untouched and
 low-risk. `docs/song-garden-v2/architecture.md` (this file) plus the code comments
 call out that a full cutover (making `/e/[slug]` render the V2 experience directly,
@@ -188,7 +188,7 @@ custom world config in production.
 
 ## 7. Next steps / explicitly not done this pass
 
-- Full cutover of `/e/[slug]` to V2 (currently a separate `/e/[slug]/world` route).
+- ~~Full cutover of `/e/[slug]` to V2~~ — done; `/e/[slug]/world` redirects to `/e/[slug]`.
 - Admin UI is a minimal flat form (title/hero/colors/preset/soundtrack URL) —
   no live world preview inside the admin editor yet.
 - Ambient soundtrack is a plain looping `<audio>` tag with an unlock-on-first-tap

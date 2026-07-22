@@ -43,7 +43,7 @@ export default function SonggardenAdminPage() {
         </Link>
         <span className="text-gray-600">·</span>
         <Link
-          href={`/e/${event.slug}/songgarden`}
+          href={`/e/${event.slug}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-[#CFFF81] hover:underline"

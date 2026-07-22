@@ -4,8 +4,8 @@ type SonggardenPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-/** Deep links land on the unified event page — no separate reload shell. */
+/** Legacy Song Garden deep links redirect to the public World experience. */
 export default async function SonggardenPage({ params }: SonggardenPageProps) {
   const { slug } = await params;
-  redirect(`/e/${slug}?panel=songgarden`);
+  redirect(`/e/${slug}`);
 }

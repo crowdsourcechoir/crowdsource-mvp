@@ -1,15 +1,11 @@
-import { Suspense } from "react";
-import WorldLoadingShell from "@/components/song-garden-v2/WorldLoadingShell";
-import WorldPageClient from "./WorldPageClient";
+import { redirect } from "next/navigation";
 
-/**
- * Song Garden V2 participant entry point. Separate from the production
- * `/e/[slug]` route on purpose — see docs/song-garden-v2/architecture.md §4.
- */
-export default function WorldPage() {
-  return (
-    <Suspense fallback={<WorldLoadingShell />}>
-      <WorldPageClient />
-    </Suspense>
-  );
+type WorldPageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+/** Legacy /world URLs redirect to the public event page (now World). */
+export default async function WorldPage({ params }: WorldPageProps) {
+  const { slug } = await params;
+  redirect(`/e/${slug}`);
 }

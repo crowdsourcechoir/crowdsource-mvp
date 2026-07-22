@@ -811,12 +811,12 @@ export default function EventForm({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className={sectionTitleClass}>World</h3>
           <a
-            href={`/e/${values.slug || "your-slug"}/world`}
+            href={`/e/${values.slug || "your-slug"}`}
             target="_blank"
             rel="noreferrer"
             className="text-[11px] text-gray-500 hover:text-gray-300"
           >
-            Preview /e/{values.slug || "…"}/world
+            Public link /e/{values.slug || "…"}
           </a>
         </div>
         <div className="grid gap-2.5 sm:grid-cols-2">

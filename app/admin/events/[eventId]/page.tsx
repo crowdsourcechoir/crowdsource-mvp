@@ -378,29 +378,17 @@ export default function EventDetailPage() {
             </Link>
             <Link
               href={`/e/${event.slug}`}
-              className="min-h-[44px] rounded-xl border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
-            >
-              View page
-            </Link>
-            <Link
-              href={`/e/${event.slug}?panel=songgarden`}
-              className="min-h-[44px] rounded-xl border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
-            >
-              View Song Garden
-            </Link>
-            <Link
-              href={`/admin/songgarden/${event.id}`}
-              className="min-h-[44px] rounded-xl border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
-            >
-              Song Garden canvas
-            </Link>
-            <Link
-              href={`/e/${event.slug}/world`}
               target="_blank"
               rel="noopener noreferrer"
               className="min-h-[44px] rounded-xl border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
             >
-              Preview Song Garden V2 (world)
+              Open public link
+            </Link>
+            <Link
+              href={`/admin/songgarden/${event.id}`}
+              className="min-h-[44px] rounded-xl border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
+            >
+              Composition canvas
             </Link>
           </div>
         </div>
