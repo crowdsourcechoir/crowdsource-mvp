@@ -5,6 +5,7 @@ import { getContact } from "./contacts";
 import { getDraft } from "./outreach";
 import { listFindingsWithSourcesForOpportunity } from "./research";
 import { getQueueItemByOpportunity } from "./queue";
+import { getLatestBriefForOpportunity } from "./pipeline";
 import type { FunnelItemDetail, QueueItemDetail } from "../types";
 
 /** Everything the review UI needs for one opportunity, assembled in one call so no extra navigation is required. */
@@ -13,9 +14,10 @@ export async function assembleQueueItemDetail(opportunityId: string): Promise<Qu
   const [opportunity, queueItem] = await Promise.all([getOpportunity(opportunityId), getQueueItemByOpportunity(opportunityId)]);
   if (!opportunity) return null;
 
-  const [organization, findings] = await Promise.all([
+  const [organization, findings, brief] = await Promise.all([
     getOrganization(opportunity.organizationId),
     listFindingsWithSourcesForOpportunity(opportunity.organizationId, opportunity.id),
+    getLatestBriefForOpportunity(opportunityId),
   ]);
   if (!organization) return null;
 
@@ -72,6 +74,7 @@ export async function assembleQueueItemDetail(opportunityId: string): Promise<Qu
     organizationTypeLabel,
     contact,
     score,
+    brief,
     draft,
     findings,
   };

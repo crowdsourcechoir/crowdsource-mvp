@@ -219,6 +219,23 @@ export default function ApprovalQueueClient() {
             </div>
           </div>
 
+          {current.brief && (
+            <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Gut check</h3>
+              <p className="mt-2 text-sm text-gray-100">{current.brief.summary}</p>
+              <p className="mt-2 text-sm text-gray-300">
+                <span className="text-gray-500">Angle: </span>
+                {current.brief.recommendedAngle}
+              </p>
+              {current.brief.risks.length > 0 && (
+                <p className="mt-2 text-sm text-amber-300/90">
+                  <span className="text-amber-500/80">Risks: </span>
+                  {current.brief.risks.join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact</h3>
@@ -344,7 +361,9 @@ export default function ApprovalQueueClient() {
           <p className="mt-3 text-xs text-gray-500">
             Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; launch email, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
             <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Approving opens the draft in your default mail app — you send it from
-            there (and can attach the one-sheet yourself). The full draft is also always copied to your clipboard as a backup.{" "}
+            there. A link to the experience page (`/book`) is already in the draft body — pricing and
+            other attachments wait until they reply. The full draft is also always copied to
+            your clipboard as a backup.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>

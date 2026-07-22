@@ -29,7 +29,9 @@ I'm Joel DeJong, founder of Crowdsource Choir. All four of my children have atte
 
 I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life. Together, attendees co-create and sing an original anthem inspired by the conference, transforming the theme into a shared experience that's joyful, memorable, and deeply participatory.
 
-I've attached a one-page overview of the Anthem Experience. If it feels like it could be a fit, I'd love to schedule a quick call and learn more about the conference.
+I've included a bit more about the experience here:
+https://www.crowdsourcechoir.com/book
+If it feels like it could be a fit, I'd love to schedule a quick call and learn more about the conference.
 
 Thanks, and I hope we have a chance to connect.
 
@@ -47,7 +49,9 @@ Unlike a traditional keynote or performance, Crowdsource Choir transforms attend
 
 Each engagement is custom-designed for the event. Before the conference, attendees contribute stories, ideas, and voices that become the creative source material for a custom anthem and participatory musical experience, premiered together live during the event. The format is flexible and can serve as an opening session, closing experience, experiential keynote, featured performance, or interactive general session for audiences of 50 to 5,000+.
 
-I've attached a one-page overview with a few links to past experiences. If it resonates, I'd love to connect and explore whether Crowdsource Choir might fit your conference.
+I've included a bit more about the experience here:
+https://www.crowdsourcechoir.com/book
+If it resonates, I'd love to connect and explore whether Crowdsource Choir might fit your conference.
 
 Thanks for your time, and I hope we have a chance to connect.
 
@@ -74,6 +78,14 @@ Rules:
 
 function fillTemplate(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? `{{${key}}}`);
+}
+
+/** Branded experience page for cold outreach — pricing/PDFs wait until they reply. Override via
+ * SALES_BOOK_URL if the landing page moves; default is the live /book page. */
+const DEFAULT_BOOK_URL = "https://www.crowdsourcechoir.com/book";
+
+function bookUrl(): string {
+  return process.env.SALES_BOOK_URL?.trim() || DEFAULT_BOOK_URL;
 }
 
 export async function runDraftStage(
@@ -143,6 +155,7 @@ export async function runDraftStage(
     // Deterministic, not AI-authored — the "ask" always matches the assigned persona strategy
     // exactly, same rationale as the rest of the template-fill approach (see SYSTEM_PROMPT above).
     cta: strategy.cta,
+    book_url: bookUrl(),
   });
 
   void resolveFindingIds(indexed, result.parsed.personalizationFindingIndexes); // kept in agent_runs.output for provenance

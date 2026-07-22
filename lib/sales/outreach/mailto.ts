@@ -2,9 +2,8 @@
  * Builds a `mailto:` URL so "launching" an email opens the reviewer's own default mail client
  * (Mail.app, Outlook, a configured webmail handler, etc.) with recipient/subject/body pre-filled
  * — the human still hits send from their own real inbox. Deliberately not a real send API: this
- * keeps the human-in-the-loop principle intact (see docs/sales-platform/README.md) and lets the
- * reviewer attach the one-sheet themselves, since `mailto:` links can't carry attachments for
- * security reasons across every browser/OS combination.
+ * keeps the human-in-the-loop principle intact (see docs/sales-platform/README.md). Cold outreach
+ * drafts already include a link to the branded `/book` page — pricing PDFs wait until they reply.
  *
  * Percent-encodes per RFC 6068 (not `application/x-www-form-urlencoded`'s "+ for space"), which
  * is what the mailto URI scheme actually expects — using URLSearchParams here would silently

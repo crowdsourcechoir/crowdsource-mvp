@@ -319,6 +319,13 @@ export type DigestRun = {
   createdAt: string;
 };
 
+/** Internal salesperson brief from the pipeline brief stage — the 15-second gut-check read on the queue. */
+export type OpportunityBrief = {
+  summary: string;
+  recommendedAngle: string;
+  risks: string[];
+};
+
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */
 export type QueueItemDetail = {
   queueItem: ApprovalQueueItem;
@@ -328,6 +335,8 @@ export type QueueItemDetail = {
   organizationTypeLabel: string | null;
   contact: Contact | null;
   score: ProspectScore | null;
+  /** Latest succeeded brief-stage output for this opportunity, if any. */
+  brief: OpportunityBrief | null;
   draft: OutreachDraft | null;
   findings: (ResearchFinding & { sourceUrl: string })[];
 };

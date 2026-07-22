@@ -1,5 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
-import type { AgentRun, AgentRunStatus, PipelineRun, PipelineRunStatus, PipelineStage } from "../types";
+import type { AgentRun, AgentRunStatus, OpportunityBrief, PipelineRun, PipelineRunStatus, PipelineStage } from "../types";
 
 function rowToPipelineRun(row: Record<string, unknown>): PipelineRun {
   return {
@@ -106,6 +106,32 @@ export async function listAgentRuns(pipelineRunId: string): Promise<AgentRun[]> 
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToAgentRun);
+}
+
+/**
+ * Latest succeeded brief-stage output for an opportunity — the 15-second gut-check the queue UI
+ * shows. Briefs are stored only on agent_runs (no dedicated briefs table); input was
+ * `{ opportunityId }` when the stage ran (see run-pipeline.ts).
+ */
+export async function getLatestBriefForOpportunity(opportunityId: string): Promise<OpportunityBrief | null> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("agent_runs")
+    .select("output")
+    .eq("stage", "brief")
+    .eq("status", "succeeded")
+    .contains("input", { opportunityId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.output || typeof data.output !== "object") return null;
+  const output = data.output as Record<string, unknown>;
+  const summary = typeof output.summary === "string" ? output.summary : null;
+  const recommendedAngle = typeof output.recommendedAngle === "string" ? output.recommendedAngle : null;
+  if (!summary || !recommendedAngle) return null;
+  const risks = Array.isArray(output.risks) ? output.risks.filter((r): r is string => typeof r === "string") : [];
+  return { summary, recommendedAngle, risks };
 }
 
 export async function startAgentRun(pipelineRunId: string, stage: PipelineStage, input: unknown): Promise<AgentRun> {
