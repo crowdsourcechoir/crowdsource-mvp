@@ -16,7 +16,7 @@ import {
 } from "@/lib/songgarden/garden-slots";
 import { gardenSlotMomentLabel } from "@/lib/song-garden-v2/moment-labels";
 
-/** Participant-facing eyebrow above the prompt (e.g. "Your Words"). */
+/** Suggestions for the freeform eyebrow field (optional). */
 export const JOURNEY_CATEGORY_PRESETS = [
   "Your Words",
   "Your Sounds",
@@ -34,28 +34,19 @@ export type JourneyNameStep = {
   categoryLabel?: string;
 };
 
-export type JourneyTextStep = {
+/**
+ * One customizable contribution prompt. Response channels are independent toggles —
+ * text, audio, and/or video (at least one required).
+ */
+export type JourneyPromptStep = {
   id: string;
-  kind: "text";
+  kind: "prompt";
   prompt: string;
   categoryLabel?: string;
+  allowText?: boolean;
+  allowAudio?: boolean;
+  allowVideo?: boolean;
   requireEmailCaptcha?: boolean;
-};
-
-/** Voice recording only — no text box. */
-export type JourneyAudioStep = {
-  id: string;
-  kind: "audio";
-  prompt: string;
-  categoryLabel?: string;
-};
-
-/** Video recording only — no text box. */
-export type JourneyVideoStep = {
-  id: string;
-  kind: "video";
-  prompt: string;
-  categoryLabel?: string;
 };
 
 export type JourneySoundStep = {
@@ -69,12 +60,7 @@ export type JourneySoundStep = {
   alternateSlotIds?: GardenSlotId[];
 };
 
-export type JourneyStep =
-  | JourneyNameStep
-  | JourneyTextStep
-  | JourneyAudioStep
-  | JourneyVideoStep
-  | JourneySoundStep;
+export type JourneyStep = JourneyNameStep | JourneyPromptStep | JourneySoundStep;
 
 export type ResolvedJourneySoundStep = JourneySoundStep & {
   slot: GardenSlotDef;
@@ -104,14 +90,27 @@ function readPrompt(item: object): string {
     : "";
 }
 
+/** Normalize response toggles so at least one channel stays on. */
+export function normalizePromptChannels(step: {
+  allowText?: boolean;
+  allowAudio?: boolean;
+  allowVideo?: boolean;
+}): Pick<JourneyPromptStep, "allowText" | "allowAudio" | "allowVideo"> {
+  const allowText = step.allowText !== false;
+  const allowAudio = Boolean(step.allowAudio);
+  const allowVideo = Boolean(step.allowVideo);
+  if (!allowText && !allowAudio && !allowVideo) {
+    return { allowText: true, allowAudio: false, allowVideo: false };
+  }
+  return { allowText, allowAudio, allowVideo };
+}
+
 export function defaultCategoryLabelForStep(
   kind: JourneyStep["kind"],
   slotId?: GardenSlotId
 ): string {
   if (kind === "name") return "Your Name";
-  if (kind === "text") return "Your Words";
-  if (kind === "audio") return "Your Voice";
-  if (kind === "video") return "Your Face";
+  if (kind === "prompt") return "Your Words";
   if (kind === "sound" && slotId) return gardenSlotMomentLabel(slotId);
   return "Your Sounds";
 }
@@ -120,16 +119,21 @@ export function resolveCategoryLabel(step: JourneyStep): string {
   const custom = step.categoryLabel?.trim();
   if (custom) return custom;
   if (step.kind === "sound") return defaultCategoryLabelForStep("sound", step.slotId);
+  if (step.kind === "prompt") {
+    const channels = normalizePromptChannels(step);
+    if (channels.allowAudio && !channels.allowText && !channels.allowVideo) return "Your Voice";
+    if (channels.allowVideo && !channels.allowText && !channels.allowAudio) return "Your Face";
+    return "Your Words";
+  }
   return defaultCategoryLabelForStep(step.kind);
 }
 
 export function isAgentContributionStep(
   step: JourneyStep
-): step is JourneyNameStep | JourneyTextStep | JourneyAudioStep | JourneyVideoStep {
-  return step.kind === "name" || step.kind === "text" || step.kind === "audio" || step.kind === "video";
+): step is JourneyNameStep | JourneyPromptStep {
+  return step.kind === "name" || step.kind === "prompt";
 }
 
-/** Short starter journey for new events. */
 export function defaultJourneySteps(): JourneyStep[] {
   return [
     {
@@ -140,9 +144,12 @@ export function defaultJourneySteps(): JourneyStep[] {
     },
     {
       id: newStepId(),
-      kind: "text",
+      kind: "prompt",
       prompt: "What's a word or phrase you want to plant in this Song Garden?",
       categoryLabel: "Your Words",
+      allowText: true,
+      allowAudio: false,
+      allowVideo: false,
     },
     {
       id: newStepId(),
@@ -154,6 +161,34 @@ export function defaultJourneySteps(): JourneyStep[] {
       alternateSlotIds: ["clap", "snap"],
     },
   ];
+}
+
+function promptFromLegacyChannels(
+  id: string,
+  prompt: string,
+  categoryLabel: string | undefined,
+  opts: {
+    allowText?: boolean;
+    allowAudio?: boolean;
+    allowVideo?: boolean;
+    requireEmailCaptcha?: boolean;
+  }
+): JourneyPromptStep {
+  const channels = normalizePromptChannels(opts);
+  let label = categoryLabel?.trim() || "";
+  if (!label) {
+    if (channels.allowAudio && !channels.allowText && !channels.allowVideo) label = "Your Voice";
+    else if (channels.allowVideo && !channels.allowText && !channels.allowAudio) label = "Your Face";
+    else label = "Your Words";
+  }
+  return {
+    id,
+    kind: "prompt",
+    prompt,
+    categoryLabel: label,
+    ...channels,
+    requireEmailCaptcha: Boolean(opts.requireEmailCaptcha) && channels.allowText,
+  };
 }
 
 export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
@@ -185,55 +220,46 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
       continue;
     }
 
-    if (kind === "audio") {
-      steps.push({
-        id,
-        kind: "audio",
-        prompt,
-        categoryLabel: categoryLabel || "Your Voice",
-      });
-      continue;
-    }
+    // Unified prompt + migrate legacy text/audio/video kinds.
+    if (kind === "prompt" || kind === "text" || kind === "audio" || kind === "video") {
+      let allowText = Boolean((item as { allowText?: unknown }).allowText);
+      let allowAudio = Boolean((item as { allowAudio?: unknown }).allowAudio);
+      let allowVideo = Boolean((item as { allowVideo?: unknown }).allowVideo);
 
-    if (kind === "video") {
-      steps.push({
-        id,
-        kind: "video",
-        prompt,
-        categoryLabel: categoryLabel || "Your Face",
-      });
-      continue;
-    }
+      if (kind === "text") {
+        // Old text steps: text on; audio/video were optional toggles.
+        allowText = true;
+        allowAudio = Boolean((item as { allowAudio?: unknown }).allowAudio);
+        allowVideo = Boolean((item as { allowVideo?: unknown }).allowVideo);
+      } else if (kind === "audio") {
+        allowText = false;
+        allowAudio = true;
+        allowVideo = false;
+      } else if (kind === "video") {
+        allowText = false;
+        allowAudio = false;
+        allowVideo = true;
+      } else if (kind === "prompt") {
+        // If none of the new flags are present, default to text.
+        const hasAnyFlag =
+          (item as { allowText?: unknown }).allowText !== undefined ||
+          (item as { allowAudio?: unknown }).allowAudio !== undefined ||
+          (item as { allowVideo?: unknown }).allowVideo !== undefined;
+        if (!hasAnyFlag) {
+          allowText = true;
+          allowAudio = false;
+          allowVideo = false;
+        }
+      }
 
-    if (kind === "text") {
-      const allowAudio = Boolean((item as { allowAudio?: unknown }).allowAudio);
-      const allowVideo = Boolean((item as { allowVideo?: unknown }).allowVideo);
-      // Migrate legacy text+audio / text+video toggles into dedicated kinds.
-      if (allowAudio && !allowVideo) {
-        steps.push({
-          id,
-          kind: "audio",
-          prompt,
-          categoryLabel: categoryLabel || "Your Voice",
-        });
-        continue;
-      }
-      if (allowVideo) {
-        steps.push({
-          id,
-          kind: "video",
-          prompt,
-          categoryLabel: categoryLabel || "Your Face",
-        });
-        continue;
-      }
-      steps.push({
-        id,
-        kind: "text",
-        prompt,
-        categoryLabel: categoryLabel || "Your Words",
-        requireEmailCaptcha: Boolean((item as { requireEmailCaptcha?: unknown }).requireEmailCaptcha),
-      });
+      steps.push(
+        promptFromLegacyChannels(id, prompt, categoryLabel, {
+          allowText,
+          allowAudio,
+          allowVideo,
+          requireEmailCaptcha: Boolean((item as { requireEmailCaptcha?: unknown }).requireEmailCaptcha),
+        })
+      );
       continue;
     }
 
@@ -272,10 +298,6 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
   return steps;
 }
 
-/**
- * Resolve the unified journey. Prefers explicit journeySteps; otherwise synthesizes
- * from collectName + askAboutItems + enabled garden steps only (not the full catalog).
- */
 export function resolveJourneySteps(event: Event | null | undefined): JourneyStep[] {
   const fromEvent = normalizeJourneySteps(event?.journeySteps);
   if (fromEvent.length > 0) return fromEvent;
@@ -304,42 +326,26 @@ export function synthesizeJourneySteps(event: Event | null | undefined): Journey
   );
   if (items?.length) {
     for (const item of items) {
-      const prompt = item.prompt.trim();
-      if (item.allowAudio && !item.allowVideo) {
-        steps.push({
-          id: newStepId(),
-          kind: "audio",
-          prompt,
-          categoryLabel: "Your Voice",
-        });
-      } else if (item.allowVideo) {
-        steps.push({
-          id: newStepId(),
-          kind: "video",
-          prompt,
-          categoryLabel: "Your Face",
-        });
-      } else {
-        steps.push({
-          id: newStepId(),
-          kind: "text",
-          prompt,
-          categoryLabel: "Your Words",
+      const allowAudio = Boolean(item.allowAudio);
+      const allowVideo = Boolean(item.allowVideo);
+      // Single media flag → media-only. Both flags → text with optional media (legacy).
+      const allowText =
+        (!allowAudio && !allowVideo) || (allowAudio && allowVideo);
+      steps.push(
+        promptFromLegacyChannels(newStepId(), item.prompt.trim(), undefined, {
+          allowText,
+          allowAudio,
+          allowVideo,
           requireEmailCaptcha: Boolean(item.requireEmailCaptcha),
-        });
-      }
+        })
+      );
     }
   } else {
     const strings = brief?.askAbout?.filter(
       (q): q is string => typeof q === "string" && q.trim().length > 0
     );
     for (const prompt of strings ?? []) {
-      steps.push({
-        id: newStepId(),
-        kind: "text",
-        prompt: prompt.trim(),
-        categoryLabel: "Your Words",
-      });
+      steps.push(createJourneyPromptStep(prompt.trim()));
     }
   }
 
@@ -362,7 +368,6 @@ export function synthesizeJourneySteps(event: Event | null | undefined): Journey
   return steps.length > 0 ? steps : defaultJourneySteps();
 }
 
-/** Sync legacy agentBrief + songGardenConfig.steps from a unified journey list. */
 export function syncLegacyFromJourneySteps(
   journeySteps: JourneyStep[],
   prevBrief: AgentBrief | null | undefined,
@@ -373,23 +378,17 @@ export function syncLegacyFromJourneySteps(
   const soundSteps = normalized.filter((s): s is JourneySoundStep => s.kind === "sound");
 
   const askAboutItems = normalized
-    .filter(
-      (s): s is JourneyTextStep | JourneyAudioStep | JourneyVideoStep =>
-        s.kind === "text" || s.kind === "audio" || s.kind === "video"
-    )
+    .filter((s): s is JourneyPromptStep => s.kind === "prompt")
     .filter((s) => s.prompt.trim().length > 0)
     .map((s) => {
-      if (s.kind === "audio") {
-        return { prompt: s.prompt.trim(), allowAudio: true, allowVideo: false, requireEmailCaptcha: false };
-      }
-      if (s.kind === "video") {
-        return { prompt: s.prompt.trim(), allowAudio: false, allowVideo: true, requireEmailCaptcha: false };
-      }
+      const channels = normalizePromptChannels(s);
       return {
         prompt: s.prompt.trim(),
-        allowAudio: false,
-        allowVideo: false,
-        requireEmailCaptcha: Boolean(s.requireEmailCaptcha),
+        allowAudio: channels.allowAudio,
+        allowVideo: channels.allowVideo,
+        // Legacy field: media-only steps still need a turn; text optional is implied by flags.
+        allowMedia: channels.allowAudio || channels.allowVideo,
+        requireEmailCaptcha: Boolean(s.requireEmailCaptcha) && channels.allowText,
       };
     });
 
@@ -438,16 +437,16 @@ export function journeyStepCount(event: Event | null | undefined): number {
   return resolveJourneySteps(event).length;
 }
 
-export function createJourneyTextStep(prompt = ""): JourneyTextStep {
-  return { id: newStepId(), kind: "text", prompt, categoryLabel: "Your Words" };
-}
-
-export function createJourneyAudioStep(prompt = "Would you be willing to sing your phrase?"): JourneyAudioStep {
-  return { id: newStepId(), kind: "audio", prompt, categoryLabel: "Your Voice" };
-}
-
-export function createJourneyVideoStep(prompt = "Share a short video."): JourneyVideoStep {
-  return { id: newStepId(), kind: "video", prompt, categoryLabel: "Your Face" };
+export function createJourneyPromptStep(prompt = ""): JourneyPromptStep {
+  return {
+    id: newStepId(),
+    kind: "prompt",
+    prompt,
+    categoryLabel: "",
+    allowText: true,
+    allowAudio: false,
+    allowVideo: false,
+  };
 }
 
 export function createJourneyNameStep(prompt = DEFAULT_NAME_QUESTION_PROMPT): JourneyNameStep {
@@ -463,5 +462,36 @@ export function createJourneySoundStep(slotId: GardenSlotId): JourneySoundStep {
     categoryLabel: defaultCategoryLabelForStep("sound", slotId),
     phaseLabel: defaultPhaseLabelForSlot(slotId),
     ...(defaultButtonLabelForSlot(slotId) ? { buttonLabel: defaultButtonLabelForSlot(slotId) } : {}),
+  };
+}
+
+/** @deprecated Use createJourneyPromptStep */
+export function createJourneyTextStep(prompt = ""): JourneyPromptStep {
+  return createJourneyPromptStep(prompt);
+}
+
+/** @deprecated Use createJourneyPromptStep with allowAudio */
+export function createJourneyAudioStep(prompt = "Would you be willing to sing your phrase?"): JourneyPromptStep {
+  return {
+    id: newStepId(),
+    kind: "prompt",
+    prompt,
+    categoryLabel: "Your Voice",
+    allowText: false,
+    allowAudio: true,
+    allowVideo: false,
+  };
+}
+
+/** @deprecated Use createJourneyPromptStep with allowVideo */
+export function createJourneyVideoStep(prompt = "Share a short video."): JourneyPromptStep {
+  return {
+    id: newStepId(),
+    kind: "prompt",
+    prompt,
+    categoryLabel: "Your Face",
+    allowText: false,
+    allowAudio: false,
+    allowVideo: true,
   };
 }

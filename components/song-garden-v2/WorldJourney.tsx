@@ -19,6 +19,7 @@ import {
 import { loadDoneSlots, clearDoneSlots } from "@/lib/songgarden/garden-storage";
 import {
   isAgentContributionStep,
+  normalizePromptChannels,
   resolveCategoryLabel,
   resolveJourneySteps,
   resolveSoundStep,
@@ -113,16 +114,19 @@ function clearJourneySession(event: Event, interviewVersion: string, sessionToke
 }
 
 function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["suggestedAnswerTypes"] {
-  if (step.kind === "name" || step.kind === "text") {
-    const types: AgentNextMessageResponse["suggestedAnswerTypes"] = ["text"];
-    if (step.kind === "text" && step.requireEmailCaptcha) {
+  if (step.kind === "name") return ["text"];
+  if (step.kind === "prompt") {
+    const channels = normalizePromptChannels(step);
+    const types: AgentNextMessageResponse["suggestedAnswerTypes"] = [];
+    if (channels.allowText) types.push("text");
+    if (channels.allowAudio) types.push("voice");
+    if (channels.allowVideo) types.push("video");
+    if (channels.allowText && step.requireEmailCaptcha) {
       types.push("email");
       types.push("captcha");
     }
-    return types;
+    return types.length > 0 ? types : ["text"];
   }
-  if (step.kind === "audio") return ["voice"];
-  if (step.kind === "video") return ["video"];
   return ["text"];
 }
 
@@ -202,20 +206,22 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const captchaGateActive = requiresCaptchaResponse && isTurnstileClientConfigured();
   const captchaSetupRequired = requiresCaptchaResponse && !isTurnstileClientConfigured();
   const isNameStep = activeStep?.kind === "name";
-  const isAudioStep = activeStep?.kind === "audio";
-  const isVideoStep = activeStep?.kind === "video";
+  const promptChannels =
+    activeStep?.kind === "prompt" ? normalizePromptChannels(activeStep) : null;
+  const showTextInput = isNameStep || Boolean(promptChannels?.allowText);
+  const showAudioInput = Boolean(promptChannels?.allowAudio);
+  const showVideoInput = Boolean(promptChannels?.allowVideo);
+  const isMediaOnlyPrompt =
+    activeStep?.kind === "prompt" &&
+    !promptChannels?.allowText &&
+    (Boolean(promptChannels?.allowAudio) || Boolean(promptChannels?.allowVideo));
 
   const promptText = useMemo(() => {
     if (!activeStep) return "";
     if (activeStep.kind === "name") {
       return activeStep.prompt?.trim() || "What should we call you?";
     }
-    if (
-      activeStep.kind === "text" ||
-      activeStep.kind === "audio" ||
-      activeStep.kind === "video" ||
-      activeStep.kind === "sound"
-    ) {
+    if (activeStep.kind === "prompt" || activeStep.kind === "sound") {
       return activeStep.prompt;
     }
     return "";
@@ -223,10 +229,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
   const responseHint = useMemo(
     () =>
-      isAudioStep || isVideoStep
+      isMediaOnlyPrompt
         ? null
         : questionResponseHint(promptText, { isName: isNameStep, isEmail: requiresEmailResponse }),
-    [promptText, isNameStep, requiresEmailResponse, isAudioStep, isVideoStep]
+    [promptText, isNameStep, requiresEmailResponse, isMediaOnlyPrompt]
   );
 
   const goToStep = useCallback(
@@ -337,36 +343,56 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
   useEffect(() => {
     if (position.phase !== "step" || !activeStep) return;
-    if (activeStep.kind !== "name" && activeStep.kind !== "text") return;
+    if (!showTextInput) return;
     if (sending) return;
     requestAnimationFrame(() => responseInputRef.current?.focus());
-  }, [position.phase, activeStep, sending, stepIndex]);
+  }, [position.phase, activeStep, sending, stepIndex, showTextInput]);
 
-  async function handleTextSubmit(e: FormEvent) {
+  async function handleContributionSubmit(e: FormEvent) {
     e.preventDefault();
     unlockReferenceTones();
-    if (!activeStep || (activeStep.kind !== "name" && activeStep.kind !== "text")) return;
+    if (!activeStep || (activeStep.kind !== "name" && activeStep.kind !== "prompt")) return;
     if (sending) return;
 
-    if (requiresEmailResponse && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputValue.trim())) {
-      setChatError("Please enter a valid email address.");
-      return;
-    }
-    if (captchaSetupRequired) {
-      setChatError("Email verification is not configured. Check /api/turnstile/status.");
-      return;
-    }
-    if (captchaGateActive && !emailCaptchaToken) {
-      setChatError("Complete the quick verification check, then submit.");
-      return;
-    }
-    if (isNameStep && !inputValue.trim()) {
+    const channels =
+      activeStep.kind === "prompt" ? normalizePromptChannels(activeStep) : { allowText: true, allowAudio: false, allowVideo: false };
+    const textValue = inputValue.trim();
+    const hasText = channels.allowText && Boolean(textValue);
+    const hasAudio = channels.allowAudio && Boolean(audioBlob);
+    const hasVideo = channels.allowVideo && Boolean(videoBlob);
+
+    if (isNameStep && !textValue) {
       setChatError("Please enter a name.");
       return;
     }
-    if (!inputValue.trim()) return;
 
-    const content = inputValue.trim();
+    if (!hasText && !hasAudio && !hasVideo) {
+      if (channels.allowAudio && !channels.allowText && !channels.allowVideo) {
+        setChatError("Record your audio, then continue.");
+      } else if (channels.allowVideo && !channels.allowText && !channels.allowAudio) {
+        setChatError("Record your video, then continue.");
+      } else if (!channels.allowText) {
+        setChatError("Record a response, then continue.");
+      } else {
+        setChatError("Add a response to continue.");
+      }
+      return;
+    }
+
+    if (hasText && requiresEmailResponse && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(textValue)) {
+      setChatError("Please enter a valid email address.");
+      return;
+    }
+    if (hasText && captchaSetupRequired) {
+      setChatError("Email verification is not configured. Check /api/turnstile/status.");
+      return;
+    }
+    if (hasText && captchaGateActive && !emailCaptchaToken) {
+      setChatError("Complete the quick verification check, then submit.");
+      return;
+    }
+
+    const content = hasText ? textValue : "(recording)";
     setInputValue("");
     if (responseInputRef.current) responseInputRef.current.style.height = "auto";
     setChatError(null);
@@ -379,66 +405,24 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         return;
       }
 
+      const audioDataUrl = hasAudio && audioBlob ? await blobToDataUrl(audioBlob) : null;
+      const videoDataUrl = hasVideo && videoBlob ? await blobToDataUrl(videoBlob) : null;
       await sendMessage(convId, content, {
-        captchaToken: captchaGateActive ? emailCaptchaToken : null,
-      });
-      setEmailCaptchaToken(null);
-      setSending(false);
-
-      if (isNameStep && content) {
-        setSonggardenContributorName(event.id, content);
-        setContributorName(content);
-      }
-
-      growNode("text");
-      pulseHaptic();
-      setBurstMessage("Got it");
-
-      celebration.celebrate(() => {
-        goToStep(stepIndex + 1);
-      });
-    } catch (err) {
-      setChatError(err instanceof Error ? err.message : "Submit failed");
-      setSending(false);
-    }
-  }
-
-  async function handleRecordingSubmit(e: FormEvent) {
-    e.preventDefault();
-    unlockReferenceTones();
-    if (!activeStep || (activeStep.kind !== "audio" && activeStep.kind !== "video")) return;
-    if (sending) return;
-
-    if (activeStep.kind === "audio" && !audioBlob) {
-      setChatError("Record your audio, then continue.");
-      return;
-    }
-    if (activeStep.kind === "video" && !videoBlob) {
-      setChatError("Record your video, then continue.");
-      return;
-    }
-
-    setChatError(null);
-    setSending(true);
-
-    try {
-      const convId = await ensureConversation();
-      if (!convId) {
-        setSending(false);
-        return;
-      }
-
-      const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
-      const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
-      await sendMessage(convId, "(recording)", {
+        captchaToken: hasText && captchaGateActive ? emailCaptchaToken : null,
         audioDataUrl,
         videoDataUrl,
       });
+      setEmailCaptchaToken(null);
       setAudioBlob(null);
       setVideoBlob(null);
       setSending(false);
 
-      growNode(videoDataUrl ? "video" : "voice");
+      if (isNameStep && content && content !== "(recording)") {
+        setSonggardenContributorName(event.id, content);
+        setContributorName(content);
+      }
+
+      growNode(videoDataUrl ? "video" : audioDataUrl ? "voice" : "text");
       pulseHaptic();
       setBurstMessage("Got it");
 
@@ -580,7 +564,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && (activeStep?.kind === "name" || activeStep?.kind === "text") && (
+          {position.phase === "step" &&
+            (activeStep?.kind === "name" || activeStep?.kind === "prompt") && (
             <div className="space-y-5">
               {chatError && (
                 <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
@@ -604,88 +589,73 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 )}
               </div>
 
-              <form onSubmit={handleTextSubmit} aria-busy={sending} className="space-y-4">
-                {captchaSetupRequired && (
+              <form onSubmit={handleContributionSubmit} aria-busy={sending} className="space-y-4">
+                {showTextInput && captchaSetupRequired && (
                   <p className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 font-mono text-xs text-amber-100">
                     Email captcha requires Turnstile keys in .env.local.
                   </p>
                 )}
-                {captchaGateActive && (
+                {showTextInput && captchaGateActive && (
                   <div className="flex flex-col items-center gap-2">
                     <p className="font-mono text-sm text-gray-300">Quick verification — then submit your email.</p>
                     <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
                   </div>
                 )}
-                <ContributionTextField
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onSubmit={() => responseInputRef.current?.form?.requestSubmit()}
-                  placeholder={requiresEmailResponse ? "you@example.com" : "Type your answer…"}
-                  disabled={sending}
-                  submitDisabled={
-                    sending ||
-                    captchaSetupRequired ||
-                    (captchaGateActive && !emailCaptchaToken) ||
-                    !inputValue.trim()
-                  }
-                  submitLabel={sending ? "Sending…" : "Continue →"}
-                  accentColor={world.accentColor}
-                  inputMode={requiresEmailResponse ? "email" : "text"}
-                  autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
-                  inputRef={(el) => (responseInputRef.current = el)}
-                />
-              </form>
-            </div>
-          )}
-
-          {position.phase === "step" && (activeStep?.kind === "audio" || activeStep?.kind === "video") && (
-            <div className="space-y-5">
-              {chatError && (
-                <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
-                  {chatError}
-                </p>
-              )}
-              <div className="min-h-[3rem] text-center">
-                {sending && !conversationReady ? (
-                  <SpinnerDots accentColor={world.accentColor} />
-                ) : (
-                  <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-white sm:text-lg">
-                    {displayPrompt(promptText)}
-                  </p>
+                {(showAudioInput || showVideoInput) && (
+                  <div className="flex flex-col items-center gap-3">
+                    {showAudioInput && (
+                      <RecordAudio
+                        variant="plain"
+                        onRecordingReady={setAudioBlob}
+                        onClear={() => setAudioBlob(null)}
+                      />
+                    )}
+                    {showVideoInput && (
+                      <RecordVideo
+                        onRecordingReady={setVideoBlob}
+                        onClear={() => setVideoBlob(null)}
+                      />
+                    )}
+                  </div>
                 )}
-              </div>
-              <form onSubmit={handleRecordingSubmit} aria-busy={sending} className="space-y-4">
-                <div className="flex flex-col items-center gap-3">
-                  {activeStep.kind === "audio" && (
-                    <RecordAudio
-                      variant="plain"
-                      onRecordingReady={setAudioBlob}
-                      onClear={() => setAudioBlob(null)}
-                    />
-                  )}
-                  {activeStep.kind === "video" && (
-                    <RecordVideo
-                      onRecordingReady={setVideoBlob}
-                      onClear={() => setVideoBlob(null)}
-                    />
-                  )}
-                </div>
-                <button
-                  type="submit"
-                  disabled={
-                    sending ||
-                    (activeStep.kind === "audio" && !audioBlob) ||
-                    (activeStep.kind === "video" && !videoBlob)
-                  }
-                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{
-                    borderColor: world.accentColor,
-                    color: world.accentColor,
-                    background: `${world.accentColor}1f`,
-                  }}
-                >
-                  {sending ? "Sending…" : "Continue →"}
-                </button>
+                {showTextInput ? (
+                  <ContributionTextField
+                    value={inputValue}
+                    onChange={setInputValue}
+                    onSubmit={() => responseInputRef.current?.form?.requestSubmit()}
+                    placeholder={requiresEmailResponse ? "you@example.com" : "Type your answer…"}
+                    disabled={sending}
+                    submitDisabled={
+                      sending ||
+                      captchaSetupRequired ||
+                      (captchaGateActive && !emailCaptchaToken && !audioBlob && !videoBlob) ||
+                      (!inputValue.trim() && !audioBlob && !videoBlob)
+                    }
+                    submitLabel={sending ? "Sending…" : "Continue →"}
+                    accentColor={world.accentColor}
+                    inputMode={requiresEmailResponse ? "email" : "text"}
+                    autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
+                    inputRef={(el) => (responseInputRef.current = el)}
+                  />
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={
+                      sending ||
+                      (showAudioInput && !audioBlob && !showVideoInput) ||
+                      (showVideoInput && !videoBlob && !showAudioInput) ||
+                      (showAudioInput && showVideoInput && !audioBlob && !videoBlob)
+                    }
+                    className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{
+                      borderColor: world.accentColor,
+                      color: world.accentColor,
+                      background: `${world.accentColor}1f`,
+                    }}
+                  >
+                    {sending ? "Sending…" : "Continue →"}
+                  </button>
+                )}
               </form>
             </div>
           )}

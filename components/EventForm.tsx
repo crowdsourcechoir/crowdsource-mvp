@@ -15,17 +15,15 @@ import {
   type SongGardenConfig,
 } from "@/lib/songgarden/config";
 import {
-  createJourneyAudioStep,
   createJourneyNameStep,
+  createJourneyPromptStep,
   createJourneySoundStep,
-  createJourneyTextStep,
-  createJourneyVideoStep,
   defaultJourneySteps,
-  JOURNEY_CATEGORY_PRESETS,
   normalizeJourneySteps,
-  resolveCategoryLabel,
+  normalizePromptChannels,
   resolveJourneySteps,
   syncLegacyFromJourneySteps,
+  type JourneyPromptStep,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
 import { JOURNEY_GARDEN_SLOT_IDS, type GardenSlotId } from "@/lib/songgarden/garden-slots";
@@ -327,7 +325,7 @@ export default function EventForm({
     setSubmitError(null);
     const journeySteps = normalizeJourneySteps(values.journeySteps);
     if (journeySteps.length === 0) {
-      setSubmitError("Add at least one journey step (text, name, or sound).");
+      setSubmitError("Add at least one journey step (prompt, name, or sound).");
       return;
     }
     const { agentBrief: syncedBrief, songGardenConfig: syncedGarden } = syncLegacyFromJourneySteps(
@@ -390,19 +388,38 @@ export default function EventForm({
     }
     for (const item of askAboutItems) {
       if (!item.prompt?.trim()) continue;
-      const prompt = item.prompt.trim();
-      if (item.allowAudio && !item.allowVideo) {
-        steps.push(createJourneyAudioStep(prompt));
-      } else if (item.allowVideo) {
-        steps.push(createJourneyVideoStep(prompt));
-      } else {
-        steps.push({
-          ...createJourneyTextStep(prompt),
-          requireEmailCaptcha: Boolean(item.requireEmailCaptcha),
-        });
-      }
+      const allowAudio = Boolean(item.allowAudio);
+      const allowVideo = Boolean(item.allowVideo);
+      const allowText = (!allowAudio && !allowVideo) || (allowAudio && allowVideo);
+      steps.push({
+        ...createJourneyPromptStep(item.prompt.trim()),
+        ...normalizePromptChannels({ allowText, allowAudio, allowVideo }),
+        requireEmailCaptcha: Boolean(item.requireEmailCaptcha) && allowText,
+      });
     }
     return steps.length > 0 ? steps : defaultJourneySteps();
+  }
+
+  function togglePromptChannel(
+    index: number,
+    channel: "allowText" | "allowAudio" | "allowVideo"
+  ) {
+    setValues((v) => {
+      const cur = v.journeySteps[index];
+      if (!cur || cur.kind !== "prompt") return v;
+      const channels = normalizePromptChannels(cur);
+      const nextChannels = normalizePromptChannels({
+        ...channels,
+        [channel]: !channels[channel],
+      });
+      const next = [...v.journeySteps];
+      next[index] = {
+        ...cur,
+        ...nextChannels,
+        requireEmailCaptcha: Boolean(cur.requireEmailCaptcha) && nextChannels.allowText,
+      };
+      return { ...v, journeySteps: normalizeJourneySteps(next) };
+    });
   }
 
   function applySavedTemplate(tpl: SavedAgentTemplate) {
@@ -451,20 +468,20 @@ export default function EventForm({
     }
     const askAboutItems = normalizeAskAboutEmailCaptcha(
       values.journeySteps
-        .filter(
-          (s): s is Extract<JourneyStep, { kind: "text" | "audio" | "video" }> =>
-            s.kind === "text" || s.kind === "audio" || s.kind === "video"
-        )
-        .map((x) => ({
-          prompt: x.prompt.trim(),
-          allowAudio: x.kind === "audio",
-          allowVideo: x.kind === "video",
-          requireEmailCaptcha: x.kind === "text" ? !!x.requireEmailCaptcha : false,
-        }))
+        .filter((s): s is JourneyPromptStep => s.kind === "prompt")
+        .map((x) => {
+          const channels = normalizePromptChannels(x);
+          return {
+            prompt: x.prompt.trim(),
+            allowAudio: channels.allowAudio,
+            allowVideo: channels.allowVideo,
+            requireEmailCaptcha: Boolean(x.requireEmailCaptcha) && channels.allowText,
+          };
+        })
         .filter((x) => x.prompt.length > 0)
     );
     if (askAboutItems.length === 0 && !values.journeySteps.some((s) => s.kind === "name")) {
-      setThemeError("Add at least one text or name step before saving a template.");
+      setThemeError("Add at least one prompt or name step before saving a template.");
       return;
     }
     const nameStep = values.journeySteps.find((s) => s.kind === "name");
@@ -1122,7 +1139,9 @@ export default function EventForm({
       <section className={sectionClass}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className={sectionTitleClass}>Journey</h3>
-          <p className="text-[11px] text-gray-500">Ordered prompts — text, name, or sound in any order</p>
+          <p className="text-[11px] text-gray-500">
+            Ordered prompts — set an eyebrow, then toggle Text / Audio / Video
+          </p>
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
@@ -1240,12 +1259,15 @@ export default function EventForm({
                 .filter((s): s is Extract<JourneyStep, { kind: "sound" }> => s.kind === "sound")
                 .map((s) => s.slotId)
             );
+            const kindLabel =
+              step.kind === "prompt" ? "Prompt" : step.kind === "name" ? "Name" : "Sound";
+            const channels = step.kind === "prompt" ? normalizePromptChannels(step) : null;
             return (
               <div key={step.id} className="space-y-1.5 py-2.5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
                   <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                    {step.kind}
+                    {kindLabel}
                   </span>
                   <span className="flex-1" />
                   <button type="button" disabled={idx === 0} onClick={() => moveJourneyStep(idx, -1)} className={chipClass}>
@@ -1269,41 +1291,20 @@ export default function EventForm({
                 </div>
 
                 <label className="block">
-                  <span className={labelClass}>Category (eyebrow)</span>
-                  <div className="mt-0.5 flex flex-wrap gap-1.5">
-                    <input
-                      type="text"
-                      list={`journey-category-${step.id}`}
-                      value={step.categoryLabel ?? resolveCategoryLabel(step)}
-                      onChange={(e) => updateJourneyStep(idx, { categoryLabel: e.target.value })}
-                      className={`${inputClass} mt-0 min-w-[10rem] flex-1`}
-                      placeholder="Your Words"
-                    />
-                    <datalist id={`journey-category-${step.id}`}>
-                      {JOURNEY_CATEGORY_PRESETS.map((preset) => (
-                        <option key={preset} value={preset} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {JOURNEY_CATEGORY_PRESETS.map((preset) => {
-                      const active = resolveCategoryLabel(step).toLowerCase() === preset.toLowerCase();
-                      return (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => updateJourneyStep(idx, { categoryLabel: preset })}
-                          className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                            active
-                              ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
-                              : chipClass
-                          }`}
-                        >
-                          {preset}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <span className={labelClass}>Eyebrow</span>
+                  <input
+                    type="text"
+                    value={step.categoryLabel ?? ""}
+                    onChange={(e) => updateJourneyStep(idx, { categoryLabel: e.target.value })}
+                    className={inputClass}
+                    placeholder={
+                      step.kind === "name"
+                        ? "Your Name"
+                        : step.kind === "sound"
+                          ? "Your Sounds"
+                          : "e.g. Your Words"
+                    }
+                  />
                 </label>
 
                 {step.kind === "name" && (
@@ -1319,7 +1320,7 @@ export default function EventForm({
                   </label>
                 )}
 
-                {(step.kind === "text" || step.kind === "audio" || step.kind === "video") && (
+                {step.kind === "prompt" && channels && (
                   <>
                     <label className="block">
                       <span className={labelClass}>Prompt</span>
@@ -1328,35 +1329,52 @@ export default function EventForm({
                         value={step.prompt}
                         onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
                         className={inputClass}
-                        placeholder={
-                          step.kind === "audio"
-                            ? "e.g. Would you be willing to sing your phrase?"
-                            : step.kind === "video"
-                              ? "e.g. Share a short video"
-                              : "Prompt participants see"
-                        }
+                        placeholder="What participants see"
                       />
                     </label>
-                    <p className="text-[11px] text-gray-500">
-                      {step.kind === "text" && "Participant types an answer."}
-                      {step.kind === "audio" && "Participant records audio only — no text box."}
-                      {step.kind === "video" && "Participant records video only — no text box."}
-                    </p>
-                    {step.kind === "text" && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateJourneyStep(idx, { requireEmailCaptcha: !step.requireEmailCaptcha })
-                        }
-                        className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                          step.requireEmailCaptcha
-                            ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
-                            : chipClass
-                        }`}
-                      >
-                        Email+Captcha
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="mr-1 text-[11px] text-gray-500">Accept:</span>
+                      {(
+                        [
+                          { key: "allowText" as const, label: "Text" },
+                          { key: "allowAudio" as const, label: "Audio" },
+                          { key: "allowVideo" as const, label: "Video" },
+                        ] as const
+                      ).map(({ key, label }) => {
+                        const on = channels[key];
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => togglePromptChannel(idx, key)}
+                            className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                              on
+                                ? "border border-sky-600/60 bg-sky-900/30 text-sky-200"
+                                : chipClass
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                      {channels.allowText && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateJourneyStep(idx, {
+                              requireEmailCaptcha: !step.requireEmailCaptcha,
+                            })
+                          }
+                          className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                            step.requireEmailCaptcha
+                              ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
+                              : chipClass
+                          }`}
+                        >
+                          Email+Captcha
+                        </button>
+                      )}
+                    </div>
                   </>
                 )}
 
@@ -1427,75 +1445,51 @@ export default function EventForm({
           })}
         </div>
 
-        <div className="relative">
-          <button type="button" onClick={() => setAddMenuOpen((o) => !o)} className={chipClass}>
-            + Add step
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setJourneySteps([...values.journeySteps, createJourneyPromptStep()])}
+            className={chipClass}
+          >
+            + Add prompt
           </button>
-          {addMenuOpen && (
-            <div className="absolute left-0 z-10 mt-1 min-w-[200px] rounded-lg border border-gray-700 bg-[#1a1a1a] p-1 shadow-lg">
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
-                onClick={() => {
-                  setJourneySteps([...values.journeySteps, createJourneyTextStep("")]);
-                  setAddMenuOpen(false);
-                }}
-              >
-                Text
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
-                onClick={() => {
-                  setJourneySteps([...values.journeySteps, createJourneyAudioStep()]);
-                  setAddMenuOpen(false);
-                }}
-              >
-                Audio
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
-                onClick={() => {
-                  setJourneySteps([...values.journeySteps, createJourneyVideoStep()]);
-                  setAddMenuOpen(false);
-                }}
-              >
-                Video
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525] disabled:opacity-40"
-                disabled={values.journeySteps.some((s) => s.kind === "name")}
-                onClick={() => {
-                  setJourneySteps([...values.journeySteps, createJourneyNameStep()]);
-                  setAddMenuOpen(false);
-                }}
-              >
-                Name
-              </button>
-              <div className="my-1 border-t border-gray-800" />
-              <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500">Sound pad</p>
-              {JOURNEY_GARDEN_SLOT_IDS.filter(
-                (id) =>
-                  !values.journeySteps.some(
-                    (s) => s.kind === "sound" && s.slotId === id
-                  )
-              ).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
-                  onClick={() => {
-                    setJourneySteps([...values.journeySteps, createJourneySoundStep(id)]);
-                    setAddMenuOpen(false);
-                  }}
-                >
-                  {GARDEN_SLOT_ADMIN_LABELS[id].name}
-                </button>
-              ))}
-            </div>
-          )}
+          <button
+            type="button"
+            disabled={values.journeySteps.some((s) => s.kind === "name")}
+            onClick={() => setJourneySteps([...values.journeySteps, createJourneyNameStep()])}
+            className={`${chipClass} disabled:opacity-40`}
+          >
+            + Name
+          </button>
+          <div className="relative">
+            <button type="button" onClick={() => setAddMenuOpen((o) => !o)} className={chipClass}>
+              + Sound pad
+            </button>
+            {addMenuOpen && (
+              <div className="absolute left-0 z-10 mt-1 min-w-[180px] rounded-lg border border-gray-700 bg-[#1a1a1a] p-1 shadow-lg">
+                {JOURNEY_GARDEN_SLOT_IDS.filter(
+                  (id) => !values.journeySteps.some((s) => s.kind === "sound" && s.slotId === id)
+                ).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
+                    onClick={() => {
+                      setJourneySteps([...values.journeySteps, createJourneySoundStep(id)]);
+                      setAddMenuOpen(false);
+                    }}
+                  >
+                    {GARDEN_SLOT_ADMIN_LABELS[id].name}
+                  </button>
+                ))}
+                {JOURNEY_GARDEN_SLOT_IDS.every((id) =>
+                  values.journeySteps.some((s) => s.kind === "sound" && s.slotId === id)
+                ) && (
+                  <p className="px-2 py-1.5 text-[11px] text-gray-500">All sound pads added</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
