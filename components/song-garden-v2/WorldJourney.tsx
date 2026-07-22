@@ -18,6 +18,7 @@ import {
 } from "@/data/songgardenClient";
 import { loadDoneSlots, clearDoneSlots } from "@/lib/songgarden/garden-storage";
 import {
+  isAgentContributionStep,
   resolveCategoryLabel,
   resolveJourneySteps,
   resolveSoundStep,
@@ -112,16 +113,17 @@ function clearJourneySession(event: Event, interviewVersion: string, sessionToke
 }
 
 function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["suggestedAnswerTypes"] {
-  if (step.kind === "name") return ["text"];
-  if (step.kind === "sound") return ["text"];
-  const types: AgentNextMessageResponse["suggestedAnswerTypes"] = ["text"];
-  if (step.allowAudio) types.push("voice");
-  if (step.allowVideo) types.push("video");
-  if (step.requireEmailCaptcha) {
-    types.push("email");
-    types.push("captcha");
+  if (step.kind === "name" || step.kind === "text") {
+    const types: AgentNextMessageResponse["suggestedAnswerTypes"] = ["text"];
+    if (step.kind === "text" && step.requireEmailCaptcha) {
+      types.push("email");
+      types.push("captcha");
+    }
+    return types;
   }
-  return types;
+  if (step.kind === "audio") return ["voice"];
+  if (step.kind === "video") return ["video"];
+  return ["text"];
 }
 
 /**
@@ -195,29 +197,36 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const showProgress = journeyStarted && position.phase !== "final";
 
   const currentSuggestedAnswerTypes = activeStep ? suggestedTypesForStep(activeStep) : ["text"];
-  const allowAudioResponse = currentSuggestedAnswerTypes.includes("voice");
-  const allowVideoResponse = currentSuggestedAnswerTypes.includes("video");
   const requiresEmailResponse = currentSuggestedAnswerTypes.includes("email");
   const requiresCaptchaResponse = currentSuggestedAnswerTypes.includes("captcha");
   const captchaGateActive = requiresCaptchaResponse && isTurnstileClientConfigured();
   const captchaSetupRequired = requiresCaptchaResponse && !isTurnstileClientConfigured();
-  const allowsMediaResponse = allowAudioResponse || allowVideoResponse;
   const isNameStep = activeStep?.kind === "name";
+  const isAudioStep = activeStep?.kind === "audio";
+  const isVideoStep = activeStep?.kind === "video";
 
   const promptText = useMemo(() => {
     if (!activeStep) return "";
     if (activeStep.kind === "name") {
       return activeStep.prompt?.trim() || "What should we call you?";
     }
-    if (activeStep.kind === "text" || activeStep.kind === "sound") {
+    if (
+      activeStep.kind === "text" ||
+      activeStep.kind === "audio" ||
+      activeStep.kind === "video" ||
+      activeStep.kind === "sound"
+    ) {
       return activeStep.prompt;
     }
     return "";
   }, [activeStep]);
 
   const responseHint = useMemo(
-    () => questionResponseHint(promptText, { isName: isNameStep, isEmail: requiresEmailResponse }),
-    [promptText, isNameStep, requiresEmailResponse]
+    () =>
+      isAudioStep || isVideoStep
+        ? null
+        : questionResponseHint(promptText, { isName: isNameStep, isEmail: requiresEmailResponse }),
+    [promptText, isNameStep, requiresEmailResponse, isAudioStep, isVideoStep]
   );
 
   const goToStep = useCallback(
@@ -283,10 +292,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     }
   }, [conversationId, conversationReady, event.id, interviewVersion]);
 
-  // When landing on a text/name step, ensure agent conversation exists for persistence.
+  // When landing on a contribution step, ensure agent conversation exists for persistence.
   useEffect(() => {
     if (position.phase !== "step" || !activeStep) return;
-    if (activeStep.kind !== "name" && activeStep.kind !== "text") return;
+    if (!isAgentContributionStep(activeStep)) return;
     if (conversationReady) return;
     void ensureConversation();
   }, [position.phase, activeStep, conversationReady, ensureConversation]);
@@ -355,7 +364,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       setChatError("Please enter a name.");
       return;
     }
-    if (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse) return;
+    if (!inputValue.trim()) return;
 
     const content = inputValue.trim();
     setInputValue("");
@@ -370,15 +379,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         return;
       }
 
-      const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
-      const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
-      await sendMessage(convId, content || "(recording)", {
-        audioDataUrl,
-        videoDataUrl,
+      await sendMessage(convId, content, {
         captchaToken: captchaGateActive ? emailCaptchaToken : null,
       });
-      setAudioBlob(null);
-      setVideoBlob(null);
       setEmailCaptchaToken(null);
       setSending(false);
 
@@ -387,7 +390,55 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         setContributorName(content);
       }
 
-      growNode(videoDataUrl ? "video" : audioDataUrl ? "voice" : "text");
+      growNode("text");
+      pulseHaptic();
+      setBurstMessage("Got it");
+
+      celebration.celebrate(() => {
+        goToStep(stepIndex + 1);
+      });
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Submit failed");
+      setSending(false);
+    }
+  }
+
+  async function handleRecordingSubmit(e: FormEvent) {
+    e.preventDefault();
+    unlockReferenceTones();
+    if (!activeStep || (activeStep.kind !== "audio" && activeStep.kind !== "video")) return;
+    if (sending) return;
+
+    if (activeStep.kind === "audio" && !audioBlob) {
+      setChatError("Record your audio, then continue.");
+      return;
+    }
+    if (activeStep.kind === "video" && !videoBlob) {
+      setChatError("Record your video, then continue.");
+      return;
+    }
+
+    setChatError(null);
+    setSending(true);
+
+    try {
+      const convId = await ensureConversation();
+      if (!convId) {
+        setSending(false);
+        return;
+      }
+
+      const audioDataUrl = audioBlob ? await blobToDataUrl(audioBlob) : null;
+      const videoDataUrl = videoBlob ? await blobToDataUrl(videoBlob) : null;
+      await sendMessage(convId, "(recording)", {
+        audioDataUrl,
+        videoDataUrl,
+      });
+      setAudioBlob(null);
+      setVideoBlob(null);
+      setSending(false);
+
+      growNode(videoDataUrl ? "video" : "voice");
       pulseHaptic();
       setBurstMessage("Got it");
 
@@ -575,7 +626,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     sending ||
                     captchaSetupRequired ||
                     (captchaGateActive && !emailCaptchaToken) ||
-                    (!inputValue.trim() && !audioBlob && !videoBlob && !allowsMediaResponse)
+                    !inputValue.trim()
                   }
                   submitLabel={sending ? "Sending…" : "Continue →"}
                   accentColor={world.accentColor}
@@ -583,17 +634,58 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
                   inputRef={(el) => (responseInputRef.current = el)}
                 />
-                {allowsMediaResponse && (
-                  <div className="space-y-2 text-center">
-                    <p className="font-mono text-sm text-gray-300">or record a message (optional)</p>
-                    {allowAudioResponse && (
-                      <RecordAudio variant="plain" onRecordingReady={setAudioBlob} onClear={() => setAudioBlob(null)} />
-                    )}
-                    {allowVideoResponse && (
-                      <RecordVideo onRecordingReady={setVideoBlob} onClear={() => setVideoBlob(null)} />
-                    )}
-                  </div>
+              </form>
+            </div>
+          )}
+
+          {position.phase === "step" && (activeStep?.kind === "audio" || activeStep?.kind === "video") && (
+            <div className="space-y-5">
+              {chatError && (
+                <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                  {chatError}
+                </p>
+              )}
+              <div className="min-h-[3rem] text-center">
+                {sending && !conversationReady ? (
+                  <SpinnerDots accentColor={world.accentColor} />
+                ) : (
+                  <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-white sm:text-lg">
+                    {displayPrompt(promptText)}
+                  </p>
                 )}
+              </div>
+              <form onSubmit={handleRecordingSubmit} aria-busy={sending} className="space-y-4">
+                <div className="flex flex-col items-center gap-3">
+                  {activeStep.kind === "audio" && (
+                    <RecordAudio
+                      variant="plain"
+                      onRecordingReady={setAudioBlob}
+                      onClear={() => setAudioBlob(null)}
+                    />
+                  )}
+                  {activeStep.kind === "video" && (
+                    <RecordVideo
+                      onRecordingReady={setVideoBlob}
+                      onClear={() => setVideoBlob(null)}
+                    />
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={
+                    sending ||
+                    (activeStep.kind === "audio" && !audioBlob) ||
+                    (activeStep.kind === "video" && !videoBlob)
+                  }
+                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{
+                    borderColor: world.accentColor,
+                    color: world.accentColor,
+                    background: `${world.accentColor}1f`,
+                  }}
+                >
+                  {sending ? "Sending…" : "Continue →"}
+                </button>
               </form>
             </div>
           )}

@@ -15,9 +15,11 @@ import {
   type SongGardenConfig,
 } from "@/lib/songgarden/config";
 import {
+  createJourneyAudioStep,
   createJourneyNameStep,
   createJourneySoundStep,
   createJourneyTextStep,
+  createJourneyVideoStep,
   defaultJourneySteps,
   JOURNEY_CATEGORY_PRESETS,
   normalizeJourneySteps,
@@ -388,12 +390,17 @@ export default function EventForm({
     }
     for (const item of askAboutItems) {
       if (!item.prompt?.trim()) continue;
-      steps.push({
-        ...createJourneyTextStep(item.prompt.trim()),
-        allowAudio: Boolean(item.allowAudio),
-        allowVideo: Boolean(item.allowVideo),
-        requireEmailCaptcha: Boolean(item.requireEmailCaptcha),
-      });
+      const prompt = item.prompt.trim();
+      if (item.allowAudio && !item.allowVideo) {
+        steps.push(createJourneyAudioStep(prompt));
+      } else if (item.allowVideo) {
+        steps.push(createJourneyVideoStep(prompt));
+      } else {
+        steps.push({
+          ...createJourneyTextStep(prompt),
+          requireEmailCaptcha: Boolean(item.requireEmailCaptcha),
+        });
+      }
     }
     return steps.length > 0 ? steps : defaultJourneySteps();
   }
@@ -444,12 +451,15 @@ export default function EventForm({
     }
     const askAboutItems = normalizeAskAboutEmailCaptcha(
       values.journeySteps
-        .filter((s): s is Extract<JourneyStep, { kind: "text" }> => s.kind === "text")
+        .filter(
+          (s): s is Extract<JourneyStep, { kind: "text" | "audio" | "video" }> =>
+            s.kind === "text" || s.kind === "audio" || s.kind === "video"
+        )
         .map((x) => ({
           prompt: x.prompt.trim(),
-          allowAudio: !!x.allowAudio,
-          allowVideo: !!x.allowVideo,
-          requireEmailCaptcha: !!x.requireEmailCaptcha,
+          allowAudio: x.kind === "audio",
+          allowVideo: x.kind === "video",
+          requireEmailCaptcha: x.kind === "text" ? !!x.requireEmailCaptcha : false,
         }))
         .filter((x) => x.prompt.length > 0)
     );
@@ -1235,7 +1245,7 @@ export default function EventForm({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
                   <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                    {step.kind === "sound" ? "sound" : step.kind === "name" ? "name" : "text"}
+                    {step.kind}
                   </span>
                   <span className="flex-1" />
                   <button type="button" disabled={idx === 0} onClick={() => moveJourneyStep(idx, -1)} className={chipClass}>
@@ -1309,7 +1319,7 @@ export default function EventForm({
                   </label>
                 )}
 
-                {step.kind === "text" && (
+                {(step.kind === "text" || step.kind === "audio" || step.kind === "video") && (
                   <>
                     <label className="block">
                       <span className={labelClass}>Prompt</span>
@@ -1318,32 +1328,21 @@ export default function EventForm({
                         value={step.prompt}
                         onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
                         className={inputClass}
-                        placeholder="Prompt participants see"
+                        placeholder={
+                          step.kind === "audio"
+                            ? "e.g. Would you be willing to sing your phrase?"
+                            : step.kind === "video"
+                              ? "e.g. Share a short video"
+                              : "Prompt participants see"
+                        }
                       />
                     </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => updateJourneyStep(idx, { allowAudio: !step.allowAudio })}
-                        className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                          step.allowAudio
-                            ? "border border-blue-600/60 bg-blue-900/25 text-blue-200"
-                            : chipClass
-                        }`}
-                      >
-                        Audio
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateJourneyStep(idx, { allowVideo: !step.allowVideo })}
-                        className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                          step.allowVideo
-                            ? "border border-purple-600/60 bg-purple-900/25 text-purple-200"
-                            : chipClass
-                        }`}
-                      >
-                        Video
-                      </button>
+                    <p className="text-[11px] text-gray-500">
+                      {step.kind === "text" && "Participant types an answer."}
+                      {step.kind === "audio" && "Participant records audio only — no text box."}
+                      {step.kind === "video" && "Participant records video only — no text box."}
+                    </p>
+                    {step.kind === "text" && (
                       <button
                         type="button"
                         onClick={() =>
@@ -1357,7 +1356,7 @@ export default function EventForm({
                       >
                         Email+Captcha
                       </button>
-                    </div>
+                    )}
                   </>
                 )}
 
@@ -1442,7 +1441,27 @@ export default function EventForm({
                   setAddMenuOpen(false);
                 }}
               >
-                Text question
+                Text
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
+                onClick={() => {
+                  setJourneySteps([...values.journeySteps, createJourneyAudioStep()]);
+                  setAddMenuOpen(false);
+                }}
+              >
+                Audio
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
+                onClick={() => {
+                  setJourneySteps([...values.journeySteps, createJourneyVideoStep()]);
+                  setAddMenuOpen(false);
+                }}
+              >
+                Video
               </button>
               <button
                 type="button"
@@ -1456,7 +1475,7 @@ export default function EventForm({
                 Name
               </button>
               <div className="my-1 border-t border-gray-800" />
-              <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500">Sound question</p>
+              <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500">Sound pad</p>
               {JOURNEY_GARDEN_SLOT_IDS.filter(
                 (id) =>
                   !values.journeySteps.some(

@@ -31,7 +31,6 @@ export type JourneyNameStep = {
   id: string;
   kind: "name";
   prompt?: string;
-  /** Eyebrow shown above the prompt, e.g. "Your Name". */
   categoryLabel?: string;
 };
 
@@ -40,9 +39,23 @@ export type JourneyTextStep = {
   kind: "text";
   prompt: string;
   categoryLabel?: string;
-  allowAudio?: boolean;
-  allowVideo?: boolean;
   requireEmailCaptcha?: boolean;
+};
+
+/** Voice recording only — no text box. */
+export type JourneyAudioStep = {
+  id: string;
+  kind: "audio";
+  prompt: string;
+  categoryLabel?: string;
+};
+
+/** Video recording only — no text box. */
+export type JourneyVideoStep = {
+  id: string;
+  kind: "video";
+  prompt: string;
+  categoryLabel?: string;
 };
 
 export type JourneySoundStep = {
@@ -56,7 +69,12 @@ export type JourneySoundStep = {
   alternateSlotIds?: GardenSlotId[];
 };
 
-export type JourneyStep = JourneyNameStep | JourneyTextStep | JourneySoundStep;
+export type JourneyStep =
+  | JourneyNameStep
+  | JourneyTextStep
+  | JourneyAudioStep
+  | JourneyVideoStep
+  | JourneySoundStep;
 
 export type ResolvedJourneySoundStep = JourneySoundStep & {
   slot: GardenSlotDef;
@@ -80,12 +98,20 @@ function readCategoryLabel(item: object): string | undefined {
   return trimmed || undefined;
 }
 
+function readPrompt(item: object): string {
+  return typeof (item as { prompt?: unknown }).prompt === "string"
+    ? (item as { prompt: string }).prompt
+    : "";
+}
+
 export function defaultCategoryLabelForStep(
   kind: JourneyStep["kind"],
   slotId?: GardenSlotId
 ): string {
   if (kind === "name") return "Your Name";
   if (kind === "text") return "Your Words";
+  if (kind === "audio") return "Your Voice";
+  if (kind === "video") return "Your Face";
   if (kind === "sound" && slotId) return gardenSlotMomentLabel(slotId);
   return "Your Sounds";
 }
@@ -95,6 +121,12 @@ export function resolveCategoryLabel(step: JourneyStep): string {
   if (custom) return custom;
   if (step.kind === "sound") return defaultCategoryLabelForStep("sound", step.slotId);
   return defaultCategoryLabelForStep(step.kind);
+}
+
+export function isAgentContributionStep(
+  step: JourneyStep
+): step is JourneyNameStep | JourneyTextStep | JourneyAudioStep | JourneyVideoStep {
+  return step.kind === "name" || step.kind === "text" || step.kind === "audio" || step.kind === "video";
 }
 
 /** Short starter journey for new events. */
@@ -138,38 +170,68 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
       typeof (item as { id?: unknown }).id === "string" && (item as { id: string }).id.trim()
         ? (item as { id: string }).id.trim()
         : newStepId();
+    const categoryLabel = readCategoryLabel(item as object);
+    const prompt = readPrompt(item as object);
 
     if (kind === "name") {
       if (hasName) continue;
       hasName = true;
-      const prompt =
-        typeof (item as { prompt?: unknown }).prompt === "string"
-          ? (item as { prompt: string }).prompt.trim()
-          : "";
-      const categoryLabel = readCategoryLabel(item as object);
       steps.push({
         id,
         kind: "name",
-        ...(prompt ? { prompt } : {}),
+        ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
         categoryLabel: categoryLabel || "Your Name",
       });
       continue;
     }
 
+    if (kind === "audio") {
+      steps.push({
+        id,
+        kind: "audio",
+        prompt,
+        categoryLabel: categoryLabel || "Your Voice",
+      });
+      continue;
+    }
+
+    if (kind === "video") {
+      steps.push({
+        id,
+        kind: "video",
+        prompt,
+        categoryLabel: categoryLabel || "Your Face",
+      });
+      continue;
+    }
+
     if (kind === "text") {
-      const prompt =
-        typeof (item as { prompt?: unknown }).prompt === "string"
-          ? (item as { prompt: string }).prompt
-          : "";
-      const categoryLabel = readCategoryLabel(item as object);
-      // Allow empty prompts while editing in admin; submit/sync filters empties.
+      const allowAudio = Boolean((item as { allowAudio?: unknown }).allowAudio);
+      const allowVideo = Boolean((item as { allowVideo?: unknown }).allowVideo);
+      // Migrate legacy text+audio / text+video toggles into dedicated kinds.
+      if (allowAudio && !allowVideo) {
+        steps.push({
+          id,
+          kind: "audio",
+          prompt,
+          categoryLabel: categoryLabel || "Your Voice",
+        });
+        continue;
+      }
+      if (allowVideo) {
+        steps.push({
+          id,
+          kind: "video",
+          prompt,
+          categoryLabel: categoryLabel || "Your Face",
+        });
+        continue;
+      }
       steps.push({
         id,
         kind: "text",
         prompt,
         categoryLabel: categoryLabel || "Your Words",
-        allowAudio: Boolean((item as { allowAudio?: unknown }).allowAudio),
-        allowVideo: Boolean((item as { allowVideo?: unknown }).allowVideo),
         requireEmailCaptcha: Boolean((item as { requireEmailCaptcha?: unknown }).requireEmailCaptcha),
       });
       continue;
@@ -184,10 +246,6 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
             (alt): alt is GardenSlotId => isGardenSlotId(alt) && alt !== slotId
           ) as GardenSlotId[])
         : undefined;
-      const promptRaw =
-        typeof (item as { prompt?: unknown }).prompt === "string"
-          ? (item as { prompt: string }).prompt.trim()
-          : "";
       const phaseLabel =
         typeof (item as { phaseLabel?: unknown }).phaseLabel === "string"
           ? (item as { phaseLabel: string }).phaseLabel.trim()
@@ -196,12 +254,11 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
         typeof (item as { buttonLabel?: unknown }).buttonLabel === "string"
           ? (item as { buttonLabel: string }).buttonLabel.trim()
           : "";
-      const categoryLabel = readCategoryLabel(item as object);
       steps.push({
         id,
         kind: "sound",
         slotId,
-        prompt: promptRaw || defaultPromptForSlot(slotId),
+        prompt: prompt.trim() || defaultPromptForSlot(slotId),
         categoryLabel: categoryLabel || defaultCategoryLabelForStep("sound", slotId),
         phaseLabel: phaseLabel || defaultPhaseLabelForSlot(slotId),
         ...(buttonLabel || defaultButtonLabelForSlot(slotId)
@@ -247,15 +304,30 @@ export function synthesizeJourneySteps(event: Event | null | undefined): Journey
   );
   if (items?.length) {
     for (const item of items) {
-      steps.push({
-        id: newStepId(),
-        kind: "text",
-        prompt: item.prompt.trim(),
-        categoryLabel: "Your Words",
-        allowAudio: Boolean(item.allowAudio),
-        allowVideo: Boolean(item.allowVideo),
-        requireEmailCaptcha: Boolean(item.requireEmailCaptcha),
-      });
+      const prompt = item.prompt.trim();
+      if (item.allowAudio && !item.allowVideo) {
+        steps.push({
+          id: newStepId(),
+          kind: "audio",
+          prompt,
+          categoryLabel: "Your Voice",
+        });
+      } else if (item.allowVideo) {
+        steps.push({
+          id: newStepId(),
+          kind: "video",
+          prompt,
+          categoryLabel: "Your Face",
+        });
+      } else {
+        steps.push({
+          id: newStepId(),
+          kind: "text",
+          prompt,
+          categoryLabel: "Your Words",
+          requireEmailCaptcha: Boolean(item.requireEmailCaptcha),
+        });
+      }
     }
   } else {
     const strings = brief?.askAbout?.filter(
@@ -298,17 +370,28 @@ export function syncLegacyFromJourneySteps(
 ): { agentBrief: AgentBrief; songGardenConfig: SongGardenConfig } {
   const normalized = normalizeJourneySteps(journeySteps);
   const nameStep = normalized.find((s): s is JourneyNameStep => s.kind === "name");
-  const textSteps = normalized.filter(
-    (s): s is JourneyTextStep => s.kind === "text" && s.prompt.trim().length > 0
-  );
   const soundSteps = normalized.filter((s): s is JourneySoundStep => s.kind === "sound");
 
-  const askAboutItems = textSteps.map((s) => ({
-    prompt: s.prompt.trim(),
-    allowAudio: Boolean(s.allowAudio),
-    allowVideo: Boolean(s.allowVideo),
-    requireEmailCaptcha: Boolean(s.requireEmailCaptcha),
-  }));
+  const askAboutItems = normalized
+    .filter(
+      (s): s is JourneyTextStep | JourneyAudioStep | JourneyVideoStep =>
+        s.kind === "text" || s.kind === "audio" || s.kind === "video"
+    )
+    .filter((s) => s.prompt.trim().length > 0)
+    .map((s) => {
+      if (s.kind === "audio") {
+        return { prompt: s.prompt.trim(), allowAudio: true, allowVideo: false, requireEmailCaptcha: false };
+      }
+      if (s.kind === "video") {
+        return { prompt: s.prompt.trim(), allowAudio: false, allowVideo: true, requireEmailCaptcha: false };
+      }
+      return {
+        prompt: s.prompt.trim(),
+        allowAudio: false,
+        allowVideo: false,
+        requireEmailCaptcha: Boolean(s.requireEmailCaptcha),
+      };
+    });
 
   const agentBrief: AgentBrief = {
     ...(prevBrief ?? {}),
@@ -357,6 +440,14 @@ export function journeyStepCount(event: Event | null | undefined): number {
 
 export function createJourneyTextStep(prompt = ""): JourneyTextStep {
   return { id: newStepId(), kind: "text", prompt, categoryLabel: "Your Words" };
+}
+
+export function createJourneyAudioStep(prompt = "Would you be willing to sing your phrase?"): JourneyAudioStep {
+  return { id: newStepId(), kind: "audio", prompt, categoryLabel: "Your Voice" };
+}
+
+export function createJourneyVideoStep(prompt = "Share a short video."): JourneyVideoStep {
+  return { id: newStepId(), kind: "video", prompt, categoryLabel: "Your Face" };
 }
 
 export function createJourneyNameStep(prompt = DEFAULT_NAME_QUESTION_PROMPT): JourneyNameStep {
