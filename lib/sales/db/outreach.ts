@@ -6,6 +6,10 @@ function rowToTemplate(row: Record<string, unknown>): OutreachTemplate {
     id: row.id as string,
     name: row.name as string,
     opportunityTypeId: (row.opportunity_type_id as string | null) ?? null,
+    // TODO(industry-segment-override): populated by the in-progress industry-segment work — see
+    // lib/sales/types.ts's OutreachTemplate.industrySegmentId doc comment. Null ("not
+    // segment-targeted") is a valid, safe default until that work is committed.
+    industrySegmentId: (row.industry_segment_id as string | null) ?? null,
     bodyTemplate: row.body_template as string,
     status: row.status as OutreachTemplate["status"],
   };

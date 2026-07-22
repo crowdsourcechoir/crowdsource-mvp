@@ -9,6 +9,10 @@ function rowToOrganization(row: Record<string, unknown>): Organization {
     normalizedName: row.normalized_name as string,
     domain: (row.domain as string | null) ?? null,
     organizationTypeId: (row.organization_type_id as string | null) ?? null,
+    // TODO(industry-segment-override): populated by the in-progress industry-segment work — see
+    // lib/sales/types.ts's Organization.industrySegmentId doc comment. Null ("inherit") is a
+    // valid, safe default until that work is committed.
+    industrySegmentId: (row.industry_segment_id as string | null) ?? null,
     websiteUrl: (row.website_url as string | null) ?? null,
     locationCity: (row.location_city as string | null) ?? null,
     locationRegion: (row.location_region as string | null) ?? null,
