@@ -9,6 +9,10 @@ function rowToContact(row: Record<string, unknown>): Contact {
     fullName: (row.full_name as string | null) ?? null,
     roleTitle: (row.role_title as string | null) ?? null,
     roleCategory: (row.role_category as string | null) ?? null,
+    // TODO(outreach-persona): placeholder until the real classifier (derived from roleTitle) lands —
+    // see lib/sales/types.ts's Contact.outreachPersona doc comment. Kept deliberately minimal here
+    // (no new imports/behavior) to unblock the build; not meant to be the final implementation.
+    outreachPersona: (row.outreach_persona as Contact["outreachPersona"] | null) ?? "other",
     email: (row.email as string | null) ?? null,
     normalizedEmail: (row.normalized_email as string | null) ?? null,
     phone: (row.phone as string | null) ?? null,
