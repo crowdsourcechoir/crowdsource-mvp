@@ -19,7 +19,9 @@ import {
   createJourneySoundStep,
   createJourneyTextStep,
   defaultJourneySteps,
+  JOURNEY_CATEGORY_PRESETS,
   normalizeJourneySteps,
+  resolveCategoryLabel,
   resolveJourneySteps,
   syncLegacyFromJourneySteps,
   type JourneyStep,
@@ -1233,7 +1235,7 @@ export default function EventForm({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
                   <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                    {step.kind}
+                    {step.kind === "sound" ? "sound" : step.kind === "name" ? "name" : "text"}
                   </span>
                   <span className="flex-1" />
                   <button type="button" disabled={idx === 0} onClick={() => moveJourneyStep(idx, -1)} className={chipClass}>
@@ -1256,25 +1258,69 @@ export default function EventForm({
                   </button>
                 </div>
 
+                <label className="block">
+                  <span className={labelClass}>Category (eyebrow)</span>
+                  <div className="mt-0.5 flex flex-wrap gap-1.5">
+                    <input
+                      type="text"
+                      list={`journey-category-${step.id}`}
+                      value={step.categoryLabel ?? resolveCategoryLabel(step)}
+                      onChange={(e) => updateJourneyStep(idx, { categoryLabel: e.target.value })}
+                      className={`${inputClass} mt-0 min-w-[10rem] flex-1`}
+                      placeholder="Your Words"
+                    />
+                    <datalist id={`journey-category-${step.id}`}>
+                      {JOURNEY_CATEGORY_PRESETS.map((preset) => (
+                        <option key={preset} value={preset} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {JOURNEY_CATEGORY_PRESETS.map((preset) => {
+                      const active = resolveCategoryLabel(step).toLowerCase() === preset.toLowerCase();
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => updateJourneyStep(idx, { categoryLabel: preset })}
+                          className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                            active
+                              ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
+                              : chipClass
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </label>
+
                 {step.kind === "name" && (
-                  <input
-                    type="text"
-                    value={step.prompt ?? ""}
-                    onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
-                    className={inputClass}
-                    placeholder={DEFAULT_NAME_QUESTION_PROMPT}
-                  />
+                  <label className="block">
+                    <span className={labelClass}>Prompt</span>
+                    <input
+                      type="text"
+                      value={step.prompt ?? ""}
+                      onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
+                      className={inputClass}
+                      placeholder={DEFAULT_NAME_QUESTION_PROMPT}
+                    />
+                  </label>
                 )}
 
                 {step.kind === "text" && (
                   <>
-                    <input
-                      type="text"
-                      value={step.prompt}
-                      onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
-                      className={inputClass}
-                      placeholder="Prompt participants see"
-                    />
+                    <label className="block">
+                      <span className={labelClass}>Prompt</span>
+                      <input
+                        type="text"
+                        value={step.prompt}
+                        onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
+                        className={inputClass}
+                        placeholder="Prompt participants see"
+                      />
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
@@ -1319,7 +1365,7 @@ export default function EventForm({
                   <>
                     <div className="grid gap-1.5 sm:grid-cols-2">
                       <label className="block">
-                        <span className={labelClass}>Sound slot</span>
+                        <span className={labelClass}>Sound type</span>
                         <select
                           value={step.slotId}
                           onChange={(e) => {
@@ -1387,7 +1433,7 @@ export default function EventForm({
             + Add step
           </button>
           {addMenuOpen && (
-            <div className="absolute left-0 z-10 mt-1 min-w-[160px] rounded-lg border border-gray-700 bg-[#1a1a1a] p-1 shadow-lg">
+            <div className="absolute left-0 z-10 mt-1 min-w-[200px] rounded-lg border border-gray-700 bg-[#1a1a1a] p-1 shadow-lg">
               <button
                 type="button"
                 className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
@@ -1410,7 +1456,7 @@ export default function EventForm({
                 Name
               </button>
               <div className="my-1 border-t border-gray-800" />
-              <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500">Sound</p>
+              <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500">Sound question</p>
               {JOURNEY_GARDEN_SLOT_IDS.filter(
                 (id) =>
                   !values.journeySteps.some(

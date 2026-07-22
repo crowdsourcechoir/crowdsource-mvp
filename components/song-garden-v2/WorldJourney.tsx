@@ -18,6 +18,7 @@ import {
 } from "@/data/songgardenClient";
 import { loadDoneSlots, clearDoneSlots } from "@/lib/songgarden/garden-storage";
 import {
+  resolveCategoryLabel,
   resolveJourneySteps,
   resolveSoundStep,
   type JourneyStep,
@@ -57,10 +58,8 @@ import {
 } from "@/lib/song-garden-v2/growth-nodes";
 import {
   COMPLETION_MOMENT_LABEL,
-  LYRIC_MOMENT_LABEL,
   NAME_MOMENT_LABEL,
   WELCOME_MOMENT_LABEL,
-  gardenSlotMomentLabel,
 } from "@/lib/song-garden-v2/moment-labels";
 import WorldStage from "./WorldStage";
 import MomentOverlay from "./MomentOverlay";
@@ -459,11 +458,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   let eyebrow: string | undefined;
   if (position.phase === "landing") eyebrow = WELCOME_MOMENT_LABEL;
   else if (needsNameGate) eyebrow = NAME_MOMENT_LABEL;
-  else if (activeStep?.kind === "name") eyebrow = NAME_MOMENT_LABEL;
-  else if (activeStep?.kind === "text") eyebrow = LYRIC_MOMENT_LABEL;
-  else if (activeStep?.kind === "sound" && activeSound) {
-    eyebrow = gardenSlotMomentLabel(activeSound.slot.id);
-  } else if (position.phase === "final") eyebrow = COMPLETION_MOMENT_LABEL;
+  else if (activeStep) eyebrow = resolveCategoryLabel(activeStep);
+  else if (position.phase === "final") eyebrow = COMPLETION_MOMENT_LABEL;
 
   return (
     <WorldStage
