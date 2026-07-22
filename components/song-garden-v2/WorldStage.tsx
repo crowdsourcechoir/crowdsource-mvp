@@ -1,18 +1,30 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
-import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
+import {
+  resolveStoryboardFrame,
+  resolveWorldSceneBlend,
+  type WorldConfig,
+} from "@/lib/song-garden-v2/world-config";
+import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
+import { useAmbientTilt } from "@/lib/song-garden-v2/tilt";
 import ParticleField from "./ParticleField";
+import WorldEnergyField from "./WorldEnergyField";
+import WorldGrowthLayer from "./WorldGrowthLayer";
+import WorldPresenceTicker from "./WorldPresenceTicker";
 
 type WorldStageProps = {
   world: WorldConfig;
+  eventId: string;
   /** 0..1 — increases as the participant contributes; makes the world visibly livelier. */
   energyLevel: number;
   /** Bump this (e.g. Date.now()) to fire a one-off "world reacts" pulse. */
   celebrationTrigger: number;
   /** True once a user gesture has happened, so the ambient soundtrack is allowed to play. */
   soundtrackUnlocked: boolean;
+  /** Everything this participant has contributed so far — rendered as a persistent, growing garden. */
+  growthNodes: WorldGrowthNode[];
   children: React.ReactNode;
 };
 
@@ -23,12 +35,22 @@ type WorldStageProps = {
  */
 export default function WorldStage({
   world,
+  eventId,
   energyLevel,
   celebrationTrigger,
   soundtrackUnlocked,
+  growthNodes,
   children,
 }: WorldStageProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const storyboardFrame = useMemo(() => resolveStoryboardFrame(world, energyLevel), [world, energyLevel]);
+  const blend = useMemo(
+    () => (storyboardFrame ? null : resolveWorldSceneBlend(world, energyLevel)),
+    [world, energyLevel, storyboardFrame]
+  );
+  const baseOpacity = 0.4 + energyLevel * 0.18;
+  const baseIntensity = storyboardFrame?.energy ?? energyLevel;
+  const tilt = useAmbientTilt(16);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -43,26 +65,69 @@ export default function WorldStage({
 
   return (
     <div
-      className="relative min-h-[100dvh] overflow-hidden [color-scheme:dark]"
+      className="relative h-[100dvh] overflow-hidden [color-scheme:dark]"
       style={{
         background: `radial-gradient(120% 90% at 50% -10%, ${world.accentColor}1f, ${world.primaryColor} 55%)`,
       }}
     >
-      {world.heroArtworkUrl && (
-        <motion.div
-          className="absolute inset-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.22 + energyLevel * 0.1 }}
-          transition={{ duration: 1.4 }}
-          style={{
-            backgroundImage: `url('${world.heroArtworkUrl}')`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(6px) saturate(0.9)",
-          }}
-          aria-hidden
-        />
-      )}
+      {/* Oversized + tilt-shifted so the 2.5D drift never reveals an edge. */}
+      <motion.div className="absolute -inset-[5%]" style={{ x: tilt.x, y: tilt.y }}>
+        {storyboardFrame ? (
+          <StoryboardBackground frame={storyboardFrame.frame} opacity={baseOpacity} />
+        ) : blend ? (
+          <>
+            {/* Lower (earlier) stage — fades out as `t` climbs toward the next stage. Kept
+                mounted (never removed) so every step nudges opacity gradually instead of a
+                hard swap at one threshold. */}
+            <motion.div
+              key={`lower-${blend.lower.sceneUrl}`}
+              className="absolute inset-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: baseOpacity * (1 - blend.t) }}
+              transition={{ duration: 1.2, ease: "easeInOut" }}
+              style={{
+                backgroundImage: `url('${blend.lower.sceneUrl}')`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "saturate(1.05)",
+              }}
+              aria-hidden
+            />
+            {blend.upper && (
+              <motion.div
+                key={`upper-${blend.upper.sceneUrl}`}
+                className="absolute inset-0"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: baseOpacity * blend.t }}
+                transition={{ duration: 1.2, ease: "easeInOut" }}
+                style={{
+                  backgroundImage: `url('${blend.upper.sceneUrl}')`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  filter: "saturate(1.05)",
+                }}
+                aria-hidden
+              />
+            )}
+          </>
+        ) : (
+          world.heroArtworkUrl && (
+            <motion.div
+              className="absolute inset-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: baseOpacity }}
+              transition={{ duration: 1.2, ease: "easeInOut" }}
+              style={{
+                backgroundImage: `url('${world.heroArtworkUrl}')`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "saturate(1.05)",
+              }}
+              aria-hidden
+            />
+          )
+        )}
+      </motion.div>
 
       <div
         className="absolute inset-0"
@@ -70,27 +135,67 @@ export default function WorldStage({
         aria-hidden
       />
 
-      <ParticleField preset={world.animationPreset} accentColor={world.accentColor} energy={energyLevel} />
+      <ParticleField preset={world.animationPreset} accentColor={world.accentColor} energy={baseIntensity} />
 
-      {celebrationTrigger > 0 && (
-        <motion.div
-          key={celebrationTrigger}
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: `radial-gradient(circle at 50% 62%, ${world.accentColor}55, transparent 60%)`,
-          }}
-          initial={{ opacity: 0.95 }}
-          animate={{ opacity: 0 }}
-          transition={{ duration: 0.9, ease: "easeOut" }}
-          aria-hidden
-        />
+      <WorldEnergyField accentColor={world.accentColor} baseIntensity={baseIntensity} pulseTrigger={celebrationTrigger} />
+
+      <WorldGrowthLayer nodes={growthNodes} accentColor={world.accentColor} />
+
+      {world.presenceSimulationEnabled !== false && (
+        <WorldPresenceTicker eventId={eventId} accentColor={world.accentColor} />
       )}
 
       {world.ambientSoundtrackUrl && (
         <audio ref={audioRef} src={world.ambientSoundtrackUrl} loop preload="none" />
       )}
 
-      <div className="relative z-10 flex min-h-[100dvh] flex-col">{children}</div>
+      <div className="relative z-10 flex h-full flex-col overflow-y-auto">{children}</div>
     </div>
   );
+}
+
+function StoryboardBackground({
+  frame,
+  opacity,
+}: {
+  frame: { sceneUrl: string | null; videoUrl: string | null };
+  opacity: number;
+}) {
+  if (frame.videoUrl) {
+    return (
+      <motion.video
+        key={frame.videoUrl}
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ opacity, filter: "saturate(1.05)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity }}
+        transition={{ duration: 1.2, ease: "easeInOut" }}
+        src={frame.videoUrl}
+        poster={frame.sceneUrl ?? undefined}
+        autoPlay
+        loop
+        muted
+        playsInline
+      />
+    );
+  }
+  if (frame.sceneUrl) {
+    return (
+      <motion.div
+        key={frame.sceneUrl}
+        className="absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity }}
+        transition={{ duration: 1.2, ease: "easeInOut" }}
+        style={{
+          backgroundImage: `url('${frame.sceneUrl}')`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          filter: "saturate(1.05)",
+        }}
+        aria-hidden
+      />
+    );
+  }
+  return null;
 }

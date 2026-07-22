@@ -185,7 +185,206 @@ custom world config in production.
 - Full cutover of `/e/[slug]` to V2 (currently a separate `/e/[slug]/world` route).
 - Admin UI is a minimal flat form (title/hero/colors/preset/soundtrack URL) —
   no live world preview inside the admin editor yet.
-- AI artwork generation (explicitly out of scope per brief).
 - Ambient soundtrack is a plain looping `<audio>` tag with an unlock-on-first-tap
   gesture; no crossfade/ducking between tracks.
 - No automated tests were added; verification was manual (see session report).
+
+## 8. Living world layer (added after initial pass)
+
+The initial pass above nailed the interaction engine and celebration loop, but the
+world itself didn't visibly change — the background reset to the same look after
+every celebration and there was no signal that anyone else was contributing. This
+addition closes that gap along three axes, all additive/backward-compatible:
+
+### 8a. Persistent growth (the participant visibly shapes the world)
+
+`lib/song-garden-v2/growth-nodes.ts` + `components/song-garden-v2/WorldGrowthLayer.tsx`.
+Every accepted contribution (text/voice/video answer, or sound-pad submission)
+appends a `WorldGrowthNode` (persisted to `localStorage` per event, so it survives
+reloads) instead of only firing the transient `CelebrationBurst`. Nodes are laid out
+with a phyllotaxis (sunflower-seed) spiral — `growthNodePosition()` — so the garden
+reads as organic growth rather than random scatter, and never unmount: the burst
+becomes the node's entrance animation, then it idles forever after. `WorldJourney`
+calls `appendGrowthNode()` right before `celebration.celebrate()` on every submit
+path (`handleChatSubmit`, `handleSlotSubmitted`), tagging the node's kind
+(`text`/`voice`/`video`/`percussion`/`vocal`/`other`) so different contribution
+types visually differ.
+
+### 8b. Growth-stage world art (the place itself evolves)
+
+`WorldConfig.worldSceneStages` (`lib/song-garden-v2/world-config.ts`) is an ordered
+list of `{ threshold, sceneUrl }` — e.g. a dormant scene at 0% and a full-bloom scene
+at 40%+. `resolveWorldSceneUrl(world, energyLevel)` picks the highest-threshold
+scene reached; `WorldStage` crossfades between them via Framer Motion
+`AnimatePresence` keyed on the URL. Falls back to the existing single
+`heroArtworkUrl` with no crossfade if no stages are configured — fully
+backward-compatible with events configured under §1–§6. Configurable per event in
+`EventForm.tsx` ("World growth stages"). `public/song-garden-v2/world-scenes/`
+holds a first prototype pair (dormant/bloom) generated for an ETHGlobal-style test
+event, used to validate the mechanic end-to-end.
+
+### 8c. Ambient collective presence (others are visibly here too)
+
+`app/api/events/[id]/activity/route.ts` is a read-only, aggregate-only endpoint
+(participant/clip counts, total + last-10-minutes, never individual content) reused
+from the existing `agent_participants` / `songgarden_clips` tables (and their local
+JSON-store equivalents). `lib/song-garden-v2/presence.ts` polls it and blends real
+counts into rotating ambient lines; `WorldPresenceTicker.tsx` renders them as a
+quiet pill near the top of the world. Real signal is always preferred; generic
+(non-fabricated) simulated lines only fill in when recent real activity is near
+zero, and only when `WorldConfig.presenceSimulationEnabled` (default on, toggle in
+`EventForm.tsx`) allows it — so a solo tester never sees an empty room, but a live
+event with real traffic never gets fed made-up specifics.
+
+### Known simplification
+
+The activity endpoint counts the current participant's own "join" as recent
+participant activity (it has no way to exclude "self" server-side without a
+session-aware query), so a solo tester may briefly see "a new voice just joined"
+referring to themselves. Harmless for the ambient-vibe use case, but worth
+tightening (exclude own session token) before relying on it for precise per-person
+messaging.
+
+### 8d. Follow-up polish: full-viewport spread, locked layout, literal growth
+
+First-round testing surfaced three concrete issues, all fixed additively:
+
+- **Growth nodes clustered below the card.** `growthNodePosition()` originally
+  fanned out from a point near the *bottom* of the world (yPct anchored at 78,
+  vertically compressed). Changed the spiral origin to the screen's true center
+  (50/50, with a 1.35x vertical stretch tuned for portrait phones) so nodes fill
+  the entire garden — above, beside, and below the card — instead of piling up in
+  one corner.
+- **Layout could drift off-center depending on content height / mobile browser
+  chrome.** `WorldStage`'s root was `min-h-[100dvh]`, which let the page grow
+  taller than one screen (and therefore scroll) whenever a moment's content was
+  tall. Changed to a hard `h-[100dvh] overflow-hidden` shell with an inner
+  `h-full overflow-y-auto` content column (`MomentOverlay`'s flex-1 wrapper now
+  has `min-h-0` so it actually shrinks/scrolls instead of forcing the parent
+  taller). Net effect: the interaction card centers reliably in whatever space is
+  left below the header, on any screen size, without page-level scroll ever
+  fighting the absolutely-positioned ambient layers (background, vines, orbs,
+  presence ticker) that are pinned to the same locked viewport.
+- **"I want to see the plants grow, not just become visible."** A first attempt
+  (hand-authored SVG vine paths animated via `pathLength`) was tried and reverted
+  — it read as thin lines drawing themselves for a couple of seconds and stopping,
+  not as a living plant. Superseded by §9 below.
+
+## 9. Storyboard + embodiment layer (second follow-up)
+
+Further feedback (real feedback quotes: "remove the vines... they look like lines
+that move for a couple seconds then stop"; "I don't want a mascot, I want more of
+a responsive environment... I want the image to actually evolve"; "what if we have
+a combo of all of them... I'm going to shorten the experience... 5 [moments] per
+event... prescriptive... think about the regenerative foundation... the closest
+thing to embodiment with a screen interaction") drove a deliberate architecture
+shift: away from a continuously-blended energy curve and hand-drawn SVG motion,
+toward a small, fixed, deterministic **storyboard** plus two always-on reactive
+layers that need no AI dependency to feel alive today.
+
+### 9a. Discrete storyboard (`WorldConfig.worldStoryboard`)
+
+`lib/song-garden-v2/world-config.ts` adds `WorldStoryboardFrame[]` — an ordered,
+fixed-length sequence of world states (e.g. 6 frames: dormant → awakening → ... →
+full bloom), each with an optional `videoUrl` (a short seamless loop — priority)
+and/or `sceneUrl` (still fallback/poster). `resolveStoryboardFrame()` **snaps**
+journey progress (`energyLevel`, already 0..1 = completed/total steps) to exactly
+one frame — `Math.floor(energyLevel * frames.length)` — no blending. This
+replaces continuous crossfading with something intentionally choreographed: the
+same progress always lands on the same frame, for every participant, every
+replay ("prescriptive" per the brief). It's designed around short (~5-moment)
+journeys, where a handful of authored states can cover the whole arc. The legacy
+`worldSceneStages` continuous blend is kept as a fallback for events with no
+storyboard configured — nothing existing breaks. `WorldStage` renders
+`worldStoryboard` frames first, then falls back to the old blend, then to
+`heroArtworkUrl`.
+
+Video generation itself (turning an admin-uploaded venue/city/org photo into
+each frame's loop) needs an external image-to-video provider (Runway/Luma/
+Stability/etc.) and an API key that wasn't available this pass — `EventForm.tsx`
+has a manual URL-entry admin UI for the storyboard today (paste a video/image URL
+per frame), ready to be auto-filled by a generation pipeline once a provider is
+chosen.
+
+### 9b. 2.5D embodiment layer (`lib/song-garden-v2/tilt.ts`)
+
+`useAmbientTilt()` gives the background real depth-of-field motion with zero API
+dependency: it prefers live device tilt (`deviceorientation`, permission
+requested via `requestTiltPermission()` at the same tap that starts the journey
+— required on iOS 13+), falls back to mouse position on desktop, and always has
+a slow autonomous drift underneath so the world is never perfectly still even
+with the phone flat on a table. `WorldStage` applies the resulting `x`/`y` as a
+transform on an oversized (`-inset-[5%]`) wrapper around the background layer so
+the drift never reveals an edge.
+
+### 9c. Reactive energy field (`WorldEnergyField.tsx`)
+
+Replaces the old one-off "flash to nothing" celebration overlay in `WorldStage`
+with a persistent glow whose *resting* brightness (`baseIntensity`, driven by the
+current storyboard frame's `energy`, or `energyLevel` as a fallback) rises across
+the storyboard, plus an instant pulse on every single contribution that spikes
+brighter and eases back down to the *current* resting level — not to zero. This
+is the literal "click → glows brighter → resets" behavior, and it's the one
+layer that's live-reactive moment-to-moment rather than only advancing at
+storyboard checkpoints. `ParticleField`'s ambient dust density is driven by the
+same `baseIntensity` signal for consistency.
+
+### 9d. Haptics (`lib/song-garden-v2/haptics.ts`)
+
+`pulseHaptic()` fires a short `navigator.vibrate()` buzz alongside every
+`growNode()` call (text/voice/video answers and sound-pad submissions) — paired
+with the energy-field pulse, this is the closest a screen interaction gets to a
+felt, physical response. Silently no-ops on unsupported devices/browsers.
+
+### 9e. Shortened journey
+
+The real test event (`csc-aug21`) was reconfigured from an open-ended ~6-question
+flow + 4 sound-garden slots down to 3 scripted `agentBrief.askAboutItems`
+questions + 1 enabled `songGardenConfig` step (5 real content-collecting moments
+total, plus the fixed transition/final beats) — validating the "fewer moments,
+more impact" pacing end-to-end against the new storyboard/energy-field stack.
+
+## 10. AI storyboard generator (Runway)
+
+Closes the loop on 9a: instead of pasting `worldStoryboard` frame URLs by hand,
+the admin can upload one photo of the venue/city/org, describe the vibe, and get
+back a full sequence of looping videos that animate that same place from
+dormant to full bloom — making it practical to stand up a bespoke world per
+event without any manual video editing.
+
+- **`lib/song-garden-v2/runway.ts`** — minimal client for Runway's API
+  (`https://api.dev.runwayml.com`, `Authorization: Bearer`, header
+  `X-Runway-Version: 2024-11-06`). `generateVideoFromImage()` submits a
+  `POST /v1/image_to_video` job (model `gen4_turbo`) and polls
+  `GET /v1/tasks/{id}` until it succeeds or fails, classifying errors into
+  `RunwayError` codes (`not_configured`, `invalid_key`, `insufficient_credits`,
+  `rate_limited`, `api_error`) so the UI can show a specific, actionable
+  message. `getRunwayAccountStatus()` hits `GET /v1/organization`, which is
+  free (does not spend credits) — this backs the admin's "Check Runway
+  credits" button so nothing has to actually generate to know whether the
+  account is funded yet.
+- **`app/api/admin/runway-status/route.ts`** — thin `GET` wrapper around the
+  account check above.
+- **`app/api/events/[id]/generate-storyboard/route.ts`** — `POST { imageDataUrl,
+  vibePrompt, frameCount }`. Builds one prompt per frame by combining the
+  admin's vibe description with a fixed ladder of escalating "aliveness"
+  modifiers (`INTENSITY_MODIFIERS`, quiet/dormant → radiant/full-bloom), so the
+  *same* base photo is animated at increasing intensity across the sequence —
+  no need to source or generate multiple base images per event. Runs frames
+  sequentially and stops on the first failure, returning whatever frames
+  already succeeded (`framesCompleted`/`framesRequested`) plus a specific
+  error — critical for the `insufficient_credits` case (HTTP 402) so a
+  mid-storyboard funding top-up doesn't throw away completed frames.
+- **`lib/song-garden-v2/persist-generated-media.ts`** — Runway's task output
+  URLs expire in 24-48h, so every generated video is downloaded and re-hosted
+  before being written into `worldConfig.worldStoryboard`: uploaded to a
+  public Supabase Storage bucket (`SONG_GARDEN_MEDIA_BUCKET`, auto-created)
+  when Supabase is configured, or written straight into
+  `public/song-garden-v2/world-scenes/generated/` for local dev without
+  Supabase set up.
+- **`components/EventForm.tsx`** — "Generate with AI (Runway)" panel above the
+  manual storyboard frame list: photo upload, frame count (2-8), vibe
+  textarea, a "Check Runway credits" button, and "Generate storyboard with
+  AI". Successful/partial results populate the same `worldStoryboard` form
+  state as manual entry — nothing is written to the event until the admin
+  hits the form's own Save.

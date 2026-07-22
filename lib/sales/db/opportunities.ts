@@ -1,5 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
-import type { Opportunity, OpportunityStatus } from "../types";
+import type { Opportunity, OpportunityStatus, RelationshipStage } from "../types";
 
 function rowToOpportunity(row: Record<string, unknown>): Opportunity {
   return {
@@ -13,6 +13,8 @@ function rowToOpportunity(row: Record<string, unknown>): Opportunity {
     description: (row.description as string | null) ?? null,
     status: (row.status as OpportunityStatus) ?? "new",
     targetContactRoleHint: (row.target_contact_role_hint as string | null) ?? null,
+    relationshipStage: (row.relationship_stage as RelationshipStage | null) ?? null,
+    stageUpdatedAt: (row.stage_updated_at as string | null) ?? null,
     importMetadata: (row.import_metadata as Record<string, unknown> | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -86,6 +88,38 @@ export async function updateOpportunityStatus(id: string, status: OpportunitySta
   const { data, error } = await db
     .from("opportunities")
     .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToOpportunity(data);
+}
+
+/** The opportunities visible on /admin/sales/funnel — anything the funnel has an opinion about
+ * yet, i.e. approved/launched at least once. Ordered oldest-stage-change-first so a "needs
+ * attention" item that's been sitting doesn't get buried below ones just moved. */
+export async function listOpportunitiesInFunnel(): Promise<Opportunity[]> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("opportunities")
+    .select("*")
+    .not("relationship_stage", "is", null)
+    .order("stage_updated_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToOpportunity);
+}
+
+/**
+ * Moves an opportunity to a new funnel stage (or into the terminal `lost` bucket), bumping
+ * `stage_updated_at` to now. Backward moves (e.g. Purchase → Interest) are allowed on purpose —
+ * this is a human correcting the record, not a one-way pipeline stage.
+ */
+export async function updateOpportunityRelationshipStage(id: string, stage: RelationshipStage): Promise<Opportunity> {
+  const db = requireSupabaseAdmin();
+  const now = new Date().toISOString();
+  const { data, error } = await db
+    .from("opportunities")
+    .update({ relationship_stage: stage, stage_updated_at: now, updated_at: now })
     .eq("id", id)
     .select()
     .single();

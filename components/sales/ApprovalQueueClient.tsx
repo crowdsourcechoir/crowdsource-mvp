@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
+import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
+import { buildEmailPlainText, buildMailtoUrl, launchMailto } from "@/lib/sales/outreach/mailto";
+import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
 const ACTIONS: { key: ActionKey; label: string; shortcut: string; tone: string }[] = [
-  { key: "approve", label: "Approve", shortcut: "A", tone: "bg-emerald-600 hover:bg-emerald-500" },
-  { key: "approve_with_edits", label: "Approve w/ edits", shortcut: "E", tone: "bg-emerald-800 hover:bg-emerald-700" },
+  { key: "approve", label: "Approve & launch email", shortcut: "A", tone: "bg-emerald-600 hover:bg-emerald-500" },
+  { key: "approve_with_edits", label: "Approve w/ edits & launch email", shortcut: "E", tone: "bg-emerald-800 hover:bg-emerald-700" },
   { key: "reject", label: "Reject", shortcut: "R", tone: "bg-red-700 hover:bg-red-600" },
   { key: "defer", label: "Defer", shortcut: "D", tone: "bg-amber-700 hover:bg-amber-600" },
   { key: "request_more_research", label: "More research", shortcut: "M", tone: "bg-sky-700 hover:bg-sky-600" },
@@ -30,6 +33,20 @@ export default function ApprovalQueueClient() {
   const [editedBody, setEditedBody] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showCopyStatus = useCallback((message: string) => {
+    if (copyStatusTimer.current) clearTimeout(copyStatusTimer.current);
+    setCopyStatus(message);
+    copyStatusTimer.current = setTimeout(() => setCopyStatus(null), 6000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyStatusTimer.current) clearTimeout(copyStatusTimer.current);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +82,30 @@ export default function ApprovalQueueClient() {
   const decide = useCallback(
     async (action: ActionKey) => {
       if (!current || busy) return;
+
+      // Must happen synchronously in the click handler, before any `await` — browsers (Safari in
+      // particular) only allow a mailto: navigation to open the OS mail client as a direct result
+      // of a user gesture, and that permission is lost once control returns from an awaited
+      // promise. Doing it first, before the decision API call below, is what makes "Approve"
+      // double as "launch the email," not two separate clicks. Dispatching via a programmatically
+      // clicked <a> (launchMailto), rather than reassigning window.location.href, is the more
+      // broadly-reliable way browsers route mailto: navigation to a registered handler.
+      if ((action === "approve" || action === "approve_with_edits") && current.contact?.email && current.draft) {
+        const to = current.contact.email;
+        const subject = action === "approve_with_edits" ? editedSubject : current.draft.editedSubject ?? current.draft.aiSubject;
+        const body = action === "approve_with_edits" ? editedBody : current.draft.editedBody ?? current.draft.aiBody;
+        launchMailto(buildMailtoUrl(to, subject, body));
+
+        // We have no reliable signal on whether a mail client actually opened (a webmail handler
+        // like Gmail only catches mailto: if explicitly granted permission in this browser — see
+        // lib/sales/outreach/mailto.ts), so always also copy the draft to the clipboard as a
+        // fallback the reviewer can paste into a fresh email.
+        navigator.clipboard
+          ?.writeText(buildEmailPlainText(to, subject, body))
+          .then(() => showCopyStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
+          .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
+      }
+
       setBusy(true);
       try {
         const res = await fetch(`/api/sales/queue/${current.queueItem.id}/decision`, {
@@ -87,7 +128,7 @@ export default function ApprovalQueueClient() {
         setBusy(false);
       }
     },
-    [current, busy, notes, editedSubject, editedBody, items.length]
+    [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus]
   );
 
   useEffect(() => {
@@ -188,6 +229,11 @@ export default function ApprovalQueueClient() {
                   <span className="text-gray-400">
                     {current.contact.email ?? "no email"} · {current.contact.emailVerificationStatus}
                   </span>
+                  <br />
+                  <span className="text-xs text-sky-400">
+                    Persona: {PERSONA_STRATEGIES[current.contact.outreachPersona].label} → goal:{" "}
+                    {PERSONA_STRATEGIES[current.contact.outreachPersona].primaryGoal}
+                  </span>
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
@@ -231,7 +277,16 @@ export default function ApprovalQueueClient() {
           )}
 
           <div className="mt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
+              {current.draft && current.contact?.email && !editing && (
+                <EmailLaunchLink
+                  to={current.contact.email}
+                  subject={current.draft.editedSubject ?? current.draft.aiSubject}
+                  body={current.draft.editedBody ?? current.draft.aiBody}
+                />
+              )}
+            </div>
             {current.draft ? (
               editing ? (
                 <div className="mt-2 space-y-2">
@@ -280,16 +335,24 @@ export default function ApprovalQueueClient() {
                 onClick={() => (action.key === "approve_with_edits" && !editing ? setEditing(true) : decide(action.key))}
                 className={`rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${action.tone}`}
               >
-                {action.label} <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
+                {action.key === "approve_with_edits" && !editing ? "Edit draft" : action.label}{" "}
+                <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
               </button>
             ))}
           </div>
+          {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve, <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more
-            research, <kbd>u</kbd> duplicate.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; launch email, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
+            <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Approving opens the draft in your default mail app — you send it from
+            there (and can attach the one-sheet yourself). The full draft is also always copied to your clipboard as a backup.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>
+          </p>
+          <p className="mt-1 text-xs text-gray-600">
+            Note: a webmail inbox (e.g. Gmail) only opens automatically if you’ve explicitly granted it mailto: handler permission in
+            this browser — setting it as your OS’s default mail app isn’t enough. In Chrome, grant it via the address-bar prompt on
+            gmail.com or under <code>chrome://settings/handlers</code>.
           </p>
         </div>
       )}

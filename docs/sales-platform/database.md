@@ -77,6 +77,7 @@ Seed rows at migration time: `conference`, `association`, `corporation`, `sports
 | `normalized_name` | text not null | Lowercased/punctuation-stripped, used for dedupe matching |
 | `domain` | text, nullable | Primary website domain, lowercased, no protocol — main dedupe key |
 | `organization_type_id` | uuid, fk → `organization_types`, not null | |
+| `industry_segment_id` | uuid, fk → `industry_segments`, nullable | **Added in `sales-platform-add-industry-segment-override.sql`.** Overrides the segment otherwise inherited transitively through `organization_type_id` (see `organization_types.industry_segment_id` above). Exists because that inheritance is too coarse for broad types like `association` — every association resolves to `associations_leadership` regardless of what field it's actually in, so there was no way to tell an education-focused association (ISACS, NAIS, CAIS...) apart from a healthcare or business one. Resolution order (`lib/sales/db/lookups.ts#resolveIndustrySegmentIdForOrganization`): this column if set, else `organization_types.industry_segment_id`. Used by outreach drafting (stage 8) to pick a segment-targeted template — see `outreach_templates.industry_segment_id` below |
 | `website_url` | text, nullable | |
 | `location_city` | text, nullable | |
 | `location_region` | text, nullable | State/province |
@@ -100,7 +101,8 @@ Indexes: unique-ish index on `domain` where not null; index on `normalized_name`
 | `normalized_email` | text, nullable | Lowercased/trimmed — dedupe key |
 | `email_verification_status` | text not null default `'unverified'` | `unverified`, `valid_format`, `verified_deliverable`, `invalid`, `risky` |
 | `phone` | text, nullable | |
-| `role_category` | text, nullable | Department/role bucket (e.g. "Marketing/Fan Engagement"), distinct from the free-text `role_title` — useful for contact-quality/decision-maker-access scoring |
+| `role_category` | text, nullable | Free-text department bucket imported verbatim from CSV (e.g. "Marketing/Fan Engagement") — useful for contact-quality/decision-maker-access scoring |
+| `outreach_persona` | text, nullable | `executive_director`, `events_director`, `program_manager`, `board_member`, `conference_planner`, `other` — a small **controlled** buyer-persona taxonomy, distinct from `role_category` above. Deterministically classified from `role_title` (`lib/sales/outreach/persona.ts`) and used by stage 8 (drafting) to pick the email's goal/CTA, not just its personalization. Re-derived on read if null, so legacy rows are never permanently unclassified |
 | `linkedin_url` | text, nullable | |
 | `source` | text not null | `ai_discovered`, `manual`, `hubspot_import`, `csv_import` |
 | `enrichment_attempted_at` | timestamptz, nullable | Phase 2. Set exactly once per contact the first time the enrichment stage runs on it — this, not a status check, is what stops the pipeline from re-billing a paid API call for the same contact on every re-run |
@@ -126,6 +128,8 @@ Same lookup pattern as `organization_types`. Seed rows: `annual_conference`, `em
 | `description` | text, nullable | Short human/AI summary |
 | `status` | text not null default `'new'` | `new`, `researching`, `awaiting_contact`, `ready_for_review`, `approved`, `rejected`, `deferred`, `needs_more_research`, `duplicate`. `awaiting_contact` (added post-v1) means the opportunity survived scoring/brief but has no contact clearing the verified-email bar yet (`valid_format`/`verified_deliverable`) — it's deliberately kept out of `ready_for_review` so the queue never becomes a place to do contact research; see `ai-workflow.md` §4/§10. It's an "undecided" status like `new`/`researching`/`ready_for_review`, so a later pipeline re-run (e.g. once enrichment finds a verified email) re-processes it and can advance it to `ready_for_review` |
 | `target_contact_role_hint` | text, nullable | A role description (e.g. "Conference director / executive director") to guide contact discovery when no named contact exists yet — not a substitute for a real `contacts` row |
+| `relationship_stage` | text, nullable | **Added in `sales-platform-add-funnel-stage.sql`.** `awareness`, `interest`, `purchase`, or `lost` (terminal, not a funnel stage) — null means not yet approved/sent. Deliberately distinct from `status` above: `status` is the AI pipeline's own state (new/researching/ready_for_review/approved/...), `relationship_stage` is Joel's actual human-relationship funnel *after* approval, surfaced at `/admin/sales/funnel`. Set to `awareness` automatically the moment a queue item is approved (`app/api/sales/queue/[itemId]/decision/route.ts`) — see `ai-workflow.md`'s "10.5. Launching the email" — and moved by hand afterward (`app/api/sales/opportunities/[oppId]/stage/route.ts`), including backward, for corrections |
+| `stage_updated_at` | timestamptz, nullable | Set alongside every `relationship_stage` change. Distinct from `approval_queue_items.decided_at` — `decided_at` is fixed the moment the queue decision is made, `stage_updated_at` keeps moving every time the funnel stage changes afterward. The funnel view's "days since" figure is anchored on this (falling back to `decided_at` if ever unexpectedly null) |
 | `import_metadata` | jsonb, nullable | Same purpose as `organizations.import_metadata` |
 | `created_at` / `updated_at` | timestamptz | |
 
@@ -230,6 +234,7 @@ Scores are immutable once created (a re-score creates a new row); the queue alwa
 | `id` | uuid pk | |
 | `name` | text not null | |
 | `opportunity_type_id` | uuid, fk → `opportunity_types`, nullable | Null = general-purpose template |
+| `industry_segment_id` | uuid, fk → `industry_segments`, nullable | **Added in `sales-platform-add-industry-segment-override.sql`.** Targets a template at the organization's *resolved* industry segment (see `organizations.industry_segment_id` above) rather than the opportunity type — e.g. `'Educational — v1 default'` (added in `sales-platform-add-educational-template.sql`) uses this to reach every education-sector org, independent of what opportunity type gets detected. `findApprovedTemplate` (`lib/sales/db/outreach.ts`) matches, in order: (1) `opportunity_type_id`, if given; (2) this column, if given and no opportunity-type match; (3) the fully generic template (both null) |
 | `body_template` | text not null | With placeholders, e.g. `{{contact_first_name}}`, `{{opportunity_title}}` |
 | `status` | text not null default `'draft'` | `draft`, `approved`, `retired` — drafting stage only uses `approved` templates |
 | `created_at` / `updated_at` | timestamptz | |

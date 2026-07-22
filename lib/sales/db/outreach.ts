@@ -6,9 +6,6 @@ function rowToTemplate(row: Record<string, unknown>): OutreachTemplate {
     id: row.id as string,
     name: row.name as string,
     opportunityTypeId: (row.opportunity_type_id as string | null) ?? null,
-    // TODO(industry-segment-override): populated by the in-progress industry-segment work — see
-    // lib/sales/types.ts's OutreachTemplate.industrySegmentId doc comment. Null ("not
-    // segment-targeted") is a valid, safe default until that work is committed.
     industrySegmentId: (row.industry_segment_id as string | null) ?? null,
     bodyTemplate: row.body_template as string,
     status: row.status as OutreachTemplate["status"],
@@ -33,7 +30,22 @@ function rowToDraft(row: Record<string, unknown>): OutreachDraft {
   };
 }
 
-export async function findApprovedTemplate(opportunityTypeId: string | null): Promise<OutreachTemplate | null> {
+/**
+ * Picks the best approved template, matching two independent dimensions that compose rather than
+ * replace each other — see supabase/sales-platform-add-industry-segment-override.sql:
+ *   1. opportunityTypeId, if given (unchanged from before this dimension existed — no current
+ *      template sets this non-null, but the matching stays intact for whenever one does).
+ *   2. industrySegmentId, if given and no opportunity-type match was found — e.g. the
+ *      'Educational — v1 default' template, matched by the organization's *resolved* segment
+ *      (org override else its organization_type's segment; see
+ *      lib/sales/db/lookups.ts#resolveIndustrySegmentIdForOrganization).
+ *   3. The fully generic fallback (both dimensions null) — same template as always if neither
+ *      more specific match exists.
+ */
+export async function findApprovedTemplate(
+  opportunityTypeId: string | null,
+  industrySegmentId?: string | null
+): Promise<OutreachTemplate | null> {
   const db = requireSupabaseAdmin();
   if (opportunityTypeId) {
     const { data, error } = await db
@@ -45,11 +57,23 @@ export async function findApprovedTemplate(opportunityTypeId: string | null): Pr
     if (error) throw new Error(error.message);
     if (data) return rowToTemplate(data);
   }
+  if (industrySegmentId) {
+    const { data, error } = await db
+      .from("outreach_templates")
+      .select("*")
+      .eq("status", "approved")
+      .eq("industry_segment_id", industrySegmentId)
+      .is("opportunity_type_id", null)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) return rowToTemplate(data);
+  }
   const { data, error } = await db
     .from("outreach_templates")
     .select("*")
     .eq("status", "approved")
     .is("opportunity_type_id", null)
+    .is("industry_segment_id", null)
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(error.message);

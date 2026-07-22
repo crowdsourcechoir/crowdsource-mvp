@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import { normalizeEmail } from "../dedupe";
+import { classifyOutreachPersona } from "../outreach/persona";
 import type { Contact } from "../types";
 
 function rowToContact(row: Record<string, unknown>): Contact {
@@ -9,10 +10,9 @@ function rowToContact(row: Record<string, unknown>): Contact {
     fullName: (row.full_name as string | null) ?? null,
     roleTitle: (row.role_title as string | null) ?? null,
     roleCategory: (row.role_category as string | null) ?? null,
-    // TODO(outreach-persona): placeholder until the real classifier (derived from roleTitle) lands —
-    // see lib/sales/types.ts's Contact.outreachPersona doc comment. Kept deliberately minimal here
-    // (no new imports/behavior) to unblock the build; not meant to be the final implementation.
-    outreachPersona: (row.outreach_persona as Contact["outreachPersona"] | null) ?? "other",
+    // Legacy rows created before this column existed classify on read rather than needing a
+    // backfill migration to be "correct" — the stored value (once backfilled) is just a cache.
+    outreachPersona: (row.outreach_persona as Contact["outreachPersona"] | null) ?? classifyOutreachPersona(row.role_title as string | null),
     email: (row.email as string | null) ?? null,
     normalizedEmail: (row.normalized_email as string | null) ?? null,
     phone: (row.phone as string | null) ?? null,
@@ -94,6 +94,7 @@ export async function createContact(input: CreateContactInput): Promise<Contact>
     full_name: input.fullName ?? null,
     role_title: input.roleTitle ?? null,
     role_category: input.roleCategory ?? null,
+    outreach_persona: classifyOutreachPersona(input.roleTitle),
     email: normalizeEmail(input.email) ? input.email : null, // guards against a model emitting the literal word "null" instead of an actual null
     normalized_email: normalizeEmail(input.email),
     phone: input.phone ?? null,

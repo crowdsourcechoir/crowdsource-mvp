@@ -51,6 +51,9 @@ const EMPTY_WORLD_CONFIG_FORM: WorldConfig = {
   animationPreset: "particles",
   ambientSoundtrackUrl: null,
   aiArtworkPrompt: null,
+  worldSceneStages: [],
+  worldStoryboard: [],
+  presenceSimulationEnabled: true,
 };
 
 type EventFormProps = {
@@ -183,6 +186,21 @@ export default function EventForm({
   const [themeError, setThemeError] = useState<string | null>(null);
   const [savedTemplates, setSavedTemplates] = useState<SavedAgentTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
+
+  // AI storyboard generation (Runway) — see app/api/events/[id]/generate-storyboard/route.ts.
+  const [runwayStatus, setRunwayStatus] = useState<{
+    checked: boolean;
+    configured: boolean;
+    creditBalance?: number;
+    tier?: string;
+    error?: string;
+  } | null>(null);
+  const [aiPhoto, setAiPhoto] = useState<string>("");
+  const [aiVibePrompt, setAiVibePrompt] = useState<string>("");
+  const [aiFrameCount, setAiFrameCount] = useState<number>(6);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiGenError, setAiGenError] = useState<string | null>(null);
+  const [aiGenNotice, setAiGenNotice] = useState<string | null>(null);
 
   useEffect(() => {
     getAgentThemes().then(setThemes).catch(() => setThemes([]));
@@ -408,6 +426,71 @@ export default function EventForm({
       ...v,
       worldConfig: { ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM), [key]: value },
     }));
+  }
+
+  async function checkRunwayStatus() {
+    setRunwayStatus({ checked: false, configured: false });
+    try {
+      const res = await fetch("/api/admin/runway-status");
+      const data = await res.json();
+      setRunwayStatus({
+        checked: true,
+        configured: Boolean(data.configured),
+        creditBalance: typeof data.creditBalance === "number" ? data.creditBalance : undefined,
+        tier: data.tier,
+        error: data.error,
+      });
+    } catch {
+      setRunwayStatus({ checked: true, configured: false, error: "Could not reach the server." });
+    }
+  }
+
+  function handleAiPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setAiPhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  async function handleGenerateStoryboard() {
+    setAiGenError(null);
+    setAiGenNotice(null);
+    if (!aiPhoto) {
+      setAiGenError("Upload a photo of the venue, city, or org first.");
+      return;
+    }
+    if (!aiVibePrompt.trim()) {
+      setAiGenError("Describe the vibe (mood, lighting, what should come alive) first.");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const eventIdForPath = values.slug?.trim() || "draft";
+      const res = await fetch(`/api/events/${encodeURIComponent(eventIdForPath)}/generate-storyboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: aiPhoto, vibePrompt: aiVibePrompt, frameCount: aiFrameCount }),
+      });
+      const data = await res.json();
+      if (Array.isArray(data.frames) && data.frames.length) {
+        setWorldConfigField("worldStoryboard", data.frames);
+      }
+      if (!res.ok) {
+        const partial = Array.isArray(data.frames) ? data.frames.length : 0;
+        setAiGenError(
+          partial > 0
+            ? `${data.error} (${partial}/${aiFrameCount} frames generated before this — kept below, click Generate again to retry the rest.)`
+            : data.error || "Generation failed."
+        );
+      } else {
+        setAiGenNotice(`Generated ${data.frames.length} storyboard frames. Review below, then Save to keep them.`);
+      }
+    } catch {
+      setAiGenError("Could not reach the server.");
+    } finally {
+      setAiGenerating(false);
+    }
   }
 
   function setSongGardenSteps(steps: SongGardenConfig["steps"]) {
@@ -1214,6 +1297,238 @@ export default function EventForm({
               placeholder="Optional looping .mp3/.wav URL"
               className={inputClass}
             />
+          </label>
+        </div>
+
+        <div className="mt-6 border-t border-gray-700/60 pt-4">
+          <span className={labelClass}>World storyboard (recommended)</span>
+          <p className="mt-1 text-xs text-gray-500">
+            A fixed sequence of world states — spread evenly across the whole journey, so the
+            same frame always shows at the same point for every participant. Each frame plays a
+            short looping video if you set one (the actual scene moving — light, fog, motion),
+            falling back to a still image if not. Leave empty to use the legacy growth-stage
+            crossfade below, or just the hero artwork.
+          </p>
+
+          <div className="mt-3 rounded-xl border border-gray-700/60 bg-[#161320] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-gray-300">Generate with AI (Runway)</span>
+              <button
+                type="button"
+                onClick={checkRunwayStatus}
+                className="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:bg-[#2a2a2a]"
+              >
+                Check Runway credits
+              </button>
+            </div>
+            {runwayStatus && (
+              <p className="mt-2 text-xs">
+                {!runwayStatus.checked ? (
+                  <span className="text-gray-500">Checking…</span>
+                ) : !runwayStatus.configured ? (
+                  <span className="text-amber-400">
+                    RUNWAYML_API_SECRET is not set on the server yet.
+                  </span>
+                ) : runwayStatus.error ? (
+                  <span className="text-amber-400">{runwayStatus.error}</span>
+                ) : (
+                  <span className="text-emerald-400">
+                    Connected{runwayStatus.tier ? ` — ${runwayStatus.tier} tier` : ""}
+                    {typeof runwayStatus.creditBalance === "number"
+                      ? `, ${runwayStatus.creditBalance} credits`
+                      : ""}
+                    .
+                  </span>
+                )}
+              </p>
+            )}
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs text-gray-500">Photo (venue / city / org)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAiPhotoUpload}
+                  className="mt-1 block w-full text-xs text-gray-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-gray-500">Frames (2–8)</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={8}
+                  value={aiFrameCount}
+                  onChange={(e) => setAiFrameCount(Math.max(2, Math.min(8, Number(e.target.value) || 6)))}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+            {aiPhoto && (
+              <img src={aiPhoto} alt="Uploaded source" className="mt-2 h-24 w-full rounded-lg object-cover" />
+            )}
+            <label className="mt-2 block">
+              <span className="text-xs text-gray-500">Vibe (mood, lighting, what should come alive)</span>
+              <textarea
+                value={aiVibePrompt}
+                onChange={(e) => setAiVibePrompt(e.target.value)}
+                placeholder="e.g. ETHGlobal hackathon convention hall at night, warm string lights, blockchain / crypto energy, crowds of builders"
+                rows={2}
+                className={inputClass}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleGenerateStoryboard}
+              disabled={aiGenerating}
+              className="mt-3 rounded-xl bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-[#1a0f2d] hover:bg-[#bdf25e] disabled:opacity-50"
+            >
+              {aiGenerating ? "Generating… (can take a few minutes)" : "Generate storyboard with AI"}
+            </button>
+            {aiGenError && <p className="mt-2 text-xs text-rose-400">{aiGenError}</p>}
+            {aiGenNotice && <p className="mt-2 text-xs text-emerald-400">{aiGenNotice}</p>}
+            <p className="mt-2 text-xs text-gray-600">
+              One photo becomes every frame below, animated from dormant to full bloom. Runway
+              requires credits on the account before this will succeed — use &ldquo;Check Runway
+              credits&rdquo; above first.
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {(values.worldConfig?.worldStoryboard ?? []).map((frame, i) => (
+              <div key={i} className="rounded-xl border border-gray-700/60 bg-[#1a1a1a] p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-400">Frame {i + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const frames = (values.worldConfig?.worldStoryboard ?? []).filter((_, idx) => idx !== i);
+                      setWorldConfigField("worldStoryboard", frames);
+                    }}
+                    className="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:bg-[#2a2a2a]"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={frame.videoUrl ?? ""}
+                    onChange={(e) => {
+                      const frames = [...(values.worldConfig?.worldStoryboard ?? [])];
+                      frames[i] = { ...frames[i], videoUrl: e.target.value || null };
+                      setWorldConfigField("worldStoryboard", frames);
+                    }}
+                    placeholder="Loop video URL (.mp4/.webm) — the scene actually moving"
+                    className={inputClass}
+                  />
+                  <input
+                    type="text"
+                    value={frame.sceneUrl ?? ""}
+                    onChange={(e) => {
+                      const frames = [...(values.worldConfig?.worldStoryboard ?? [])];
+                      frames[i] = { ...frames[i], sceneUrl: e.target.value || null };
+                      setWorldConfigField("worldStoryboard", frames);
+                    }}
+                    placeholder="Still image URL (poster / fallback if no video)"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const frames = [
+                  ...(values.worldConfig?.worldStoryboard ?? []),
+                  { sceneUrl: null, videoUrl: null },
+                ];
+                setWorldConfigField("worldStoryboard", frames);
+              }}
+              className="rounded-xl border border-gray-700 bg-[#1f1f1f] px-3 py-2 text-xs font-semibold text-gray-300 hover:bg-[#2a2a2a]"
+            >
+              + Add storyboard frame
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-gray-600">
+            AI-assisted generation (upload a venue/city/org photo → auto-fill all frames) is
+            planned next — paste URLs manually for now.
+          </p>
+        </div>
+
+        <div className="mt-6 border-t border-gray-700/60 pt-4">
+          <span className={labelClass}>World growth stages (legacy crossfade)</span>
+          <p className="mt-1 text-xs text-gray-500">
+            Only used when the storyboard above is empty. Add 2+ scene images at increasing
+            completion thresholds (0–100%) and the world background will crossfade to the next
+            one as participants contribute — e.g. a dormant scene at 0%, in-bloom at 50%,
+            full-bloom at 100%. Leave empty to just use the hero artwork above with no crossfade.
+          </p>
+          <div className="mt-3 space-y-2">
+            {(values.worldConfig?.worldSceneStages ?? []).map((stage, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(stage.threshold * 100)}
+                  onChange={(e) => {
+                    const stages = [...(values.worldConfig?.worldSceneStages ?? [])];
+                    stages[i] = { ...stages[i], threshold: Math.max(0, Math.min(100, Number(e.target.value) || 0)) / 100 };
+                    setWorldConfigField("worldSceneStages", stages);
+                  }}
+                  className={`${inputClass} w-20`}
+                  aria-label="Threshold %"
+                />
+                <span className="text-xs text-gray-500">%</span>
+                <input
+                  type="text"
+                  value={stage.sceneUrl}
+                  onChange={(e) => {
+                    const stages = [...(values.worldConfig?.worldSceneStages ?? [])];
+                    stages[i] = { ...stages[i], sceneUrl: e.target.value };
+                    setWorldConfigField("worldSceneStages", stages);
+                  }}
+                  placeholder="/song-garden-v2/world-scenes/scene.jpg"
+                  className={`${inputClass} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const stages = (values.worldConfig?.worldSceneStages ?? []).filter((_, idx) => idx !== i);
+                    setWorldConfigField("worldSceneStages", stages);
+                  }}
+                  className="shrink-0 rounded-lg border border-gray-700 px-2 py-2 text-xs text-gray-400 hover:bg-[#2a2a2a]"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const stages = [...(values.worldConfig?.worldSceneStages ?? []), { threshold: 0, sceneUrl: "" }];
+                setWorldConfigField("worldSceneStages", stages);
+              }}
+              className="rounded-xl border border-gray-700 bg-[#1f1f1f] px-3 py-2 text-xs font-semibold text-gray-300 hover:bg-[#2a2a2a]"
+            >
+              + Add growth stage
+            </button>
+          </div>
+
+          <label className="mt-4 flex items-start gap-3 rounded-xl border border-gray-700/60 bg-[#1a1a1a] px-4 py-3">
+            <input
+              type="checkbox"
+              checked={values.worldConfig?.presenceSimulationEnabled ?? true}
+              onChange={(e) => setWorldConfigField("presenceSimulationEnabled", e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span className="text-sm text-gray-300">
+              Show &quot;others are here too&quot; ambient activity. Uses real participant/clip
+              counts when available; blends in generic ambient lines only when recent real
+              activity is near zero (e.g. solo testing), so the world never feels empty.
+            </span>
           </label>
         </div>
         {values.worldConfig && (

@@ -1,11 +1,11 @@
 import { requireSupabaseAdmin } from "./client";
-import { getOpportunity } from "./opportunities";
+import { getOpportunity, listOpportunitiesInFunnel } from "./opportunities";
 import { getOrganization } from "./organizations";
 import { getContact } from "./contacts";
 import { getDraft } from "./outreach";
 import { listFindingsWithSourcesForOpportunity } from "./research";
 import { getQueueItemByOpportunity } from "./queue";
-import type { QueueItemDetail } from "../types";
+import type { FunnelItemDetail, QueueItemDetail } from "../types";
 
 /** Everything the review UI needs for one opportunity, assembled in one call so no extra navigation is required. */
 export async function assembleQueueItemDetail(opportunityId: string): Promise<QueueItemDetail | null> {
@@ -75,4 +75,26 @@ export async function assembleQueueItemDetail(opportunityId: string): Promise<Qu
     draft,
     findings,
   };
+}
+
+/** Everything /admin/sales/funnel needs, for every opportunity with a non-null relationship_stage
+ * — reuses the same queue-item→draft→contact join shape as assembleQueueItemDetail above rather
+ * than a new one, per the "one shape for opportunity + org + contact + draft" convention. */
+export async function assembleFunnelItems(): Promise<FunnelItemDetail[]> {
+  const opportunities = await listOpportunitiesInFunnel();
+  const details = await Promise.all(
+    opportunities.map(async (opportunity): Promise<FunnelItemDetail | null> => {
+      const [organization, queueItem] = await Promise.all([
+        getOrganization(opportunity.organizationId),
+        getQueueItemByOpportunity(opportunity.id),
+      ]);
+      if (!organization) return null;
+
+      const draft = queueItem?.outreachDraftId ? await getDraft(queueItem.outreachDraftId) : null;
+      const contact = draft?.contactId ? await getContact(draft.contactId) : null;
+
+      return { opportunity, organization, contact, draft, approvedAt: queueItem?.decidedAt ?? null };
+    })
+  );
+  return details.filter((d): d is FunnelItemDetail => d !== null);
 }

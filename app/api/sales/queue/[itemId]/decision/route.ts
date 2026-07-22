@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
 import { updateDraftDecision } from "@/lib/sales/db/outreach";
-import { updateOpportunityStatus } from "@/lib/sales/db/opportunities";
+import { updateOpportunityStatus, updateOpportunityRelationshipStage } from "@/lib/sales/db/opportunities";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +46,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     });
 
     await updateOpportunityStatus(item.opportunityId, QUEUE_STATUS_TO_OPPORTUNITY_STATUS[queueStatus]);
+
+    // The "email was launched" moment (see ai-workflow.md §10.5) — enters the funnel at
+    // Awareness. Distinct from the queue/pipeline status above: this is Joel's own
+    // Awareness→Interest→Purchase relationship model, tracked in /admin/sales/funnel.
+    if (action === "approve" || action === "approve_with_edits") {
+      await updateOpportunityRelationshipStage(item.opportunityId, "awareness");
+    }
 
     if (item.outreachDraftId && (action === "approve" || action === "approve_with_edits")) {
       await updateDraftDecision(item.outreachDraftId, {

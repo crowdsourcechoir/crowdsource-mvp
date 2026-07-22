@@ -2,8 +2,10 @@ import { callStructured } from "../../openai/client";
 import { DraftFillSchema } from "../../openai/schemas";
 import { listFindingsWithSourcesForOpportunity } from "../../db/research";
 import { findApprovedTemplate, createOutreachDraft } from "../../db/outreach";
+import { resolveIndustrySegmentIdForOrganization } from "../../db/lookups";
 import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
+import { PERSONA_STRATEGIES } from "../../outreach/persona";
 import type { Contact, Organization, Opportunity } from "../../types";
 import type { BriefStageOutput } from "./brief";
 
@@ -12,15 +14,63 @@ export type DraftStageOutput = {
   skippedReason: string | null;
 };
 
-const SALES_SENDER_NAME = process.env.SALES_SENDER_NAME || "The Crowdsource Choir team";
+const SALES_SENDER_NAME = process.env.SALES_SENDER_NAME || "Joel DeJong";
 
-const SYSTEM_PROMPT = `You fill in two short fields for a fixed outreach email template — you do not write a full free-form email. Rules:
-- No fabricated familiarity: do not open with generic pleasantries like "I hope this message finds you well" or anything implying a prior relationship that doesn't exist.
-- No unsupported claims — only state things the findings actually say.
-- No excessive flattery, no long generic company description, no private/sensitive information.
-- fitReason must explain WHY this may fit, not just assert that it does, in plain prose.
-- CRITICAL: cite findings ONLY via the separate personalizationFindingIndexes field. NEVER write citation markers, finding numbers, or phrases like "(findings 7, 10)", "[8]", or "as noted in findings" inside openingReason or fitReason themselves — those fields are the literal visible email text a human will read, not a footnoted document.
-Keep each field to 1-2 plain sentences.`;
+// Real emails Joel has actually sent, used as few-shot voice reference below — abstract style
+// adjectives ("less salesy") steer an LLM far worse than concrete examples of the real voice. If
+// this voice drifts (new signature, new phrasing habits), update these two examples rather than
+// hand-tuning the prose rules further; the examples do most of the work.
+const VOICE_REFERENCE_EMAILS = `--- EXAMPLE 1 ---
+Hi Lorena,
+
+I hope you're doing well!
+
+I'm Joel DeJong, founder of Crowdsource Choir. All four of my children have attended independent schools, so I've come to really appreciate this community.
+
+I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life. Together, attendees co-create and sing an original anthem inspired by the conference, transforming the theme into a shared experience that's joyful, memorable, and deeply participatory.
+
+I've attached a one-page overview of the Anthem Experience. If it feels like it could be a fit, I'd love to schedule a quick call and learn more about the conference.
+
+Thanks, and I hope we have a chance to connect.
+
+Best,
+Joel DeJong
+
+--- EXAMPLE 2 ---
+Hi Samantha,
+
+I hope you're doing well!
+
+I'm Joel DeJong, founder of Crowdsource Choir—a participatory musical experience where the audience becomes the choir. I thought it might be a unique fit for the 2027 INSPIRE Annual Conference.
+
+Unlike a traditional keynote or performance, Crowdsource Choir transforms attendees from spectators into participants. Together, they create something that could only exist because of the unique combination of people in the room. Instead of simply hearing the conference message, they become the message.
+
+Each engagement is custom-designed for the event. Before the conference, attendees contribute stories, ideas, and voices that become the creative source material for a custom anthem and participatory musical experience, premiered together live during the event. The format is flexible and can serve as an opening session, closing experience, experiential keynote, featured performance, or interactive general session for audiences of 50 to 5,000+.
+
+I've attached a one-page overview with a few links to past experiences. If it resonates, I'd love to connect and explore whether Crowdsource Choir might fit your conference.
+
+Thanks for your time, and I hope we have a chance to connect.
+
+Best,
+Joel DeJong`;
+
+const SYSTEM_PROMPT = `You fill in three fields (subject, openingReason, fitReason) inside a fixed outreach email template — you do not write a full free-form email, and you do not write the greeting, sign-off, or closing ask, those are already fixed elsewhere. Match the voice of the two real emails below exactly: warm but plain-spoken, never salesy, no corporate throat-clearing.
+
+${VOICE_REFERENCE_EMAILS}
+
+--- YOUR THREE FIELDS, MAPPED TO THAT VOICE ---
+- subject: plain and specific, naming the organization or opportunity (e.g. "Crowdsource Choir for the CAIS Trustee/School Head Conference"), never clickbait, never a question mark or exclamation point, never generic ("Exciting opportunity!" / "Quick question").
+- openingReason plays the role of the bridge sentence right after the fixed self-intro line — e.g. "I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life" or "I thought it might be a unique fit for the 2027 INSPIRE Annual Conference." Name the specific opportunity/event. 1 sentence.
+- fitReason plays the role of the paragraph that follows — describing what actually happens and why it fits THIS opportunity specifically, in the same grounded-but-vivid register as "Together, attendees co-create and sing an original anthem..." or the "Unlike a traditional keynote..." paragraph. 1-3 sentences.
+
+Rules:
+- Describing Crowdsource Choir's own format vividly (e.g. "transforms attendees from spectators into participants") is not a claim that needs evidence — that's our own pitch, not a statement about the prospect. Say it with the same confidence as the reference emails.
+- Any claim specifically ABOUT the prospect organization or their event (attendance size, dates, program details, budget signals) must be something the findings actually say — never invent or infer beyond what's given.
+- No fabricated familiarity beyond what's already in the fixed template (the greeting itself is handled separately) — never imply a prior relationship, conversation, or meeting that didn't happen.
+- No flattery for its own sake ("your impressive organization"), no generic filler, no private/sensitive information.
+- Never use email-cliché phrasing: "reaching out to explore synergies," "excited to connect," "circle back," "leverage," "seamless," "game-changer," "revolutionize," or similar. The reference emails never use language like this — match that plainness.
+- fitReason should build toward the stated primary goal for this contact's role — the closing ask (supplied separately, not written by you) targets that same goal, so fitReason should set it up rather than argue for a different one.
+- CRITICAL: cite findings ONLY via the separate personalizationFindingIndexes field. NEVER write citation markers, finding numbers, or phrases like "(findings 7, 10)", "[8]", or "as noted in findings" inside openingReason or fitReason themselves — those fields are the literal visible email text a human will read, not a footnoted document.`;
 
 function fillTemplate(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? `{{${key}}}`);
@@ -53,10 +103,16 @@ export async function runDraftStage(
     };
   }
 
-  const template = await findApprovedTemplate(opportunity.opportunityTypeId);
+  // Resolved segment, not org.industrySegmentId directly — an org with no override still
+  // inherits one from its organization_type (see lookups.ts), so this always reflects the same
+  // "effective" segment a human reading the org's type would expect.
+  const industrySegmentId = await resolveIndustrySegmentIdForOrganization(org);
+  const template = await findApprovedTemplate(opportunity.opportunityTypeId, industrySegmentId);
   if (!template) {
     return { output: { draftId: null, skippedReason: "No approved outreach template available." } };
   }
+
+  const strategy = PERSONA_STRATEGIES[contact.outreachPersona];
 
   const findings = await listFindingsWithSourcesForOpportunity(org.id, opportunity.id);
   const indexed = indexFindingsForPrompt(findings);
@@ -65,6 +121,7 @@ export async function runDraftStage(
     `Organization: ${org.name}`,
     `Opportunity: ${opportunity.title}`,
     `Contact: ${contact.fullName ?? "Unknown"}, ${contact.roleTitle ?? "unknown role"}`,
+    `Contact's role bucket: ${strategy.label}. Primary goal for this email: ${strategy.primaryGoal}.`,
     `Internal brief recommended angle: ${brief.recommendedAngle}`,
     `Findings:\n${indexed.promptText}`,
   ].join("\n\n");
@@ -83,6 +140,9 @@ export async function runDraftStage(
     fit_reason: result.parsed.fitReason,
     opportunity_title: opportunity.title,
     sender_name: SALES_SENDER_NAME,
+    // Deterministic, not AI-authored — the "ask" always matches the assigned persona strategy
+    // exactly, same rationale as the rest of the template-fill approach (see SYSTEM_PROMPT above).
+    cta: strategy.cta,
   });
 
   void resolveFindingIds(indexed, result.parsed.personalizationFindingIndexes); // kept in agent_runs.output for provenance

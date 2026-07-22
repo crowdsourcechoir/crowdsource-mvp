@@ -1,5 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
-import type { IndustrySegment, OpportunityType, OrganizationType } from "../types";
+import type { IndustrySegment, OpportunityType, Organization, OrganizationType } from "../types";
 
 function rowToOrganizationType(row: Record<string, unknown>): OrganizationType {
   return {
@@ -53,4 +53,19 @@ export async function findOrganizationTypeByKey(key: string): Promise<Organizati
 export async function findOpportunityTypeByKey(key: string): Promise<OpportunityType | null> {
   const types = await listOpportunityTypes();
   return types.find((t) => t.key === key) ?? null;
+}
+
+/**
+ * Resolves an organization's *effective* industry segment: its own `industrySegmentId` override
+ * if set, else whatever its `organizationTypeId` inherits (see
+ * supabase/sales-platform-add-industry-segment-override.sql for why the override exists — e.g.
+ * `organization_type = 'association'` alone can't distinguish ISACS from a healthcare
+ * association). Used by drafting (stage 8) to pick a segment-targeted outreach template — see
+ * lib/sales/db/outreach.ts#findApprovedTemplate.
+ */
+export async function resolveIndustrySegmentIdForOrganization(org: Organization): Promise<string | null> {
+  if (org.industrySegmentId) return org.industrySegmentId;
+  if (!org.organizationTypeId) return null;
+  const types = await listOrganizationTypes();
+  return types.find((t) => t.id === org.organizationTypeId)?.industrySegmentId ?? null;
 }

@@ -80,6 +80,16 @@ export async function localSonggardenSubmissionRecords(eventId: string): Promise
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
 }
 
+export async function localSonggardenActivity(
+  eventId: string,
+  sinceIso: string
+): Promise<{ total: number; recent: number }> {
+  const clips = await readManifest(eventId);
+  const sinceMs = new Date(sinceIso).getTime();
+  const recent = clips.filter((c) => new Date(c.submittedAt).getTime() > sinceMs).length;
+  return { total: clips.length, recent };
+}
+
 export async function localSonggardenGetClip(
   eventId: string,
   clipId: string

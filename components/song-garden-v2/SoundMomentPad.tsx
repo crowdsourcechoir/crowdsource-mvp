@@ -16,7 +16,7 @@ import { runPadCountdown } from "@/lib/songgarden/pad-countdown";
 import { sanitizeSoundFilename } from "@/lib/songgarden/categories";
 import { saveDoneSlot } from "@/lib/songgarden/garden-storage";
 
-type PadPhase = "idle" | "tone" | "countdown" | "recording" | "review" | "uploading" | "done" | "error";
+type PadPhase = "choose" | "idle" | "tone" | "countdown" | "recording" | "review" | "uploading" | "done" | "error";
 
 type SoundMomentPadProps = {
   eventId: string;
@@ -25,6 +25,8 @@ type SoundMomentPadProps = {
   buttonLabel?: string;
   contributorName: string | null;
   accentColor: string;
+  /** When set, the participant picks exactly one of [slot, ...alternateSlots] to perform — "add a stomp, clap, or snap" as one moment instead of three. */
+  alternateSlots?: GardenSlotDef[];
   /** Called once the clip is durably submitted — parent runs the celebration + advances. */
   onSubmitted: () => void;
 };
@@ -41,9 +43,13 @@ export default function SoundMomentPad({
   buttonLabel,
   contributorName,
   accentColor,
+  alternateSlots,
   onSubmitted,
 }: SoundMomentPadProps) {
-  const [phase, setPhase] = useState<PadPhase>("idle");
+  const hasChoices = !!alternateSlots?.length;
+  const choices = hasChoices ? [slot, ...alternateSlots!] : [slot];
+  const [phase, setPhase] = useState<PadPhase>(hasChoices ? "choose" : "idle");
+  const [activeSlot, setActiveSlot] = useState<GardenSlotDef>(slot);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
@@ -54,8 +60,13 @@ export default function SoundMomentPad({
   const playbackRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
 
-  const isChoir = !!slot.harmonyDegree;
-  const label = buttonLabel ?? slot.label;
+  const isChoir = !!activeSlot.harmonyDegree;
+  const label = hasChoices ? activeSlot.label : buttonLabel ?? activeSlot.label;
+
+  const handleChoose = useCallback((chosen: GardenSlotDef) => {
+    setActiveSlot(chosen);
+    setPhase("idle");
+  }, []);
 
   const stopPlayback = useCallback(() => {
     playbackRef.current?.pause();
@@ -66,9 +77,9 @@ export default function SoundMomentPad({
   const runCapture = useCallback(async () => {
     setError(null);
     try {
-      if (isChoir && slot.harmonyDegree) {
+      if (isChoir && activeSlot.harmonyDegree) {
         setPhase("tone");
-        await playReferenceTone(slot.harmonyDegree);
+        await playReferenceTone(activeSlot.harmonyDegree);
       }
 
       setPhase("countdown");
@@ -80,7 +91,7 @@ export default function SoundMomentPad({
       const micStream = await micReady;
       let peak = 0;
       const handle = startQuickRecord(
-        slot.recordMs,
+        activeSlot.recordMs,
         ({ remainingMs, totalMs, level: lvl }) => {
           peak = Math.max(peak, lvl);
           setSecondsLeft(Math.max(0, Math.ceil(remainingMs / 1000)));
@@ -107,7 +118,7 @@ export default function SoundMomentPad({
       setError(err instanceof Error ? err.message : "Could not capture that. Try again.");
       window.setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 1800);
     }
-  }, [isChoir, slot]);
+  }, [isChoir, activeSlot]);
 
   const handleTap = useCallback(() => {
     unlockReferenceTones();
@@ -143,17 +154,20 @@ export default function SoundMomentPad({
     setPhase("uploading");
     try {
       const { blob, durationMs } = await prepareWavFromBlob(pendingClip);
-      const filename = sanitizeSoundFilename(slot.label.toLowerCase().replace(/\s+/g, "-"), "wav");
+      const filename = sanitizeSoundFilename(activeSlot.label.toLowerCase().replace(/\s+/g, "-"), "wav");
       const credit = contributorName?.trim() || getSonggardenContributorName(eventId)?.trim() || null;
       await submitSonggardenClip({
         eventId,
-        category: slot.category,
+        category: activeSlot.category,
         audio: blob,
         filename,
         contributorName: credit,
-        label: slot.label,
+        label: activeSlot.label,
         durationMs,
       });
+      // Always mark the *configured* step slot done (not whichever alternate was actually
+      // performed) — progress tracking (firstIncompleteGardenIndex) keys off this step's
+      // nominal slotId regardless of which choice the participant picked.
       saveDoneSlot(eventId, slot.id);
       setPendingClip(null);
       setPhase("done");
@@ -162,7 +176,7 @@ export default function SoundMomentPad({
       setPhase("review");
       setError(err instanceof Error ? err.message : "Couldn't add that sound. Try again.");
     }
-  }, [contributorName, eventId, onSubmitted, pendingClip, slot, stopPlayback]);
+  }, [activeSlot, contributorName, eventId, onSubmitted, pendingClip, slot, stopPlayback]);
 
   const ringPct =
     phase === "recording" ? progress : phase === "countdown" && countdown ? 1 - countdown / 3 : 0;
@@ -173,8 +187,29 @@ export default function SoundMomentPad({
         {promptText}
       </p>
 
+      {phase === "choose" && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-auto flex max-w-xs flex-wrap items-center justify-center gap-3"
+        >
+          {choices.map((choice) => (
+            <button
+              key={choice.id}
+              type="button"
+              onClick={() => handleChoose(choice)}
+              className="min-h-[64px] min-w-[64px] select-none rounded-2xl border px-4 py-3 font-mono text-sm font-semibold uppercase tracking-wide [touch-action:manipulation]"
+              style={{ borderColor: accentColor, color: accentColor, background: `${accentColor}1f` }}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </motion.div>
+      )}
+
+      {phase !== "choose" && (
       <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
-        <svg className="absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
+        <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
           <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
           <motion.circle
             cx="50"
@@ -199,7 +234,7 @@ export default function SoundMomentPad({
           whileTap={{ scale: 0.94 }}
           animate={phase === "done" ? { scale: [1, 1.12, 1] } : {}}
           transition={{ duration: 0.4 }}
-          className="flex h-28 w-28 flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide transition disabled:cursor-default"
+          className="flex h-28 w-28 [touch-action:manipulation] select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide transition [-webkit-tap-highlight-color:transparent] [-webkit-user-select:none] disabled:cursor-default"
           style={{
             background:
               phase === "recording"
@@ -226,6 +261,7 @@ export default function SoundMomentPad({
           {phase === "done" && <span className="text-2xl">✓</span>}
         </motion.button>
       </div>
+      )}
 
       {phase === "recording" && (
         <div className="mx-auto flex h-3 w-32 items-end justify-center gap-0.5" aria-hidden>
@@ -252,7 +288,7 @@ export default function SoundMomentPad({
             type="button"
             disabled={previewPlaying}
             onClick={() => void handlePreview()}
-            className="min-h-[44px] rounded-xl border px-3 py-2 font-mono text-xs disabled:opacity-50"
+            className="min-h-[44px] select-none rounded-xl border px-3 py-2 font-mono text-xs [touch-action:manipulation] disabled:opacity-50"
             style={{ borderColor: accentColor, color: accentColor }}
           >
             {previewPlaying ? "▶ …" : "▶ Listen"}
@@ -261,7 +297,7 @@ export default function SoundMomentPad({
             type="button"
             disabled={previewPlaying}
             onClick={handleRetry}
-            className="min-h-[44px] rounded-xl border px-3 py-2 font-mono text-xs disabled:opacity-50"
+            className="min-h-[44px] select-none rounded-xl border px-3 py-2 font-mono text-xs [touch-action:manipulation] disabled:opacity-50"
             style={{ borderColor: accentColor, color: accentColor }}
           >
             ↻ Again
@@ -270,7 +306,7 @@ export default function SoundMomentPad({
             type="button"
             disabled={previewPlaying}
             onClick={() => void handleKeep()}
-            className="col-span-2 min-h-[44px] rounded-xl px-3 py-2 font-mono text-xs font-semibold disabled:opacity-50"
+            className="col-span-2 min-h-[44px] select-none rounded-xl px-3 py-2 font-mono text-xs font-semibold [touch-action:manipulation] disabled:opacity-50"
             style={{ background: accentColor, color: "#1a1530" }}
           >
             ✓ Add it to the world

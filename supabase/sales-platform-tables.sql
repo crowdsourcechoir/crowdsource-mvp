@@ -60,6 +60,8 @@ create table if not exists public.contacts (
   full_name text,
   role_title text,
   role_category text,
+  outreach_persona text
+    check (outreach_persona in ('executive_director', 'events_director', 'program_manager', 'board_member', 'conference_planner', 'other')),
   email text,
   normalized_email text,
   phone text,
@@ -326,7 +328,7 @@ insert into public.outreach_templates (name, opportunity_type_id, body_template,
 select
   'General purpose — v1 default',
   null,
-  E'Hi {{contact_first_name}},\n\n{{opening_reason}}\n\nI''m reaching out from Crowdsource Choir — we build a short, participatory song experience where a group creates and performs an anthem together in real time, designed for moments like {{opportunity_title}}.\n\n{{fit_reason}}\n\nWould it be worth a quick conversation, or is there someone else on your team better placed to talk about this?\n\nThanks,\n{{sender_name}}',
+  E'Hi {{contact_first_name}},\n\nI hope you''re doing well!\n\nI''m {{sender_name}}, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. {{opening_reason}}\n\n{{fit_reason}}\n\nI''ve attached a one-page overview of the Anthem Experience. {{cta}}\n\nThanks, and I hope we have a chance to connect.\n\nBest,\n{{sender_name}}\n\n--\n{{sender_name}}\nCreator, Crowdsource Choir\n''One of the Pacific Northwest''s Most Talented Composers''\n—American Songwriter',
   'approved'
 where not exists (
   select 1 from public.outreach_templates where name = 'General purpose — v1 default'

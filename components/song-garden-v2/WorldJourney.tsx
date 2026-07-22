@@ -48,8 +48,16 @@ import {
 } from "@/lib/participant-journey/contribution-consent";
 import { questionResponseHint } from "@/lib/participant-journey/example-words";
 import { unlockReferenceTones } from "@/lib/songgarden/reference-tones";
+import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
+import { requestTiltPermission } from "@/lib/song-garden-v2/tilt";
 import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
+import {
+  appendGrowthNode,
+  clearGrowthNodes,
+  loadGrowthNodes,
+  type WorldGrowthNode,
+} from "@/lib/song-garden-v2/growth-nodes";
 import {
   COMPLETION_MOMENT_LABEL,
   LYRIC_MOMENT_LABEL,
@@ -144,6 +152,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const requireContributionConsent = requiresContributionConsent(event);
   const contributionConsentLabel = contributionConsentText(event);
   const [worldUnlocked, setWorldUnlocked] = useState(false);
+  const [growthNodes, setGrowthNodes] = useState<WorldGrowthNode[]>(() => loadGrowthNodes(event.id));
+
+  const growNode = useCallback(
+    (kind: WorldGrowthNode["kind"]) => {
+      setGrowthNodes(appendGrowthNode(event.id, kind));
+    },
+    [event.id]
+  );
 
   const firstMessageRequested = useRef(false);
   const responseInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -234,6 +250,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   async function handleStartJourney(e: FormEvent) {
     e.preventDefault();
     unlockReferenceTones();
+    requestTiltPermission();
     setWorldUnlocked(true);
     if (journeyStarted) return;
     if (requireContributionConsent && !contributionConsentAgreed) {
@@ -399,6 +416,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         setContributorName(content);
       }
 
+      growNode(videoDataUrl ? "video" : audioDataUrl ? "voice" : "text");
+      pulseHaptic();
+
       celebration.celebrate(() => {
         if (res.nextMessage.stopReason === "finished") {
           setChatFinished(true);
@@ -447,6 +467,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     const currentIndex = gardenSteps.findIndex((step) => step.slot.id === activeGardenStep.slot.id);
     const nextIndex = currentIndex + 1;
 
+    const category = activeGardenStep.slot.category;
+    growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
+    pulseHaptic();
+
     celebration.celebrate(() => {
       if (nextIndex >= gardenSteps.length) {
         setPositionPersisted({ phase: "final", gardenSlotIndex: Math.max(0, gardenSteps.length - 1) });
@@ -454,11 +478,13 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         setPositionPersisted({ phase: "garden", gardenSlotIndex: nextIndex });
       }
     });
-  }, [activeGardenStep, celebration, event.id, gardenSteps, setPositionPersisted]);
+  }, [activeGardenStep, celebration, event.id, gardenSteps, growNode, setPositionPersisted]);
 
   function handleParticipateAgain() {
     clearJourneySession(event, interviewVersion, activeSessionToken);
     clearDoneSlots(event.id);
+    clearGrowthNodes(event.id);
+    setGrowthNodes([]);
     firstMessageRequested.current = false;
     setJourneyStarted(false);
     setPosition({ phase: "landing", gardenSlotIndex: 0, interviewVersion });
@@ -492,9 +518,11 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   return (
     <WorldStage
       world={world}
+      eventId={event.id}
       energyLevel={energyLevel}
       celebrationTrigger={celebration.trigger}
       soundtrackUnlocked={worldUnlocked}
+      growthNodes={growthNodes}
     >
       <header className="mx-auto w-full max-w-lg px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
         {world.logoUrl ? (
@@ -659,6 +687,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             buttonLabel={activeGardenStep.buttonLabel}
             contributorName={contributorName.trim() || null}
             accentColor={world.accentColor}
+            alternateSlots={activeGardenStep.alternateSlots}
             onSubmitted={handleSlotSubmitted}
           />
         )}

@@ -221,6 +221,17 @@ export async function localGetEventTranscripts(eventId: string): Promise<
   return results;
 }
 
+export async function localAgentParticipantActivity(
+  eventId: string,
+  sinceIso: string
+): Promise<{ total: number; recent: number }> {
+  const store = await loadStore();
+  const forEvent = store.participants.filter((p) => p.eventId === eventId);
+  const sinceMs = new Date(sinceIso).getTime();
+  const recent = forEvent.filter((p) => new Date(p.createdAt).getTime() > sinceMs).length;
+  return { total: forEvent.length, recent };
+}
+
 export async function localWipeEventAgentData(eventId: string): Promise<number> {
   const store = await loadStore();
   const convsForEvent = store.conversations.filter((c) => c.eventId === eventId);

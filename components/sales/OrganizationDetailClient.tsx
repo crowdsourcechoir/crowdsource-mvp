@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { AgentRun, Contact, Opportunity, Organization, PipelineRun, ResearchFinding } from "@/lib/sales/types";
+import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 
 type PipelineRunWithStages = PipelineRun & { agentRuns: AgentRun[] };
 type FindingWithUrl = ResearchFinding & { sourceUrl: string };
@@ -167,6 +168,9 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
                 <span className="text-gray-500">
                   {c.email ?? "no email"} · {c.emailVerificationStatus} · {c.source}
                 </span>
+                {c.outreachPersona !== "other" && (
+                  <span className="ml-1 text-sky-500">· {PERSONA_STRATEGIES[c.outreachPersona].label}</span>
+                )}
               </li>
             ))}
           </ul>

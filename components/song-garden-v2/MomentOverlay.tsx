@@ -17,7 +17,7 @@ type MomentOverlayProps = {
  */
 export default function MomentOverlay({ momentKey, eyebrow, accentColor, children }: MomentOverlayProps) {
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-6 sm:px-6">
+    <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-center px-4 py-6 sm:px-6">
       <AnimatePresence mode="wait">
         <motion.div
           key={momentKey}

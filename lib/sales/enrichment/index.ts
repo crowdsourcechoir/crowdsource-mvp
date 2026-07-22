@@ -5,23 +5,20 @@ import type { EnrichmentInput, EnrichmentProvider, EnrichmentResult } from "./ty
 export type { EnrichmentInput, EnrichmentProvider, EnrichmentResult } from "./types";
 
 /**
- * Apollo is preferred (broader database, phone/title data available in the same call if ever
- * needed later); Hunter is the automatic fallback. Both are self-serve REST APIs — this is a
- * runtime choice based on whichever key is configured, not a build-time one, so switching
- * providers is just an env var change, no code change or redeploy of logic needed.
- *
- * IMPORTANT, learned the hard way: Apollo's people-enrichment/"match" endpoint (what
- * `enrichWithApollo` calls) is NOT actually included on Apollo's free plan — a valid API key on
- * a free account gets a `403 API_INACCESSIBLE` on every call, "not included in your Free plan
- * ... All paid plans include full API access." Hunter's Email Finder endpoint, by contrast,
+ * Hunter is preferred for now — Apollo's people-enrichment/"match" endpoint (what
+ * `enrichWithApollo` calls) is NOT actually included on Apollo's free plan, a valid API key on a
+ * free account gets a `403 API_INACCESSIBLE` on every single call, "not included in your Free
+ * plan ... All paid plans include full API access." Hunter's Email Finder endpoint, by contrast,
  * genuinely is included on Hunter's free plan (50 credits/month, verified against Hunter's own
- * docs). So this reports "apollo" as the *configured* preference below, but `enrichContactEmail`
- * always falls back to Hunter at runtime when Apollo errors out and a Hunter key is also present
- * — otherwise setting an Apollo key alone (free plan) would silently never enrich anything.
+ * docs and against real enrichment results in this project). Calling Apollo first and always
+ * falling back to Hunter worked, but wasted a request + added latency on every single lookup, so
+ * Hunter is called directly. Apollo is only used as an (unlikely) fallback if Hunter itself
+ * errors and an Apollo key happens to be configured — revisit this ordering once Apollo is on a
+ * paid plan.
  */
 export function activeEnrichmentProvider(): EnrichmentProvider | null {
-  if (process.env.APOLLO_API_KEY) return "apollo";
   if (process.env.HUNTER_API_KEY) return "hunter";
+  if (process.env.APOLLO_API_KEY) return "apollo";
   return null;
 }
 
@@ -30,13 +27,13 @@ export async function enrichContactEmail(input: EnrichmentInput): Promise<Enrich
   const hasHunter = Boolean(process.env.HUNTER_API_KEY);
   if (!hasApollo && !hasHunter) return null;
 
-  if (!hasApollo) return enrichWithHunter(input);
+  if (!hasHunter) return enrichWithApollo(input);
 
-  const apolloResult = await enrichWithApollo(input);
-  if (apolloResult.status !== "error" || !hasHunter) return apolloResult;
-  // Apollo errored outright (plan restriction, timeout, HTTP failure — not just "no match found")
-  // and a Hunter key is available too: retry this same lookup with Hunter rather than losing the
-  // enrichment attempt entirely. The caller/DB record whichever provider actually produced the
-  // result (`result.provider`), so this stays accurate even though Apollo is "preferred."
-  return enrichWithHunter(input);
+  const hunterResult = await enrichWithHunter(input);
+  if (hunterResult.status !== "error" || !hasApollo) return hunterResult;
+  // Hunter errored outright (rate limit, timeout, HTTP failure — not just "no match found") and
+  // an Apollo key happens to be configured too: retry with Apollo rather than losing the
+  // enrichment attempt entirely. The caller/DB records whichever provider actually produced the
+  // result, so this stays accurate regardless of which one is "preferred."
+  return enrichWithApollo(input);
 }

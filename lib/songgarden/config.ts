@@ -16,6 +16,13 @@ export type SongGardenStepConfig = {
   prompt: string;
   phaseLabel: string;
   buttonLabel?: string;
+  /**
+   * Optional sibling slots the participant can perform *instead* of `slotId` — e.g. "add a
+   * stomp, clap, or snap" as one moment rather than three sequential ones. The participant
+   * picks exactly one; whichever they perform is what gets submitted/labeled, but the step
+   * still completes under `slotId` for progress-tracking purposes (see firstIncompleteGardenIndex).
+   */
+  alternateSlotIds?: GardenSlotId[];
 };
 
 export type SongGardenConfig = {
@@ -25,6 +32,7 @@ export type SongGardenConfig = {
 
 export type ResolvedGardenStep = SongGardenStepConfig & {
   slot: GardenSlotDef;
+  alternateSlots?: GardenSlotDef[];
 };
 
 export const DEFAULT_SOUND_TRANSITION_MESSAGE = "Now let's build the sounds of the experience.";
@@ -125,12 +133,18 @@ export function normalizeSongGardenConfig(
     if (!raw?.slotId || !defaultBySlot.has(raw.slotId) || seen.has(raw.slotId)) continue;
     seen.add(raw.slotId);
     const def = defaultBySlot.get(raw.slotId)!;
+    const alternateSlotIds = Array.isArray(raw.alternateSlotIds)
+      ? raw.alternateSlotIds.filter(
+          (id): id is GardenSlotId => typeof id === "string" && id !== raw.slotId && defaultBySlot.has(id)
+        )
+      : undefined;
     steps.push({
       slotId: raw.slotId,
       enabled: raw.enabled !== false,
       prompt: raw.prompt?.trim() || def.prompt,
       phaseLabel: raw.phaseLabel?.trim() || def.phaseLabel,
       buttonLabel: raw.buttonLabel?.trim() || def.buttonLabel,
+      ...(alternateSlotIds?.length ? { alternateSlotIds } : {}),
     });
   }
 
@@ -157,7 +171,10 @@ export function getEnabledGardenSteps(event: Event | null | undefined): Resolved
     .map((step) => {
       const slot = gardenSlotById(step.slotId);
       if (!slot) return null;
-      return { ...step, slot };
+      const alternateSlots = step.alternateSlotIds
+        ?.map((id) => gardenSlotById(id))
+        .filter((s): s is GardenSlotDef => s != null);
+      return { ...step, slot, ...(alternateSlots?.length ? { alternateSlots } : {}) };
     })
     .filter((step): step is ResolvedGardenStep => step != null);
 }

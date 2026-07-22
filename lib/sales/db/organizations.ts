@@ -9,9 +9,6 @@ function rowToOrganization(row: Record<string, unknown>): Organization {
     normalizedName: row.normalized_name as string,
     domain: (row.domain as string | null) ?? null,
     organizationTypeId: (row.organization_type_id as string | null) ?? null,
-    // TODO(industry-segment-override): populated by the in-progress industry-segment work — see
-    // lib/sales/types.ts's Organization.industrySegmentId doc comment. Null ("inherit") is a
-    // valid, safe default until that work is committed.
     industrySegmentId: (row.industry_segment_id as string | null) ?? null,
     websiteUrl: (row.website_url as string | null) ?? null,
     locationCity: (row.location_city as string | null) ?? null,
@@ -30,6 +27,7 @@ function rowToOrganization(row: Record<string, unknown>): Organization {
 export type CreateOrganizationInput = {
   name: string;
   organizationTypeId?: string | null;
+  industrySegmentId?: string | null;
   websiteUrl?: string | null;
   locationCity?: string | null;
   locationRegion?: string | null;
@@ -102,6 +100,7 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
     normalized_name: normalizeOrgName(input.name),
     domain: extractDomain(input.websiteUrl),
     organization_type_id: input.organizationTypeId ?? null,
+    industry_segment_id: input.industrySegmentId ?? null,
     website_url: input.websiteUrl ?? null,
     location_city: input.locationCity ?? null,
     location_region: input.locationRegion ?? null,
@@ -124,6 +123,7 @@ export async function updateOrganization(id: string, patch: Partial<CreateOrgani
     row.normalized_name = normalizeOrgName(patch.name);
   }
   if (patch.organizationTypeId !== undefined) row.organization_type_id = patch.organizationTypeId;
+  if (patch.industrySegmentId !== undefined) row.industry_segment_id = patch.industrySegmentId;
   if (patch.websiteUrl !== undefined) {
     row.website_url = patch.websiteUrl;
     row.domain = extractDomain(patch.websiteUrl);
