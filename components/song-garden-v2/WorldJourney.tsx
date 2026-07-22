@@ -194,7 +194,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     position.phase === "step" && stepIndex >= 0 && stepIndex < journeySteps.length
       ? journeySteps[stepIndex]
       : null;
-  const activeSound = activeStep?.kind === "sound" ? resolveSoundStep(activeStep) : null;
+  const activeSound =
+    activeStep?.kind === "prompt" ? resolveSoundStep(activeStep) : null;
 
   const progress = journeyProgress(event, position);
   const energyLevel = progress.total > 0 ? Math.min(1, progress.completed / progress.total) : 0;
@@ -211,6 +212,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const showTextInput = isNameStep || Boolean(promptChannels?.allowText);
   const showAudioInput = Boolean(promptChannels?.allowAudio);
   const showVideoInput = Boolean(promptChannels?.allowVideo);
+  const showAgentInputs = isNameStep || showTextInput || showAudioInput || showVideoInput;
   const isMediaOnlyPrompt =
     activeStep?.kind === "prompt" &&
     !promptChannels?.allowText &&
@@ -221,7 +223,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     if (activeStep.kind === "name") {
       return activeStep.prompt?.trim() || "What should we call you?";
     }
-    if (activeStep.kind === "prompt" || activeStep.kind === "sound") {
+    if (activeStep.kind === "prompt") {
       return activeStep.prompt;
     }
     return "";
@@ -242,7 +244,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         return;
       }
       const step = journeySteps[index];
-      if (step?.kind === "sound") unlockReferenceTones();
+      if (step?.kind === "prompt" && step.allowSound) unlockReferenceTones();
       setPositionPersisted({ phase: "step", gardenSlotIndex: 0, stepIndex: index });
       setInputValue("");
       setAudioBlob(null);
@@ -306,9 +308,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     void ensureConversation();
   }, [position.phase, activeStep, conversationReady, ensureConversation]);
 
-  // Skip already-completed sound steps when resuming.
+  // Skip already-completed sound pad steps when resuming.
   useEffect(() => {
-    if (position.phase !== "step" || !activeStep || activeStep.kind !== "sound") return;
+    if (position.phase !== "step" || !activeStep || activeStep.kind !== "prompt") return;
+    if (!activeStep.allowSound || !activeStep.slotId) return;
     const done = loadDoneSlots(event.id);
     if (done.has(activeStep.slotId)) {
       goToStep(stepIndex + 1);
@@ -467,11 +470,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     setVideoBlob(null);
   }
 
-  // Sound step without contributor name — brief name gate
+  // Sound pad without contributor name — brief name gate
   const needsNameGate =
-    position.phase === "step" &&
-    activeStep?.kind === "sound" &&
-    !contributorName.trim();
+    position.phase === "step" && Boolean(activeSound) && !contributorName.trim();
 
   const [nameGateValue, setNameGateValue] = useState("");
   function handleNameGateContinue() {
@@ -490,11 +491,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     ? "name-gate"
     : `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
 
+  const completionEyebrow =
+    event.songGardenConfig?.completionEyebrow?.trim() || COMPLETION_MOMENT_LABEL;
+
   let eyebrow: string | undefined;
   if (position.phase === "landing") eyebrow = WELCOME_MOMENT_LABEL;
   else if (needsNameGate) eyebrow = NAME_MOMENT_LABEL;
   else if (activeStep) eyebrow = resolveCategoryLabel(activeStep);
-  else if (position.phase === "final") eyebrow = COMPLETION_MOMENT_LABEL;
+  else if (position.phase === "final") eyebrow = completionEyebrow;
 
   return (
     <WorldStage
@@ -564,8 +568,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" &&
-            (activeStep?.kind === "name" || activeStep?.kind === "prompt") && (
+          {position.phase === "step" && showAgentInputs && !needsNameGate && (
             <div className="space-y-5">
               {chatError && (
                 <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
@@ -660,7 +663,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && activeStep?.kind === "sound" && needsNameGate && (
+          {position.phase === "step" && activeSound && needsNameGate && (
             <div className="space-y-4">
               <p className="text-center font-mono text-base text-gray-100">
                 What name should we credit on your sounds?
@@ -678,18 +681,20 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && activeStep?.kind === "sound" && !needsNameGate && activeSound && (
-            <SoundMomentPad
-              key={activeSound.slot.id}
-              eventId={event.id}
-              slot={activeSound.slot}
-              promptText={activeSound.prompt}
-              buttonLabel={activeSound.buttonLabel}
-              contributorName={contributorName.trim() || null}
-              accentColor={world.accentColor}
-              alternateSlots={activeSound.alternateSlots}
-              onSubmitted={handleSlotSubmitted}
-            />
+          {position.phase === "step" && activeSound && !needsNameGate && (
+            <div className={showAgentInputs ? "mt-6" : undefined}>
+              <SoundMomentPad
+                key={activeSound.slot.id}
+                eventId={event.id}
+                slot={activeSound.slot}
+                promptText={activeSound.prompt}
+                buttonLabel={activeSound.buttonLabel}
+                contributorName={contributorName.trim() || null}
+                accentColor={world.accentColor}
+                alternateSlots={activeSound.alternateSlots}
+                onSubmitted={handleSlotSubmitted}
+              />
+            </div>
           )}
 
           {position.phase === "final" && (

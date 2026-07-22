@@ -17,7 +17,6 @@ import {
 import {
   createJourneyNameStep,
   createJourneyPromptStep,
-  createJourneySoundStep,
   defaultJourneySteps,
   normalizeJourneySteps,
   normalizePromptChannels,
@@ -26,6 +25,7 @@ import {
   type JourneyPromptStep,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
+import { COMPLETION_MOMENT_LABEL } from "@/lib/song-garden-v2/moment-labels";
 import { JOURNEY_GARDEN_SLOT_IDS, type GardenSlotId } from "@/lib/songgarden/garden-slots";
 import {
   normalizeWorldConfigInput,
@@ -215,7 +215,6 @@ export default function EventForm({
           });
     return { ...merged, journeySteps };
   });
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [success, setSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -295,6 +294,8 @@ export default function EventForm({
   }, [values.date, slugManuallyEdited]);
 
   function setJourneySteps(next: JourneyStep[]) {
+    // Normalize only when adding/removing/reordering structure — not on every keystroke
+    // (trimming would swallow spaces in eyebrow/prompt fields).
     setValues((v) => ({ ...v, journeySteps: normalizeJourneySteps(next) }));
   }
 
@@ -304,7 +305,7 @@ export default function EventForm({
       const cur = next[index];
       if (!cur) return v;
       next[index] = { ...cur, ...patch } as JourneyStep;
-      return { ...v, journeySteps: normalizeJourneySteps(next) };
+      return { ...v, journeySteps: next };
     });
   }
 
@@ -325,13 +326,16 @@ export default function EventForm({
     setSubmitError(null);
     const journeySteps = normalizeJourneySteps(values.journeySteps);
     if (journeySteps.length === 0) {
-      setSubmitError("Add at least one journey step (prompt, name, or sound).");
+      setSubmitError("Add at least one journey step (prompt or name).");
       return;
     }
     const { agentBrief: syncedBrief, songGardenConfig: syncedGarden } = syncLegacyFromJourneySteps(
       journeySteps,
       values.agentBrief,
-      values.songGardenConfig
+      {
+        ...(values.songGardenConfig ?? defaultSongGardenConfig()),
+        completionEyebrow: values.songGardenConfig?.completionEyebrow,
+      }
     );
     const brief: AgentBrief = {
       ...syncedBrief,
@@ -402,12 +406,13 @@ export default function EventForm({
 
   function togglePromptChannel(
     index: number,
-    channel: "allowText" | "allowAudio" | "allowVideo"
+    channel: "allowText" | "allowAudio" | "allowVideo" | "allowSound"
   ) {
     setValues((v) => {
       const cur = v.journeySteps[index];
       if (!cur || cur.kind !== "prompt") return v;
       const channels = normalizePromptChannels(cur);
+      const turningSoundOn = channel === "allowSound" && !channels.allowSound;
       const nextChannels = normalizePromptChannels({
         ...channels,
         [channel]: !channels[channel],
@@ -417,8 +422,17 @@ export default function EventForm({
         ...cur,
         ...nextChannels,
         requireEmailCaptcha: Boolean(cur.requireEmailCaptcha) && nextChannels.allowText,
+        ...(turningSoundOn
+          ? {
+              slotId: cur.slotId ?? "stomp",
+              buttonLabel: cur.buttonLabel || "Add sound",
+            }
+          : {}),
+        ...(!nextChannels.allowSound
+          ? { slotId: undefined, alternateSlotIds: undefined }
+          : {}),
       };
-      return { ...v, journeySteps: normalizeJourneySteps(next) };
+      return { ...v, journeySteps: next };
     });
   }
 
@@ -1140,7 +1154,7 @@ export default function EventForm({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className={sectionTitleClass}>Journey</h3>
           <p className="text-[11px] text-gray-500">
-            Ordered prompts — set an eyebrow, then toggle Text / Audio / Video
+            Ordered prompts — set an eyebrow, then toggle Text / Audio / Video / Sound
           </p>
         </div>
 
@@ -1256,11 +1270,13 @@ export default function EventForm({
           {values.journeySteps.map((step, idx) => {
             const usedSlots = new Set(
               values.journeySteps
-                .filter((s): s is Extract<JourneyStep, { kind: "sound" }> => s.kind === "sound")
-                .map((s) => s.slotId)
+                .filter(
+                  (s): s is JourneyPromptStep =>
+                    s.kind === "prompt" && Boolean(s.allowSound) && Boolean(s.slotId)
+                )
+                .map((s) => s.slotId as GardenSlotId)
             );
-            const kindLabel =
-              step.kind === "prompt" ? "Prompt" : step.kind === "name" ? "Name" : "Sound";
+            const kindLabel = step.kind === "prompt" ? "Prompt" : "Name";
             const channels = step.kind === "prompt" ? normalizePromptChannels(step) : null;
             return (
               <div key={step.id} className="space-y-1.5 py-2.5">
@@ -1297,13 +1313,7 @@ export default function EventForm({
                     value={step.categoryLabel ?? ""}
                     onChange={(e) => updateJourneyStep(idx, { categoryLabel: e.target.value })}
                     className={inputClass}
-                    placeholder={
-                      step.kind === "name"
-                        ? "Your Name"
-                        : step.kind === "sound"
-                          ? "Your Sounds"
-                          : "e.g. Your Words"
-                    }
+                    placeholder={step.kind === "name" ? "Your Name" : "e.g. Your Words"}
                   />
                 </label>
 
@@ -1339,6 +1349,7 @@ export default function EventForm({
                           { key: "allowText" as const, label: "Text" },
                           { key: "allowAudio" as const, label: "Audio" },
                           { key: "allowVideo" as const, label: "Video" },
+                          { key: "allowSound" as const, label: "Sound" },
                         ] as const
                       ).map(({ key, label }) => {
                         const on = channels[key];
@@ -1375,75 +1386,101 @@ export default function EventForm({
                         </button>
                       )}
                     </div>
-                  </>
-                )}
-
-                {step.kind === "sound" && (
-                  <>
-                    <div className="grid gap-1.5 sm:grid-cols-2">
-                      <label className="block">
-                        <span className={labelClass}>Sound type</span>
-                        <select
-                          value={step.slotId}
-                          onChange={(e) => {
-                            updateJourneyStep(idx, { slotId: e.target.value as GardenSlotId });
-                          }}
-                          className={inputClass}
-                        >
-                          {JOURNEY_GARDEN_SLOT_IDS.map((id) => (
-                            <option
-                              key={id}
-                              value={id}
-                              disabled={usedSlots.has(id) && id !== step.slotId}
-                            >
-                              {GARDEN_SLOT_ADMIN_LABELS[id].name} ({GARDEN_SLOT_ADMIN_LABELS[id].group})
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block sm:col-span-2">
-                        <span className={labelClass}>Prompt</span>
-                        <input
-                          type="text"
-                          value={step.prompt}
-                          onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
-                          className={inputClass}
-                        />
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      <span className="mr-1 self-center text-[11px] text-gray-500">Also allow:</span>
-                      {JOURNEY_GARDEN_SLOT_IDS.filter((id) => id !== step.slotId).map((id) => {
-                        const on = step.alternateSlotIds?.includes(id);
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => {
-                              const cur = new Set(step.alternateSlotIds ?? []);
-                              if (cur.has(id)) cur.delete(id);
-                              else cur.add(id);
+                    {channels.allowSound && (
+                      <div className="grid gap-1.5 sm:grid-cols-2">
+                        <label className="block">
+                          <span className={labelClass}>Sound type</span>
+                          <select
+                            value={step.slotId ?? "stomp"}
+                            onChange={(e) => {
                               updateJourneyStep(idx, {
-                                alternateSlotIds: Array.from(cur) as GardenSlotId[],
+                                slotId: e.target.value as GardenSlotId,
                               });
                             }}
-                            className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                              on
-                                ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
-                                : chipClass
-                            }`}
+                            className={inputClass}
                           >
-                            {GARDEN_SLOT_ADMIN_LABELS[id].name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                            {JOURNEY_GARDEN_SLOT_IDS.map((id) => (
+                              <option
+                                key={id}
+                                value={id}
+                                disabled={usedSlots.has(id) && id !== step.slotId}
+                              >
+                                {GARDEN_SLOT_ADMIN_LABELS[id].name} ({GARDEN_SLOT_ADMIN_LABELS[id].group})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className={labelClass}>Button text</span>
+                          <input
+                            type="text"
+                            value={step.buttonLabel ?? ""}
+                            onChange={(e) =>
+                              updateJourneyStep(idx, { buttonLabel: e.target.value })
+                            }
+                            className={inputClass}
+                            placeholder="Add sound"
+                          />
+                        </label>
+                        <div className="flex flex-wrap gap-1 sm:col-span-2">
+                          <span className="mr-1 self-center text-[11px] text-gray-500">Also allow:</span>
+                          {JOURNEY_GARDEN_SLOT_IDS.filter((id) => id !== (step.slotId ?? "stomp")).map(
+                            (id) => {
+                              const on = step.alternateSlotIds?.includes(id);
+                              return (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  onClick={() => {
+                                    const cur = new Set(step.alternateSlotIds ?? []);
+                                    if (cur.has(id)) cur.delete(id);
+                                    else cur.add(id);
+                                    updateJourneyStep(idx, {
+                                      alternateSlotIds: Array.from(cur) as GardenSlotId[],
+                                    });
+                                  }}
+                                  className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                                    on
+                                      ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
+                                      : chipClass
+                                  }`}
+                                >
+                                  {GARDEN_SLOT_ADMIN_LABELS[id].name}
+                                </button>
+                              );
+                            }
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
             );
           })}
         </div>
+
+        <label className="block">
+          <span className={labelClass}>Completion eyebrow</span>
+          <input
+            type="text"
+            value={values.songGardenConfig?.completionEyebrow ?? ""}
+            onChange={(e) =>
+              setValues((v) => ({
+                ...v,
+                songGardenConfig: {
+                  ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                  completionEyebrow: e.target.value,
+                },
+              }))
+            }
+            className={inputClass}
+            placeholder={COMPLETION_MOMENT_LABEL}
+          />
+          <span className="mt-0.5 block text-[11px] text-gray-500">
+            Shown on the final screen (default: {COMPLETION_MOMENT_LABEL})
+          </span>
+        </label>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -1461,35 +1498,6 @@ export default function EventForm({
           >
             + Name
           </button>
-          <div className="relative">
-            <button type="button" onClick={() => setAddMenuOpen((o) => !o)} className={chipClass}>
-              + Sound pad
-            </button>
-            {addMenuOpen && (
-              <div className="absolute left-0 z-10 mt-1 min-w-[180px] rounded-lg border border-gray-700 bg-[#1a1a1a] p-1 shadow-lg">
-                {JOURNEY_GARDEN_SLOT_IDS.filter(
-                  (id) => !values.journeySteps.some((s) => s.kind === "sound" && s.slotId === id)
-                ).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-[#252525]"
-                    onClick={() => {
-                      setJourneySteps([...values.journeySteps, createJourneySoundStep(id)]);
-                      setAddMenuOpen(false);
-                    }}
-                  >
-                    {GARDEN_SLOT_ADMIN_LABELS[id].name}
-                  </button>
-                ))}
-                {JOURNEY_GARDEN_SLOT_IDS.every((id) =>
-                  values.journeySteps.some((s) => s.kind === "sound" && s.slotId === id)
-                ) && (
-                  <p className="px-2 py-1.5 text-[11px] text-gray-500">All sound pads added</p>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </section>
 

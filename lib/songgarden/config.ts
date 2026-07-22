@@ -28,6 +28,8 @@ export type SongGardenConfig = {
   steps: SongGardenStepConfig[];
   /** Unified ordered journey (V2). When present, source of truth for WorldJourney. */
   journeySteps?: unknown[];
+  /** Final-screen eyebrow (defaults to "You're Part Of It"). */
+  completionEyebrow?: string;
 };
 
 export type ResolvedGardenStep = SongGardenStepConfig & {
@@ -136,6 +138,9 @@ export function normalizeSongGardenConfig(
       ...(Array.isArray(input?.journeySteps) ? { journeySteps: input.journeySteps } : {}),
       soundTransitionMessage:
         input?.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
+      ...(typeof input?.completionEyebrow === "string"
+        ? { completionEyebrow: input.completionEyebrow }
+        : {}),
     };
   }
 
@@ -167,6 +172,9 @@ export function normalizeSongGardenConfig(
       ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
       soundTransitionMessage:
         input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
+      ...(typeof input.completionEyebrow === "string"
+        ? { completionEyebrow: input.completionEyebrow }
+        : {}),
     };
   }
 
@@ -174,6 +182,9 @@ export function normalizeSongGardenConfig(
     soundTransitionMessage: input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
     steps,
     ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
+    ...(typeof input.completionEyebrow === "string"
+      ? { completionEyebrow: input.completionEyebrow }
+      : {}),
   };
 }
 
