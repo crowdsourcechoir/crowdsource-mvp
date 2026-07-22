@@ -46,10 +46,14 @@ app/
       contacts/route.ts, [contactId]/route.ts
       opportunities/route.ts, [oppId]/route.ts
       pipeline/run/route.ts        ← manually trigger the staged pipeline for one org
-      pipeline/cron/route.ts       ← Vercel Cron entry point (batch, see §6) — Phase 2, not yet built
+      pipeline/batch-run/route.ts  ← manually trigger the batch/cron pipeline logic for testing (built; see §6)
       discovery/run/route.ts       ← manually trigger a stage-0 discovery run (built; see below)
       discovery/route.ts           ← list recent discovery runs (built; see below)
+      digest/run/route.ts          ← manually trigger a digest send for testing (built; see §6)
+      digest/route.ts              ← list recent digest send history (built; see §6)
       cron/discovery/route.ts      ← Vercel Cron entry point for nightly discovery (built; see §6)
+      cron/pipeline/route.ts       ← Vercel Cron entry point for nightly pipeline batch processing (built; see §6)
+      cron/digest/route.ts         ← Vercel Cron entry point for the morning digest email (built; see §6)
       queue/route.ts                ← list/filter approval queue items
       queue/[itemId]/decision/route.ts  ← approve / edit / reject / defer / more-research / duplicate
       hubspot/sync/route.ts         ← manual re-sync trigger
@@ -65,6 +69,9 @@ lib/
     pipeline/
       stages/                      ← one file per pipeline stage (see ai-workflow.md)
       run-pipeline.ts              ← orchestrator: runs due stages for a pipeline_run
+      run-pipeline-batch.ts        ← orchestrator: time-boxed batch of organizations for the nightly cron (built; see §6)
+    digest/
+      render.ts, send.ts           ← morning digest email — "new leads in my inbox every morning" (built; see §6)
     scoring/
       model.ts                     ← weights + component definitions
       score.ts                     ← pure scoring function (testable, no I/O)
@@ -143,9 +150,17 @@ See [`ai-workflow.md`](./ai-workflow.md) for full detail. Eleven explicit per-or
 
 **Recommendation: Vercel Cron**, calling a route handler that processes a small, time-boxed batch of pending pipeline work per invocation.
 
-**Built today: the stage-0 discovery cron.** `vercel.json` schedules `GET /api/sales/cron/discovery` once nightly (`0 9 * * *` UTC). The route is secured by a `CRON_SECRET` env var checked against the `Authorization: Bearer` header Vercel sends automatically on scheduled invocations — set `CRON_SECRET` in Vercel Project Settings to enable it; the route refuses every request (including Vercel's own) if that var isn't set, rather than ever running unsecured. This only finds and creates new `organizations` rows (`source = 'ai_discovered'`); it does not itself run the per-organization pipeline on them.
+**Built: three chained nightly crons, all secured by the same `CRON_SECRET` env var** checked against the `Authorization: Bearer` header Vercel sends automatically on scheduled invocations — set `CRON_SECRET` in Vercel Project Settings to enable them; every route refuses every request (including Vercel's own) if that var isn't set, rather than ever running unsecured. `vercel.json`:
 
-**Not yet built: a pipeline-processing cron (`/api/sales/pipeline/cron`).** Turning "click Run pipeline on next N" into genuine unattended overnight processing is still the Phase 2 item described below — a human still triggers that batch manually today. Once discovery's nightly-refilled pool needs processing without a human clicking a button every morning, this is the next piece to build, following the same time-boxed-batch approach:
+| Time (UTC) | Route | Does |
+|---|---|---|
+| `0 9 * * *` | `/api/sales/cron/discovery` | Finds and creates new `organizations` rows (`source = 'ai_discovered'`). Does not itself run the pipeline on them. |
+| `20 9 * * *` | `/api/sales/cron/pipeline` | Runs the full 10-stage pipeline on a time-boxed batch of pending organizations (`lib/sales/pipeline/run-pipeline-batch.ts`) — the piece that actually turns organizations into scored, drafted, queue-ready opportunities without a human clicking "Run pipeline." |
+| `0 10 * * *` | `/api/sales/cron/digest` | Emails everything new in the queue since the last send (`lib/sales/digest/`) — the "in my inbox every morning" delivery step. |
+
+All three times are early-morning UTC (well before 7am US Pacific) specifically so discovery → pipeline → digest have run in sequence before a US-based operator's morning; adjust the schedule in `vercel.json` if your timezone/target time differs.
+
+**The pipeline-processing cron's batching/time-boxing, in detail:** same shape as discovery — small, resumable batches rather than one long-running loop:
 
 | Option | Fit here |
 |---|---|
@@ -153,6 +168,8 @@ See [`ai-workflow.md`](./ai-workflow.md) for full detail. Eleven explicit per-or
 | Supabase scheduled functions | Would require adopting Supabase Edge Functions (Deno runtime, separate deploy path from Vercel) purely for scheduling — no functional benefit over Vercel Cron here since all DB access already goes through the service-role client from Next.js. Adds a second deployment surface for no gain. |
 | Trigger.dev | Real benefit for long-running, multi-step, resumable jobs with built-in retries/observability — but it's a new paid service and a new mental model. Worth it only once the pipeline needs true long-running durability beyond what "cron + resumable DB rows" gives us. |
 | Inngest | Similar tradeoff to Trigger.dev: great step-function ergonomics, but another new service/account before we've proven the workload needs it. |
+
+**Resumability under real execution limits:** `run-pipeline-batch.ts` stops starting new organizations once `SALES_PIPELINE_CRON_TIME_BUDGET_MS` (default 4 minutes) elapses, and `maxDuration = 290` gives Vercel Pro's 300s ceiling a small buffer — but if the actual plan's limit is lower (e.g. Hobby), Vercel simply kills the function first regardless of these settings, mid-organization. Historically that would've left that organization's `pipeline_runs` row stuck at `running` forever with no automatic recovery (see `listUnprocessedOrganizations`'s "has any non-csv_import run" check). `markStalledPipelineRunsFailed()` closes that gap: before drawing new organizations, the batch marks any `running` `pipeline_runs` row older than 10 minutes as `failed` and retries that organization first — so a killed invocation degrades to "that organization gets retried tomorrow," not "silently stuck forever." **Practical implication if you're on Hobby:** true nightly throughput may be just one or two organizations (each takes roughly a minute end-to-end), well short of the "30–50/day" review-volume ambition — confirm your plan (open question 2 below) if you want closer to that from night one.
 
 **Why this works for the batch size in play:** even at 50 approvals/day, the AI pipeline itself only needs to fully process maybe 100–300 organizations/day through 11 lightweight stages. That's comfortably within "cron every few minutes, process N pending stage-rows, mark them done" — no need for a dedicated job-orchestration service yet. Revisit Trigger.dev/Inngest if/when: stage latency (e.g. deep research) regularly exceeds the Vercel function timeout, or true fan-out/parallelism across many orgs concurrently becomes a bottleneck.
 

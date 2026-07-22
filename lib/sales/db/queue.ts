@@ -51,6 +51,27 @@ export async function listQueueItems(status?: ApprovalQueueItemStatus): Promise<
   return (data ?? []).map(rowToQueueItem);
 }
 
+/** Pending queue items created at/after `sinceIso` — the "what's new since the last digest" query. */
+export async function listQueueItemsCreatedSince(sinceIso: string): Promise<ApprovalQueueItem[]> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .select("*")
+    .eq("status", "pending")
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToQueueItem);
+}
+
+/** Total pending backlog size, regardless of when it was created — included in the digest as a health signal. */
+export async function countPendingQueueItems(): Promise<number> {
+  const db = requireSupabaseAdmin();
+  const { count, error } = await db.from("approval_queue_items").select("id", { count: "exact", head: true }).eq("status", "pending");
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 export async function getQueueItem(id: string): Promise<ApprovalQueueItem | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db.from("approval_queue_items").select("*").eq("id", id).maybeSingle();

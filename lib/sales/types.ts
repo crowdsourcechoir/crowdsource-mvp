@@ -59,6 +59,12 @@ export type Organization = {
   normalizedName: string;
   domain: string | null;
   organizationTypeId: string | null;
+  /** Overrides the industry segment otherwise inherited transitively through organizationTypeId
+   * (see organization_types.industry_segment_id). Null = inherit. See
+   * lib/sales/db/lookups.ts#resolveIndustrySegmentIdForOrganization for the resolution order this
+   * exists to support — e.g. distinguishing an education-focused association (ISACS) from a
+   * healthcare or business association, which `organization_type = 'association'` alone can't do. */
+  industrySegmentId: string | null;
   websiteUrl: string | null;
   locationCity: string | null;
   locationRegion: string | null;
@@ -78,6 +84,8 @@ export type Contact = {
   fullName: string | null;
   roleTitle: string | null;
   roleCategory: string | null;
+  /** Buyer-persona bucket derived from roleTitle — see lib/sales/outreach/persona.ts. Distinct from roleCategory (free-text CSV department). */
+  outreachPersona: "executive_director" | "events_director" | "program_manager" | "board_member" | "conference_planner" | "other";
   email: string | null;
   normalizedEmail: string | null;
   phone: string | null;
@@ -105,6 +113,12 @@ export type OpportunityStatus =
   | "needs_more_research"
   | "duplicate";
 
+/** Post-approval funnel tracking — Joel's own mental model for what happens after an email is
+ * launched, distinct from `status` above (which tracks the AI pipeline's own state, not the human
+ * relationship). Null = not yet sent. `lost` is a terminal, non-funnel bucket, not a fourth funnel
+ * stage — see docs/sales-platform/database.md. */
+export type RelationshipStage = "awareness" | "interest" | "purchase" | "lost";
+
 export type Opportunity = {
   id: string;
   organizationId: string;
@@ -116,6 +130,8 @@ export type Opportunity = {
   description: string | null;
   status: OpportunityStatus;
   targetContactRoleHint: string | null;
+  relationshipStage: RelationshipStage | null;
+  stageUpdatedAt: string | null;
   importMetadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -217,6 +233,10 @@ export type OutreachTemplate = {
   id: string;
   name: string;
   opportunityTypeId: string | null;
+  /** Optional targeting by the organization's resolved industry segment — see
+   * lib/sales/db/outreach.ts#findApprovedTemplate for the exact matching/fallback order. Null =
+   * not segment-targeted (e.g. the general-purpose default). */
+  industrySegmentId: string | null;
   bodyTemplate: string;
   status: "draft" | "approved" | "retired";
 };
@@ -283,6 +303,22 @@ export type DiscoveryRun = {
   createdAt: string;
 };
 
+/** The "new leads in my inbox every morning" email — one row per send attempt, tracks the cutoff
+ * timestamp for "new since last digest" and gives the send an audit trail like every other run
+ * type in this system. Sibling of discovery_runs/pipeline_runs, not a child of either. */
+export type DigestRun = {
+  id: string;
+  trigger: "manual" | "cron";
+  status: "running" | "succeeded" | "failed" | "skipped_no_provider";
+  itemCount: number;
+  recipient: string | null;
+  providerMessageId: string | null;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+};
+
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */
 export type QueueItemDetail = {
   queueItem: ApprovalQueueItem;
@@ -294,4 +330,17 @@ export type QueueItemDetail = {
   score: ProspectScore | null;
   draft: OutreachDraft | null;
   findings: (ResearchFinding & { sourceUrl: string })[];
+};
+
+/** One card's worth of data for /admin/sales/funnel — deliberately reuses the same
+ * queue-item→draft→contact join shape as QueueItemDetail (via assembleFunnelItems in
+ * lib/sales/db/assemble.ts) rather than inventing a new one. */
+export type FunnelItemDetail = {
+  opportunity: Opportunity;
+  organization: Organization;
+  contact: Contact | null;
+  draft: OutreachDraft | null;
+  /** approval_queue_items.decided_at — "when this was approved/launched," used as the "days
+   * since" anchor if stageUpdatedAt is ever unexpectedly null. */
+  approvedAt: string | null;
 };

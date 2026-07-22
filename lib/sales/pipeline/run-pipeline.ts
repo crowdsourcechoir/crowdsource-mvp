@@ -46,7 +46,10 @@ function pickBestContact(contacts: Contact[]): Contact | null {
  * stage is a separate agent_runs row; a failure at one stage halts only what depends on it,
  * not the whole run (see docs/sales-platform/ai-workflow.md failure-isolation notes per stage).
  */
-export async function runPipelineForOrganization(organizationId: string): Promise<PipelineRunSummary> {
+export async function runPipelineForOrganization(
+  organizationId: string,
+  trigger: "manual" | "cron" | "reprocess_request" = "manual"
+): Promise<PipelineRunSummary> {
   const org = await getOrganization(organizationId);
   if (!org) throw new Error(`Organization ${organizationId} not found.`);
 
@@ -56,7 +59,7 @@ export async function runPipelineForOrganization(organizationId: string): Promis
     return { pipelineRunId: null, status: "skipped_existing_client", stagesRun: [], opportunityIds: [] };
   }
 
-  const pipelineRun = await createPipelineRun(organizationId, "manual");
+  const pipelineRun = await createPipelineRun(organizationId, trigger);
   const stagesRun: PipelineRunSummary["stagesRun"] = [];
   let hadFailure = false;
 

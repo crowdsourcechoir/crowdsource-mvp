@@ -62,6 +62,30 @@ export async function updatePipelineRun(
   return rowToPipelineRun(data);
 }
 
+/**
+ * A serverless cron invocation that gets killed mid-run (execution-duration limit) leaves its
+ * `pipeline_runs` row stuck at status "running" forever — and because `listUnprocessedOrganizations`
+ * treats "has any non-csv_import pipeline_runs row" as "processed" regardless of status, that
+ * organization would otherwise never be picked up again by anything automatic. This finds those
+ * orphaned rows (status still "running" well past how long a real run ever takes — see
+ * PipelineRunSummary/BatchRunClient's "roughly a minute" note) and marks them "failed" so the
+ * caller can explicitly re-run those specific organizations. A real in-progress run started
+ * seconds ago is never touched — only ones stale enough that they can't still legitimately be
+ * running are affected.
+ */
+export async function markStalledPipelineRunsFailed(staleMinutesThreshold: number): Promise<string[]> {
+  const db = requireSupabaseAdmin();
+  const staleBefore = new Date(Date.now() - staleMinutesThreshold * 60_000).toISOString();
+  const { data, error } = await db
+    .from("pipeline_runs")
+    .update({ status: "failed", finished_at: new Date().toISOString(), current_stage: null })
+    .eq("status", "running")
+    .lt("started_at", staleBefore)
+    .select("organization_id");
+  if (error) throw new Error(error.message);
+  return Array.from(new Set((data ?? []).map((r) => r.organization_id as string)));
+}
+
 export async function listPipelineRunsForOrganization(organizationId: string): Promise<PipelineRun[]> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db
