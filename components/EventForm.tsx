@@ -793,6 +793,27 @@ export default function EventForm({
             />
           </div>
           <div>
+            <label htmlFor="completionEyebrow" className={labelClass}>
+              Completion eyebrow
+            </label>
+            <input
+              id="completionEyebrow"
+              type="text"
+              value={values.songGardenConfig?.completionEyebrow ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                    completionEyebrow: e.target.value,
+                  },
+                }))
+              }
+              className={inputClass}
+              placeholder={COMPLETION_MOMENT_LABEL}
+            />
+          </div>
+          <div>
             <label htmlFor="anthemCompletionMessage" className={labelClass}>
               Completion message
             </label>
@@ -1459,28 +1480,6 @@ export default function EventForm({
             );
           })}
         </div>
-
-        <label className="block">
-          <span className={labelClass}>Completion eyebrow</span>
-          <input
-            type="text"
-            value={values.songGardenConfig?.completionEyebrow ?? ""}
-            onChange={(e) =>
-              setValues((v) => ({
-                ...v,
-                songGardenConfig: {
-                  ...(v.songGardenConfig ?? defaultSongGardenConfig()),
-                  completionEyebrow: e.target.value,
-                },
-              }))
-            }
-            className={inputClass}
-            placeholder={COMPLETION_MOMENT_LABEL}
-          />
-          <span className="mt-0.5 block text-[11px] text-gray-500">
-            Shown on the final screen (default: {COMPLETION_MOMENT_LABEL})
-          </span>
-        </label>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <button
