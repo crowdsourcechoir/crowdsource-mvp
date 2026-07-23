@@ -625,7 +625,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 <button
                   type="submit"
                   disabled={sending || (requireContributionConsent && !contributionConsentAgreed)}
-                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed"
                   style={{
                     borderColor: world.accentColor,
                     color: "#1a1530",
