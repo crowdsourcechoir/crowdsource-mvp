@@ -158,8 +158,8 @@ function storyboardMediaKey(frame: WorldStoryboardFrame): string {
 }
 
 /**
- * Crossfade between discrete storyboard frames. Previous media stays mounted
- * while the next fades in, so progress steps don't hard-cut the world.
+ * Crossfade between storyboard frames (one media layer each). No still stacked
+ * under the playing video — that double-exposed trees/objects over themselves.
  */
 function StoryboardBackground({
   frame,
@@ -181,8 +181,13 @@ function StoryboardBackground({
           exit={{ opacity: 0 }}
           transition={{ duration: STORYBOARD_CROSSFADE_SEC, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Still under the video so decode/start never flashes black mid-crossfade. */}
-          {frame.sceneUrl && (
+          {frame.videoUrl ? (
+            <LoopingVideo
+              src={frame.videoUrl}
+              poster={frame.sceneUrl ?? undefined}
+              opacity={opacity}
+            />
+          ) : frame.sceneUrl ? (
             <div
               className="absolute inset-0"
               style={{
@@ -192,14 +197,6 @@ function StoryboardBackground({
                 filter: "saturate(1.05)",
                 opacity,
               }}
-            />
-          )}
-          {frame.videoUrl ? (
-            <LoopingVideo
-              src={frame.videoUrl}
-              poster={frame.sceneUrl ?? undefined}
-              opacity={opacity}
-              crossfadeSeconds={1.25}
             />
           ) : null}
         </motion.div>
