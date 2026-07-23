@@ -13,8 +13,8 @@ type MomentOverlayProps = {
 };
 
 /**
- * Tinted glass moment panel — world-colored wash, open enough to read the
- * video through it, with soft contrast so prompts stay legible.
+ * World-tinted glass panel. Dense enough for contrast over bright video, with
+ * a little garden still reading through.
  */
 export default function MomentOverlay({
   momentKey,
@@ -36,16 +36,16 @@ export default function MomentOverlay({
           style={{
             background: `linear-gradient(
               165deg,
-              color-mix(in srgb, ${primaryColor} 42%, transparent) 0%,
-              color-mix(in srgb, ${primaryColor} 22%, transparent) 55%,
-              color-mix(in srgb, ${accentColor} 12%, transparent) 100%
+              color-mix(in srgb, ${primaryColor} 82%, transparent) 0%,
+              color-mix(in srgb, ${primaryColor} 74%, transparent) 50%,
+              color-mix(in srgb, color-mix(in srgb, ${primaryColor} 88%, ${accentColor}) 70%, transparent) 100%
             )`,
-            backdropFilter: "blur(7px) saturate(1.35)",
-            WebkitBackdropFilter: "blur(7px) saturate(1.35)",
-            border: `1px solid color-mix(in srgb, ${accentColor} 38%, transparent)`,
+            backdropFilter: "blur(14px) saturate(1.12)",
+            WebkitBackdropFilter: "blur(14px) saturate(1.12)",
+            border: `1px solid color-mix(in srgb, ${accentColor} 48%, transparent)`,
             boxShadow: `
-              0 16px 40px -24px color-mix(in srgb, ${primaryColor} 70%, transparent),
-              inset 0 1px 0 color-mix(in srgb, ${accentColor} 22%, transparent)
+              0 18px 48px -18px rgba(0,0,0,0.6),
+              inset 0 1px 0 color-mix(in srgb, ${accentColor} 30%, transparent)
             `,
           }}
         >
@@ -54,13 +54,15 @@ export default function MomentOverlay({
               className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.25em]"
               style={{
                 color: accentColor,
-                textShadow: "0 1px 10px rgba(0,0,0,0.45)",
+                textShadow: "0 1px 2px rgba(0,0,0,0.75), 0 0 16px rgba(0,0,0,0.4)",
               }}
             >
               {eyebrow}
             </p>
           )}
-          {children}
+          <div style={{ textShadow: "0 1px 2px rgba(0,0,0,0.7), 0 2px 14px rgba(0,0,0,0.4)" }}>
+            {children}
+          </div>
         </motion.div>
       </AnimatePresence>
     </div>
