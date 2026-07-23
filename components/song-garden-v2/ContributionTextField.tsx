@@ -18,8 +18,8 @@ type ContributionTextFieldProps = {
 };
 
 /**
- * One obvious action, always. A single text field plus a single primary button —
- * never a menu, never a branching choice.
+ * Compact text field + solid lime confirm — matches the moment-pad review control.
+ * Prefer TextMomentPad for full participant moments (prompt + circle + field).
  */
 export default function ContributionTextField({
   value,
@@ -28,15 +28,17 @@ export default function ContributionTextField({
   placeholder = "Type your answer…",
   disabled,
   submitDisabled,
-  submitLabel = "Continue",
+  submitLabel = "✓ Continue",
   accentColor,
   hint,
   inputMode = "text",
   autoComplete = "off",
   inputRef,
 }: ContributionTextFieldProps) {
+  const hasText = value.trim().length > 0;
+
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-xs space-y-3 text-center">
       <textarea
         ref={inputRef}
         value={value}
@@ -58,11 +60,14 @@ export default function ContributionTextField({
         enterKeyHint="send"
         inputMode={inputMode}
         autoComplete={autoComplete}
-        className="w-full resize-none rounded-2xl border-2 bg-black/25 px-4 py-3.5 font-mono text-base text-white placeholder:text-gray-400 focus:outline-none"
-        style={{ borderColor: `${accentColor}66` }}
+        className="w-full resize-none rounded-2xl border-2 bg-black/25 px-4 py-3.5 text-center font-mono text-base text-white placeholder:text-gray-500 focus:outline-none"
+        style={{
+          borderColor: hasText ? accentColor : `${accentColor}66`,
+          boxShadow: hasText ? `0 0 24px -12px ${accentColor}88` : undefined,
+        }}
       />
       {hint && (
-        <p className="text-center font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
+        <p className="font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
           {hint}
         </p>
       )}
@@ -71,12 +76,8 @@ export default function ContributionTextField({
         onClick={onSubmit}
         disabled={disabled || submitDisabled}
         whileTap={{ scale: 0.97 }}
-        className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          borderColor: accentColor,
-          color: accentColor,
-          background: `${accentColor}1f`,
-        }}
+        className="flex min-h-[44px] w-full select-none items-center justify-center rounded-xl px-3 py-2 font-mono text-xs font-semibold [touch-action:manipulation] disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ background: accentColor, color: "#1a1530" }}
       >
         {submitLabel}
       </motion.button>
