@@ -238,6 +238,8 @@ export default function EventForm({
   const [aiReferencePhoto, setAiReferencePhoto] = useState<string>("");
   const [aiFrameCount, setAiFrameCount] = useState<number>(4);
   const [aiGenerating, setAiGenerating] = useState(false);
+  /** When set, only that storyboard frame index is regenerating. */
+  const [aiRegeneratingFrame, setAiRegeneratingFrame] = useState<number | null>(null);
   const [aiGenError, setAiGenError] = useState<string | null>(null);
   const [aiGenNotice, setAiGenNotice] = useState<string | null>(null);
 
@@ -597,6 +599,50 @@ export default function EventForm({
       setAiGenError("Could not reach the server.");
     } finally {
       setAiGenerating(false);
+    }
+  }
+
+  async function handleRegenerateFrame(frameIndex: number) {
+    setAiGenError(null);
+    setAiGenNotice(null);
+    if (!aiVibePrompt.trim()) {
+      setAiGenError("Describe the vibe first, then regenerate this frame.");
+      return;
+    }
+    const existing = values.worldConfig?.worldStoryboard ?? [];
+    setAiRegeneratingFrame(frameIndex);
+    try {
+      const eventIdForPath = values.slug?.trim() || "draft";
+      const res = await fetch(`/api/events/${encodeURIComponent(eventIdForPath)}/generate-storyboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vibePrompt: aiVibePrompt,
+          frameIndex,
+          frameCount: Math.max(existing.length, frameIndex + 1, aiFrameCount),
+          ...(aiReferencePhoto ? { imageDataUrl: aiReferencePhoto } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiGenError(data.error || `Frame ${frameIndex + 1} regeneration failed.`);
+        return;
+      }
+      if (data.frame && typeof data.frameIndex === "number") {
+        const next = [...existing];
+        while (next.length <= data.frameIndex) {
+          next.push({ sceneUrl: null, videoUrl: null });
+        }
+        next[data.frameIndex] = data.frame;
+        setWorldConfigField("worldStoryboard", next);
+        setAiGenNotice(
+          `Replaced frame ${data.frameIndex + 1} only — other frames unchanged. Save to keep it.`
+        );
+      }
+    } catch {
+      setAiGenError("Could not reach the server.");
+    } finally {
+      setAiRegeneratingFrame(null);
     }
   }
 
@@ -1015,12 +1061,15 @@ export default function EventForm({
             <button
               type="button"
               onClick={handleGenerateStoryboard}
-              disabled={aiGenerating}
+              disabled={aiGenerating || aiRegeneratingFrame != null}
               className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-[#1a0f2d] hover:bg-[#bdf25e] disabled:opacity-50"
             >
               {aiGenerating ? "Generating…" : "Generate with AI"}
             </button>
           </div>
+          <p className="text-[11px] text-gray-500">
+            Prefer one frame? Use <span className="text-gray-400">Regen</span> on that row — the others stay put.
+          </p>
           {aiReferencePhoto && (
             <div className="flex items-center gap-2">
               <img src={aiReferencePhoto} alt="Reference" className="h-12 w-20 rounded object-cover" />
@@ -1036,6 +1085,16 @@ export default function EventForm({
             {(values.worldConfig?.worldStoryboard ?? []).map((frame, i) => (
               <div key={i} className="flex flex-col gap-1.5 py-2 sm:flex-row sm:items-center">
                 <span className="w-14 shrink-0 text-[11px] font-medium text-gray-500">Frame {i + 1}</span>
+                {frame.sceneUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={frame.sceneUrl}
+                    alt=""
+                    className="h-10 w-16 shrink-0 rounded object-cover"
+                  />
+                ) : (
+                  <div className="h-10 w-16 shrink-0 rounded bg-gray-800/80" />
+                )}
                 <input
                   type="text"
                   value={frame.videoUrl ?? ""}
@@ -1060,10 +1119,20 @@ export default function EventForm({
                 />
                 <button
                   type="button"
+                  onClick={() => handleRegenerateFrame(i)}
+                  disabled={aiGenerating || aiRegeneratingFrame != null}
+                  className={chipClass}
+                  title="Regenerate only this frame with AI"
+                >
+                  {aiRegeneratingFrame === i ? "…" : "Regen"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     const frames = (values.worldConfig?.worldStoryboard ?? []).filter((_, idx) => idx !== i);
                     setWorldConfigField("worldStoryboard", frames);
                   }}
+                  disabled={aiGenerating || aiRegeneratingFrame != null}
                   className={chipClass}
                 >
                   ×

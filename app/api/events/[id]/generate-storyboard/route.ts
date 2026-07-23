@@ -74,12 +74,39 @@ function buildMotionPrompt(vibePrompt: string, frameIndex: number, frameCount: n
   );
 }
 
-function extensionForContentType(contentType: string): string {
-  if (contentType.includes("png")) return "png";
-  if (contentType.includes("webp")) return "webp";
-  if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
-  if (contentType.includes("webm")) return "webm";
-  return "mp4";
+async function generateOneFrame(opts: {
+  eventId: string;
+  vibePrompt: string;
+  frameIndex: number;
+  frameCount: number;
+  referenceImage: string | null;
+}): Promise<WorldStoryboardFrame> {
+  const { eventId, vibePrompt, frameIndex, frameCount, referenceImage } = opts;
+
+  const runwayImageUrl = await generateImageFromText({
+    promptText: buildImagePrompt(vibePrompt, frameIndex, frameCount, Boolean(referenceImage)),
+    model: "gen4_image",
+    ratio: "1920:1080",
+    ...(referenceImage ? { referenceImages: [{ uri: referenceImage, tag: "ref" }] } : {}),
+  });
+  const sceneFilename = `${eventId}-scene-${frameIndex + 1}-${Date.now()}.jpg`;
+  const sceneUrl = await persistGeneratedMedia(runwayImageUrl, sceneFilename, "image/jpeg");
+
+  const runwayVideoUrl = await generateVideoFromImage({
+    promptImage: sceneUrl,
+    promptText: buildMotionPrompt(vibePrompt, frameIndex, frameCount),
+    model: "gen4_turbo",
+    duration: VIDEO_DURATION_SEC,
+    ratio: "1920:1080",
+  });
+  const videoFilename = `${eventId}-frame-${frameIndex + 1}-${Date.now()}.mp4`;
+  const videoUrl = await persistGeneratedMedia(runwayVideoUrl, videoFilename, "video/mp4");
+
+  return {
+    sceneUrl,
+    videoUrl,
+    energy: frameCount > 1 ? frameIndex / (frameCount - 1) : 1,
+  };
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -95,7 +122,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  let body: { vibePrompt?: string; frameCount?: number; imageDataUrl?: string };
+  let body: {
+    vibePrompt?: string;
+    frameCount?: number;
+    imageDataUrl?: string;
+    /** When set, regenerate only this 0-based frame and leave the rest alone. */
+    frameIndex?: number;
+  };
   try {
     body = await request.json();
   } catch {
@@ -104,7 +137,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const vibePrompt = body.vibePrompt?.trim();
   const referenceImage = body.imageDataUrl?.trim() || null;
-  const frameCount = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, body.frameCount || DEFAULT_FRAMES));
 
   if (!vibePrompt) {
     return NextResponse.json(
@@ -113,39 +145,57 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  const singleFrameIndex =
+    typeof body.frameIndex === "number" && Number.isFinite(body.frameIndex)
+      ? Math.floor(body.frameIndex)
+      : null;
+
+  // Single-frame replace — intensity uses the board length you already have.
+  if (singleFrameIndex != null) {
+    if (singleFrameIndex < 0 || singleFrameIndex >= MAX_FRAMES) {
+      return NextResponse.json(
+        { error: `frameIndex must be between 0 and ${MAX_FRAMES - 1}.` },
+        { status: 400 }
+      );
+    }
+    const frameCount = Math.max(
+      singleFrameIndex + 1,
+      Math.min(MAX_FRAMES, body.frameCount || DEFAULT_FRAMES)
+    );
+
+    try {
+      const frame = await generateOneFrame({
+        eventId,
+        vibePrompt,
+        frameIndex: singleFrameIndex,
+        frameCount,
+        referenceImage,
+      });
+      return NextResponse.json({ frame, frameIndex: singleFrameIndex, frames: [frame] });
+    } catch (err) {
+      const code = err instanceof RunwayError ? err.code : "api_error";
+      const message = err instanceof Error ? err.message : "Failed to regenerate this frame.";
+      return NextResponse.json(
+        { error: message, code },
+        { status: code === "insufficient_credits" ? 402 : 502 }
+      );
+    }
+  }
+
+  const frameCount = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, body.frameCount || DEFAULT_FRAMES));
   const frames: WorldStoryboardFrame[] = [];
 
   for (let i = 0; i < frameCount; i += 1) {
     try {
-      // 1) Invent a new still from the vibe (+ optional reference photo for place/atmosphere).
-      const runwayImageUrl = await generateImageFromText({
-        promptText: buildImagePrompt(vibePrompt, i, frameCount, Boolean(referenceImage)),
-        model: "gen4_image",
-        ratio: "1920:1080",
-        ...(referenceImage
-          ? { referenceImages: [{ uri: referenceImage, tag: "ref" }] }
-          : {}),
-      });
-      const sceneFilename = `${eventId}-scene-${i + 1}-${Date.now()}.jpg`;
-      const sceneUrl = await persistGeneratedMedia(runwayImageUrl, sceneFilename, "image/jpeg");
-
-      // 2) Animate that still into a longer seamless-ish loop.
-      const runwayVideoUrl = await generateVideoFromImage({
-        promptImage: sceneUrl,
-        promptText: buildMotionPrompt(vibePrompt, i, frameCount),
-        model: "gen4_turbo",
-        duration: VIDEO_DURATION_SEC,
-        // Match the 1080p still — 720p was softening the world on phone screens.
-        ratio: "1920:1080",
-      });
-      const videoFilename = `${eventId}-frame-${i + 1}-${Date.now()}.mp4`;
-      const videoUrl = await persistGeneratedMedia(runwayVideoUrl, videoFilename, "video/mp4");
-
-      frames.push({
-        sceneUrl,
-        videoUrl,
-        energy: frameCount > 1 ? i / (frameCount - 1) : 1,
-      });
+      frames.push(
+        await generateOneFrame({
+          eventId,
+          vibePrompt,
+          frameIndex: i,
+          frameCount,
+          referenceImage,
+        })
+      );
     } catch (err) {
       const code = err instanceof RunwayError ? err.code : "api_error";
       const message = err instanceof Error ? err.message : "Failed to generate this frame.";
