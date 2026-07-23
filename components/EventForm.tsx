@@ -613,6 +613,10 @@ export default function EventForm({
     setAiRegeneratingFrame(frameIndex);
     try {
       const eventIdForPath = values.slug?.trim() || "draft";
+      const siblingSceneUrls = existing.map((f) => f.sceneUrl ?? null);
+      const siblingCount = siblingSceneUrls.filter(
+        (url, idx) => idx !== frameIndex && Boolean(url)
+      ).length;
       const res = await fetch(`/api/events/${encodeURIComponent(eventIdForPath)}/generate-storyboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -620,6 +624,7 @@ export default function EventForm({
           vibePrompt: aiVibePrompt,
           frameIndex,
           frameCount: Math.max(existing.length, frameIndex + 1, aiFrameCount),
+          siblingSceneUrls,
           ...(aiReferencePhoto ? { imageDataUrl: aiReferencePhoto } : {}),
         }),
       });
@@ -636,7 +641,9 @@ export default function EventForm({
         next[data.frameIndex] = data.frame;
         setWorldConfigField("worldStoryboard", next);
         setAiGenNotice(
-          `Replaced frame ${data.frameIndex + 1} only — other frames unchanged. Save to keep it.`
+          siblingCount > 0
+            ? `Replaced frame ${data.frameIndex + 1} using ${Math.min(siblingCount, 3)} sibling stills for theme match. Save to keep it.`
+            : `Replaced frame ${data.frameIndex + 1} only — other frames unchanged. Save to keep it.`
         );
       }
     } catch {
@@ -1068,7 +1075,8 @@ export default function EventForm({
             </button>
           </div>
           <p className="text-[11px] text-gray-500">
-            Prefer one frame? Use <span className="text-gray-400">Regen</span> on that row — the others stay put.
+            Prefer one frame? Use <span className="text-gray-400">Regen</span> on that row — it keeps the others
+            and references their stills so the replacement stays on-theme.
           </p>
           {aiReferencePhoto && (
             <div className="flex items-center gap-2">
