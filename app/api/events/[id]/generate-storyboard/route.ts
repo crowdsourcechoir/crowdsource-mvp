@@ -21,16 +21,17 @@ const VIDEO_DURATION_SEC = 10;
  * Escalating world states — each frame is a *new* still invented from the vibe,
  * not a recycled event photo. Intensity climbs so the garden visibly wakes up.
  */
+/** Place-agnostic growth arc — vibe prompt carries location/palette specifics. */
 const INTENSITY_MODIFIERS = [
-  "quiet dormant desert dusk, soft sandstone dunes, faint Sphere glow on the horizon, sparse bioluminescent seeds barely lit, calm empty pathways",
-  "early awakening, desert blooms beginning to open, soft cyan mycelial threads connecting a few glowing seeds, Sphere faintly pulsing in the distance",
-  "living garden emerging, cacti and digital plants intertwined, warm gold and indigo light, mycelial network spreading, pathways starting to pulse",
-  "full bloom regenerative ecosystem, radiant bioluminescent greens and electric cyan, Sphere reflecting community patterns, dense glowing seed network, optimistic cinematic energy",
+  "quiet dormant threshold dusk, soft mist and empty pathways, sparse bioluminescent seeds barely lit, calm waiting atmosphere",
+  "early awakening, organic forms beginning to open, soft mycelial threads connecting a few glowing seeds, light gently gathering",
+  "living garden emerging, natural and luminous digital forms intertwined, warm light, mycelial network spreading, pathways starting to pulse",
+  "full bloom regenerative ecosystem, radiant bioluminescent growth, dense glowing seed network of community contributions, optimistic cinematic energy",
 ];
 
 const MAX_VIBE_PROMPT_CHARS = 480;
 const IMAGE_SUFFIX =
-  "Premium cinematic wide environment concept art, no people in foreground, no readable text or logos, desert sage sandstone warm gold copper deep indigo electric cyan soft violet bioluminescent green color palette.";
+  "Premium cinematic wide environment concept art, no people in foreground, no readable text or logos; follow the vibe prompt color palette.";
 const MOTION_SUFFIX =
   "Subtle ambient motion only, slow drifting light and haze, camera locked in place, seamless looping atmosphere, no people walking into frame, no text or logos.";
 

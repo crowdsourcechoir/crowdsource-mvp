@@ -232,7 +232,9 @@ export default function EventForm({
     tier?: string;
     error?: string;
   } | null>(null);
-  const [aiVibePrompt, setAiVibePrompt] = useState<string>("");
+  const [aiVibePrompt, setAiVibePrompt] = useState<string>(
+    () => initialProp?.worldConfig?.aiArtworkPrompt?.trim() || ""
+  );
   const [aiReferencePhoto, setAiReferencePhoto] = useState<string>("");
   const [aiFrameCount, setAiFrameCount] = useState<number>(4);
   const [aiGenerating, setAiGenerating] = useState(false);
