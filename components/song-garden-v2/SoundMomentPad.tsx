@@ -191,14 +191,14 @@ export default function SoundMomentPad({
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mx-auto flex max-w-xs flex-wrap items-center justify-center gap-3"
+          className="mx-auto flex max-w-sm flex-wrap items-center justify-center gap-3"
         >
           {choices.map((choice) => (
             <button
               key={choice.id}
               type="button"
               onClick={() => handleChoose(choice)}
-              className="min-h-[64px] min-w-[64px] select-none rounded-2xl border px-4 py-3 font-mono text-sm font-semibold uppercase tracking-wide [touch-action:manipulation]"
+              className="flex h-16 w-[5.5rem] shrink-0 select-none items-center justify-center rounded-2xl border px-1 font-mono text-sm font-semibold uppercase tracking-wide [touch-action:manipulation]"
               style={{ borderColor: accentColor, color: accentColor, background: `${accentColor}1f` }}
             >
               {choice.label}

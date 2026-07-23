@@ -78,6 +78,7 @@ export function growthNodePosition(index: number): { xPct: number; yPct: number 
   const yPct = 50 + radius * 1.35 * Math.sin(angle);
   return {
     xPct: Math.max(3, Math.min(97, xPct)),
-    yPct: Math.max(4, Math.min(96, yPct)),
+    // Keep clear of the top title / progress / ambient ticker chrome.
+    yPct: Math.max(14, Math.min(96, yPct)),
   };
 }

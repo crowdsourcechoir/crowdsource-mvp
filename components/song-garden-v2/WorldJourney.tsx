@@ -67,6 +67,7 @@ import {
 import WorldStage from "./WorldStage";
 import MomentOverlay from "./MomentOverlay";
 import WorldProgressTrail from "./WorldProgressTrail";
+import WorldPresenceTicker from "./WorldPresenceTicker";
 import TextMomentPad from "./TextMomentPad";
 import SoundMomentPad from "./SoundMomentPad";
 import VoiceMomentPad from "./VoiceMomentPad";
@@ -561,7 +562,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   return (
     <WorldStage
       world={world}
-      eventId={event.id}
       energyLevel={energyLevel}
       celebrationTrigger={celebration.trigger}
       soundtrackUnlocked={worldUnlocked}
@@ -584,6 +584,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           </div>
         )}
       </header>
+
+      {world.presenceSimulationEnabled !== false && (
+        <WorldPresenceTicker eventId={event.id} accentColor={world.accentColor} />
+      )}
 
       {/* Hide prompt UI instantly while celebrating so the burst isn't overlaid on the question. */}
       {!celebration.active ? (
@@ -672,7 +676,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 <TextMomentPad
                   key={`text-${stepIndex}-${activeStep?.id ?? ""}`}
                   promptText={displayPrompt(promptText)}
-                  buttonLabel={isNameStep ? "Name" : "Type"}
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={() => void handleTextSubmit()}
@@ -740,7 +743,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             <div className="space-y-4">
               <TextMomentPad
                 promptText="What name should we credit on your sounds?"
-                buttonLabel="Name"
                 value={nameGateValue}
                 onChange={setNameGateValue}
                 onSubmit={handleNameGateContinue}
@@ -748,6 +750,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 autoComplete="given-name"
                 submitLabel="✓ Continue"
                 accentColor={world.accentColor}
+                hint="Your first name is fine."
               />
               {chatError && <p className="text-center text-sm text-red-300">{chatError}</p>}
             </div>

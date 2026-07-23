@@ -19,7 +19,7 @@ type ContributionTextFieldProps = {
 
 /**
  * Compact text field + solid lime confirm — matches the moment-pad review control.
- * Prefer TextMomentPad for full participant moments (prompt + circle + field).
+ * Prefer TextMomentPad for full participant moments (prompt + field + confirm).
  */
 export default function ContributionTextField({
   value,

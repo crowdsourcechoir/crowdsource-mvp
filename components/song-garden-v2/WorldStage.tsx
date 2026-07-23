@@ -13,11 +13,9 @@ import LoopingVideo from "./LoopingVideo";
 import ParticleField from "./ParticleField";
 import WorldEnergyField from "./WorldEnergyField";
 import WorldGrowthLayer from "./WorldGrowthLayer";
-import WorldPresenceTicker from "./WorldPresenceTicker";
 
 type WorldStageProps = {
   world: WorldConfig;
-  eventId: string;
   /** 0..1 — increases as the participant contributes; makes the world visibly livelier. */
   energyLevel: number;
   /** Bump this (e.g. Date.now()) to fire a one-off "world reacts" pulse. */
@@ -36,7 +34,6 @@ type WorldStageProps = {
  */
 export default function WorldStage({
   world,
-  eventId,
   energyLevel,
   celebrationTrigger,
   soundtrackUnlocked,
@@ -142,10 +139,6 @@ export default function WorldStage({
       <WorldEnergyField accentColor={world.accentColor} baseIntensity={baseIntensity} pulseTrigger={celebrationTrigger} />
 
       <WorldGrowthLayer nodes={growthNodes} accentColor={world.accentColor} />
-
-      {world.presenceSimulationEnabled !== false && (
-        <WorldPresenceTicker eventId={eventId} accentColor={world.accentColor} />
-      )}
 
       {world.ambientSoundtrackUrl && (
         <audio ref={audioRef} src={world.ambientSoundtrackUrl} loop preload="none" />
