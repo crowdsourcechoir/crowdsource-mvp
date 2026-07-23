@@ -87,7 +87,7 @@ export default function WorldStage({
       >
         <motion.div className="absolute -inset-[10%]" style={{ x: tilt.x, y: tilt.y }}>
           {storyboardFrame ? (
-            <StoryboardBackground frame={storyboardFrame.frame} />
+            <StoryboardBackground frame={storyboardFrame.frame} veilColor={world.primaryColor} />
           ) : blend ? (
             <>
               <motion.div
@@ -169,7 +169,13 @@ function storyboardMediaKey(frame: WorldStoryboardFrame): string {
  * Crossfade between storyboard frames (one media layer each). No still stacked
  * under the playing video — that double-exposed trees/objects over themselves.
  */
-function StoryboardBackground({ frame }: { frame: WorldStoryboardFrame }) {
+function StoryboardBackground({
+  frame,
+  veilColor,
+}: {
+  frame: WorldStoryboardFrame;
+  veilColor: string;
+}) {
   const mediaKey = storyboardMediaKey(frame);
 
   return (
@@ -184,7 +190,11 @@ function StoryboardBackground({ frame }: { frame: WorldStoryboardFrame }) {
           transition={{ duration: STORYBOARD_CROSSFADE_SEC, ease: [0.22, 1, 0.36, 1] }}
         >
           {frame.videoUrl ? (
-            <LoopingVideo src={frame.videoUrl} poster={frame.sceneUrl ?? undefined} />
+            <LoopingVideo
+              src={frame.videoUrl}
+              poster={frame.sceneUrl ?? undefined}
+              veilColor={veilColor}
+            />
           ) : frame.sceneUrl ? (
             <div
               className="absolute inset-0"
