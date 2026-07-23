@@ -7,14 +7,22 @@ type MomentOverlayProps = {
   momentKey: string;
   eyebrow?: string;
   accentColor: string;
+  /** World primary — tints the glass so it feels like the garden, not a gray sheet. */
+  primaryColor: string;
   children: React.ReactNode;
 };
 
 /**
- * Frosted glass moment panel — light enough that the world stays visible, strong
- * enough that prompts and controls stay readable on busy video.
+ * Tinted glass moment panel — world-colored wash, open enough to read the
+ * video through it, with soft contrast so prompts stay legible.
  */
-export default function MomentOverlay({ momentKey, eyebrow, accentColor, children }: MomentOverlayProps) {
+export default function MomentOverlay({
+  momentKey,
+  eyebrow,
+  accentColor,
+  primaryColor,
+  children,
+}: MomentOverlayProps) {
   return (
     <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-center px-4 py-6 sm:px-6">
       <AnimatePresence mode="wait">
@@ -24,18 +32,30 @@ export default function MomentOverlay({ momentKey, eyebrow, accentColor, childre
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -14, scale: 0.99 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-3xl border border-white/15 p-6 sm:p-8"
+          className="rounded-3xl p-6 sm:p-8"
           style={{
-            background: "rgba(12, 12, 16, 0.38)",
-            backdropFilter: "blur(14px) saturate(1.1)",
-            WebkitBackdropFilter: "blur(14px) saturate(1.1)",
-            boxShadow: `0 12px 48px -20px rgba(0,0,0,0.55), 0 0 0 1px ${accentColor}18`,
+            background: `linear-gradient(
+              165deg,
+              color-mix(in srgb, ${primaryColor} 42%, transparent) 0%,
+              color-mix(in srgb, ${primaryColor} 22%, transparent) 55%,
+              color-mix(in srgb, ${accentColor} 12%, transparent) 100%
+            )`,
+            backdropFilter: "blur(7px) saturate(1.35)",
+            WebkitBackdropFilter: "blur(7px) saturate(1.35)",
+            border: `1px solid color-mix(in srgb, ${accentColor} 38%, transparent)`,
+            boxShadow: `
+              0 16px 40px -24px color-mix(in srgb, ${primaryColor} 70%, transparent),
+              inset 0 1px 0 color-mix(in srgb, ${accentColor} 22%, transparent)
+            `,
           }}
         >
           {eyebrow && (
             <p
               className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.25em]"
-              style={{ color: accentColor }}
+              style={{
+                color: accentColor,
+                textShadow: "0 1px 10px rgba(0,0,0,0.45)",
+              }}
             >
               {eyebrow}
             </p>

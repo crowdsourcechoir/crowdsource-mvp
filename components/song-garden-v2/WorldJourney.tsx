@@ -600,7 +600,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
       {/* Hide prompt UI instantly while celebrating so the burst isn't overlaid on the question. */}
       {!celebration.active ? (
-        <MomentOverlay momentKey={momentKey} eyebrow={eyebrow} accentColor={world.accentColor}>
+        <MomentOverlay
+          momentKey={momentKey}
+          eyebrow={eyebrow}
+          accentColor={world.accentColor}
+          primaryColor={world.primaryColor}
+        >
           {position.phase === "landing" && (
             <div className="space-y-5 text-center">
               <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
