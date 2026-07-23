@@ -1,14 +1,23 @@
 import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import {
   localEventsGetById,
   localEventsUpdate,
 } from "@/lib/local-events-store";
+import {
+  persistDataUrlMedia,
+  resolveHeroImageForStorage,
+} from "@/lib/song-garden-v2/persist-generated-media";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
 import type { SongGardenConfig } from "@/lib/songgarden/config";
 import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
+
+/** Omit hero_image so PATCH responses stay small after bloated data-URI heroes. */
+const EVENT_SELECT_LEAN =
+  "id,slug,title,description,date,time,venue,address,prompt,hero_image_mode,landing_headline,landing_copy,cta_text,anthem_completion_message,allow_audio_video_prompt,agent_theme_id,agent_brief,song_garden_config,world_config";
 
 function rowToEvent(row: Record<string, unknown>) {
   return {
@@ -40,6 +49,34 @@ function rowToEvent(row: Record<string, unknown>) {
       null,
     worldConfig: (row.world_config as WorldConfig | null) ?? null,
   };
+}
+
+function scheduleHeroMigration(id: string, knownHero?: string): void {
+  const run = async () => {
+    try {
+      let hero = knownHero;
+      if (hero == null && supabaseAdmin) {
+        const { data } = await supabaseAdmin.from("events").select("hero_image").eq("id", id).maybeSingle();
+        hero = typeof data?.hero_image === "string" ? data.hero_image : undefined;
+      }
+      if (typeof hero !== "string" || !hero.startsWith("data:image/")) return;
+      const url = await persistDataUrlMedia(hero, `${id}-hero`);
+      if (USE_LOCAL_EVENTS) {
+        localEventsUpdate(id, { hero_image: url });
+        return;
+      }
+      if (!supabaseAdmin) return;
+      await supabaseAdmin.from("events").update({ hero_image: url }).eq("id", id);
+    } catch (err) {
+      console.error("[events] hero migration failed:", err);
+    }
+  };
+
+  try {
+    waitUntil(run());
+  } catch {
+    void run();
+  }
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -83,7 +120,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (body.venue !== undefined) updates.venue = body.venue;
       if (body.address !== undefined) updates.address = body.address;
       if (body.prompt !== undefined) updates.prompt = body.prompt;
-      if (body.heroImage !== undefined) updates.hero_image = body.heroImage;
+      if (body.heroImage !== undefined) {
+        updates.hero_image = await resolveHeroImageForStorage(body.heroImage, id);
+      }
       if (body.heroImageMode !== undefined) updates.hero_image_mode = body.heroImageMode;
       if (body.landingHeadline !== undefined) updates.landing_headline = body.landingHeadline;
       if (body.landingCopy !== undefined) updates.landing_copy = body.landingCopy;
@@ -108,6 +147,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (body.worldConfig !== undefined) updates.world_config = body.worldConfig;
       const updated = localEventsUpdate(id, updates as Partial<import("@/lib/local-events-store").EventRow>);
       if (!updated) return NextResponse.json(null, { status: 404 });
+      if (body.heroImage === undefined) {
+        const existing = typeof updated.hero_image === "string" ? updated.hero_image : undefined;
+        scheduleHeroMigration(id, existing);
+      }
       return NextResponse.json(rowToEvent(updated));
     } catch (err) {
       return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -132,7 +175,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.venue !== undefined) row.venue = body.venue;
     if (body.address !== undefined) row.address = body.address;
     if (body.prompt !== undefined) row.prompt = body.prompt;
-    if (body.heroImage !== undefined) row.hero_image = body.heroImage;
+    if (body.heroImage !== undefined) {
+      row.hero_image = await resolveHeroImageForStorage(body.heroImage, id);
+    }
     if (body.heroImageMode !== undefined) row.hero_image_mode = body.heroImageMode;
     if (body.landingHeadline !== undefined) row.landing_headline = body.landingHeadline;
     if (body.landingCopy !== undefined) row.landing_copy = body.landingCopy;
@@ -156,9 +201,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (body.worldConfig !== undefined) row.world_config = body.worldConfig;
 
-    const { data, error } = await supabaseAdmin.from("events").update(row).eq("id", id).select().single();
+    // Lean select — never pull a multi‑MB data-URI hero back into the response.
+    const { data, error } = await supabaseAdmin
+      .from("events")
+      .update(row)
+      .eq("id", id)
+      .select(EVENT_SELECT_LEAN)
+      .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json(rowToEvent(data));
+
+    const responseRow: Record<string, unknown> = {
+      ...(data as Record<string, unknown>),
+      hero_image: typeof row.hero_image === "string" ? row.hero_image : "",
+    };
+
+    // Migrate any leftover data-URI hero in the background (does not block save).
+    if (body.heroImage === undefined) {
+      scheduleHeroMigration(id);
+    }
+
+    return NextResponse.json(rowToEvent(responseRow));
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

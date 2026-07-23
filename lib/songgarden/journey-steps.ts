@@ -32,6 +32,8 @@ export type JourneyNameStep = {
   kind: "name";
   prompt?: string;
   categoryLabel?: string;
+  /** Helper line under the prompt (defaults to "Your first name is fine."). */
+  responseHint?: string;
 };
 
 /**
@@ -277,11 +279,16 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
     if (kind === "name") {
       if (hasName) continue;
       hasName = true;
+      const responseHint =
+        typeof (item as { responseHint?: unknown }).responseHint === "string"
+          ? (item as { responseHint: string }).responseHint
+          : undefined;
       steps.push({
         id,
         kind: "name",
         ...(typeof (item as { prompt?: unknown }).prompt === "string" ? { prompt } : {}),
         categoryLabel: typeof categoryLabel === "string" ? categoryLabel : "Your Name",
+        ...(responseHint !== undefined ? { responseHint } : {}),
       });
       continue;
     }
@@ -562,7 +569,13 @@ export function createJourneyPromptStep(prompt = ""): JourneyPromptStep {
 }
 
 export function createJourneyNameStep(prompt = DEFAULT_NAME_QUESTION_PROMPT): JourneyNameStep {
-  return { id: newStepId(), kind: "name", prompt, categoryLabel: "Your Name" };
+  return {
+    id: newStepId(),
+    kind: "name",
+    prompt,
+    categoryLabel: "Your Name",
+    responseHint: "",
+  };
 }
 
 export function createJourneySoundPromptStep(

@@ -1339,16 +1339,28 @@ export default function EventForm({
                 </label>
 
                 {step.kind === "name" && (
-                  <label className="block">
-                    <span className={labelClass}>Prompt</span>
-                    <input
-                      type="text"
-                      value={step.prompt ?? ""}
-                      onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
-                      className={inputClass}
-                      placeholder={DEFAULT_NAME_QUESTION_PROMPT}
-                    />
-                  </label>
+                  <>
+                    <label className="block">
+                      <span className={labelClass}>Prompt</span>
+                      <input
+                        type="text"
+                        value={step.prompt ?? ""}
+                        onChange={(e) => updateJourneyStep(idx, { prompt: e.target.value })}
+                        className={inputClass}
+                        placeholder={DEFAULT_NAME_QUESTION_PROMPT}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Helper text</span>
+                      <input
+                        type="text"
+                        value={step.responseHint ?? ""}
+                        onChange={(e) => updateJourneyStep(idx, { responseHint: e.target.value })}
+                        className={inputClass}
+                        placeholder="Your first name is fine."
+                      />
+                    </label>
+                  </>
                 )}
 
                 {step.kind === "prompt" && channels && (

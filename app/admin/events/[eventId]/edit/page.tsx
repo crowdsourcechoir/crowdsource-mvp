@@ -33,7 +33,12 @@ export default function EditEventPage() {
 
   async function handleSubmit(values: EventFormValues) {
     if (!event) throw new Error("Event is still loading or missing.");
-    const updated = await updateEvent(event.id, values);
+    // Skip re-uploading an unchanged hero — data-URI heroes are multi‑MB and dominate save time.
+    const payload: Partial<EventFormValues> = { ...values };
+    if (payload.heroImage === event.heroImage) {
+      delete payload.heroImage;
+    }
+    const updated = await updateEvent(event.id, payload);
     if (!updated) throw new Error("Could not save (event may have been deleted).");
     router.push(`/admin/events/${event.id}`);
   }

@@ -46,7 +46,10 @@ import {
   contributionConsentText,
   requiresContributionConsent,
 } from "@/lib/participant-journey/contribution-consent";
-import { questionResponseHint } from "@/lib/participant-journey/example-words";
+import {
+  DEFAULT_NAME_RESPONSE_HINT,
+  questionResponseHint,
+} from "@/lib/participant-journey/example-words";
 import { unlockReferenceTones } from "@/lib/songgarden/reference-tones";
 import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
 import { requestTiltPermission } from "@/lib/song-garden-v2/tilt";
@@ -229,13 +232,17 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     return "";
   }, [activeStep]);
 
-  const responseHint = useMemo(
-    () =>
-      isMediaOnlyPrompt
-        ? null
-        : questionResponseHint(promptText, { isName: isNameStep, isEmail: requiresEmailResponse }),
-    [promptText, isNameStep, requiresEmailResponse, isMediaOnlyPrompt]
-  );
+  const responseHint = useMemo(() => {
+    if (isMediaOnlyPrompt) return null;
+    if (isNameStep && activeStep?.kind === "name") {
+      const custom = activeStep.responseHint?.trim();
+      return custom || DEFAULT_NAME_RESPONSE_HINT;
+    }
+    return questionResponseHint(promptText, {
+      isName: isNameStep,
+      isEmail: requiresEmailResponse,
+    });
+  }, [promptText, isNameStep, requiresEmailResponse, isMediaOnlyPrompt, activeStep]);
 
   const goToStep = useCallback(
     (index: number) => {

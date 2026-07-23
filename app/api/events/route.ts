@@ -108,6 +108,17 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const row = eventToRow(body);
+    const tempId =
+      typeof body.id === "string" && body.id.trim()
+        ? body.id.trim()
+        : `new_${Date.now().toString(36)}`;
+    if (typeof row.hero_image === "string" && row.hero_image.startsWith("data:image/")) {
+      const { resolveHeroImageForStorage } = await import(
+        "@/lib/song-garden-v2/persist-generated-media"
+      );
+      const hosted = await resolveHeroImageForStorage(row.hero_image, tempId);
+      row.hero_image = hosted ?? "";
+    }
     const { data, error } = await supabaseAdmin.from("events").insert(row).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json(rowToEvent(data));
