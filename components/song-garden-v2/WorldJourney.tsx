@@ -611,7 +611,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
               )}
               <form onSubmit={handleStartJourney} className="space-y-4">
                 {requireContributionConsent && (
-                  <label className="flex items-start gap-3 rounded-2xl border border-white/15 bg-black/20 px-4 py-3 text-left">
+                  <label className="flex items-start gap-3 px-1 py-1 text-left">
                     <input
                       type="checkbox"
                       checked={contributionConsentAgreed}
@@ -619,7 +619,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                       className="mt-1 h-5 w-5 shrink-0"
                       style={{ accentColor: world.accentColor }}
                     />
-                    <span className="font-mono text-sm text-gray-200">{contributionConsentLabel}</span>
+                    <span className="font-mono text-sm text-gray-100">{contributionConsentLabel}</span>
                   </label>
                 )}
                 <button
@@ -628,8 +628,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
                   style={{
                     borderColor: world.accentColor,
-                    color: world.accentColor,
-                    background: `${world.accentColor}1f`,
+                    color: "#1a1530",
+                    background: world.accentColor,
                   }}
                 >
                   {sending ? "Starting…" : event.ctaText || DEFAULT_CTA_TEXT}

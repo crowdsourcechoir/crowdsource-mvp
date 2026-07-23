@@ -11,8 +11,8 @@ type MomentOverlayProps = {
 };
 
 /**
- * Moment content over the world — no card panel. Legibility comes from soft text
- * shadow so the environment stays sharp (backdrop-blur was frosting the videos).
+ * Frosted glass moment panel — light enough that the world stays visible, strong
+ * enough that prompts and controls stay readable on busy video.
  */
 export default function MomentOverlay({ momentKey, eyebrow, accentColor, children }: MomentOverlayProps) {
   return (
@@ -20,14 +20,16 @@ export default function MomentOverlay({ momentKey, eyebrow, accentColor, childre
       <AnimatePresence mode="wait">
         <motion.div
           key={momentKey}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -14, scale: 0.99 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-          className="px-1 py-2 sm:px-2"
+          className="rounded-3xl border border-white/15 p-6 sm:p-8"
           style={{
-            textShadow:
-              "0 1px 2px rgba(0,0,0,0.85), 0 4px 28px rgba(0,0,0,0.55), 0 0 1px rgba(0,0,0,0.9)",
+            background: "rgba(12, 12, 16, 0.38)",
+            backdropFilter: "blur(14px) saturate(1.1)",
+            WebkitBackdropFilter: "blur(14px) saturate(1.1)",
+            boxShadow: `0 12px 48px -20px rgba(0,0,0,0.55), 0 0 0 1px ${accentColor}18`,
           }}
         >
           {eyebrow && (
