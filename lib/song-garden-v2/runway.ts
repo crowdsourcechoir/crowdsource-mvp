@@ -152,7 +152,7 @@ async function startImageToVideo(opts: ImageToVideoOptions): Promise<string> {
       model: opts.model ?? "gen4_turbo",
       promptImage: opts.promptImage,
       promptText: opts.promptText,
-      ratio: opts.ratio ?? "1280:720",
+      ratio: opts.ratio ?? "1920:1080",
       duration: opts.duration ?? 10,
     }),
   });

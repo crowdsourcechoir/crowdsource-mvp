@@ -31,9 +31,9 @@ const INTENSITY_MODIFIERS = [
 
 const MAX_VIBE_PROMPT_CHARS = 480;
 const IMAGE_SUFFIX =
-  "Premium cinematic wide environment concept art, no people in foreground, no readable text or logos; follow the vibe prompt color palette.";
+  "Premium cinematic wide environment concept art, tack-sharp focus, high detail, crisp textures, no soft focus, no heavy fog or muddy blur, no people in foreground, no readable text or logos; follow the vibe prompt color palette.";
 const MOTION_SUFFIX =
-  "Subtle ambient motion only, slow drifting light and haze, camera locked in place, seamless looping atmosphere, no people walking into frame, no text or logos.";
+  "Subtle ambient motion only, slow drifting light, camera locked in place, seamless looping atmosphere, keep the scene sharp and clear, no soft focus, no heavy haze or blur, no people walking into frame, no text or logos.";
 
 function condenseVibePrompt(vibePrompt: string): string {
   const collapsed = vibePrompt.trim().replace(/\s+/g, " ");
@@ -135,7 +135,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         promptText: buildMotionPrompt(vibePrompt, i, frameCount),
         model: "gen4_turbo",
         duration: VIDEO_DURATION_SEC,
-        ratio: "1280:720",
+        // Match the 1080p still — 720p was softening the world on phone screens.
+        ratio: "1920:1080",
       });
       const videoFilename = `${eventId}-frame-${i + 1}-${Date.now()}.mp4`;
       const videoUrl = await persistGeneratedMedia(runwayVideoUrl, videoFilename, "video/mp4");

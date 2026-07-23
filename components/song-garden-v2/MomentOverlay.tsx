@@ -11,9 +11,8 @@ type MomentOverlayProps = {
 };
 
 /**
- * The overlay "window" into the world. WorldStage never remounts underneath this —
- * only this card's content cross-fades, which is what replaces traditional page
- * transitions between creative moments.
+ * Moment content over the world — no card panel. Legibility comes from soft text
+ * shadow so the environment stays sharp (backdrop-blur was frosting the videos).
  */
 export default function MomentOverlay({ momentKey, eyebrow, accentColor, children }: MomentOverlayProps) {
   return (
@@ -21,18 +20,14 @@ export default function MomentOverlay({ momentKey, eyebrow, accentColor, childre
       <AnimatePresence mode="wait">
         <motion.div
           key={momentKey}
-          initial={{ opacity: 0, y: 18, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -14, scale: 0.99 }}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-3xl border border-white/5 bg-transparent p-6 sm:p-8"
+          className="px-1 py-2 sm:px-2"
           style={{
-            // Frost the world behind the moment — no solid card wash that kills the environment.
-            backdropFilter: "blur(22px) saturate(1.15)",
-            WebkitBackdropFilter: "blur(22px) saturate(1.15)",
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.08) 100%)",
-            boxShadow: `0 0 60px -28px ${accentColor}33`,
+            textShadow:
+              "0 1px 2px rgba(0,0,0,0.85), 0 4px 28px rgba(0,0,0,0.55), 0 0 1px rgba(0,0,0,0.9)",
           }}
         >
           {eyebrow && (

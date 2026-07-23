@@ -25,9 +25,9 @@ const INTENSITY = [
 ];
 
 const IMAGE_SUFFIX =
-  "Premium cinematic wide environment concept art, no people in foreground, no readable text or logos, moss green deep teal weathered cedar rust amber slate blue soft gold bioluminescent color palette.";
+  "Premium cinematic wide environment concept art, tack-sharp focus, high detail, crisp textures, no soft focus, no heavy fog or muddy blur, no people in foreground, no readable text or logos, moss green deep teal weathered cedar rust amber slate blue soft gold bioluminescent color palette.";
 const MOTION_SUFFIX =
-  "Subtle ambient motion only, slow drifting rain mist light and haze, gentle water shimmer, camera locked in place, seamless looping atmosphere, no people walking into frame, no text or logos.";
+  "Subtle ambient motion only, slow drifting light, gentle water shimmer, camera locked in place, seamless looping atmosphere, keep the scene sharp and clear, no soft focus, no heavy haze or blur, no people walking into frame, no text or logos.";
 
 function apiKey() {
   const key = process.env.RUNWAYML_API_SECRET?.trim();
@@ -144,7 +144,7 @@ async function main() {
         model: "gen4_turbo",
         promptImage: sceneUrl,
         promptText: motionPrompt(i),
-        ratio: "1280:720",
+        ratio: "1920:1080",
         duration: VIDEO_DURATION,
       }),
     });

@@ -49,7 +49,8 @@ export default function WorldStage({
     () => (storyboardFrame ? null : resolveWorldSceneBlend(world, energyLevel)),
     [world, energyLevel, storyboardFrame]
   );
-  const baseOpacity = 0.4 + energyLevel * 0.18;
+  // Keep the world bright/sharp — low opacity washed frames and read as soft/blurry.
+  const baseOpacity = 0.82 + energyLevel * 0.14;
   const baseIntensity = storyboardFrame?.energy ?? energyLevel;
   // Strong enough to feel on phone tilt / mouse move — 16px was too subtle under the UI card.
   const tilt = useAmbientTilt(32);
@@ -133,7 +134,7 @@ export default function WorldStage({
 
       <div
         className="absolute inset-0"
-        style={{ background: `linear-gradient(180deg, transparent 35%, ${world.primaryColor}66 100%)` }}
+        style={{ background: `linear-gradient(180deg, transparent 50%, ${world.primaryColor}40 100%)` }}
         aria-hidden
       />
 
