@@ -362,7 +362,11 @@ export default function EventForm({
           ...syncedGarden,
           journeySteps,
         }),
-        worldConfig: normalizeWorldConfigInput(values.worldConfig),
+        worldConfig: normalizeWorldConfigInput({
+          ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+          // Vibe lives in local state for the AI controls — always fold it into the saved world.
+          aiArtworkPrompt: aiVibePrompt.trim() || null,
+        }),
       });
       setSuccess(true);
     } catch (err) {
@@ -581,7 +585,14 @@ export default function EventForm({
       });
       const data = await res.json();
       if (Array.isArray(data.frames) && data.frames.length) {
-        setWorldConfigField("worldStoryboard", data.frames);
+        setValues((v) => ({
+          ...v,
+          worldConfig: {
+            ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+            worldStoryboard: data.frames,
+            aiArtworkPrompt: aiVibePrompt.trim() || null,
+          },
+        }));
       }
       if (!res.ok) {
         const partial = Array.isArray(data.frames) ? data.frames.length : 0;
@@ -639,7 +650,14 @@ export default function EventForm({
           next.push({ sceneUrl: null, videoUrl: null });
         }
         next[data.frameIndex] = data.frame;
-        setWorldConfigField("worldStoryboard", next);
+        setValues((v) => ({
+          ...v,
+          worldConfig: {
+            ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+            worldStoryboard: next,
+            aiArtworkPrompt: aiVibePrompt.trim() || null,
+          },
+        }));
         setAiGenNotice(
           siblingCount > 0
             ? `Replaced frame ${data.frameIndex + 1} using ${Math.min(siblingCount, 3)} sibling stills for theme match. Save to keep it.`
@@ -1038,7 +1056,11 @@ export default function EventForm({
             <span className={labelClass}>Vibe prompt (required for AI)</span>
             <textarea
               value={aiVibePrompt}
-              onChange={(e) => setAiVibePrompt(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setAiVibePrompt(next);
+                setWorldConfigField("aiArtworkPrompt", next.trim() || null);
+              }}
               placeholder="e.g. Sphere Las Vegas at desert sunset — Mojave dunes, bioluminescent mycelial garden…"
               rows={3}
               className={inputClass}
