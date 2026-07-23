@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Event } from "@/data/mockEvents";
-import RecordAudio from "@/components/RecordAudio";
 import RecordVideo from "@/components/RecordVideo";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import {
@@ -71,6 +70,7 @@ import MomentOverlay from "./MomentOverlay";
 import WorldProgressTrail from "./WorldProgressTrail";
 import ContributionTextField from "./ContributionTextField";
 import SoundMomentPad from "./SoundMomentPad";
+import VoiceMomentPad from "./VoiceMomentPad";
 import CelebrationBurst from "./CelebrationBurst";
 import { useCelebration } from "./engine/useCelebration";
 
@@ -212,10 +212,11 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const isNameStep = activeStep?.kind === "name";
   const promptChannels =
     activeStep?.kind === "prompt" ? normalizePromptChannels(activeStep) : null;
-  const showTextInput = isNameStep || Boolean(promptChannels?.allowText);
-  const showAudioInput = Boolean(promptChannels?.allowAudio);
-  const showVideoInput = Boolean(promptChannels?.allowVideo);
-  const showAgentInputs = isNameStep || showTextInput || showAudioInput || showVideoInput;
+  /** Audio prompts use the SoundMomentPad-style circle control — not RecordAudio + text. */
+  const useVoicePad = Boolean(promptChannels?.allowAudio);
+  const showTextInput = (isNameStep || Boolean(promptChannels?.allowText)) && !useVoicePad;
+  const showVideoInput = Boolean(promptChannels?.allowVideo) && !useVoicePad;
+  const showAgentInputs = isNameStep || showTextInput || showVideoInput;
   const isMediaOnlyPrompt =
     activeStep?.kind === "prompt" &&
     !promptChannels?.allowText &&
@@ -231,6 +232,11 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     }
     return "";
   }, [activeStep]);
+
+  const voicePadLabel = useMemo(() => {
+    if (!useVoicePad) return "Record";
+    return /sing/i.test(promptText) ? "Sing" : "Record";
+  }, [useVoicePad, promptText]);
 
   const responseHint = useMemo(() => {
     if (isMediaOnlyPrompt) return null;
@@ -458,6 +464,34 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     });
   }, [activeSound, celebration, goToStep, growNode, stepIndex]);
 
+  const handleVoiceSubmitted = useCallback(
+    async (blob: Blob) => {
+      unlockReferenceTones();
+      setChatError(null);
+      setSending(true);
+      try {
+        const convId = await ensureConversation();
+        if (!convId) {
+          setSending(false);
+          throw new Error("Could not start the conversation. Try again.");
+        }
+        const audioDataUrl = await blobToDataUrl(blob);
+        await sendMessage(convId, "(recording)", { audioDataUrl });
+        setSending(false);
+        growNode("voice");
+        pulseHaptic();
+        setBurstMessage("Got it");
+        celebration.celebrate(() => {
+          goToStep(stepIndex + 1);
+        });
+      } catch (err) {
+        setSending(false);
+        throw err instanceof Error ? err : new Error("Submit failed");
+      }
+    },
+    [celebration, ensureConversation, goToStep, growNode, stepIndex]
+  );
+
   function handleParticipateAgain() {
     clearJourneySession(event, interviewVersion, activeSessionToken);
     clearDoneSlots(event.id);
@@ -611,21 +645,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} onTokenChange={setEmailCaptchaToken} />
                   </div>
                 )}
-                {(showAudioInput || showVideoInput) && (
+                {showVideoInput && (
                   <div className="flex flex-col items-center gap-3">
-                    {showAudioInput && (
-                      <RecordAudio
-                        variant="plain"
-                        onRecordingReady={setAudioBlob}
-                        onClear={() => setAudioBlob(null)}
-                      />
-                    )}
-                    {showVideoInput && (
-                      <RecordVideo
-                        onRecordingReady={setVideoBlob}
-                        onClear={() => setVideoBlob(null)}
-                      />
-                    )}
+                    <RecordVideo
+                      onRecordingReady={setVideoBlob}
+                      onClear={() => setVideoBlob(null)}
+                    />
                   </div>
                 )}
                 {showTextInput ? (
@@ -638,8 +663,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     submitDisabled={
                       sending ||
                       captchaSetupRequired ||
-                      (captchaGateActive && !emailCaptchaToken && !audioBlob && !videoBlob) ||
-                      (!inputValue.trim() && !audioBlob && !videoBlob)
+                      (captchaGateActive && !emailCaptchaToken && !videoBlob) ||
+                      (!inputValue.trim() && !videoBlob)
                     }
                     submitLabel={sending ? "Sending…" : "Continue →"}
                     accentColor={world.accentColor}
@@ -650,12 +675,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 ) : (
                   <button
                     type="submit"
-                    disabled={
-                      sending ||
-                      (showAudioInput && !audioBlob && !showVideoInput) ||
-                      (showVideoInput && !videoBlob && !showAudioInput) ||
-                      (showAudioInput && showVideoInput && !audioBlob && !videoBlob)
-                    }
+                    disabled={sending || (showVideoInput && !videoBlob)}
                     className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border-2 px-6 py-3 font-mono text-base font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
                     style={{
                       borderColor: world.accentColor,
@@ -667,6 +687,30 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   </button>
                 )}
               </form>
+            </div>
+          )}
+
+          {position.phase === "step" && useVoicePad && !needsNameGate && (
+            <div className={showAgentInputs ? "mt-6" : undefined}>
+              {chatError && (
+                <p className="mb-4 rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                  {chatError}
+                </p>
+              )}
+              {sending && !conversationReady ? (
+                <div className="flex justify-center py-8">
+                  <SpinnerDots accentColor={world.accentColor} />
+                </div>
+              ) : (
+                <VoiceMomentPad
+                  key={`voice-${stepIndex}-${activeStep?.id ?? ""}`}
+                  promptText={displayPrompt(promptText)}
+                  buttonLabel={voicePadLabel}
+                  accentColor={world.accentColor}
+                  disabled={sending}
+                  onSubmitted={handleVoiceSubmitted}
+                />
+              )}
             </div>
           )}
 
