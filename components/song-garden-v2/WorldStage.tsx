@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   resolveStoryboardFrame,
   resolveWorldSceneBlend,
   type WorldConfig,
+  type WorldStoryboardFrame,
 } from "@/lib/song-garden-v2/world-config";
 import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
 import { useAmbientTilt } from "@/lib/song-garden-v2/tilt";
@@ -13,6 +14,8 @@ import LoopingVideo from "./LoopingVideo";
 import ParticleField from "./ParticleField";
 import WorldEnergyField from "./WorldEnergyField";
 import WorldGrowthLayer from "./WorldGrowthLayer";
+
+const STORYBOARD_CROSSFADE_SEC = 1.85;
 
 type WorldStageProps = {
   world: WorldConfig;
@@ -130,7 +133,7 @@ export default function WorldStage({
 
       <div
         className="absolute inset-0"
-        style={{ background: `linear-gradient(180deg, transparent 0%, ${world.primaryColor}cc 75%)` }}
+        style={{ background: `linear-gradient(180deg, transparent 35%, ${world.primaryColor}66 100%)` }}
         aria-hidden
       />
 
@@ -149,43 +152,57 @@ export default function WorldStage({
   );
 }
 
+function storyboardMediaKey(frame: WorldStoryboardFrame): string {
+  return frame.videoUrl || frame.sceneUrl || "empty";
+}
+
+/**
+ * Crossfade between discrete storyboard frames. Previous media stays mounted
+ * while the next fades in, so progress steps don't hard-cut the world.
+ */
 function StoryboardBackground({
   frame,
   opacity,
 }: {
-  frame: { sceneUrl: string | null; videoUrl: string | null };
+  frame: WorldStoryboardFrame;
   opacity: number;
 }) {
-  if (frame.videoUrl) {
-    return (
-      <motion.div
-        key={frame.videoUrl}
-        className="absolute inset-0"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1.2, ease: "easeInOut" }}
-      >
-        <LoopingVideo src={frame.videoUrl} poster={frame.sceneUrl ?? undefined} opacity={opacity} />
-      </motion.div>
-    );
-  }
-  if (frame.sceneUrl) {
-    return (
-      <motion.div
-        key={frame.sceneUrl}
-        className="absolute inset-0"
-        initial={{ opacity: 0 }}
-        animate={{ opacity }}
-        transition={{ duration: 1.2, ease: "easeInOut" }}
-        style={{
-          backgroundImage: `url('${frame.sceneUrl}')`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          filter: "saturate(1.05)",
-        }}
-        aria-hidden
-      />
-    );
-  }
-  return null;
+  const mediaKey = storyboardMediaKey(frame);
+
+  return (
+    <div className="absolute inset-0" aria-hidden>
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={mediaKey}
+          className="absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: STORYBOARD_CROSSFADE_SEC, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Still under the video so decode/start never flashes black mid-crossfade. */}
+          {frame.sceneUrl && (
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `url('${frame.sceneUrl}')`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "saturate(1.05)",
+                opacity,
+              }}
+            />
+          )}
+          {frame.videoUrl ? (
+            <LoopingVideo
+              src={frame.videoUrl}
+              poster={frame.sceneUrl ?? undefined}
+              opacity={opacity}
+              crossfadeSeconds={1.25}
+            />
+          ) : null}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
 }
