@@ -212,8 +212,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const isNameStep = activeStep?.kind === "name";
   const promptChannels =
     activeStep?.kind === "prompt" ? normalizePromptChannels(activeStep) : null;
-  /** Audio prompts use the SoundMomentPad-style circle control — not RecordAudio + text. */
-  const useVoicePad = Boolean(promptChannels?.allowAudio);
+  /** Audio prompts use the SoundMomentPad-style circle — not the old RecordAudio bar. */
+  const useVoicePad = Boolean(promptChannels?.allowAudio) && !activeSound;
   const showTextInput = (isNameStep || Boolean(promptChannels?.allowText)) && !useVoicePad;
   const showVideoInput = Boolean(promptChannels?.allowVideo) && !useVoicePad;
   const showAgentInputs = isNameStep || showTextInput || showVideoInput;

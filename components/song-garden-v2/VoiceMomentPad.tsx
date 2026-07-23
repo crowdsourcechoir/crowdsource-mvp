@@ -189,6 +189,10 @@ export default function VoiceMomentPad({
                   : `${accentColor}1f`,
             color: phase === "recording" ? "#fecaca" : phase === "done" ? "#1a1530" : accentColor,
             border: `2px solid ${phase === "recording" ? "#f87171" : accentColor}`,
+            boxShadow:
+              phase === "recording" || phase === "done"
+                ? undefined
+                : `0 0 0 10px ${accentColor}14, 0 0 0 20px ${accentColor}0a`,
           }}
         >
           {phase === "idle" && <span>{label}</span>}
