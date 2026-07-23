@@ -5,7 +5,6 @@ import { useEffect, useRef } from "react";
 type LoopingVideoProps = {
   src: string;
   poster?: string;
-  opacity: number;
 };
 
 /**
@@ -13,7 +12,7 @@ type LoopingVideoProps = {
  * stacked two copies of the same AI clip and made objects (trees, etc.) ghost
  * over themselves at the seam.
  */
-export default function LoopingVideo({ src, poster, opacity }: LoopingVideoProps) {
+export default function LoopingVideo({ src, poster }: LoopingVideoProps) {
   const ref = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -28,11 +27,11 @@ export default function LoopingVideo({ src, poster, opacity }: LoopingVideoProps
   }, [src]);
 
   return (
-    <div className="absolute inset-0" style={{ opacity }} aria-hidden>
+    <div className="absolute inset-0" aria-hidden>
       <video
         ref={ref}
         className="absolute inset-0 h-full w-full object-cover"
-        style={{ filter: "saturate(1.05)" }}
+        style={{ filter: "saturate(1.12) brightness(1.12) contrast(1.04)" }}
         src={src}
         poster={poster}
         muted

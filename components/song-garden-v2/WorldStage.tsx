@@ -17,6 +17,10 @@ import WorldGrowthLayer from "./WorldGrowthLayer";
 
 const STORYBOARD_CROSSFADE_SEC = 1.85;
 
+/** Full opacity from step one — energy used to dim early frames and look muddy. */
+const WORLD_MEDIA_OPACITY = 1;
+const WORLD_MEDIA_FILTER = "saturate(1.12) brightness(1.12) contrast(1.04)";
+
 type WorldStageProps = {
   world: WorldConfig;
   /** 0..1 — increases as the participant contributes; makes the world visibly livelier. */
@@ -49,8 +53,6 @@ export default function WorldStage({
     () => (storyboardFrame ? null : resolveWorldSceneBlend(world, energyLevel)),
     [world, energyLevel, storyboardFrame]
   );
-  // Keep the world bright/sharp — low opacity washed frames and read as soft/blurry.
-  const baseOpacity = 0.82 + energyLevel * 0.14;
   const baseIntensity = storyboardFrame?.energy ?? energyLevel;
   // Strong enough to feel on phone tilt / mouse move — 16px was too subtle under the UI card.
   const tilt = useAmbientTilt(32);
@@ -68,87 +70,93 @@ export default function WorldStage({
 
   return (
     <div
-      className="relative h-[100dvh] overflow-hidden [color-scheme:dark]"
-      style={{
-        background: `radial-gradient(120% 90% at 50% -10%, ${world.accentColor}1f, ${world.primaryColor} 55%)`,
-      }}
+      className="relative min-h-[100dvh] [color-scheme:dark]"
+      style={{ background: world.primaryColor }}
     >
-      {/* Oversized + tilt-shifted so the 2.5D drift never reveals an edge. */}
-      <motion.div className="absolute -inset-[8%]" style={{ x: tilt.x, y: tilt.y }}>
-        {storyboardFrame ? (
-          <StoryboardBackground frame={storyboardFrame.frame} opacity={baseOpacity} />
-        ) : blend ? (
-          <>
-            {/* Lower (earlier) stage — fades out as `t` climbs toward the next stage. Kept
-                mounted (never removed) so every step nudges opacity gradually instead of a
-                hard swap at one threshold. */}
-            <motion.div
-              key={`lower-${blend.lower.sceneUrl}`}
-              className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: baseOpacity * (1 - blend.t) }}
-              transition={{ duration: 1.2, ease: "easeInOut" }}
-              style={{
-                backgroundImage: `url('${blend.lower.sceneUrl}')`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                filter: "saturate(1.05)",
-              }}
-              aria-hidden
-            />
-            {blend.upper && (
+      {/*
+        Fixed full-bleed world: covers the largest viewport (lvh) so iOS toolbars
+        never leave a primary-color strip. Content scrolls over it.
+      */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        style={{
+          minHeight: "100lvh",
+          background: `radial-gradient(120% 90% at 50% -10%, ${world.accentColor}1f, ${world.primaryColor} 55%)`,
+        }}
+        aria-hidden
+      >
+        <motion.div className="absolute -inset-[10%]" style={{ x: tilt.x, y: tilt.y }}>
+          {storyboardFrame ? (
+            <StoryboardBackground frame={storyboardFrame.frame} />
+          ) : blend ? (
+            <>
               <motion.div
-                key={`upper-${blend.upper.sceneUrl}`}
+                key={`lower-${blend.lower.sceneUrl}`}
                 className="absolute inset-0"
                 initial={{ opacity: 0 }}
-                animate={{ opacity: baseOpacity * blend.t }}
+                animate={{ opacity: WORLD_MEDIA_OPACITY * (1 - blend.t) }}
                 transition={{ duration: 1.2, ease: "easeInOut" }}
                 style={{
-                  backgroundImage: `url('${blend.upper.sceneUrl}')`,
+                  backgroundImage: `url('${blend.lower.sceneUrl}')`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
-                  filter: "saturate(1.05)",
+                  filter: WORLD_MEDIA_FILTER,
                 }}
-                aria-hidden
               />
-            )}
-          </>
-        ) : (
-          world.heroArtworkUrl && (
-            <motion.div
-              className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: baseOpacity }}
-              transition={{ duration: 1.2, ease: "easeInOut" }}
-              style={{
-                backgroundImage: `url('${world.heroArtworkUrl}')`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                filter: "saturate(1.05)",
-              }}
-              aria-hidden
-            />
-          )
-        )}
-      </motion.div>
+              {blend.upper && (
+                <motion.div
+                  key={`upper-${blend.upper.sceneUrl}`}
+                  className="absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: WORLD_MEDIA_OPACITY * blend.t }}
+                  transition={{ duration: 1.2, ease: "easeInOut" }}
+                  style={{
+                    backgroundImage: `url('${blend.upper.sceneUrl}')`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    filter: WORLD_MEDIA_FILTER,
+                  }}
+                />
+              )}
+            </>
+          ) : (
+            world.heroArtworkUrl && (
+              <motion.div
+                className="absolute inset-0"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: WORLD_MEDIA_OPACITY }}
+                transition={{ duration: 1.2, ease: "easeInOut" }}
+                style={{
+                  backgroundImage: `url('${world.heroArtworkUrl}')`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  filter: WORLD_MEDIA_FILTER,
+                }}
+              />
+            )
+          )}
+        </motion.div>
 
-      <div
-        className="absolute inset-0"
-        style={{ background: `linear-gradient(180deg, transparent 50%, ${world.primaryColor}40 100%)` }}
-        aria-hidden
-      />
+        {/* Soft vignette only — no heavy bottom wash that reads as a cut-off bar. */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(180deg, ${world.primaryColor}22 0%, transparent 28%, transparent 72%, ${world.primaryColor}28 100%)`,
+          }}
+        />
 
-      <ParticleField preset={world.animationPreset} accentColor={world.accentColor} energy={baseIntensity} />
-
-      <WorldEnergyField accentColor={world.accentColor} baseIntensity={baseIntensity} pulseTrigger={celebrationTrigger} />
-
-      <WorldGrowthLayer nodes={growthNodes} accentColor={world.accentColor} />
+        <ParticleField preset={world.animationPreset} accentColor={world.accentColor} energy={baseIntensity} />
+        <WorldEnergyField accentColor={world.accentColor} baseIntensity={baseIntensity} pulseTrigger={celebrationTrigger} />
+        <WorldGrowthLayer nodes={growthNodes} accentColor={world.accentColor} />
+      </div>
 
       {world.ambientSoundtrackUrl && (
         <audio ref={audioRef} src={world.ambientSoundtrackUrl} loop preload="none" />
       )}
 
-      <div className="relative z-10 flex h-full flex-col overflow-y-auto">{children}</div>
+      <div className="relative z-10 flex min-h-[100dvh] flex-col pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        {children}
+      </div>
     </div>
   );
 }
@@ -161,13 +169,7 @@ function storyboardMediaKey(frame: WorldStoryboardFrame): string {
  * Crossfade between storyboard frames (one media layer each). No still stacked
  * under the playing video — that double-exposed trees/objects over themselves.
  */
-function StoryboardBackground({
-  frame,
-  opacity,
-}: {
-  frame: WorldStoryboardFrame;
-  opacity: number;
-}) {
+function StoryboardBackground({ frame }: { frame: WorldStoryboardFrame }) {
   const mediaKey = storyboardMediaKey(frame);
 
   return (
@@ -182,11 +184,7 @@ function StoryboardBackground({
           transition={{ duration: STORYBOARD_CROSSFADE_SEC, ease: [0.22, 1, 0.36, 1] }}
         >
           {frame.videoUrl ? (
-            <LoopingVideo
-              src={frame.videoUrl}
-              poster={frame.sceneUrl ?? undefined}
-              opacity={opacity}
-            />
+            <LoopingVideo src={frame.videoUrl} poster={frame.sceneUrl ?? undefined} />
           ) : frame.sceneUrl ? (
             <div
               className="absolute inset-0"
@@ -194,8 +192,7 @@ function StoryboardBackground({
                 backgroundImage: `url('${frame.sceneUrl}')`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
-                filter: "saturate(1.05)",
-                opacity,
+                filter: WORLD_MEDIA_FILTER,
               }}
             />
           ) : null}
