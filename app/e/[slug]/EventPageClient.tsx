@@ -21,7 +21,7 @@ function EventPageInner() {
       .finally(() => setLoaded(true));
   }, [slug]);
 
-  if (!loaded) return <WorldLoadingShell />;
+  if (!loaded) return <WorldLoadingShell slug={slug} />;
   if (!event) return <EventNotFound />;
   return <WorldJourney event={event} />;
 }

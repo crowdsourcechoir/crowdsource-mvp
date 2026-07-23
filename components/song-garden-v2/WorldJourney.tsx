@@ -53,6 +53,7 @@ import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
 import { requestTiltPermission } from "@/lib/song-garden-v2/tilt";
 import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
+import { writeWorldThemeCache } from "@/lib/song-garden-v2/world-theme-cache";
 import {
   appendGrowthNode,
   clearGrowthNodes,
@@ -150,6 +151,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const world = useMemo(() => resolveWorldConfig(event), [event]);
   const interviewVersion = eventInterviewVersion(event);
   const journeySteps = useMemo(() => resolveJourneySteps(event), [event]);
+
+  useEffect(() => {
+    if (!event.slug) return;
+    writeWorldThemeCache(event.slug, {
+      primaryColor: world.primaryColor,
+      accentColor: world.accentColor,
+    });
+  }, [event.slug, world.primaryColor, world.accentColor]);
 
   const [position, setPosition] = useState<JourneyPosition>(() => {
     const saved = loadJourneyPosition(event.id, interviewVersion);
