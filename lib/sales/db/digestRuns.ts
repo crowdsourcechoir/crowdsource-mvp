@@ -50,15 +50,31 @@ export async function finishDigestRun(
   return rowToDigestRun(data);
 }
 
-/** Most recent digest that actually completed a send (used as the "new since" cutoff). Deliberately
- * excludes "skipped_no_provider" runs — a night with no RESEND_API_KEY configured shouldn't count
- * as "already covered," or the very first real send after configuring it would under-report. */
+/** Most recent digest that actually completed a send (used by admin history / already-sent checks).
+ * Deliberately excludes "skipped_no_provider" runs — a night with no RESEND_API_KEY configured
+ * shouldn't count as "already covered." */
 export async function getLastSucceededDigestRun(): Promise<DigestRun | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db
     .from("digest_runs")
     .select("*")
     .eq("status", "succeeded")
+    .order("finished_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? rowToDigestRun(data) : null;
+}
+
+/** Most recent digest that actually delivered at least one lead. Empty "heartbeat" succeeds must
+ * not advance the "new since" cutoff, or pending 70+ leads get stranded behind a zero-item send. */
+export async function getLastDeliveredDigestRun(): Promise<DigestRun | null> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("digest_runs")
+    .select("*")
+    .eq("status", "succeeded")
+    .gt("item_count", 0)
     .order("finished_at", { ascending: false })
     .limit(1)
     .maybeSingle();

@@ -1,12 +1,12 @@
 import { Resend } from "resend";
-import { listQueueItemsCreatedSince, countPendingQueueItems } from "../db/queue";
+import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems } from "../db/queue";
 import { assembleQueueItemDetail } from "../db/assemble";
-import { createDigestRun, finishDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
+import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
 import { renderDigestEmail } from "./render";
-import { getDigestMinScore } from "./config";
+import { getDigestMinScore, getDigestTargetCount } from "./config";
 import { filterDigestQualifyingItems, sortByScoreDesc } from "./qualify";
 import { siteUrl } from "@/lib/site-url";
-import type { QueueItemDetail } from "../types";
+import type { ApprovalQueueItem, QueueItemDetail } from "../types";
 
 export type DigestSendResult = {
   status: "succeeded" | "failed" | "skipped_no_provider";
@@ -18,25 +18,51 @@ export type DigestSendResult = {
 const DEFAULT_FALLBACK_LOOKBACK_HOURS = 24;
 const DEFAULT_FROM = "Crowdsource Sales <onboarding@resend.dev>";
 
+async function assembleMany(queueItems: ApprovalQueueItem[]): Promise<QueueItemDetail[]> {
+  return (await Promise.all(queueItems.map((qi) => assembleQueueItemDetail(qi.opportunityId)))).filter(
+    (d): d is QueueItemDetail => d !== null
+  );
+}
+
 /**
- * Loads pending queue items created since the last successful digest (or a 24h fallback),
- * assembles details, and keeps only those that clear the digest min-score bar.
+ * Loads pending queue items that clear the digest min-score bar.
+ *
+ * Cutoff uses the last digest that actually delivered leads (item_count > 0), so empty heartbeat
+ * sends cannot strand the pending 70+ backlog. If the most recent succeeded digest was empty and
+ * we still don't have enough "new" leads, backfill from older pending 70+ leads until the target
+ * count — a one-shot recovery that stops once a real digest lands.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
   sinceIso: string;
   backlogCount: number;
+  backfilled: boolean;
 }> {
-  const lastDigest = await getLastSucceededDigestRun();
+  const [lastDelivered, lastSucceeded] = await Promise.all([getLastDeliveredDigestRun(), getLastSucceededDigestRun()]);
   const sinceIso =
-    lastDigest?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+    lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+  const targetCount = getDigestTargetCount();
 
   const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
-  const details = (await Promise.all(newQueueItems.map((qi) => assembleQueueItemDetail(qi.opportunityId)))).filter(
-    (d): d is QueueItemDetail => d !== null
-  );
-  const items = sortByScoreDesc(filterDigestQualifyingItems(details, minScore));
-  return { items, sinceIso, backlogCount };
+  let items = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(newQueueItems), minScore));
+  let backfilled = false;
+
+  const shouldBackfill = items.length < targetCount && (!lastSucceeded || lastSucceeded.itemCount === 0);
+  if (shouldBackfill) {
+    const allPending = await listQueueItems("pending");
+    const older = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
+    const seen = new Set(items.map((i) => i.queueItem.id));
+    const merged = [...items];
+    for (const item of older) {
+      if (seen.has(item.queueItem.id)) continue;
+      seen.add(item.queueItem.id);
+      merged.push(item);
+    }
+    items = merged;
+    backfilled = items.length > 0;
+  }
+
+  return { items, sinceIso, backlogCount, backfilled };
 }
 
 /**
