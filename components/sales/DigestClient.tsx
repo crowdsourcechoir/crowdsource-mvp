@@ -96,26 +96,15 @@ export default function DigestClient() {
                           ? "text-red-400"
                           : run.status === "skipped_no_provider"
                             ? "text-gray-500"
-                            : run.status === "deferred"
-                              ? "text-amber-400"
-                              : "text-sky-400"
+                            : "text-sky-400"
                     }
                   >
-                    {run.status === "skipped_no_provider"
-                      ? "no provider configured"
-                      : run.status === "deferred"
-                        ? "deferred — still under target"
-                        : run.status}
+                    {run.status === "skipped_no_provider" ? "no provider configured" : run.status}
                   </span>
                 </div>
                 {run.status === "succeeded" && (
                   <p className="mt-1 text-xs text-gray-500">
                     {run.itemCount} new lead(s) · sent to {run.recipient}
-                  </p>
-                )}
-                {run.status === "deferred" && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    {run.itemCount} qualifying so far · waiting for target before send
                   </p>
                 )}
                 {run.error && <p className="mt-1 text-xs text-red-400">{run.error}</p>}

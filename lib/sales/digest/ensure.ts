@@ -1,5 +1,5 @@
 import { listUnprocessedOrganizations } from "../db/organizations";
-import { createDigestRun, finishDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
+import { getLastSucceededDigestRun } from "../db/digestRuns";
 import { runDiscoveryRun } from "../discovery/run-discovery";
 import { runPipelineBatch, type PipelineBatchSummary } from "../pipeline/run-pipeline-batch";
 import {
@@ -81,14 +81,9 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
   }
 
   if (loaded.items.length < targetCount) {
-    const to = process.env.SALES_DIGEST_TO_EMAIL ?? null;
-    const digestRun = await createDigestRun(trigger);
-    await finishDigestRun(digestRun.id, {
-      status: "deferred",
-      itemCount: loaded.items.length,
-      recipient: to,
-      error: `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Pipeline will keep topping up on later cron ticks.`,
-    });
+    // Intentionally no digest_runs row: only `succeeded` advances the "new since" cutoff, and
+    // writing a new `deferred` status would require a one-time SQL migration. Returning deferred
+    // here is enough for cron follow-up ticks to keep topping up without a schema change.
     return {
       status: "deferred",
       qualifyingCount: loaded.items.length,
@@ -97,6 +92,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       topupBatches,
       discoveryRuns,
       pipelineSummaries,
+      error: `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Pipeline will keep topping up on later cron ticks.`,
     };
   }
 

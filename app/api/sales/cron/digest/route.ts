@@ -9,8 +9,8 @@ export const maxDuration = 290;
  * Vercel Cron entry point (see vercel.json) — the "new leads in my inbox every morning" piece.
  * Waits until at least SALES_DIGEST_TARGET_COUNT (default 10) new queue items score at least
  * SALES_DIGEST_MIN_SCORE (default 70), topping up discovery/pipeline within this invocation when
- * short, and deferring (without advancing the cutoff) so later cron ticks can continue. Same
- * `Authorization: Bearer $CRON_SECRET` gate as the other sales cron routes.
+ * short, and holding the send (without advancing the cutoff) so later cron ticks can continue.
+ * Same `Authorization: Bearer $CRON_SECRET` gate as the other sales cron routes.
  */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
