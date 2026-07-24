@@ -10,7 +10,7 @@
   "crons": [
     {
       "path": "/api/sales/cron/discovery",
-      "schedule": "0 9 * * 1-5"
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/sales/cron/pipeline",
