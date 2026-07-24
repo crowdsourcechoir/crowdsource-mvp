@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { sendDailyDigest } from "@/lib/sales/digest/send";
+import { ensureDigestTarget } from "@/lib/sales/digest/ensure";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+/** Top-up may run a discovery pass + a pipeline batch before deciding to send or defer. */
+export const maxDuration = 290;
 
 /**
  * Vercel Cron entry point (see vercel.json) — the "new leads in my inbox every morning" piece.
- * Runs after the discovery and pipeline-processing crons so there's something fresh to report.
+ * Waits until at least SALES_DIGEST_TARGET_COUNT (default 10) new queue items score at least
+ * SALES_DIGEST_MIN_SCORE (default 70), topping up discovery/pipeline within this invocation when
+ * short, and holding the send (without advancing the cutoff) so later cron ticks can continue.
  * Same `Authorization: Bearer $CRON_SECRET` gate as the other sales cron routes.
  */
 export async function GET(request: Request) {
@@ -20,7 +23,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await sendDailyDigest("cron");
+    const result = await ensureDigestTarget("cron");
     return NextResponse.json({ result });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });

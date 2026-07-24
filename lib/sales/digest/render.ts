@@ -4,6 +4,8 @@ export type DigestStats = {
   newCount: number;
   backlogCount: number;
   sinceIso: string;
+  /** Quality bar applied to the list (e.g. 70). Included in copy so the inbox subject matches the gate. */
+  minScore: number;
 };
 
 function escapeHtml(value: string): string {
@@ -60,15 +62,17 @@ function itemToHtmlBlock(item: QueueItemDetail, baseUrl: string): string {
 
 export function renderDigestEmail(items: QueueItemDetail[], stats: DigestStats, baseUrl: string): { subject: string; html: string; text: string } {
   const queueUrl = `${baseUrl}/admin/sales/queue`;
+  const barLabel = `${stats.minScore}+`;
   const subject =
     stats.newCount === 0
-      ? "Crowdsource Sales: no new leads overnight (pipeline healthy)"
-      : `Crowdsource Sales: ${stats.newCount} new lead${stats.newCount === 1 ? "" : "s"} ready for review`;
+      ? `Crowdsource Sales: no new ${barLabel} leads yet (still working)`
+      : `Crowdsource Sales: ${stats.newCount} new ${barLabel} lead${stats.newCount === 1 ? "" : "s"} ready for review`;
+
+  const introEmpty = `No new opportunities scoring ${barLabel} reached the review queue since the last digest — the pipeline is still working toward that bar.`;
+  const introSome = `${stats.newCount} new opportunit${stats.newCount === 1 ? "y" : "ies"} scoring ${barLabel} reached the review queue:`;
 
   const text = [
-    stats.newCount === 0
-      ? "No new opportunities reached the review queue overnight — the pipeline ran, just nothing new cleared the bar yet."
-      : `${stats.newCount} new opportunit${stats.newCount === 1 ? "y" : "ies"} reached the review queue overnight:`,
+    stats.newCount === 0 ? introEmpty : introSome,
     "",
     ...items.flatMap((item) => [...itemToPlainLines(item, baseUrl), ""]),
     `Total pending backlog: ${stats.backlogCount}`,
@@ -80,11 +84,7 @@ export function renderDigestEmail(items: QueueItemDetail[], stats: DigestStats, 
     <div style="max-width:560px;margin:0 auto;">
       <h2 style="color:#f4f4f5;font-size:18px;margin:0 0 4px;">Crowdsource Sales — morning digest</h2>
       <p style="color:#a1a1aa;font-size:13px;margin:0 0 20px;">
-        ${
-          stats.newCount === 0
-            ? "No new opportunities reached the review queue overnight — the pipeline ran, just nothing new cleared the bar yet."
-            : `${stats.newCount} new opportunit${stats.newCount === 1 ? "y" : "ies"} reached the review queue overnight.`
-        }
+        ${stats.newCount === 0 ? escapeHtml(introEmpty) : escapeHtml(introSome)}
       </p>
       <table style="width:100%;border-collapse:collapse;">
         ${items.map((item) => itemToHtmlBlock(item, baseUrl)).join("")}

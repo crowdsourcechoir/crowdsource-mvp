@@ -3,50 +3,76 @@ import { listQueueItemsCreatedSince, countPendingQueueItems } from "../db/queue"
 import { assembleQueueItemDetail } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
 import { renderDigestEmail } from "./render";
+import { getDigestMinScore } from "./config";
+import { filterDigestQualifyingItems, sortByScoreDesc } from "./qualify";
 import { siteUrl } from "@/lib/site-url";
 import type { QueueItemDetail } from "../types";
 
 export type DigestSendResult = {
   status: "succeeded" | "failed" | "skipped_no_provider";
   itemCount: number;
+  minScore: number;
   error?: string;
 };
 
 const DEFAULT_FALLBACK_LOOKBACK_HOURS = 24;
 const DEFAULT_FROM = "Crowdsource Sales <onboarding@resend.dev>";
 
-function sortByScoreDesc(items: QueueItemDetail[]): QueueItemDetail[] {
-  return [...items].sort((a, b) => (b.score?.totalScore ?? -1) - (a.score?.totalScore ?? -1));
+/**
+ * Loads pending queue items created since the last successful digest (or a 24h fallback),
+ * assembles details, and keeps only those that clear the digest min-score bar.
+ */
+export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
+  items: QueueItemDetail[];
+  sinceIso: string;
+  backlogCount: number;
+}> {
+  const lastDigest = await getLastSucceededDigestRun();
+  const sinceIso =
+    lastDigest?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+
+  const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
+  const details = (await Promise.all(newQueueItems.map((qi) => assembleQueueItemDetail(qi.opportunityId)))).filter(
+    (d): d is QueueItemDetail => d !== null
+  );
+  const items = sortByScoreDesc(filterDigestQualifyingItems(details, minScore));
+  return { items, sinceIso, backlogCount };
 }
 
 /**
  * Sends the "new leads since last digest" email — the actual "in my inbox every morning" piece.
  * A no-op (recorded as `skipped_no_provider`, never an error) if RESEND_API_KEY or
  * SALES_DIGEST_TO_EMAIL aren't set, same graceful-degradation contract as discovery/enrichment
- * (see docs/sales-platform/roadmap.md). Always sends, even when there's nothing new — see
- * render.ts — since silence on a broken pipeline is worse than a "nothing new" email; the digest
- * doubles as an "is this thing still running" heartbeat.
+ * (see docs/sales-platform/roadmap.md).
+ *
+ * Only includes leads scoring >= SALES_DIGEST_MIN_SCORE (default 70). Cron callers should use
+ * `ensureDigestTarget` so the email waits until SALES_DIGEST_TARGET_COUNT (default 10) qualify;
+ * manual/admin sends still go out with whatever currently qualifies (including zero) for testing.
  */
-export async function sendDailyDigest(trigger: "manual" | "cron" = "cron"): Promise<DigestSendResult> {
+export async function sendDailyDigest(
+  trigger: "manual" | "cron" = "cron",
+  options?: { items?: QueueItemDetail[]; sinceIso?: string; backlogCount?: number; minScore?: number }
+): Promise<DigestSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.SALES_DIGEST_TO_EMAIL;
+  const minScore = options?.minScore ?? getDigestMinScore();
   if (!apiKey || !to) {
-    return { status: "skipped_no_provider", itemCount: 0 };
+    return { status: "skipped_no_provider", itemCount: 0, minScore };
   }
 
   const digestRun = await createDigestRun(trigger);
 
   try {
-    const lastDigest = await getLastSucceededDigestRun();
-    const sinceIso = lastDigest?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+    const loaded =
+      options?.items && options.sinceIso !== undefined && options.backlogCount !== undefined
+        ? { items: options.items, sinceIso: options.sinceIso, backlogCount: options.backlogCount }
+        : await loadQualifyingDigestItems(minScore);
 
-    const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
-    const details = (await Promise.all(newQueueItems.map((qi) => assembleQueueItemDetail(qi.opportunityId)))).filter(
-      (d): d is QueueItemDetail => d !== null
+    const { subject, html, text } = renderDigestEmail(
+      loaded.items,
+      { newCount: loaded.items.length, backlogCount: loaded.backlogCount, sinceIso: loaded.sinceIso, minScore },
+      siteUrl()
     );
-    const sorted = sortByScoreDesc(details);
-
-    const { subject, html, text } = renderDigestEmail(sorted, { newCount: sorted.length, backlogCount, sinceIso }, siteUrl());
 
     const resend = new Resend(apiKey);
     const from = process.env.SALES_DIGEST_FROM_EMAIL || DEFAULT_FROM;
@@ -55,14 +81,14 @@ export async function sendDailyDigest(trigger: "manual" | "cron" = "cron"): Prom
 
     await finishDigestRun(digestRun.id, {
       status: "succeeded",
-      itemCount: sorted.length,
+      itemCount: loaded.items.length,
       recipient: to,
       providerMessageId: data?.id ?? null,
     });
-    return { status: "succeeded", itemCount: sorted.length };
+    return { status: "succeeded", itemCount: loaded.items.length, minScore };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await finishDigestRun(digestRun.id, { status: "failed", recipient: to, error: message });
-    return { status: "failed", itemCount: 0, error: message };
+    return { status: "failed", itemCount: 0, minScore, error: message };
   }
 }

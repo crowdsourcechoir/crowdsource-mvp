@@ -50,8 +50,10 @@ export default function DigestClient() {
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Morning digest email</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Emails everything new in the review queue since the last send, runs nightly via cron after discovery and pipeline
-            processing.
+            Cron emails new review-queue leads scoring 70+ once at least 10 are ready (tunable via{" "}
+            <span className="font-mono">SALES_DIGEST_MIN_SCORE</span> /{" "}
+            <span className="font-mono">SALES_DIGEST_TARGET_COUNT</span>), topping up the pipeline until then. Test send
+            below bypasses the count wait and sends whatever currently qualifies.
           </p>
         </div>
         <button

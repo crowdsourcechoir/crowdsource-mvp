@@ -71,7 +71,8 @@ lib/
       run-pipeline.ts              ← orchestrator: runs due stages for a pipeline_run
       run-pipeline-batch.ts        ← orchestrator: time-boxed batch of organizations for the nightly cron (built; see §6)
     digest/
-      render.ts, send.ts           ← morning digest email — "new leads in my inbox every morning" (built; see §6)
+      render.ts, send.ts, ensure.ts, config.ts, qualify.ts
+                                   ← morning digest email — waits for N leads scoring M+ then sends (built; see §6)
     scoring/
       model.ts                     ← weights + component definitions
       score.ts                     ← pure scoring function (testable, no I/O)
@@ -156,7 +157,7 @@ See [`ai-workflow.md`](./ai-workflow.md) for full detail. Eleven explicit per-or
 |---|---|---|---|
 | `0 9` | Mon–Fri only | `/api/sales/cron/discovery` | Finds and creates new `organizations` rows (`source = 'ai_discovered'`). Does not itself run the pipeline on them. Weekdays-only by request — no reason to spend discovery API calls finding organizations nobody's reviewing that day. |
 | `5, 15, 25, 35, 45, 55` past 9 | every day | `/api/sales/cron/pipeline` | Runs the full 10-stage pipeline on a time-boxed batch of pending organizations (`lib/sales/pipeline/run-pipeline-batch.ts`). **Six invocations, 10 minutes apart**, not one — see throughput note below. Runs every day (including weekends) since it works through whatever backlog already exists, independent of whether discovery ran that morning. |
-| `10 10` | every day | `/api/sales/cron/digest` | Emails everything new in the queue since the last send (`lib/sales/digest/`) — the "in my inbox every morning" delivery step. Pushed 10 minutes later than before to give the last (9:55) pipeline invocation room to finish. |
+| `10` / `40` past 10–12, plus `10 13` | every day | `/api/sales/cron/digest` | Sends the morning digest only once at least `SALES_DIGEST_TARGET_COUNT` (default **10**) new queue items scoring ≥ `SALES_DIGEST_MIN_SCORE` (default **70**) exist since the last successful send (`lib/sales/digest/ensure.ts`). Each tick may top up discovery + a pipeline batch within its time budget; if still under target it returns `deferred` without advancing the cutoff so the next tick continues. Pipeline cron ticks also call `ensureDigestTarget` after each batch. |
 
 All times are early-morning UTC (well before 7am US Pacific) specifically so discovery → pipeline → digest have run in sequence before a US-based operator's morning; adjust the schedule in `vercel.json` if your timezone/target time differs.
 
