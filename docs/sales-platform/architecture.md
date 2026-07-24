@@ -155,7 +155,7 @@ See [`ai-workflow.md`](./ai-workflow.md) for full detail. Eleven explicit per-or
 
 | Time (UTC) | Days | Route | Does |
 |---|---|---|---|
-| `0 9` | Mon–Fri only | `/api/sales/cron/discovery` | Finds and creates new `organizations` rows (`source = 'ai_discovered'`). Does not itself run the pipeline on them. Weekdays-only by request — no reason to spend discovery API calls finding organizations nobody's reviewing that day. |
+| `0 9` | every day | `/api/sales/cron/discovery` | Finds and creates new `organizations` rows (`source = 'ai_discovered'`). Does not itself run the pipeline on them. Runs 7 days a week so weekend digest sends still have fresh top-of-funnel material. |
 | `5, 15, 25, 35, 45, 55` past 9 | every day | `/api/sales/cron/pipeline` | Runs the full 10-stage pipeline on a time-boxed batch of pending organizations (`lib/sales/pipeline/run-pipeline-batch.ts`). **Six invocations, 10 minutes apart**, not one — see throughput note below. Runs every day (including weekends) since it works through whatever backlog already exists, independent of whether discovery ran that morning. |
 | `10` / `40` past 10–12, plus `10 13` | every day | `/api/sales/cron/digest` | Sends the morning digest only once at least `SALES_DIGEST_TARGET_COUNT` (default **10**) new queue items scoring ≥ `SALES_DIGEST_MIN_SCORE` (default **70**) exist since the last successful send (`lib/sales/digest/ensure.ts`). Each tick may top up discovery + a pipeline batch within its time budget; if still under target it returns `deferred` without advancing the cutoff so the next tick continues. Pipeline cron ticks also call `ensureDigestTarget` after each batch. |
 
