@@ -12,6 +12,7 @@ export type ScoreStageOutput = {
   prospectScoreId: string;
   totalScore: number;
   confidence: string;
+  missingInformation: string[];
 };
 
 const SYSTEM_PROMPT = `Score how promising this prospect is for a company that sells participatory choir/anthem live-audience experiences, across each required component (0-10). Base every score and rationale ONLY on the findings provided — cite the finding numbers that support each component. If a component has no supporting findings, score conservatively (low-to-mid) and say so in the rationale rather than guessing high. List anything important that's still missing.`;
@@ -78,7 +79,12 @@ export async function runScoreStage(
   });
 
   return {
-    output: { prospectScoreId: score.id, totalScore: total, confidence: result.parsed.overallConfidence },
+    output: {
+      prospectScoreId: score.id,
+      totalScore: total,
+      confidence: result.parsed.overallConfidence,
+      missingInformation: result.parsed.missingInformation,
+    },
     model: result.model,
     tokensInput: result.tokensInput,
     tokensOutput: result.tokensOutput,

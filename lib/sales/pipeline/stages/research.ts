@@ -4,11 +4,11 @@ import { discoverRelevantLinks, fallbackCandidateUrls, fetchPageText, homepageUr
 import { createResearchFinding, createResearchSource } from "../../db/research";
 import type { Organization } from "../../types";
 
-const MAX_LEVEL1_LINKS = 5;
-const MAX_LEVEL2_LINKS = 4;
-const LINK_DISCOVERY_OVERFETCH = 12; // ask for more candidates than we need so filtering out already-visited links doesn't starve the final slice
-const MAX_PAGES_TO_FETCH = 10; // homepage + up to 5 discovered nav links + up to 4 event-detail pages found one hop deeper
-const EVENT_LISTING_PATTERN = /event|conference|calendar/i;
+const MAX_LEVEL1_LINKS = 8;
+const MAX_LEVEL2_LINKS = 6;
+const LINK_DISCOVERY_OVERFETCH = 20; // ask for more candidates than we need so filtering out already-visited links doesn't starve the final slice
+const MAX_PAGES_TO_FETCH = 16; // homepage + deeper contact/event hops — more pages → stronger score evidence toward 70+
+const EVENT_LISTING_PATTERN = /event|conference|calendar|convention|summit|program/i;
 
 export type ResearchStageOutput = {
   pagesAttempted: number;
@@ -39,8 +39,9 @@ const SYSTEM_PROMPT = `You extract factual signals relevant to whether this orga
  * Fetches one page, extracts structured findings from it via the model, and records both the
  * research_source row (always) and any research_finding rows (only on successful extraction).
  * Returns the raw HTML too, so the caller can discover further links from it.
+ * Exported for the deepen-research pass (search-backed second hop) to reuse the same boundary.
  */
-async function fetchAndExtract(
+export async function fetchAndExtractFromUrl(
   org: Organization,
   pipelineRunId: string,
   url: string
@@ -142,7 +143,7 @@ export async function runResearchStage(
   // Level 0 — homepage.
   pagesAttempted += 1;
   visited.add(origin);
-  const home = await fetchAndExtract(org, pipelineRunId, origin);
+  const home = await fetchAndExtractFromUrl(org, pipelineRunId, origin);
   if (home.fetched) pagesFetched += 1;
   findingsCreated += home.findingsCreated;
   namedPeopleMentioned.push(...home.namedPeople);
@@ -164,7 +165,7 @@ export async function runResearchStage(
     if (visited.has(link.url) || pagesAttempted >= MAX_PAGES_TO_FETCH) continue;
     visited.add(link.url);
     pagesAttempted += 1;
-    const page = await fetchAndExtract(org, pipelineRunId, link.url);
+    const page = await fetchAndExtractFromUrl(org, pipelineRunId, link.url);
     if (page.fetched) pagesFetched += 1;
     findingsCreated += page.findingsCreated;
     namedPeopleMentioned.push(...page.namedPeople);
@@ -185,7 +186,7 @@ export async function runResearchStage(
       if (visited.has(link.url) || pagesAttempted >= MAX_PAGES_TO_FETCH) continue;
       visited.add(link.url);
       pagesAttempted += 1;
-      const page = await fetchAndExtract(org, pipelineRunId, link.url);
+      const page = await fetchAndExtractFromUrl(org, pipelineRunId, link.url);
       if (page.fetched) pagesFetched += 1;
       findingsCreated += page.findingsCreated;
       namedPeopleMentioned.push(...page.namedPeople);

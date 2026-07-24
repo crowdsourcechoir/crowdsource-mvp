@@ -1,9 +1,24 @@
 import { createHash } from "crypto";
 
-const MAX_EXCERPT_LENGTH = 6000;
-const FETCH_TIMEOUT_MS = 8000;
+const MAX_EXCERPT_LENGTH = 12000;
+const FETCH_TIMEOUT_MS = 12000;
 /** Only used as a fallback when link discovery on the homepage finds nothing relevant (e.g. a homepage with no visible nav links). */
-export const FALLBACK_SUBPATHS = ["/about", "/contact", "/staff", "/events"];
+export const FALLBACK_SUBPATHS = [
+  "/about",
+  "/about-us",
+  "/contact",
+  "/contact-us",
+  "/staff",
+  "/leadership",
+  "/board",
+  "/team",
+  "/events",
+  "/conferences",
+  "/annual-conference",
+  "/sponsorship",
+  "/exhibitors",
+  "/membership",
+];
 
 export type FetchedPage = {
   url: string;
@@ -22,12 +37,14 @@ export type DiscoveredLink = { url: string; anchorText: string; score: number };
 const RELEVANCE_KEYWORDS: { pattern: RegExp; weight: number }[] = [
   { pattern: /contact/i, weight: 3 },
   { pattern: /staff|directory|who[-_]?to[-_]?contact/i, weight: 3 },
-  { pattern: /leadership|board|administration|our[-_]?team/i, weight: 2 },
+  { pattern: /leadership|board|administration|our[-_]?team|executive/i, weight: 2 },
   { pattern: /\bteam\b|\bpeople\b|\bwho\b/i, weight: 1 },
-  { pattern: /event|conference|calendar|agenda|schedule|program/i, weight: 3 },
-  { pattern: /register|registration/i, weight: 1 },
-  { pattern: /about/i, weight: 1 },
-  { pattern: /news|press/i, weight: 1 },
+  { pattern: /event|conference|calendar|agenda|schedule|program|convention|summit/i, weight: 3 },
+  { pattern: /sponsor|exhibitor|vendor|partner/i, weight: 2 },
+  { pattern: /register|registration|attend/i, weight: 1 },
+  { pattern: /about|mission|history/i, weight: 1 },
+  { pattern: /news|press|annual[-_ ]?report/i, weight: 1 },
+  { pattern: /membership|member[-_ ]?benefits/i, weight: 1 },
 ];
 
 const EXCLUDED_HREF_PATTERN = /^(mailto:|tel:|javascript:|#)|\.(pdf|jpg|jpeg|png|gif|svg|zip|doc|docx)$/i;
