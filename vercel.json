@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/sales/cron/digest",
-      "schedule": "10 10 * * *"
+      "schedule": "10,30,50 10-13 * * *"
     }
   ]
 }

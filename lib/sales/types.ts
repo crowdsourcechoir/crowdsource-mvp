@@ -309,7 +309,8 @@ export type DiscoveryRun = {
 export type DigestRun = {
   id: string;
   trigger: "manual" | "cron";
-  status: "running" | "succeeded" | "failed" | "skipped_no_provider";
+  /** `deferred` = cron topped up but still under the min-score target count; does not advance the "new since" cutoff. */
+  status: "running" | "succeeded" | "failed" | "skipped_no_provider" | "deferred";
   itemCount: number;
   recipient: string | null;
   providerMessageId: string | null;

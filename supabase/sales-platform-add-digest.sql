@@ -8,7 +8,7 @@
 create table if not exists public.digest_runs (
   id uuid primary key default gen_random_uuid(),
   trigger text not null default 'cron' check (trigger in ('manual', 'cron')),
-  status text not null default 'running' check (status in ('running', 'succeeded', 'failed', 'skipped_no_provider')),
+  status text not null default 'running' check (status in ('running', 'succeeded', 'failed', 'skipped_no_provider', 'deferred')),
   item_count int not null default 0,
   recipient text,
   provider_message_id text,

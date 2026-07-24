@@ -50,8 +50,10 @@ export default function DigestClient() {
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Morning digest email</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Emails everything new in the review queue since the last send, runs nightly via cron after discovery and pipeline
-            processing.
+            Cron emails new review-queue leads scoring 70+ once at least 10 are ready (tunable via{" "}
+            <span className="font-mono">SALES_DIGEST_MIN_SCORE</span> /{" "}
+            <span className="font-mono">SALES_DIGEST_TARGET_COUNT</span>), topping up the pipeline until then. Test send
+            below bypasses the count wait and sends whatever currently qualifies.
           </p>
         </div>
         <button
@@ -94,15 +96,26 @@ export default function DigestClient() {
                           ? "text-red-400"
                           : run.status === "skipped_no_provider"
                             ? "text-gray-500"
-                            : "text-sky-400"
+                            : run.status === "deferred"
+                              ? "text-amber-400"
+                              : "text-sky-400"
                     }
                   >
-                    {run.status === "skipped_no_provider" ? "no provider configured" : run.status}
+                    {run.status === "skipped_no_provider"
+                      ? "no provider configured"
+                      : run.status === "deferred"
+                        ? "deferred — still under target"
+                        : run.status}
                   </span>
                 </div>
                 {run.status === "succeeded" && (
                   <p className="mt-1 text-xs text-gray-500">
                     {run.itemCount} new lead(s) · sent to {run.recipient}
+                  </p>
+                )}
+                {run.status === "deferred" && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {run.itemCount} qualifying so far · waiting for target before send
                   </p>
                 )}
                 {run.error && <p className="mt-1 text-xs text-red-400">{run.error}</p>}
