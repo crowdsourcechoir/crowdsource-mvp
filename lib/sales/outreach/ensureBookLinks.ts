@@ -32,11 +32,12 @@ export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
     templatesUpdated += 1;
   }
 
-  // Rewrite any non-terminal drafts still carrying attachment language (pending queue + fresh drafts).
+  // Rewrite non-terminal drafts still carrying attachment language (ASCII or curly apostrophe).
   const { data: drafts, error: draftsError } = await db
     .from("outreach_drafts")
     .select("id, ai_body, edited_body, status")
-    .in("status", ["draft", "qa_flagged", "qa_passed"]);
+    .in("status", ["draft", "qa_flagged", "qa_passed"])
+    .or("ai_body.ilike.%attached a one-page%,edited_body.ilike.%attached a one-page%");
   if (draftsError) throw new Error(draftsError.message);
 
   for (const row of drafts ?? []) {
