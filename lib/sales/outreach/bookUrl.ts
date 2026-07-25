@@ -5,8 +5,9 @@ export function bookUrl(): string {
   return process.env.SALES_BOOK_URL?.trim() || DEFAULT_BOOK_URL;
 }
 
-/** ASCII or curly apostrophe (drafts often store “I’ve” with U+2019). */
-const APOSTROPHE = "['\u2019]";
+function bookBlock(url: string): string {
+  return `I've included a bit more about the experience here:\n${url}`;
+}
 
 /**
  * Replaces legacy "I've attached a one-page overview..." cold-outreach wording with a
@@ -15,22 +16,26 @@ const APOSTROPHE = "['\u2019]";
 export function replaceAttachmentWithBookLink(body: string, url: string = bookUrl()): string {
   if (!body) return body;
 
-  const bookBlock = `I've included a bit more about the experience here:\n${url}`;
-  const includedRe = new RegExp(
-    `I${APOSTROPHE}ve included a bit more about the experience here:\\s*\\nhttps?:\\/\\/\\S+`,
-    "i"
-  );
-  const attachedRe = new RegExp(
-    `I${APOSTROPHE}ve attached a one-page overview(?: of (?:the Anthem Experience|Crowdsource Choir[^.]*))?\\.\\s*`,
-    "gi"
-  );
+  const block = bookBlock(url);
 
-  // Normalize any existing book block to the configured URL.
-  if (includedRe.test(body)) {
-    return body.replace(includedRe, bookBlock);
+  // Normalize any existing book block to the configured URL (ASCII or curly apostrophe).
+  const included = /I['\u2019]ve included a bit more about the experience here:\s*\nhttps?:\/\/\S+/i;
+  if (included.test(body)) {
+    return body.replace(included, block);
   }
 
-  let next = body.replace(attachedRe, `${bookBlock}\n\n`);
+  // Broad match: any "I've attached a one-page overview..." sentence, ASCII or curly apostrophe.
+  const attached = /I['\u2019]ve attached a one-page overview[^\n.]*\.\s*/gi;
+  let next = body.replace(attached, `${block}\n\n`);
+
+  // Last-resort line rewrite if a weird character still blocked the sentence regex.
+  if (/attached a one-page/i.test(next) && !/crowdsourcechoir\.com\/book/i.test(next)) {
+    next = next
+      .split("\n")
+      .map((line) => (/attached a one-page/i.test(line) ? block : line))
+      .join("\n");
+  }
+
   next = next.replaceAll("{{book_url}}", url);
   return next;
 }
@@ -38,17 +43,15 @@ export function replaceAttachmentWithBookLink(body: string, url: string = bookUr
 /** Same rewrite for outreach_templates.body_template (keeps {{book_url}} placeholder). */
 export function replaceAttachmentInTemplate(bodyTemplate: string): string {
   if (!bodyTemplate) return bodyTemplate;
-  const alreadyRe = new RegExp(
-    `I${APOSTROPHE}ve included a bit more about the experience here:\\s*\\n\\{\\{book_url\\}\\}`,
-    "i"
-  );
-  if (alreadyRe.test(bodyTemplate)) {
-    return bodyTemplate;
+  const already = /I['\u2019]ve included a bit more about the experience here:\s*\n\{\{book_url\}\}/i;
+  if (already.test(bodyTemplate)) return bodyTemplate;
+  const block = "I've included a bit more about the experience here:\n{{book_url}}";
+  let next = bodyTemplate.replace(/I['\u2019]ve attached a one-page overview[^\n.]*\.\s*/gi, `${block}\n\n`);
+  if (/attached a one-page/i.test(next)) {
+    next = next
+      .split("\n")
+      .map((line) => (/attached a one-page/i.test(line) ? block : line))
+      .join("\n");
   }
-  const bookBlock = "I've included a bit more about the experience here:\n{{book_url}}";
-  const attachedRe = new RegExp(
-    `I${APOSTROPHE}ve attached a one-page overview(?: of (?:the Anthem Experience|Crowdsource Choir[^.]*))?\\.\\s*`,
-    "gi"
-  );
-  return bodyTemplate.replace(attachedRe, `${bookBlock}\n\n`);
+  return next;
 }

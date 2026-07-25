@@ -27,29 +27,40 @@ export async function POST(request: Request) {
         ? ((raw as { draftIds: unknown[] }).draftIds.filter((id) => typeof id === "string") as string[])
         : [];
 
+    const forceDetails: { id: string; changed: boolean; hadAttach: boolean; hasBook: boolean }[] = [];
     if (draftIds.length > 0) {
       const db = requireSupabaseAdmin();
       const url = bookUrl();
       const { data, error } = await db.from("outreach_drafts").select("id, ai_body, edited_body").in("id", draftIds);
       if (error) throw new Error(error.message);
       for (const row of data ?? []) {
-        const nextAi = replaceAttachmentWithBookLink((row.ai_body as string) ?? "", url);
+        const aiBody = (row.ai_body as string) ?? "";
+        const nextAi = replaceAttachmentWithBookLink(aiBody, url);
         const edited = (row.edited_body as string | null) ?? null;
         const nextEdited = edited ? replaceAttachmentWithBookLink(edited, url) : null;
-        const { error: updateError } = await db
+        const changed = nextAi !== aiBody || (edited !== null && nextEdited !== edited);
+        const { data: updated, error: updateError } = await db
           .from("outreach_drafts")
           .update({
             ai_body: nextAi,
             ...(edited ? { edited_body: nextEdited } : {}),
             updated_at: new Date().toISOString(),
           })
-          .eq("id", row.id as string);
+          .eq("id", row.id as string)
+          .select("id, updated_at, ai_body")
+          .maybeSingle();
         if (updateError) throw new Error(updateError.message);
-        forcedUpdated += 1;
+        if (updated) forcedUpdated += 1;
+        forceDetails.push({
+          id: row.id as string,
+          changed,
+          hadAttach: /attached a one-page/i.test(aiBody),
+          hasBook: /crowdsourcechoir\.com\/book/i.test((updated?.ai_body as string) ?? nextAi),
+        });
       }
     }
 
-    return NextResponse.json({ ...result, forcedUpdated });
+    return NextResponse.json({ ...result, forcedUpdated, forceDetails });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
   }
