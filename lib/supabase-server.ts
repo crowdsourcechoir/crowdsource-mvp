@@ -11,6 +11,13 @@ if (url && serviceRoleKey) {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
+    // Next.js 14 caches `fetch` by default; without this, sales-platform reads can keep
+    // serving stale Supabase rows after writes (e.g. queue drafts still saying "I've attached..."
+    // after ensure-book-links updated them).
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }
 
