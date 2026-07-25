@@ -65,6 +65,23 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   return { items, sinceIso, backlogCount, backfilled };
 }
 
+/** All pending queue items at/above the digest min score — used for force-resend with corrected links. */
+export async function loadAllPendingDigestItems(minScore = getDigestMinScore()): Promise<{
+  items: QueueItemDetail[];
+  sinceIso: string;
+  backlogCount: number;
+}> {
+  const [allPending, backlogCount, lastDelivered] = await Promise.all([
+    listQueueItems("pending"),
+    countPendingQueueItems(),
+    getLastDeliveredDigestRun(),
+  ]);
+  const sinceIso =
+    lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+  const items = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
+  return { items, sinceIso, backlogCount };
+}
+
 /**
  * Sends the "new leads since last digest" email — the actual "in my inbox every morning" piece.
  * A no-op (recorded as `skipped_no_provider`, never an error) if RESEND_API_KEY or
