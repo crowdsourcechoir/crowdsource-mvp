@@ -8,6 +8,7 @@ import type { Contact, PipelineStage } from "../types";
 
 import { runNormalizeStage } from "./stages/normalize";
 import { runResearchStage } from "./stages/research";
+import { DEEPEN_MAX_SCORE, DEEPEN_MIN_SCORE, runDeepenResearchPass } from "./stages/deepenResearch";
 import { runDetectOpportunitiesStage } from "./stages/detectOpportunities";
 import { runDiscoverContactsStage } from "./stages/discoverContacts";
 import { runEnrichContactsStage } from "./stages/enrichContacts";
@@ -122,7 +123,7 @@ export async function runPipelineForOrganization(
   await runStage("verify_contact", { organizationId }, () => runVerifyContactsStage(freshOrg));
 
   const contacts = await listContactsForOrganization(organizationId);
-  const bestContact = pickBestContact(contacts);
+  let bestContact = pickBestContact(contacts);
 
   // A human decision is final — re-running the pipeline (e.g. to refresh research on other
   // opportunities for this org) must never re-score/re-draft/re-queue an opportunity a human
@@ -137,14 +138,46 @@ export async function runPipelineForOrganization(
   // more research work for the human, defeating the point of the pipeline (see
   // docs/sales-platform/ai-workflow.md §4/§10). This reuses the exact same `bestContact` the
   // draft stage uses, so "who we'd draft to" and "who we require to be verified" never diverge.
-  const contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
+  let contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
 
   // Stages 6-10 run per opportunity — an organization can have several.
   for (const opportunity of undecidedOpportunities) {
-    const scoreResult = await runStage("score", { opportunityId: opportunity.id }, () =>
+    let scoreResult = await runStage("score", { opportunityId: opportunity.id }, () =>
       runScoreStage(freshOrg, opportunity, pipelineRun.id)
     );
     if (!scoreResult) continue; // no explainable score → don't proceed to brief/draft/queue for this opportunity
+
+    // Near-miss salvage: if the first score is below the digest bar but not hopeless, run a
+    // search-backed deepen-research pass (tracked as another `research` agent_runs row) and
+    // re-score once. Aimed at pushing more leads over SALES_DIGEST_MIN_SCORE (default 70).
+    if (scoreResult.totalScore >= DEEPEN_MIN_SCORE && scoreResult.totalScore < DEEPEN_MAX_SCORE) {
+      const deepen = await runStage(
+        "research",
+        {
+          opportunityId: opportunity.id,
+          deepen: true,
+          priorScore: scoreResult.totalScore,
+          missingInformation: scoreResult.missingInformation,
+        },
+        () => runDeepenResearchPass(freshOrg, pipelineRun.id, scoreResult!.missingInformation)
+      );
+      if (deepen && (deepen.findingsCreated > 0 || deepen.namedPeopleMentioned.length > 0)) {
+        if (deepen.namedPeopleMentioned.length > 0) {
+          await runStage("find_contact", { organizationId, afterDeepen: true }, () =>
+            runDiscoverContactsStage(freshOrg, deepen.namedPeopleMentioned)
+          );
+          await runStage("enrich_contact", { organizationId, afterDeepen: true }, () => runEnrichContactsStage(freshOrg));
+          await runStage("verify_contact", { organizationId, afterDeepen: true }, () => runVerifyContactsStage(freshOrg));
+          const refreshedContacts = await listContactsForOrganization(organizationId);
+          bestContact = pickBestContact(refreshedContacts);
+          contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
+        }
+        const rescored = await runStage("score", { opportunityId: opportunity.id, rescoreAfterDeepen: true }, () =>
+          runScoreStage(freshOrg, opportunity, pipelineRun.id)
+        );
+        if (rescored) scoreResult = rescored;
+      }
+    }
 
     const briefResult = await runStage("brief", { opportunityId: opportunity.id }, async () => {
       const score = await getLatestScoreForOpportunity(opportunity.id);

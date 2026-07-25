@@ -7,8 +7,8 @@ const DEFAULT_MIN_SCORE = 70;
 const DEFAULT_TARGET_COUNT = 10;
 /** Skip re-sending if a target-meeting digest already landed within this window. */
 const DEFAULT_ALREADY_SENT_WINDOW_HOURS = 18;
-/** Soft time budget for pipeline/discovery top-up inside one digest cron invocation. */
-const DEFAULT_TOPUP_TIME_BUDGET_MS = 4 * 60 * 1000;
+/** Soft time budget for pipeline/discovery/near-miss top-up inside one digest cron invocation. */
+const DEFAULT_TOPUP_TIME_BUDGET_MS = 5 * 60 * 1000;
 
 function readEnvInt(name: string, fallback: number): number {
   const raw = process.env[name];
