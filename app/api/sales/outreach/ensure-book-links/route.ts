@@ -27,7 +27,15 @@ export async function POST(request: Request) {
         ? ((raw as { draftIds: unknown[] }).draftIds.filter((id) => typeof id === "string") as string[])
         : [];
 
-    const forceDetails: { id: string; changed: boolean; hadAttach: boolean; hasBook: boolean }[] = [];
+    const forceDetails: {
+      id: string;
+      changed: boolean;
+      hadAttach: boolean;
+      hasBookAfter: boolean;
+      beforeSnippet: string | null;
+      afterSnippet: string | null;
+      updatedAt: string | null;
+    }[] = [];
     if (draftIds.length > 0) {
       const db = requireSupabaseAdmin();
       const url = bookUrl();
@@ -51,11 +59,15 @@ export async function POST(request: Request) {
           .maybeSingle();
         if (updateError) throw new Error(updateError.message);
         if (updated) forcedUpdated += 1;
+        const afterBody = (updated?.ai_body as string) ?? "";
         forceDetails.push({
           id: row.id as string,
           changed,
           hadAttach: /attached a one-page/i.test(aiBody),
-          hasBook: /crowdsourcechoir\.com\/book/i.test((updated?.ai_body as string) ?? nextAi),
+          hasBookAfter: /crowdsourcechoir\.com\/book/i.test(afterBody),
+          beforeSnippet: aiBody.match(/I['\u2019]ve (?:attached|included)[^\n]{0,70}/)?.[0] ?? null,
+          afterSnippet: afterBody.match(/I['\u2019]ve (?:attached|included)[^\n]{0,70}/)?.[0] ?? null,
+          updatedAt: (updated?.updated_at as string) ?? null,
         });
       }
     }
