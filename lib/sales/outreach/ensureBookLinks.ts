@@ -5,6 +5,9 @@ export type EnsureBookLinksResult = {
   templatesUpdated: number;
   draftsUpdated: number;
   bookUrl: string;
+  draftsScanned: number;
+  draftsAlreadyLinked: number;
+  sampleUnchangedWithAttach: string | null;
 };
 
 /**
@@ -16,6 +19,8 @@ export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
   const url = bookUrl();
   let templatesUpdated = 0;
   let draftsUpdated = 0;
+  let draftsAlreadyLinked = 0;
+  let sampleUnchangedWithAttach: string | null = null;
 
   const { data: templates, error: templatesError } = await db.from("outreach_templates").select("id, body_template");
   if (templatesError) throw new Error(templatesError.message);
@@ -32,36 +37,51 @@ export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
     templatesUpdated += 1;
   }
 
-<<<<<<< HEAD
-  // Rewrite non-terminal drafts still carrying attachment language (ASCII or curly apostrophe).
-  const { data: drafts, error: draftsError } = await db
-    .from("outreach_drafts")
-    .select("id, ai_body, edited_body, status")
-    .in("status", ["draft", "qa_flagged", "qa_passed"])
-    .or("ai_body.ilike.%attached a one-page%,edited_body.ilike.%attached a one-page%");
-=======
-  // Rewrite non-terminal drafts; content filter is applied in JS so spaces/apostrophes
-  // in "I've attached..." can't break the PostgREST `.or()` filter parser.
-  const { data: drafts, error: draftsError } = await db
-    .from("outreach_drafts")
-    .select("id, ai_body, edited_body, status")
-    .in("status", ["draft", "qa_flagged", "qa_passed"]);
->>>>>>> main
-  if (draftsError) throw new Error(draftsError.message);
+  // Page through all non-terminal drafts (PostgREST default max-rows can otherwise truncate).
+  const pageSize = 200;
+  let from = 0;
+  let draftsScanned = 0;
+  for (;;) {
+    const { data: drafts, error: draftsError } = await db
+      .from("outreach_drafts")
+      .select("id, ai_body, edited_body, status")
+      .in("status", ["draft", "qa_flagged", "qa_passed"])
+      .range(from, from + pageSize - 1);
+    if (draftsError) throw new Error(draftsError.message);
+    const page = drafts ?? [];
+    if (page.length === 0) break;
 
-  for (const row of drafts ?? []) {
-    const aiBody = (row.ai_body as string) ?? "";
-    const editedBody = (row.edited_body as string | null) ?? null;
-    const nextAi = replaceAttachmentWithBookLink(aiBody, url);
-    const nextEdited = editedBody ? replaceAttachmentWithBookLink(editedBody, url) : null;
-    if (nextAi === aiBody && nextEdited === editedBody) continue;
-    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (nextAi !== aiBody) patch.ai_body = nextAi;
-    if (editedBody && nextEdited !== editedBody) patch.edited_body = nextEdited;
-    const { error } = await db.from("outreach_drafts").update(patch).eq("id", row.id as string);
-    if (error) throw new Error(error.message);
-    draftsUpdated += 1;
+    for (const row of page) {
+      draftsScanned += 1;
+      const aiBody = (row.ai_body as string) ?? "";
+      const editedBody = (row.edited_body as string | null) ?? null;
+      const nextAi = replaceAttachmentWithBookLink(aiBody, url);
+      const nextEdited = editedBody ? replaceAttachmentWithBookLink(editedBody, url) : null;
+      if (nextAi === aiBody && nextEdited === editedBody) {
+        if (/crowdsourcechoir\.com\/book/i.test(aiBody)) draftsAlreadyLinked += 1;
+        if (!sampleUnchangedWithAttach && /attached a one-page/i.test(aiBody)) {
+          sampleUnchangedWithAttach = `${row.id as string}:${JSON.stringify(aiBody.match(/I.ve attached[^\n.]{0,60}/)?.[0] ?? "").slice(0, 120)}`;
+        }
+        continue;
+      }
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (nextAi !== aiBody) patch.ai_body = nextAi;
+      if (editedBody && nextEdited !== editedBody) patch.edited_body = nextEdited;
+      const { error } = await db.from("outreach_drafts").update(patch).eq("id", row.id as string);
+      if (error) throw new Error(error.message);
+      draftsUpdated += 1;
+    }
+
+    if (page.length < pageSize) break;
+    from += pageSize;
   }
 
-  return { templatesUpdated, draftsUpdated, bookUrl: url };
+  return {
+    templatesUpdated,
+    draftsUpdated,
+    bookUrl: url,
+    draftsScanned,
+    draftsAlreadyLinked,
+    sampleUnchangedWithAttach,
+  };
 }
