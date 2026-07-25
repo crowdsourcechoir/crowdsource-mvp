@@ -2,13 +2,21 @@ import { getOrganization } from "../db/organizations";
 import { listContactsForOrganization } from "../db/contacts";
 import { listOpportunitiesForOrganization } from "../db/opportunities";
 import { createPipelineRun, finishAgentRun, startAgentRun, updatePipelineRun } from "../db/pipeline";
+import { listFindingsForOrganization } from "../db/research";
 import { getLatestScoreForOpportunity } from "../db/scores";
 import { looksLikePersonName, hasVerifiedEmail } from "../dedupe";
+import { ensureBookLinks } from "../outreach/ensureBookLinks";
+import { claimLooksLikeCalendarDate } from "../research/extractEventDates";
 import type { Contact, PipelineStage } from "../types";
 
 import { runNormalizeStage } from "./stages/normalize";
 import { runResearchStage } from "./stages/research";
-import { DEEPEN_MAX_SCORE, DEEPEN_MIN_SCORE, runDeepenResearchPass } from "./stages/deepenResearch";
+import {
+  DEEPEN_MAX_SCORE,
+  DEEPEN_MIN_SCORE,
+  type DeepenFocus,
+  runDeepenResearchPass,
+} from "./stages/deepenResearch";
 import { runDetectOpportunitiesStage } from "./stages/detectOpportunities";
 import { runDiscoverContactsStage } from "./stages/discoverContacts";
 import { runEnrichContactsStage } from "./stages/enrichContacts";
@@ -18,6 +26,21 @@ import { runBriefStage } from "./stages/brief";
 import { runDraftStage } from "./stages/draft";
 import { runQaStage } from "./stages/qa";
 import { runQueueStage } from "./stages/queue";
+
+async function organizationHasCalendarEventDate(organizationId: string): Promise<boolean> {
+  const findings = await listFindingsForOrganization(organizationId);
+  return findings.some(
+    (f) =>
+      f.claimType === "event_date" &&
+      claimLooksLikeCalendarDate(
+        `${f.claimText} ${typeof f.claimValue === "object" && f.claimValue && "text" in f.claimValue ? String((f.claimValue as { text?: unknown }).text ?? "") : ""}`
+      )
+  );
+}
+
+function missingInfoSuggestsDateGap(missingInformation: string[]): boolean {
+  return missingInformation.some((m) => /\b(date|dates|timing|schedule|when|calendar)\b/i.test(m));
+}
 
 export type PipelineRunSummary = {
   pipelineRunId: string | null;
@@ -58,6 +81,14 @@ export async function runPipelineForOrganization(
   // customer — checked before creating any pipeline_run row at all, not just before queueing.
   if (org.isExistingClient) {
     return { pipelineRunId: null, status: "skipped_existing_client", stagesRun: [], opportunityIds: [] };
+  }
+
+  // Cheap idempotent repair: stale templates/drafts that still say "I've attached..." get the
+  // /book link before this run drafts anything new.
+  try {
+    await ensureBookLinks();
+  } catch {
+    // Non-fatal — draft stage also sanitizes attachment wording per email.
   }
 
   const pipelineRun = await createPipelineRun(organizationId, trigger);
@@ -147,19 +178,31 @@ export async function runPipelineForOrganization(
     );
     if (!scoreResult) continue; // no explainable score → don't proceed to brief/draft/queue for this opportunity
 
-    // Near-miss salvage: if the first score is below the digest bar but not hopeless, run a
-    // search-backed deepen-research pass (tracked as another `research` agent_runs row) and
-    // re-score once. Aimed at pushing more leads over SALES_DIGEST_MIN_SCORE (default 70).
-    if (scoreResult.totalScore >= DEEPEN_MIN_SCORE && scoreResult.totalScore < DEEPEN_MAX_SCORE) {
+    // Search-backed deepen pass (tracked as another `research` agent_runs row), then re-score:
+    // (1) near-miss salvage for 45–69 totals, aimed at clearing SALES_DIGEST_MIN_SCORE (70);
+    // (2) date-gap fill even above 70 when we still lack a real calendar event date — otherwise
+    // high-scoring leads (e.g. NAEA at 77) skip web search and ship drafts with only a year/name.
+    const nearMiss =
+      scoreResult.totalScore >= DEEPEN_MIN_SCORE && scoreResult.totalScore < DEEPEN_MAX_SCORE;
+    const hasCalendarDate = await organizationHasCalendarEventDate(organizationId);
+    // Above the digest bar, still chase a real calendar date when research only has a year/name.
+    const dateGap =
+      !nearMiss &&
+      !hasCalendarDate &&
+      (scoreResult.totalScore >= DEEPEN_MAX_SCORE || missingInfoSuggestsDateGap(scoreResult.missingInformation));
+    const deepenFocus: DeepenFocus | null = nearMiss ? "full" : dateGap ? "dates" : null;
+
+    if (deepenFocus) {
       const deepen = await runStage(
         "research",
         {
           opportunityId: opportunity.id,
           deepen: true,
+          deepenFocus,
           priorScore: scoreResult.totalScore,
           missingInformation: scoreResult.missingInformation,
         },
-        () => runDeepenResearchPass(freshOrg, pipelineRun.id, scoreResult!.missingInformation)
+        () => runDeepenResearchPass(freshOrg, pipelineRun.id, scoreResult!.missingInformation, deepenFocus)
       );
       if (deepen && (deepen.findingsCreated > 0 || deepen.namedPeopleMentioned.length > 0)) {
         if (deepen.namedPeopleMentioned.length > 0) {

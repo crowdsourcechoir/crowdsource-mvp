@@ -1,6 +1,7 @@
 import { callStructured } from "../../openai/client";
 import { PageFindingsSchema } from "../../openai/schemas";
 import { discoverRelevantLinks, fallbackCandidateUrls, fetchPageText, homepageUrl } from "../../research/fetch";
+import { claimLooksLikeCalendarDate, extractCalendarEventDates } from "../../research/extractEventDates";
 import { createResearchFinding, createResearchSource } from "../../db/research";
 import type { Organization } from "../../types";
 
@@ -33,7 +34,11 @@ function buildResearchUserContent(orgName: string, url: string, pageText: string
   ].join("\n\n");
 }
 
-const SYSTEM_PROMPT = `You extract factual signals relevant to whether this organization would host a participatory choir/anthem-style live audience experience: audience/attendance size, event dates, named decision-makers, budget signals, and general program fit. Only extract what the source text actually states or strongly implies. Do not invent numbers or names. For namedPeopleMentioned, only include an actual named human being (a real first + last name) — NEVER a generic/departmental mailbox or role with no attached person name (e.g. "info@...", "admissions@...", "General Mailbox", "Front Desk") as if it were a person; skip those entirely, they are not a named person. Include an email ONLY if that exact email address is literally present in the source text (e.g. in a mailto: link or written out) for that specific named person — otherwise leave email null; never guess or construct an email from a name and domain. If nothing relevant is present, return an empty findings array.`;
+const SYSTEM_PROMPT = `You extract factual signals relevant to whether this organization would host a participatory choir/anthem-style live audience experience: audience/attendance size, event dates, named decision-makers, budget signals, and general program fit. Only extract what the source text actually states or strongly implies. Do not invent numbers or names.
+
+For claimType "event_date": ONLY use this when the source states an actual calendar date or date range (month + day + year, or month + year). Put the normalized date/range in claimValueText (e.g. "March 4–6, 2027") and mention the event name in claimText. Do NOT emit event_date for an event name/year alone (e.g. "2027 NAEA National Convention" with no month/day) — that is not a date. Prefer the organization's flagship annual convention/conference dates over secondary deadlines (award nominations, application windows, leadership-cohort notices) unless those secondary dates are clearly the opportunity being researched.
+
+For namedPeopleMentioned, only include an actual named human being (a real first + last name) — NEVER a generic/departmental mailbox or role with no attached person name (e.g. "info@...", "admissions@...", "General Mailbox", "Front Desk") as if it were a person; skip those entirely, they are not a named person. Include an email ONLY if that exact email address is literally present in the source text (e.g. in a mailto: link or written out) for that specific named person — otherwise leave email null; never guess or construct an email from a name and domain. If nothing relevant is present, return an empty findings array.`;
 
 /**
  * Fetches one page, extracts structured findings from it via the model, and records both the
@@ -68,6 +73,7 @@ export async function fetchAndExtractFromUrl(
 
   const namedPeople: ResearchStageOutput["namedPeopleMentioned"] = [];
   let findingsCreated = 0;
+  const seenCalendarDates = new Set<string>();
   try {
     const result = await callStructured({
       schema: PageFindingsSchema,
@@ -81,6 +87,13 @@ export async function fetchAndExtractFromUrl(
     usage.costUsd = result.costUsd;
 
     for (const finding of result.parsed.findings) {
+      // Drop name-only "event_date" claims — they inflate timing confidence without a real date.
+      if (
+        finding.claimType === "event_date" &&
+        !claimLooksLikeCalendarDate(`${finding.claimText} ${finding.claimValueText ?? ""}`)
+      ) {
+        continue;
+      }
       await createResearchFinding({
         pipelineRunId,
         organizationId: org.id,
@@ -92,12 +105,37 @@ export async function fetchAndExtractFromUrl(
         origin: "ai_research",
       });
       findingsCreated += 1;
+      if (finding.claimType === "event_date" && finding.claimValueText) {
+        seenCalendarDates.add(finding.claimValueText.toLowerCase());
+      }
     }
     for (const person of result.parsed.namedPeopleMentioned) {
       namedPeople.push({ fullName: person.fullName, roleTitle: person.roleTitle, email: person.email, sourceUrl: url });
     }
   } catch {
     // A single page's extraction failing doesn't fail the whole research stage — partial research is acceptable.
+  }
+
+  // Deterministic backstop: recover calendar dates the model often skips (event name tagged as date).
+  for (const extracted of extractCalendarEventDates(page.text)) {
+    const key = extracted.claimValueText.toLowerCase();
+    if (seenCalendarDates.has(key)) continue;
+    seenCalendarDates.add(key);
+    try {
+      await createResearchFinding({
+        pipelineRunId,
+        organizationId: org.id,
+        sourceId: source.id,
+        claimType: "event_date",
+        claimText: extracted.claimText,
+        claimValue: { text: extracted.claimValueText },
+        confidence: extracted.confidence,
+        origin: "ai_research",
+      });
+      findingsCreated += 1;
+    } catch {
+      // Same isolation as LLM extraction — one bad write shouldn't fail the page.
+    }
   }
 
   return { html: page.html, fetched: true, findingsCreated, namedPeople, usage };

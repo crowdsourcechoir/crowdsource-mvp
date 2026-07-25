@@ -21,7 +21,7 @@ select
   'Educational — v1 default',
   null,
   (select id from public.industry_segments where key = 'education'),
-  E'Hi {{contact_first_name}},\n\nI hope you''re doing well!\n\nI''m {{sender_name}}, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. {{opening_reason}}\n\nWe''ve found that educational conferences are a particularly natural fit for Crowdsource Choir. Educators tend to arrive curious, collaborative, and willing to participate, so they quickly move from being an audience to becoming creators. By the end of the experience, they''ve not only learned together—they''ve created something together that''s unique to that gathering.\n\nI''ve attached a one-page overview of Crowdsource Choir and more specifics about the Anthem Experience. {{cta}}\n\nThanks, and I hope we have a chance to connect.\n\nBest,\nJoel',
+  E'Hi {{contact_first_name}},\n\nI hope you''re doing well!\n\nI''m {{sender_name}}, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. {{opening_reason}}\n\nWe''ve found that educational conferences are a particularly natural fit for Crowdsource Choir. Educators tend to arrive curious, collaborative, and willing to participate, so they quickly move from being an audience to becoming creators. By the end of the experience, they''ve not only learned together—they''ve created something together that''s unique to that gathering.\n\nI''ve included a bit more about the experience here:\n{{book_url}}\n\n{{cta}}\n\nThanks, and I hope we have a chance to connect.\n\nBest,\nJoel',
   'approved'
 where not exists (
   select 1 from public.outreach_templates where name = 'Educational — v1 default'
