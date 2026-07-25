@@ -5,6 +5,9 @@ export function bookUrl(): string {
   return process.env.SALES_BOOK_URL?.trim() || DEFAULT_BOOK_URL;
 }
 
+/** ASCII or curly apostrophe (drafts often store “I’ve” with U+2019). */
+const APOSTROPHE = "['\u2019]";
+
 /**
  * Replaces legacy "I've attached a one-page overview..." cold-outreach wording with a
  * link to the /book page. Idempotent if the body already has the book URL block.
@@ -13,19 +16,21 @@ export function replaceAttachmentWithBookLink(body: string, url: string = bookUr
   if (!body) return body;
 
   const bookBlock = `I've included a bit more about the experience here:\n${url}`;
+  const includedRe = new RegExp(
+    `I${APOSTROPHE}ve included a bit more about the experience here:\\s*\\nhttps?:\\/\\/\\S+`,
+    "i"
+  );
+  const attachedRe = new RegExp(
+    `I${APOSTROPHE}ve attached a one-page overview(?: of (?:the Anthem Experience|Crowdsource Choir[^.]*))?\\.\\s*`,
+    "gi"
+  );
 
   // Normalize any existing book block to the configured URL.
-  if (/I've included a bit more about the experience here:\s*\nhttps?:\/\/\S+/i.test(body)) {
-    return body.replace(
-      /I've included a bit more about the experience here:\s*\nhttps?:\/\/\S+/i,
-      bookBlock
-    );
+  if (includedRe.test(body)) {
+    return body.replace(includedRe, bookBlock);
   }
 
-  let next = body.replace(
-    /I've attached a one-page overview(?: of (?:the Anthem Experience|Crowdsource Choir[^.]*))?\.\s*/gi,
-    `${bookBlock}\n\n`
-  );
+  let next = body.replace(attachedRe, `${bookBlock}\n\n`);
   next = next.replaceAll("{{book_url}}", url);
   return next;
 }
@@ -33,12 +38,17 @@ export function replaceAttachmentWithBookLink(body: string, url: string = bookUr
 /** Same rewrite for outreach_templates.body_template (keeps {{book_url}} placeholder). */
 export function replaceAttachmentInTemplate(bodyTemplate: string): string {
   if (!bodyTemplate) return bodyTemplate;
-  if (/I've included a bit more about the experience here:\s*\n\{\{book_url\}\}/i.test(bodyTemplate)) {
+  const alreadyRe = new RegExp(
+    `I${APOSTROPHE}ve included a bit more about the experience here:\\s*\\n\\{\\{book_url\\}\\}`,
+    "i"
+  );
+  if (alreadyRe.test(bodyTemplate)) {
     return bodyTemplate;
   }
   const bookBlock = "I've included a bit more about the experience here:\n{{book_url}}";
-  return bodyTemplate.replace(
-    /I've attached a one-page overview(?: of (?:the Anthem Experience|Crowdsource Choir[^.]*))?\.\s*/gi,
-    `${bookBlock}\n\n`
+  const attachedRe = new RegExp(
+    `I${APOSTROPHE}ve attached a one-page overview(?: of (?:the Anthem Experience|Crowdsource Choir[^.]*))?\\.\\s*`,
+    "gi"
   );
+  return bodyTemplate.replace(attachedRe, `${bookBlock}\n\n`);
 }
