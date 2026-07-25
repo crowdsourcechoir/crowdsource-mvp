@@ -6,6 +6,7 @@ import { resolveIndustrySegmentIdForOrganization } from "../../db/lookups";
 import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
+import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "../../outreach/bookUrl";
 import type { Contact, Organization, Opportunity } from "../../types";
 import type { BriefStageOutput } from "./brief";
 
@@ -80,14 +81,6 @@ function fillTemplate(template: string, values: Record<string, string>): string 
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? `{{${key}}}`);
 }
 
-/** Branded experience page for cold outreach — pricing/PDFs wait until they reply. Override via
- * SALES_BOOK_URL if the landing page moves; default is the live /book page. */
-const DEFAULT_BOOK_URL = "https://www.crowdsourcechoir.com/book";
-
-function bookUrl(): string {
-  return process.env.SALES_BOOK_URL?.trim() || DEFAULT_BOOK_URL;
-}
-
 export async function runDraftStage(
   org: Organization,
   opportunity: Opportunity,
@@ -146,17 +139,21 @@ export async function runDraftStage(
   });
 
   const contactFirstName = (contact.fullName ?? "").split(" ")[0] || "there";
-  const body = fillTemplate(template.bodyTemplate, {
-    contact_first_name: contactFirstName,
-    opening_reason: result.parsed.openingReason,
-    fit_reason: result.parsed.fitReason,
-    opportunity_title: opportunity.title,
-    sender_name: SALES_SENDER_NAME,
-    // Deterministic, not AI-authored — the "ask" always matches the assigned persona strategy
-    // exactly, same rationale as the rest of the template-fill approach (see SYSTEM_PROMPT above).
-    cta: strategy.cta,
-    book_url: bookUrl(),
-  });
+  // Sanitize before fill so a stale DB template that still says "I've attached..." cannot
+  // ship — cold outreach always links to /book (see lib/sales/outreach/bookUrl.ts).
+  const body = replaceAttachmentWithBookLink(
+    fillTemplate(replaceAttachmentInTemplate(template.bodyTemplate), {
+      contact_first_name: contactFirstName,
+      opening_reason: result.parsed.openingReason,
+      fit_reason: result.parsed.fitReason,
+      opportunity_title: opportunity.title,
+      sender_name: SALES_SENDER_NAME,
+      // Deterministic, not AI-authored — the "ask" always matches the assigned persona strategy
+      // exactly, same rationale as the rest of the template-fill approach (see SYSTEM_PROMPT above).
+      cta: strategy.cta,
+      book_url: bookUrl(),
+    })
+  );
 
   void resolveFindingIds(indexed, result.parsed.personalizationFindingIndexes); // kept in agent_runs.output for provenance
 

@@ -5,6 +5,7 @@ import { createPipelineRun, finishAgentRun, startAgentRun, updatePipelineRun } f
 import { listFindingsForOrganization } from "../db/research";
 import { getLatestScoreForOpportunity } from "../db/scores";
 import { looksLikePersonName, hasVerifiedEmail } from "../dedupe";
+import { ensureBookLinks } from "../outreach/ensureBookLinks";
 import { claimLooksLikeCalendarDate } from "../research/extractEventDates";
 import type { Contact, PipelineStage } from "../types";
 
@@ -80,6 +81,14 @@ export async function runPipelineForOrganization(
   // customer — checked before creating any pipeline_run row at all, not just before queueing.
   if (org.isExistingClient) {
     return { pipelineRunId: null, status: "skipped_existing_client", stagesRun: [], opportunityIds: [] };
+  }
+
+  // Cheap idempotent repair: stale templates/drafts that still say "I've attached..." get the
+  // /book link before this run drafts anything new.
+  try {
+    await ensureBookLinks();
+  } catch {
+    // Non-fatal — draft stage also sanitizes attachment wording per email.
   }
 
   const pipelineRun = await createPipelineRun(organizationId, trigger);
