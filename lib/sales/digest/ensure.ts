@@ -25,6 +25,12 @@ export type DigestEnsureResult = {
   pipelineSummaries: PipelineBatchSummary[];
   send?: DigestSendResult;
   error?: string;
+  /**
+   * When status is `deferred`, whether another invocation should keep topping up
+   * (unprocessed orgs and/or near-miss salvage still available). False means the
+   * funnel is empty for now — stop self-chaining rather than spinning forever.
+   */
+  continuationRecommended?: boolean;
 };
 
 const MAX_DISCOVERY_RUNS_PER_ENSURE = 2;
@@ -63,8 +69,9 @@ async function listNearMissOrganizationIds(limit: number): Promise<string[]> {
  * Cron orchestrator: keep the overnight pipeline working until at least
  * `SALES_DIGEST_TARGET_COUNT` queue items scoring >= `SALES_DIGEST_MIN_SCORE` exist, then send
  * the email. One Vercel invocation can't process the whole backlog (see architecture.md §6), so
- * this is intentionally resumable — later digest/pipeline cron ticks pick up where earlier ones
- * left off, and `deferred` runs do NOT advance the "new since" cutoff.
+ * this is intentionally resumable — later digest/pipeline cron ticks (and self-chained digest
+ * continuations when still under target) pick up where earlier ones left off. `deferred` runs
+ * do NOT advance the "new since" cutoff.
  */
 export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): Promise<DigestEnsureResult> {
   const minScore = getDigestMinScore();
@@ -135,6 +142,11 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
 
   if (loaded.items.length < targetCount) {
     // Intentionally no digest_runs row: only `succeeded` advances the "new since" cutoff.
+    const [stillUnprocessed, stillNearMiss] = await Promise.all([
+      listUnprocessedOrganizations(1),
+      listNearMissOrganizationIds(1),
+    ]);
+    const continuationRecommended = stillUnprocessed.length > 0 || stillNearMiss.length > 0;
     return {
       status: "deferred",
       qualifyingCount: loaded.items.length,
@@ -144,7 +156,10 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       discoveryRuns,
       nearMissReprocesses,
       pipelineSummaries,
-      error: `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Pipeline will keep topping up on later cron ticks.`,
+      continuationRecommended,
+      error: continuationRecommended
+        ? `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Continuing overnight top-up until the target is met.`
+        : `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). No unprocessed orgs or near-miss salvage left — discovery/pipeline must add more before another attempt helps.`,
     };
   }
 
