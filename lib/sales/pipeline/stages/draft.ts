@@ -43,7 +43,6 @@ Joel
 --
 Joel DeJong
 Creator, Crowdsource Choir
-https://crowdsourcechoir.com
 'One of the Pacific Northwest's Most Talented Composers'
 —American Songwriter
 
@@ -70,7 +69,6 @@ Joel
 --
 Joel DeJong
 Creator, Crowdsource Choir
-https://crowdsourcechoir.com
 'One of the Pacific Northwest's Most Talented Composers'
 —American Songwriter`;
 

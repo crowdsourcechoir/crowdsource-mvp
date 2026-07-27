@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
-import { ensureEmailSignature } from "@/lib/sales/outreach/signature";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
+import DraftEmailBody from "@/components/sales/DraftEmailBody";
 
 export default function OpportunityDetailClient({ opportunityId }: { opportunityId: string }) {
   const [detail, setDetail] = useState<QueueItemDetail | null>(null);
@@ -71,9 +71,12 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             )}
           </div>
           <p className="font-medium text-gray-100">{detail.draft.editedSubject ?? detail.draft.aiSubject}</p>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-300">
-            {ensureEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody)}
-          </p>
+          <div className="mt-2">
+            <DraftEmailBody
+              body={detail.draft.editedBody ?? detail.draft.aiBody}
+              className="whitespace-pre-wrap text-sm text-gray-300"
+            />
+          </div>
           {detail.contact?.email && (
             <p className="mt-2 text-xs text-gray-600">
               Note: webmail (e.g. Gmail) only opens automatically if you’ve explicitly granted it mailto: handler permission in this

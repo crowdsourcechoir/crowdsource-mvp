@@ -38,7 +38,7 @@ export async function copyEmailToClipboard(to: string, subject: string, body: st
   }
 
   if (htmlBody && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
-    const html = `<pre style="font-family:sans-serif;white-space:pre-wrap">To: ${escapeHtml(to)}\nSubject: ${escapeHtml(subject)}\n\n</pre>${htmlBody}`;
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;white-space:pre-wrap">To: ${escapeHtml(to)}<br>Subject: ${escapeHtml(subject)}<br><br>${htmlBody}</div>`;
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
