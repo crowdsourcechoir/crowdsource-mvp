@@ -7,6 +7,7 @@ import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { emailBodyToHtml, ensureEmailSignature } from "@/lib/sales/outreach/signature";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
+import DraftEmailBody from "@/components/sales/DraftEmailBody";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -352,7 +353,9 @@ export default function ApprovalQueueClient() {
               ) : (
                 <div className="mt-2 rounded-md border border-gray-800 bg-gray-900/60 p-3 text-sm text-gray-200">
                   <p className="font-medium">{current.draft.editedSubject ?? current.draft.aiSubject}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-gray-300">{draftBody(current)}</p>
+                  <div className="mt-2">
+                    <DraftEmailBody body={draftBody(current)} className="whitespace-pre-wrap text-sm text-gray-300" />
+                  </div>
                   {current.draft.status === "qa_flagged" && current.draft.qaFlags && (
                     <div className="mt-3 rounded-md border border-red-800 bg-red-950/40 p-2 text-xs text-red-300">
                       QA flagged: {current.draft.qaFlags.map((f) => f.detail).join(" · ")}
