@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
+import { ensureEmailSignature } from "@/lib/sales/outreach/signature";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 export default function OpportunityDetailClient({ opportunityId }: { opportunityId: string }) {

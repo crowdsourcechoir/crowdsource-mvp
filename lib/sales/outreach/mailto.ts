@@ -28,6 +28,38 @@ export function buildEmailPlainText(to: string, subject: string, body: string): 
 }
 
 /**
+ * Copy draft to the clipboard as plain text, and HTML when the browser supports it so
+ * "Crowdsource Choir" pastes into Gmail as a real hyperlink.
+ */
+export async function copyEmailToClipboard(to: string, subject: string, body: string, htmlBody?: string): Promise<void> {
+  const plain = buildEmailPlainText(to, subject, body);
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
+    throw new Error("Clipboard unavailable");
+  }
+
+  if (htmlBody && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+    const html = `<pre style="font-family:sans-serif;white-space:pre-wrap">To: ${escapeHtml(to)}\nSubject: ${escapeHtml(subject)}\n\n</pre>${htmlBody}`;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Fall through to plain-text write if rich clipboard is blocked.
+    }
+  }
+
+  await navigator.clipboard.writeText(plain);
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
  * Navigates to a `mailto:` URL via a programmatically created-and-clicked `<a>` element rather
  * than reassigning `window.location.href` — dispatching an actual click is the more broadly-
  * reliable way browsers route custom-protocol navigation to a registered handler. Must be called
