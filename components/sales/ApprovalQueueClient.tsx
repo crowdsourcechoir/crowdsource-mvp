@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
-import { buildEmailPlainText, buildMailtoUrl, launchMailto } from "@/lib/sales/outreach/mailto";
+import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
+import { emailBodyToHtml, ensureEmailSignature } from "@/lib/sales/outreach/signature";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -23,11 +24,18 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className={`rounded-md border px-2 py-0.5 text-sm font-semibold ${color}`}>{score.toFixed(0)}</span>;
 }
 
+function draftBody(item: QueueItemDetail): string {
+  if (!item.draft) return "";
+  return ensureEmailSignature(item.draft.editedBody ?? item.draft.aiBody);
+}
+
 export default function ApprovalQueueClient() {
   const [items, setItems] = useState<QueueItemDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  /** On phones, list and detail swap full-screen — tap a row to open detail, back to return. */
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editedSubject, setEditedSubject] = useState("");
   const [editedBody, setEditedBody] = useState("");
@@ -57,6 +65,7 @@ export default function ApprovalQueueClient() {
       setItems(data.items ?? []);
       setError(null);
       setSelectedIndex(0);
+      setMobileDetailOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load queue");
     } finally {
@@ -75,9 +84,14 @@ export default function ApprovalQueueClient() {
     setNotes("");
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
-      setEditedBody(current.draft.editedBody ?? current.draft.aiBody);
+      setEditedBody(ensureEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
     }
   }, [current?.queueItem.id]);
+
+  const selectItem = useCallback((index: number) => {
+    setSelectedIndex(index);
+    setMobileDetailOpen(true);
+  }, []);
 
   const decide = useCallback(
     async (action: ActionKey) => {
@@ -93,15 +107,16 @@ export default function ApprovalQueueClient() {
       if ((action === "approve" || action === "approve_with_edits") && current.contact?.email && current.draft) {
         const to = current.contact.email;
         const subject = action === "approve_with_edits" ? editedSubject : current.draft.editedSubject ?? current.draft.aiSubject;
-        const body = action === "approve_with_edits" ? editedBody : current.draft.editedBody ?? current.draft.aiBody;
+        const body = ensureEmailSignature(
+          action === "approve_with_edits" ? editedBody : current.draft.editedBody ?? current.draft.aiBody
+        );
         launchMailto(buildMailtoUrl(to, subject, body));
 
         // We have no reliable signal on whether a mail client actually opened (a webmail handler
         // like Gmail only catches mailto: if explicitly granted permission in this browser — see
         // lib/sales/outreach/mailto.ts), so always also copy the draft to the clipboard as a
         // fallback the reviewer can paste into a fresh email.
-        navigator.clipboard
-          ?.writeText(buildEmailPlainText(to, subject, body))
+        copyEmailToClipboard(to, subject, body, emailBodyToHtml(body))
           .then(() => showCopyStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
           .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
       }
@@ -115,13 +130,14 @@ export default function ApprovalQueueClient() {
             action,
             notes: notes || null,
             editedSubject: action === "approve_with_edits" ? editedSubject : undefined,
-            editedBody: action === "approve_with_edits" ? editedBody : undefined,
+            editedBody: action === "approve_with_edits" ? ensureEmailSignature(editedBody) : undefined,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Decision failed");
         setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
         setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
+        setMobileDetailOpen(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Decision failed");
       } finally {
@@ -139,9 +155,14 @@ export default function ApprovalQueueClient() {
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((i) => Math.min(items.length - 1, i + 1));
+        setMobileDetailOpen(true);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((i) => Math.max(0, i - 1));
+        setMobileDetailOpen(true);
+      } else if (e.key === "Escape" && mobileDetailOpen) {
+        e.preventDefault();
+        setMobileDetailOpen(false);
       } else {
         const action = ACTIONS.find((a) => a.shortcut.toLowerCase() === e.key.toLowerCase());
         if (action && action.key !== "approve_with_edits") {
@@ -155,7 +176,7 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items.length, decide, editing]);
+  }, [items.length, decide, editing, mobileDetailOpen]);
 
   const pendingCount = items.length;
 
@@ -172,18 +193,19 @@ export default function ApprovalQueueClient() {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-      <div className="rounded-xl border border-gray-800">
+      <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">{pendingCount} pending</div>
-        <ul className="max-h-[75vh] overflow-y-auto">
+        <ul className="max-h-[75vh] overflow-y-auto overscroll-contain">
           {items.map((item, i) => (
             <li key={item.queueItem.id}>
               <button
-                onClick={() => setSelectedIndex(i)}
-                className={`flex w-full items-center justify-between gap-2 border-b border-gray-800 px-4 py-3 text-left text-sm ${
-                  i === selectedIndex ? "bg-gray-800 text-white" : "text-gray-300 hover:bg-gray-900"
+                type="button"
+                onClick={() => selectItem(i)}
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 border-b border-gray-800 px-4 py-3 text-left text-sm touch-manipulation ${
+                  i === selectedIndex ? "bg-gray-800 text-white" : "text-gray-300 hover:bg-gray-900 active:bg-gray-800"
                 }`}
               >
-                <span className="truncate">
+                <span className="min-w-0 flex-1 truncate">
                   <span className="block truncate font-medium">{item.organization.name}</span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunity.title}</span>
                 </span>
@@ -195,7 +217,15 @@ export default function ApprovalQueueClient() {
       </div>
 
       {current && (
-        <div className="rounded-xl border border-gray-800 p-6">
+        <div className={`rounded-xl border border-gray-800 p-4 sm:p-6 ${mobileDetailOpen ? "block" : "hidden lg:block"}`}>
+          <button
+            type="button"
+            onClick={() => setMobileDetailOpen(false)}
+            className="mb-4 inline-flex items-center gap-1 rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 touch-manipulation lg:hidden"
+          >
+            ← Back to queue
+          </button>
+
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold text-white">{current.organization.name}</h2>
@@ -300,7 +330,7 @@ export default function ApprovalQueueClient() {
                 <EmailLaunchLink
                   to={current.contact.email}
                   subject={current.draft.editedSubject ?? current.draft.aiSubject}
-                  body={current.draft.editedBody ?? current.draft.aiBody}
+                  body={draftBody(current)}
                 />
               )}
             </div>
@@ -322,7 +352,7 @@ export default function ApprovalQueueClient() {
               ) : (
                 <div className="mt-2 rounded-md border border-gray-800 bg-gray-900/60 p-3 text-sm text-gray-200">
                   <p className="font-medium">{current.draft.editedSubject ?? current.draft.aiSubject}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-gray-300">{current.draft.editedBody ?? current.draft.aiBody}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-gray-300">{draftBody(current)}</p>
                   {current.draft.status === "qa_flagged" && current.draft.qaFlags && (
                     <div className="mt-3 rounded-md border border-red-800 bg-red-950/40 p-2 text-xs text-red-300">
                       QA flagged: {current.draft.qaFlags.map((f) => f.detail).join(" · ")}
@@ -348,9 +378,10 @@ export default function ApprovalQueueClient() {
             {ACTIONS.map((action) => (
               <button
                 key={action.key}
+                type="button"
                 disabled={busy}
                 onClick={() => (action.key === "approve_with_edits" && !editing ? setEditing(true) : decide(action.key))}
-                className={`rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${action.tone}`}
+                className={`rounded-lg px-3 py-2 text-sm font-medium text-white touch-manipulation disabled:opacity-50 ${action.tone}`}
               >
                 {action.key === "approve_with_edits" && !editing ? "Edit draft" : action.label}{" "}
                 <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>

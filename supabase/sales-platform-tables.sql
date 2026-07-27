@@ -328,7 +328,7 @@ insert into public.outreach_templates (name, opportunity_type_id, body_template,
 select
   'General purpose — v1 default',
   null,
-  E'Hi {{contact_first_name}},\n\nI hope you''re doing well!\n\nI''m {{sender_name}}, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. {{opening_reason}}\n\n{{fit_reason}}\n\nI''ve included a bit more about the experience here:\n{{book_url}}\n\n{{cta}}\n\nThanks, and I hope we have a chance to connect.\n\nBest,\nJoel',
+  E'Hi {{contact_first_name}},\n\nI hope you''re doing well!\n\nI''m {{sender_name}}, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. {{opening_reason}}\n\n{{fit_reason}}\n\nI''ve included a bit more about the experience here:\n{{book_url}}\n\n{{cta}}\n\nThanks, and I hope we have a chance to connect.\n\nBest,\nJoel\n\n--\nJoel DeJong\nCreator, Crowdsource Choir\nhttps://crowdsourcechoir.com\n''One of the Pacific Northwest''s Most Talented Composers''\n—American Songwriter',
   'approved'
 where not exists (
   select 1 from public.outreach_templates where name = 'General purpose — v1 default'
