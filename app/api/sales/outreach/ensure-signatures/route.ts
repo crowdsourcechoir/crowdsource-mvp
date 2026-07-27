@@ -3,7 +3,7 @@ import { ensureEmailSignatures } from "@/lib/sales/outreach/ensureSignatures";
 
 export const dynamic = "force-dynamic";
 
-/** One-shot: append the Crowdsource Choir signature to templates + pending drafts. Idempotent. */
+/** One-shot: strip embedded Crowdsource Choir signatures from templates + pending drafts. Idempotent. */
 export async function POST() {
   try {
     const result = await ensureEmailSignatures();
