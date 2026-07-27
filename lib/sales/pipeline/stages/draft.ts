@@ -7,7 +7,6 @@ import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
 import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "../../outreach/bookUrl";
-import { ensureEmailSignature } from "../../outreach/signature";
 import type { Contact, Organization, Opportunity } from "../../types";
 import type { BriefStageOutput } from "./brief";
 
@@ -38,13 +37,7 @@ If it feels like it could be a fit, I'd love to schedule a quick call and learn 
 Thanks, and I hope we have a chance to connect.
 
 Best,
-Joel
-
---
 Joel DeJong
-Creator, Crowdsource Choir
-'One of the Pacific Northwest's Most Talented Composers'
-—American Songwriter
 
 --- EXAMPLE 2 ---
 Hi Samantha,
@@ -64,13 +57,7 @@ If it resonates, I'd love to connect and explore whether Crowdsource Choir might
 Thanks for your time, and I hope we have a chance to connect.
 
 Best,
-Joel
-
---
-Joel DeJong
-Creator, Crowdsource Choir
-'One of the Pacific Northwest's Most Talented Composers'
-—American Songwriter`;
+Joel DeJong`;
 
 const SYSTEM_PROMPT = `You fill in three fields (subject, openingReason, fitReason) inside a fixed outreach email template — you do not write a full free-form email, and you do not write the greeting, sign-off, or closing ask, those are already fixed elsewhere. Match the voice of the two real emails below exactly: warm but plain-spoken, never salesy, no corporate throat-clearing.
 
@@ -154,20 +141,18 @@ export async function runDraftStage(
   const contactFirstName = (contact.fullName ?? "").split(" ")[0] || "there";
   // Sanitize before fill so a stale DB template that still says "I've attached..." cannot
   // ship — cold outreach always links to /book (see lib/sales/outreach/bookUrl.ts).
-  const body = ensureEmailSignature(
-    replaceAttachmentWithBookLink(
-      fillTemplate(replaceAttachmentInTemplate(template.bodyTemplate), {
-        contact_first_name: contactFirstName,
-        opening_reason: result.parsed.openingReason,
-        fit_reason: result.parsed.fitReason,
-        opportunity_title: opportunity.title,
-        sender_name: SALES_SENDER_NAME,
-        // Deterministic, not AI-authored — the "ask" always matches the assigned persona strategy
-        // exactly, same rationale as the rest of the template-fill approach (see SYSTEM_PROMPT above).
-        cta: strategy.cta,
-        book_url: bookUrl(),
-      })
-    )
+  const body = replaceAttachmentWithBookLink(
+    fillTemplate(replaceAttachmentInTemplate(template.bodyTemplate), {
+      contact_first_name: contactFirstName,
+      opening_reason: result.parsed.openingReason,
+      fit_reason: result.parsed.fitReason,
+      opportunity_title: opportunity.title,
+      sender_name: SALES_SENDER_NAME,
+      // Deterministic, not AI-authored — the "ask" always matches the assigned persona strategy
+      // exactly, same rationale as the rest of the template-fill approach (see SYSTEM_PROMPT above).
+      cta: strategy.cta,
+      book_url: bookUrl(),
+    })
   );
 
   void resolveFindingIds(indexed, result.parsed.personalizationFindingIndexes); // kept in agent_runs.output for provenance

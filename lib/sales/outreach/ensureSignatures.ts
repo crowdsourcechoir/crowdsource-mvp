@@ -1,22 +1,25 @@
 import { requireSupabaseAdmin } from "../db/client";
-import { ensureEmailSignature, hasEmailSignature } from "./signature";
+import { hasEmailSignature, stripEmailSignature } from "./signature";
 
 export type EnsureEmailSignaturesResult = {
   templatesUpdated: number;
   draftsUpdated: number;
   draftsScanned: number;
   draftsAlreadySigned: number;
+  draftsAlreadyClean: number;
 };
 
 /**
- * Appends the Crowdsource Choir press-quote signature after "Best,\nJoel" on all outreach
- * templates and non-terminal drafts. Idempotent — safe to re-run.
+ * Strips the embedded Crowdsource Choir press-quote signature from templates and non-terminal
+ * drafts. Gmail already appends Joel's signature on mailto launch, so embedding it duplicated.
+ * Idempotent — safe to re-run.
  */
 export async function ensureEmailSignatures(): Promise<EnsureEmailSignaturesResult> {
   const db = requireSupabaseAdmin();
   let templatesUpdated = 0;
   let draftsUpdated = 0;
   let draftsAlreadySigned = 0;
+  let draftsAlreadyClean = 0;
   let draftsScanned = 0;
 
   const { data: templates, error: templatesError } = await db.from("outreach_templates").select("id, body_template");
@@ -24,7 +27,7 @@ export async function ensureEmailSignatures(): Promise<EnsureEmailSignaturesResu
 
   for (const row of templates ?? []) {
     const current = (row.body_template as string) ?? "";
-    const next = ensureEmailSignature(current);
+    const next = stripEmailSignature(current);
     if (next === current) continue;
     const { error } = await db
       .from("outreach_templates")
@@ -50,10 +53,11 @@ export async function ensureEmailSignatures(): Promise<EnsureEmailSignaturesResu
       draftsScanned += 1;
       const aiBody = (row.ai_body as string) ?? "";
       const editedBody = (row.edited_body as string | null) ?? null;
-      const nextAi = ensureEmailSignature(aiBody);
-      const nextEdited = editedBody ? ensureEmailSignature(editedBody) : null;
+      const nextAi = stripEmailSignature(aiBody);
+      const nextEdited = editedBody ? stripEmailSignature(editedBody) : null;
       if (nextAi === aiBody && nextEdited === editedBody) {
         if (hasEmailSignature(aiBody)) draftsAlreadySigned += 1;
+        else draftsAlreadyClean += 1;
         continue;
       }
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -68,5 +72,5 @@ export async function ensureEmailSignatures(): Promise<EnsureEmailSignaturesResu
     from += pageSize;
   }
 
-  return { templatesUpdated, draftsUpdated, draftsScanned, draftsAlreadySigned };
+  return { templatesUpdated, draftsUpdated, draftsScanned, draftsAlreadySigned, draftsAlreadyClean };
 }

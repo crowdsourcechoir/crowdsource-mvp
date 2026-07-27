@@ -5,9 +5,8 @@ import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
-import { emailBodyToHtml, ensureEmailSignature } from "@/lib/sales/outreach/signature";
+import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
-import DraftEmailBody from "@/components/sales/DraftEmailBody";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -23,11 +22,6 @@ const ACTIONS: { key: ActionKey; label: string; shortcut: string; tone: string }
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 70 ? "text-emerald-400 border-emerald-700" : score >= 45 ? "text-amber-400 border-amber-700" : "text-gray-400 border-gray-700";
   return <span className={`rounded-md border px-2 py-0.5 text-sm font-semibold ${color}`}>{score.toFixed(0)}</span>;
-}
-
-function draftBody(item: QueueItemDetail): string {
-  if (!item.draft) return "";
-  return ensureEmailSignature(item.draft.editedBody ?? item.draft.aiBody);
 }
 
 export default function ApprovalQueueClient() {
@@ -85,7 +79,7 @@ export default function ApprovalQueueClient() {
     setNotes("");
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
-      setEditedBody(ensureEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
+      setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
     }
   }, [current?.queueItem.id]);
 
@@ -108,7 +102,7 @@ export default function ApprovalQueueClient() {
       if ((action === "approve" || action === "approve_with_edits") && current.contact?.email && current.draft) {
         const to = current.contact.email;
         const subject = action === "approve_with_edits" ? editedSubject : current.draft.editedSubject ?? current.draft.aiSubject;
-        const body = ensureEmailSignature(
+        const body = stripEmailSignature(
           action === "approve_with_edits" ? editedBody : current.draft.editedBody ?? current.draft.aiBody
         );
         launchMailto(buildMailtoUrl(to, subject, body));
@@ -117,7 +111,7 @@ export default function ApprovalQueueClient() {
         // like Gmail only catches mailto: if explicitly granted permission in this browser — see
         // lib/sales/outreach/mailto.ts), so always also copy the draft to the clipboard as a
         // fallback the reviewer can paste into a fresh email.
-        copyEmailToClipboard(to, subject, body, emailBodyToHtml(body))
+        copyEmailToClipboard(to, subject, body)
           .then(() => showCopyStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
           .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
       }
@@ -131,7 +125,7 @@ export default function ApprovalQueueClient() {
             action,
             notes: notes || null,
             editedSubject: action === "approve_with_edits" ? editedSubject : undefined,
-            editedBody: action === "approve_with_edits" ? ensureEmailSignature(editedBody) : undefined,
+            editedBody: action === "approve_with_edits" ? stripEmailSignature(editedBody) : undefined,
           }),
         });
         const data = await res.json();
@@ -331,7 +325,7 @@ export default function ApprovalQueueClient() {
                 <EmailLaunchLink
                   to={current.contact.email}
                   subject={current.draft.editedSubject ?? current.draft.aiSubject}
-                  body={draftBody(current)}
+                  body={stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
                 />
               )}
             </div>
@@ -353,9 +347,9 @@ export default function ApprovalQueueClient() {
               ) : (
                 <div className="mt-2 rounded-md border border-gray-800 bg-gray-900/60 p-3 text-sm text-gray-200">
                   <p className="font-medium">{current.draft.editedSubject ?? current.draft.aiSubject}</p>
-                  <div className="mt-2">
-                    <DraftEmailBody body={draftBody(current)} className="whitespace-pre-wrap text-sm text-gray-300" />
-                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-gray-300">
+                    {stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
+                  </p>
                   {current.draft.status === "qa_flagged" && current.draft.qaFlags && (
                     <div className="mt-3 rounded-md border border-red-800 bg-red-950/40 p-2 text-xs text-red-300">
                       QA flagged: {current.draft.qaFlags.map((f) => f.detail).join(" · ")}

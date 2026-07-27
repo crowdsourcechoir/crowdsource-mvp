@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
+import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
-import DraftEmailBody from "@/components/sales/DraftEmailBody";
 
 export default function OpportunityDetailClient({ opportunityId }: { opportunityId: string }) {
   const [detail, setDetail] = useState<QueueItemDetail | null>(null);
@@ -49,9 +49,11 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           <p className="text-sm text-gray-300">{detail.score.rationale}</p>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {Object.entries(detail.score.componentScores).map(([key, c]) => (
-              <div key={key} className="rounded-md border border-gray-800 p-2 text-xs">
-                <div className="text-gray-500">{key.replace(/_/g, " ")}</div>
-                <div className="text-gray-200">{c.score}/10</div>
+              <div key={key} className="rounded-md border border-gray-800 bg-gray-900/40 p-2">
+                <p className="text-xs uppercase tracking-wide text-gray-500">{key}</p>
+                <p className="text-sm text-gray-200">
+                  {c.score}/10 <span className="text-gray-500">× {c.weight}</span>
+                </p>
               </div>
             ))}
           </div>
@@ -71,12 +73,9 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             )}
           </div>
           <p className="font-medium text-gray-100">{detail.draft.editedSubject ?? detail.draft.aiSubject}</p>
-          <div className="mt-2">
-            <DraftEmailBody
-              body={detail.draft.editedBody ?? detail.draft.aiBody}
-              className="whitespace-pre-wrap text-sm text-gray-300"
-            />
-          </div>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-300">
+            {stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody)}
+          </p>
           {detail.contact?.email && (
             <p className="mt-2 text-xs text-gray-600">
               Note: webmail (e.g. Gmail) only opens automatically if you’ve explicitly granted it mailto: handler permission in this

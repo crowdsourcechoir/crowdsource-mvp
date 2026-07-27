@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
-import { emailBodyToHtml, ensureEmailSignature } from "@/lib/sales/outreach/signature";
+import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 
 /**
  * Standalone "Open in email client" trigger, shared between the approval queue and the single-
@@ -34,14 +34,15 @@ export default function EmailLaunchLink({
   }, []);
 
   const handleClick = useCallback(() => {
-    const signedBody = ensureEmailSignature(body);
+    // Strip any previously embedded press-quote block — Gmail appends Joel's signature itself.
+    const cleanBody = stripEmailSignature(body);
     // Fire the mailto navigation synchronously, in the same click event, before touching the
     // clipboard API — same user-gesture reasoning as the approve flow in ApprovalQueueClient.
-    launchMailto(buildMailtoUrl(to, subject, signedBody));
+    launchMailto(buildMailtoUrl(to, subject, cleanBody));
 
     if (clearTimer.current) clearTimeout(clearTimer.current);
 
-    copyEmailToClipboard(to, subject, signedBody, emailBodyToHtml(signedBody))
+    copyEmailToClipboard(to, subject, cleanBody)
       .then(() => setStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
       .catch(() => setStatus("Couldn't copy the draft to your clipboard automatically."));
 
