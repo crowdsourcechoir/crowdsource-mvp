@@ -69,8 +69,8 @@ export default function DigestClient() {
 
       {noProviderConfigured && (
         <p className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-          No email provider configured — this was a no-op. Add <span className="font-mono">RESEND_API_KEY</span> and{" "}
-          <span className="font-mono">SALES_DIGEST_TO_EMAIL</span> to activate the digest.
+          No email provider configured — this was a no-op. Add <span className="font-mono">RESEND_API_KEY</span> to
+          activate the digest (sends to sing@crowdsourcechoir.com by default).
         </p>
       )}
 

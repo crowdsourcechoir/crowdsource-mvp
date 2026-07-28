@@ -82,11 +82,28 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
   return { items, sinceIso, backlogCount };
 }
 
+/** Canonical morning-digest inbox. */
+export const DEFAULT_DIGEST_TO_EMAIL = "sing@crowdsourcechoir.com";
+
+/**
+ * Resolve digest recipient. Prefer an explicit per-send override, otherwise the
+ * Crowdsource ops inbox. `SALES_DIGEST_TO_EMAIL` overrides when set (for staging);
+ * the retired crowdsourcechoir@gmail.com value is ignored so stale Vercel env cannot
+ * keep routing mail away from sing@.
+ */
+function resolveDigestToEmail(override?: string): string {
+  const fromOverride = override?.trim();
+  if (fromOverride) return fromOverride;
+  const fromEnv = process.env.SALES_DIGEST_TO_EMAIL?.trim();
+  if (fromEnv && fromEnv.toLowerCase() !== "crowdsourcechoir@gmail.com") return fromEnv;
+  return DEFAULT_DIGEST_TO_EMAIL;
+}
+
 /**
  * Sends the "new leads since last digest" email — the actual "in my inbox every morning" piece.
- * A no-op (recorded as `skipped_no_provider`, never an error) if RESEND_API_KEY or
- * SALES_DIGEST_TO_EMAIL aren't set, same graceful-degradation contract as discovery/enrichment
- * (see docs/sales-platform/roadmap.md).
+ * A no-op (recorded as `skipped_no_provider`, never an error) if RESEND_API_KEY isn't set,
+ * same graceful-degradation contract as discovery/enrichment (see docs/sales-platform/roadmap.md).
+ * Recipient is sing@crowdsourcechoir.com (override via options.to or SALES_DIGEST_TO_EMAIL).
  *
  * Only includes leads scoring >= SALES_DIGEST_MIN_SCORE (default 70). Cron callers should use
  * `ensureDigestTarget` so the email waits until SALES_DIGEST_TARGET_COUNT (default 10) qualify;
@@ -94,12 +111,18 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
  */
 export async function sendDailyDigest(
   trigger: "manual" | "cron" = "cron",
-  options?: { items?: QueueItemDetail[]; sinceIso?: string; backlogCount?: number; minScore?: number }
+  options?: {
+    items?: QueueItemDetail[];
+    sinceIso?: string;
+    backlogCount?: number;
+    minScore?: number;
+    to?: string;
+  }
 ): Promise<DigestSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.SALES_DIGEST_TO_EMAIL;
+  const to = resolveDigestToEmail(options?.to);
   const minScore = options?.minScore ?? getDigestMinScore();
-  if (!apiKey || !to) {
+  if (!apiKey) {
     return { status: "skipped_no_provider", itemCount: 0, minScore };
   }
 
