@@ -86,6 +86,7 @@ create table if not exists public.opportunities (
   event_or_initiative_name text,
   event_date_estimate date,
   event_date_confidence text check (event_date_confidence in ('confirmed', 'estimated', 'unknown')),
+  event_website_url text,
   description text,
   status text not null default 'new'
     check (status in ('new', 'researching', 'ready_for_review', 'approved', 'rejected', 'deferred', 'needs_more_research', 'duplicate')),

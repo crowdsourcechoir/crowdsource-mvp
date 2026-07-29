@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { QueueItemDetail } from "@/lib/sales/types";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { resolveProspectWebsite } from "@/lib/sales/prospectWebsite";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 export default function OpportunityDetailClient({ opportunityId }: { opportunityId: string }) {
@@ -29,6 +30,12 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   if (error) return <p className="text-red-400">{error}</p>;
   if (!detail) return <p className="text-gray-400">Loading…</p>;
 
+  const prospectWebsite = resolveProspectWebsite({
+    eventWebsiteUrl: detail.opportunity.eventWebsiteUrl,
+    organizationWebsiteUrl: detail.organization.websiteUrl,
+    findingSourceUrls: detail.findings.map((f) => f.sourceUrl),
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -39,6 +46,21 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
         <p className="text-sm text-gray-400">
           Status: {detail.queueItem.status} {detail.opportunityTypeLabel ? `· ${detail.opportunityTypeLabel}` : ""}
         </p>
+        {prospectWebsite ? (
+          <p className="mt-1 text-sm text-gray-300">
+            <span className="text-gray-500">{prospectWebsite.label}: </span>
+            <a
+              href={prospectWebsite.url}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all text-sky-400 underline hover:text-sky-300"
+            >
+              {prospectWebsite.url.replace(/^https?:\/\//i, "")}
+            </a>
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-gray-500">No website on file</p>
+        )}
       </div>
 
       {detail.score && (

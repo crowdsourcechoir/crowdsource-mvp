@@ -51,6 +51,8 @@ export function buildOpportunityDetectionSchema(opportunityTypeKeys: string[]) {
         eventOrInitiativeName: z.string().nullable(),
         eventDateEstimate: z.string().nullable(),
         eventDateConfidence: z.enum(["confirmed", "estimated", "unknown"]),
+        /** Official site for this specific conference/event if evidenced in findings; otherwise null. */
+        eventWebsiteUrl: z.string().nullable(),
         description: z.string(),
         supportingFindingIndexes: z.array(z.number().int()),
       })

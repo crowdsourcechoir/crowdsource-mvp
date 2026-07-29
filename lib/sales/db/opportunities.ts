@@ -10,6 +10,7 @@ function rowToOpportunity(row: Record<string, unknown>): Opportunity {
     eventOrInitiativeName: (row.event_or_initiative_name as string | null) ?? null,
     eventDateEstimate: (row.event_date_estimate as string | null) ?? null,
     eventDateConfidence: (row.event_date_confidence as Opportunity["eventDateConfidence"]) ?? null,
+    eventWebsiteUrl: (row.event_website_url as string | null) ?? null,
     description: (row.description as string | null) ?? null,
     status: (row.status as OpportunityStatus) ?? "new",
     targetContactRoleHint: (row.target_contact_role_hint as string | null) ?? null,
@@ -28,6 +29,7 @@ export type CreateOpportunityInput = {
   eventOrInitiativeName?: string | null;
   eventDateEstimate?: string | null;
   eventDateConfidence?: Opportunity["eventDateConfidence"];
+  eventWebsiteUrl?: string | null;
   description?: string | null;
   status?: OpportunityStatus;
   targetContactRoleHint?: string | null;
@@ -73,6 +75,7 @@ export async function createOpportunity(input: CreateOpportunityInput): Promise<
     event_or_initiative_name: input.eventOrInitiativeName ?? null,
     event_date_estimate: input.eventDateEstimate ?? null,
     event_date_confidence: input.eventDateConfidence ?? null,
+    event_website_url: input.eventWebsiteUrl ?? null,
     description: input.description ?? null,
     status: input.status ?? "new",
     target_contact_role_hint: input.targetContactRoleHint ?? null,

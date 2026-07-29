@@ -6,6 +6,7 @@ import type { QueueItemDetail } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { resolveProspectWebsite } from "@/lib/sales/prospectWebsite";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -22,6 +23,25 @@ const ACTIONS: { key: ActionKey; label: string; shortcut: string; tone: string }
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 70 ? "text-emerald-400 border-emerald-700" : score >= 45 ? "text-amber-400 border-amber-700" : "text-gray-400 border-gray-700";
   return <span className={`rounded-md border px-2 py-0.5 text-sm font-semibold ${color}`}>{score.toFixed(0)}</span>;
+}
+
+function ProspectWebsiteLink({ detail }: { detail: QueueItemDetail }) {
+  const site = resolveProspectWebsite({
+    eventWebsiteUrl: detail.opportunity.eventWebsiteUrl,
+    organizationWebsiteUrl: detail.organization.websiteUrl,
+    findingSourceUrls: detail.findings.map((f) => f.sourceUrl),
+  });
+  if (!site) {
+    return <p className="mt-1 text-sm text-gray-500">No website on file</p>;
+  }
+  return (
+    <p className="mt-1 text-sm text-gray-200">
+      <span className="text-gray-500">{site.label}: </span>
+      <a href={site.url} target="_blank" rel="noreferrer" className="break-all text-sky-400 underline hover:text-sky-300">
+        {site.url.replace(/^https?:\/\//i, "")}
+      </a>
+    </p>
+  );
 }
 
 export default function ApprovalQueueClient() {
@@ -228,6 +248,7 @@ export default function ApprovalQueueClient() {
                 {current.organizationTypeLabel ?? "Type unknown"} · {current.opportunity.title}
                 {current.opportunityTypeLabel ? ` (${current.opportunityTypeLabel})` : ""}
               </p>
+              <ProspectWebsiteLink detail={current} />
               {current.queueItem.duplicateWarning && (
                 <p className="mt-1 text-sm font-medium text-amber-400">⚠ Possible duplicate organization</p>
               )}

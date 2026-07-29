@@ -4,6 +4,7 @@ import { listOpportunityTypes, findOpportunityTypeByKey } from "../../db/lookups
 import { createOpportunity, findExistingOpportunityByTitle, listOpportunitiesForOrganization } from "../../db/opportunities";
 import { listFindingsForOrganization } from "../../db/research";
 import { indexFindingsForPrompt, resolveFindingIds } from "../context";
+import { normalizeHttpUrl } from "../../prospectWebsite";
 import type { Organization, Opportunity } from "../../types";
 
 export type DetectOpportunitiesStageOutput = {
@@ -16,7 +17,9 @@ export type DetectOpportunitiesStageOutput = {
 /** Product decision: one opportunity per organization. A human can still add a second manually if a real, separate case comes up. */
 const MAX_OPPORTUNITIES_PER_ORGANIZATION = 1;
 
-const SYSTEM_PROMPT = `Given an organization and researched findings, identify specific reasons a participatory choir/anthem live-audience experience could be relevant to them (e.g. an annual conference, employee gathering, fan engagement initiative, season launch, orientation, gala, retreat, festival, convention). Do not repeat opportunities that are already known/listed. Only propose an opportunity if there's a real, stated reason for it in the findings or organization context — do not invent an event that isn't evidenced. If one or more opportunities are already known, be conservative: only add a new one if it is clearly a separate, distinctly-named recurring program or event, not a rewording of something already listed.`;
+const SYSTEM_PROMPT = `Given an organization and researched findings, identify specific reasons a participatory choir/anthem live-audience experience could be relevant to them (e.g. an annual conference, employee gathering, fan engagement initiative, season launch, orientation, gala, retreat, festival, convention). Do not repeat opportunities that are already known/listed. Only propose an opportunity if there's a real, stated reason for it in the findings or organization context — do not invent an event that isn't evidenced. If one or more opportunities are already known, be conservative: only add a new one if it is clearly a separate, distinctly-named recurring program or event, not a rewording of something already listed.
+
+For eventWebsiteUrl: set the official website for that specific conference/event/initiative when a URL appears in the findings (usually a finding's "source:" URL that is clearly the event page — e.g. a /conference, /events, convention subdomain, or dedicated event domain). Prefer an event-specific URL over the organization's general homepage. Never invent or guess a URL that is not present in the findings. If no event-specific site is evidenced, return null.`;
 
 export async function runDetectOpportunitiesStage(
   org: Organization,
@@ -68,6 +71,7 @@ export async function runDetectOpportunitiesStage(
       eventOrInitiativeName: proposed.eventOrInitiativeName,
       eventDateEstimate: proposed.eventDateEstimate,
       eventDateConfidence: proposed.eventDateConfidence,
+      eventWebsiteUrl: normalizeHttpUrl(proposed.eventWebsiteUrl),
       description: proposed.description,
       status: "researching",
     });

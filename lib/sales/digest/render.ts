@@ -1,4 +1,5 @@
 import type { QueueItemDetail } from "../types";
+import { resolveProspectWebsite } from "../prospectWebsite";
 
 export type DigestStats = {
   newCount: number;
@@ -21,12 +22,24 @@ function contactLine(item: QueueItemDetail): string {
   return `${name} — ${item.contact.roleTitle ?? "role unknown"} (${email}, ${statusLabel})`;
 }
 
+function websiteLine(item: QueueItemDetail): string | null {
+  const site = resolveProspectWebsite({
+    eventWebsiteUrl: item.opportunity.eventWebsiteUrl,
+    organizationWebsiteUrl: item.organization.websiteUrl,
+    findingSourceUrls: item.findings.map((f) => f.sourceUrl),
+  });
+  if (!site) return null;
+  return `${site.label}: ${site.url}`;
+}
+
 function itemToPlainLines(item: QueueItemDetail, baseUrl: string): string[] {
   const score = item.score ? `${item.score.totalScore}/100` : "not scored";
   const opportunityUrl = `${baseUrl}/admin/sales/opportunities/${item.opportunity.id}`;
+  const website = websiteLine(item);
   return [
     `${item.organization.name} — ${item.opportunity.title} (score: ${score})`,
     `  ${item.opportunityTypeLabel ?? "Uncategorized"}${item.organizationTypeLabel ? ` · ${item.organizationTypeLabel}` : ""}`,
+    website ? `  ${website}` : "",
     `  Contact: ${contactLine(item)}`,
     item.queueItem.duplicateWarning ? "  ⚠ possible duplicate — check before approving" : "",
     `  Review: ${opportunityUrl}`,
@@ -36,6 +49,11 @@ function itemToPlainLines(item: QueueItemDetail, baseUrl: string): string[] {
 function itemToHtmlBlock(item: QueueItemDetail, baseUrl: string): string {
   const score = item.score ? `${item.score.totalScore}/100` : "not scored";
   const opportunityUrl = `${baseUrl}/admin/sales/opportunities/${item.opportunity.id}`;
+  const site = resolveProspectWebsite({
+    eventWebsiteUrl: item.opportunity.eventWebsiteUrl,
+    organizationWebsiteUrl: item.organization.websiteUrl,
+    findingSourceUrls: item.findings.map((f) => f.sourceUrl),
+  });
   return `
     <tr>
       <td style="padding:14px 0;border-bottom:1px solid #27272a;">
@@ -47,6 +65,13 @@ function itemToHtmlBlock(item: QueueItemDetail, baseUrl: string): string {
             item.organizationTypeLabel ? ` · ${escapeHtml(item.organizationTypeLabel)}` : ""
           }
         </div>
+        ${
+          site
+            ? `<div style="font-size:13px;color:#d4d4d8;margin-top:6px;">${escapeHtml(site.label)}: <a href="${escapeHtml(
+                site.url
+              )}" style="color:#38bdf8;text-decoration:underline;">${escapeHtml(site.url.replace(/^https?:\/\//i, ""))}</a></div>`
+            : ""
+        }
         <div style="font-size:13px;color:#d4d4d8;margin-top:6px;">Contact: ${escapeHtml(contactLine(item))}</div>
         ${
           item.queueItem.duplicateWarning

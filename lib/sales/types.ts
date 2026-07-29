@@ -127,6 +127,8 @@ export type Opportunity = {
   eventOrInitiativeName: string | null;
   eventDateEstimate: string | null;
   eventDateConfidence: "confirmed" | "estimated" | "unknown" | null;
+  /** Conference/event-specific site when known; queue/digest fall back to organization.websiteUrl. */
+  eventWebsiteUrl: string | null;
   description: string | null;
   status: OpportunityStatus;
   targetContactRoleHint: string | null;

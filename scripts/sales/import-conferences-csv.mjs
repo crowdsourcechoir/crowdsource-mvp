@@ -89,6 +89,7 @@ async function main() {
         opportunity_type_id: annualConferenceTypeId,
         title,
         event_or_initiative_name: eventName || null,
+        event_website_url: sourceUrl,
         description: row["Why It Fits Crowdsource Choir Anthem Experience"]?.trim() || null,
         status: "new",
         target_contact_role_hint: row["Likely Buyer / Owner"]?.trim() || null,
