@@ -2,6 +2,8 @@ import type { EnrichmentInput, EnrichmentResult } from "./types";
 
 const HUNTER_FINDER_URL = "https://api.hunter.io/v2/email-finder";
 const FETCH_TIMEOUT_MS = 10000;
+/** Reject Hunter guesses below this confidence — low-score @org-domain hits have bounced in production. */
+const MIN_HUNTER_SCORE = 90;
 
 /**
  * Hunter.io Email Finder — self-serve REST API, genuinely usable on Hunter's free plan (50
@@ -32,7 +34,18 @@ export async function enrichWithHunter(input: EnrichmentInput): Promise<Enrichme
     }
     const body = (await res.json()) as { data?: { email?: string | null; score?: number | null } };
     const email = body.data?.email ?? null;
-    return email ? { provider: "hunter", status: "found", email, error: null } : { provider: "hunter", status: "not_found", email: null, error: null };
+    const score = body.data?.score ?? null;
+    if (!email) return { provider: "hunter", status: "not_found", email: null, error: null, score };
+    if (typeof score === "number" && score < MIN_HUNTER_SCORE) {
+      return {
+        provider: "hunter",
+        status: "not_found",
+        email: null,
+        error: `Hunter score ${score} below minimum ${MIN_HUNTER_SCORE}`,
+        score,
+      };
+    }
+    return { provider: "hunter", status: "found", email, error: null, score };
   } catch (err) {
     return { provider: "hunter", status: "error", email: null, error: err instanceof Error ? err.message : "Hunter request failed" };
   }

@@ -1,5 +1,5 @@
 import { listContactsForOrganization, updateContactVerification } from "../../db/contacts";
-import { isPlausibleEmail, extractDomain } from "../../dedupe";
+import { isPlausibleEmail, extractDomain, domainsMatch } from "../../dedupe";
 import type { Organization } from "../../types";
 
 export type VerifyContactsStageOutput = {
@@ -12,8 +12,14 @@ export type VerifyContactsStageOutput = {
 
 /**
  * Deterministic only — no MX/SMTP probing in v1 (see docs/sales-platform/ai-workflow.md §5).
- * Format-valid + domain matches the org's own domain → "valid_format".
+ * Format-valid + domain matches the org's own domain (including parent/subdomain pairs like
+ * nacada.ksu.edu ↔ ksu.edu) → "valid_format".
  * Format-valid but a different domain (e.g. a personal/agency email) → "risky", still surfaced, never silently promoted.
+ *
+ * Enrichment-sourced guesses (Apollo/Hunter) that merely share a domain are still only
+ * "risky": several @aorn.org Hunter hits bounced in production, so same-domain alone is not
+ * enough evidence to clear the queue gate. Page-literal / human-verified addresses remain
+ * eligible for valid_format / verified_deliverable.
  */
 export async function runVerifyContactsStage(org: Organization): Promise<{ output: VerifyContactsStageOutput }> {
   const contacts = await listContactsForOrganization(org.id);
@@ -33,7 +39,14 @@ export async function runVerifyContactsStage(org: Organization): Promise<{ outpu
     }
     const contactDomain = extractDomain(contact.email.split("@")[1]);
     const orgDomain = org.domain;
-    if (orgDomain && contactDomain && contactDomain !== orgDomain) {
+    const sameOrgDomain = domainsMatch(contactDomain, orgDomain);
+    // Paid enrichment is a guess from a third-party DB — never auto-promote to queue-ready.
+    if (contact.enrichmentProvider && contact.enrichmentStatus === "found") {
+      await updateContactVerification(contact.id, "risky");
+      output.risky += 1;
+      continue;
+    }
+    if (orgDomain && contactDomain && !sameOrgDomain) {
       await updateContactVerification(contact.id, "risky");
       output.risky += 1;
     } else {

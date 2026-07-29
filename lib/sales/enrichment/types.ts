@@ -11,4 +11,6 @@ export type EnrichmentResult = {
   status: "found" | "not_found" | "error";
   email: string | null;
   error: string | null;
+  /** Hunter confidence 0–100 when available; used to reject low-confidence guesses. */
+  score?: number | null;
 };

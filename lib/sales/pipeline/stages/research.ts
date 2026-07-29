@@ -2,6 +2,7 @@ import { callStructured } from "../../openai/client";
 import { PageFindingsSchema } from "../../openai/schemas";
 import { discoverRelevantLinks, fallbackCandidateUrls, fetchPageText, homepageUrl } from "../../research/fetch";
 import { claimLooksLikeCalendarDate, extractCalendarEventDates } from "../../research/extractEventDates";
+import { emailLiterallyPresent } from "../../research/emails";
 import { createResearchFinding, createResearchSource } from "../../db/research";
 import type { Organization } from "../../types";
 
@@ -110,7 +111,12 @@ export async function fetchAndExtractFromUrl(
       }
     }
     for (const person of result.parsed.namedPeopleMentioned) {
-      namedPeople.push({ fullName: person.fullName, roleTitle: person.roleTitle, email: person.email, sourceUrl: url });
+      // Hard backstop: the model is told not to invent emails, but it still constructs plausible
+      // ones (e.g. firstlast@usmayors.org, first.last@nacada.ksu.edu) that then bounce. Only keep
+      // an email when that exact address appears in the fetched page text/HTML (incl. CF decode).
+      const email =
+        person.email && emailLiterallyPresent(person.email, page.text, page.html) ? person.email : null;
+      namedPeople.push({ fullName: person.fullName, roleTitle: person.roleTitle, email, sourceUrl: url });
     }
   } catch {
     // A single page's extraction failing doesn't fail the whole research stage — partial research is acceptable.

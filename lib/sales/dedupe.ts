@@ -24,6 +24,22 @@ export function extractDomain(urlOrDomain: string | null | undefined): string | 
   }
 }
 
+/**
+ * Same-organization domain check that tolerates university/association subdomain setups
+ * (e.g. org domain `nacada.ksu.edu` with staff mailbox `elshaffer@ksu.edu`). Either host may
+ * be a subdomain of the other; bare equality still counts.
+ */
+export function domainsMatch(
+  emailDomain: string | null | undefined,
+  orgDomain: string | null | undefined
+): boolean {
+  const a = extractDomain(emailDomain);
+  const b = extractDomain(orgDomain);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
 export function normalizeEmail(email: string | null | undefined): string | null {
   if (!email) return null;
   const trimmed = email.trim().toLowerCase();

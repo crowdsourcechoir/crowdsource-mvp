@@ -123,6 +123,42 @@ export async function updateContactVerification(
   return rowToContact(data);
 }
 
+export type UpdateContactInput = {
+  fullName?: string | null;
+  roleTitle?: string | null;
+  roleCategory?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  linkedinUrl?: string | null;
+  emailVerificationStatus?: Contact["emailVerificationStatus"];
+  importMetadata?: Record<string, unknown> | null;
+};
+
+/** Partial contact update used by repair scripts and the admin PATCH route. */
+export async function updateContact(id: string, input: UpdateContactInput): Promise<Contact> {
+  const db = requireSupabaseAdmin();
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.fullName !== undefined) patch.full_name = input.fullName;
+  if (input.roleTitle !== undefined) {
+    patch.role_title = input.roleTitle;
+    patch.outreach_persona = classifyOutreachPersona(input.roleTitle);
+  }
+  if (input.roleCategory !== undefined) patch.role_category = input.roleCategory;
+  if (input.email !== undefined) {
+    patch.email = normalizeEmail(input.email) ? input.email : null;
+    patch.normalized_email = normalizeEmail(input.email);
+  }
+  if (input.phone !== undefined) patch.phone = input.phone;
+  if (input.linkedinUrl !== undefined) patch.linkedin_url = input.linkedinUrl;
+  if (input.emailVerificationStatus !== undefined) {
+    patch.email_verification_status = input.emailVerificationStatus;
+  }
+  if (input.importMetadata !== undefined) patch.import_metadata = input.importMetadata;
+  const { data, error } = await db.from("contacts").update(patch).eq("id", id).select().single();
+  if (error) throw new Error(error.message);
+  return rowToContact(data);
+}
+
 /**
  * Records the outcome of a paid enrichment API call and, if an email was found, sets it (and
  * resets email_verification_status to 'unverified' so the verify_contact stage re-checks it).
