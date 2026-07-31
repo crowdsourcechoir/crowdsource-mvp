@@ -78,19 +78,34 @@ export async function getOrganization(id: string): Promise<Organization | null> 
   return data ? rowToOrganization(data) : null;
 }
 
-/** Finds an existing org by domain first (strongest signal), then normalized name. */
+/** Finds an existing org by domain first (strongest signal), then normalized name.
+ * Uses limit(1) rather than maybeSingle: duplicate domain/normalized_name rows exist in
+ * production (no unique constraint), and maybeSingle throws
+ * "JSON object requested, multiple (or no) rows returned" — which was aborting every
+ * discovery cron run and starving the morning digest of new 70+ leads.
+ */
 export async function findExistingOrganization(name: string, websiteUrl?: string | null): Promise<Organization | null> {
   const db = requireSupabaseAdmin();
   const domain = extractDomain(websiteUrl);
   if (domain) {
-    const { data, error } = await db.from("organizations").select("*").eq("domain", domain).maybeSingle();
+    const { data, error } = await db
+      .from("organizations")
+      .select("*")
+      .eq("domain", domain)
+      .order("created_at", { ascending: true })
+      .limit(1);
     if (error) throw new Error(error.message);
-    if (data) return rowToOrganization(data);
+    if (data?.[0]) return rowToOrganization(data[0]);
   }
   const normalized = normalizeOrgName(name);
-  const { data, error } = await db.from("organizations").select("*").eq("normalized_name", normalized).maybeSingle();
+  const { data, error } = await db
+    .from("organizations")
+    .select("*")
+    .eq("normalized_name", normalized)
+    .order("created_at", { ascending: true })
+    .limit(1);
   if (error) throw new Error(error.message);
-  return data ? rowToOrganization(data) : null;
+  return data?.[0] ? rowToOrganization(data[0]) : null;
 }
 
 export async function createOrganization(input: CreateOrganizationInput): Promise<Organization> {
