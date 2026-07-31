@@ -132,6 +132,70 @@ export async function updateDraftDecision(
   return rowToDraft(data);
 }
 
+/**
+ * Persist human edits without approving/launching — keeps the queue item pending so the
+ * reviewer can come back and send later. Also the learning corpus: draft stage pulls recent
+ * rows where edited_* differs from ai_* (see lib/sales/outreach/editLearning.ts).
+ */
+export async function saveDraftEdits(
+  id: string,
+  input: { editedSubject: string; editedBody: string }
+): Promise<OutreachDraft> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("outreach_drafts")
+    .update({
+      edited_subject: input.editedSubject,
+      edited_body: input.editedBody,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToDraft(data);
+}
+
+/** Recent human-edited drafts used as few-shot voice examples for new AI drafts. */
+export async function listHumanEditedDrafts(limit = 5): Promise<OutreachDraft[]> {
+  const db = requireSupabaseAdmin();
+  // Prefer approved_with_edits (explicit human signal), then any draft that has edits saved.
+  const { data: approvedEdits, error: approvedError } = await db
+    .from("outreach_drafts")
+    .select("*")
+    .eq("status", "approved_with_edits")
+    .not("edited_body", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (approvedError) throw new Error(approvedError.message);
+
+  const approved = (approvedEdits ?? []).map(rowToDraft);
+  if (approved.length >= limit) return approved;
+
+  const seen = new Set(approved.map((d) => d.id));
+  const { data: savedEdits, error: savedError } = await db
+    .from("outreach_drafts")
+    .select("*")
+    .not("edited_body", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit * 3);
+  if (savedError) throw new Error(savedError.message);
+
+  const extras: OutreachDraft[] = [];
+  for (const row of savedEdits ?? []) {
+    const draft = rowToDraft(row);
+    if (seen.has(draft.id)) continue;
+    const subjectChanged =
+      !!draft.editedSubject?.trim() && draft.editedSubject.trim() !== draft.aiSubject.trim();
+    const bodyChanged = !!draft.editedBody?.trim() && draft.editedBody.trim() !== draft.aiBody.trim();
+    if (!subjectChanged && !bodyChanged) continue;
+    extras.push(draft);
+    seen.add(draft.id);
+    if (approved.length + extras.length >= limit) break;
+  }
+  return [...approved, ...extras].slice(0, limit);
+}
+
 export async function getDraft(id: string): Promise<OutreachDraft | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db.from("outreach_drafts").select("*").eq("id", id).maybeSingle();

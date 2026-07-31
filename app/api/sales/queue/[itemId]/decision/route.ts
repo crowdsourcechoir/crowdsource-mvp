@@ -55,10 +55,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     }
 
     if (item.outreachDraftId && (action === "approve" || action === "approve_with_edits")) {
+      const hasEdits =
+        typeof body?.editedSubject === "string" || typeof body?.editedBody === "string";
       await updateDraftDecision(item.outreachDraftId, {
-        status: action === "approve_with_edits" ? "approved_with_edits" : "approved",
-        editedSubject: action === "approve_with_edits" ? body?.editedSubject ?? undefined : undefined,
-        editedBody: action === "approve_with_edits" ? body?.editedBody ?? undefined : undefined,
+        status: action === "approve_with_edits" || hasEdits ? "approved_with_edits" : "approved",
+        editedSubject: hasEdits ? body?.editedSubject ?? undefined : undefined,
+        editedBody: hasEdits ? body?.editedBody ?? undefined : undefined,
       });
     } else if (item.outreachDraftId && action === "reject") {
       await updateDraftDecision(item.outreachDraftId, { status: "rejected" });
