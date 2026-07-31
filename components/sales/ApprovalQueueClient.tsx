@@ -36,6 +36,7 @@ export default function ApprovalQueueClient() {
   const [editedBody, setEditedBody] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,6 +78,7 @@ export default function ApprovalQueueClient() {
   useEffect(() => {
     setEditing(false);
     setNotes("");
+    setSaveStatus(null);
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
       setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
@@ -88,9 +90,60 @@ export default function ApprovalQueueClient() {
     setMobileDetailOpen(true);
   }, []);
 
+  const draftSubject = (draft: NonNullable<QueueItemDetail["draft"]>) =>
+    draft.editedSubject ?? draft.aiSubject;
+  const draftBody = (draft: NonNullable<QueueItemDetail["draft"]>) =>
+    stripEmailSignature(draft.editedBody ?? draft.aiBody);
+
+  const saveDraft = useCallback(async () => {
+    if (!current?.draft || busy) return;
+    setBusy(true);
+    setSaveStatus(null);
+    try {
+      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          editedSubject,
+          editedBody: stripEmailSignature(editedBody),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save draft");
+      const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
+      setItems((prev) =>
+        prev.map((item) =>
+          item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item
+        )
+      );
+      setEditedSubject(saved.editedSubject ?? saved.aiSubject);
+      setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
+      setSaveStatus("Draft saved — still in queue. Approve when you’re ready to launch.");
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save draft");
+    } finally {
+      setBusy(false);
+    }
+  }, [current, busy, editedSubject, editedBody]);
+
   const decide = useCallback(
     async (action: ActionKey) => {
       if (!current || busy) return;
+
+      // Prefer in-progress editor values; otherwise whatever was last saved on the draft.
+      const launchSubject =
+        editing || action === "approve_with_edits"
+          ? editedSubject
+          : current.draft
+            ? draftSubject(current.draft)
+            : "";
+      const launchBody =
+        editing || action === "approve_with_edits"
+          ? stripEmailSignature(editedBody)
+          : current.draft
+            ? draftBody(current.draft)
+            : "";
 
       // Must happen synchronously in the click handler, before any `await` — browsers (Safari in
       // particular) only allow a mailto: navigation to open the OS mail client as a direct result
@@ -101,31 +154,33 @@ export default function ApprovalQueueClient() {
       // broadly-reliable way browsers route mailto: navigation to a registered handler.
       if ((action === "approve" || action === "approve_with_edits") && current.contact?.email && current.draft) {
         const to = current.contact.email;
-        const subject = action === "approve_with_edits" ? editedSubject : current.draft.editedSubject ?? current.draft.aiSubject;
-        const body = stripEmailSignature(
-          action === "approve_with_edits" ? editedBody : current.draft.editedBody ?? current.draft.aiBody
-        );
-        launchMailto(buildMailtoUrl(to, subject, body));
+        launchMailto(buildMailtoUrl(to, launchSubject, launchBody));
 
         // We have no reliable signal on whether a mail client actually opened (a webmail handler
         // like Gmail only catches mailto: if explicitly granted permission in this browser — see
         // lib/sales/outreach/mailto.ts), so always also copy the draft to the clipboard as a
         // fallback the reviewer can paste into a fresh email.
-        copyEmailToClipboard(to, subject, body)
+        copyEmailToClipboard(to, launchSubject, launchBody)
           .then(() => showCopyStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
           .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
       }
 
       setBusy(true);
       try {
+        const shouldPersistEdits =
+          action === "approve_with_edits" ||
+          (action === "approve" &&
+            current.draft &&
+            (editing ||
+              !!(current.draft.editedSubject || current.draft.editedBody)));
         const res = await fetch(`/api/sales/queue/${current.queueItem.id}/decision`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action,
+            action: shouldPersistEdits && action === "approve" ? "approve_with_edits" : action,
             notes: notes || null,
-            editedSubject: action === "approve_with_edits" ? editedSubject : undefined,
-            editedBody: action === "approve_with_edits" ? stripEmailSignature(editedBody) : undefined,
+            editedSubject: shouldPersistEdits ? launchSubject : undefined,
+            editedBody: shouldPersistEdits ? launchBody : undefined,
           }),
         });
         const data = await res.json();
@@ -139,14 +194,31 @@ export default function ApprovalQueueClient() {
         setBusy(false);
       }
     },
-    [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus]
+    [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus, editing]
   );
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (editing) return;
       const target = e.target as HTMLElement;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      const inField = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+      if (editing) {
+        if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          saveDraft();
+        } else if (e.key.toLowerCase() === "s" && !inField) {
+          e.preventDefault();
+          saveDraft();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          if (current?.draft) {
+            setEditedSubject(draftSubject(current.draft));
+            setEditedBody(draftBody(current.draft));
+          }
+          setEditing(false);
+        }
+        return;
+      }
+      if (inField) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((i) => Math.min(items.length - 1, i + 1));
@@ -171,7 +243,7 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items.length, decide, editing, mobileDetailOpen]);
+  }, [items.length, decide, editing, mobileDetailOpen, saveDraft, current]);
 
   const pendingCount = items.length;
 
@@ -319,15 +391,26 @@ export default function ApprovalQueueClient() {
           )}
 
           <div className="mt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
-              {current.draft && current.contact?.email && !editing && (
-                <EmailLaunchLink
-                  to={current.contact.email}
-                  subject={current.draft.editedSubject ?? current.draft.aiSubject}
-                  body={stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
-                />
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {current.draft && !editing && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="rounded-md border border-gray-600 px-2 py-1 text-xs text-gray-200 touch-manipulation hover:bg-gray-800"
+                  >
+                    Edit draft
+                  </button>
+                )}
+                {current.draft && current.contact?.email && !editing && (
+                  <EmailLaunchLink
+                    to={current.contact.email}
+                    subject={draftSubject(current.draft)}
+                    body={draftBody(current.draft)}
+                  />
+                )}
+              </div>
             </div>
             {current.draft ? (
               editing ? (
@@ -343,13 +426,40 @@ export default function ApprovalQueueClient() {
                     rows={10}
                     className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
                   />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => saveDraft()}
+                      className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-medium text-white touch-manipulation hover:bg-sky-600 disabled:opacity-50"
+                    >
+                      Save draft <span className="ml-1 text-xs opacity-70">(S)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditedSubject(draftSubject(current.draft!));
+                        setEditedBody(draftBody(current.draft!));
+                        setEditing(false);
+                        setSaveStatus(null);
+                      }}
+                      className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-200 touch-manipulation hover:bg-gray-800 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Save keeps the item in the queue without sending. Your edits also train future AI drafts.
+                  </p>
                 </div>
               ) : (
                 <div className="mt-2 rounded-md border border-gray-800 bg-gray-900/60 p-3 text-sm text-gray-200">
-                  <p className="font-medium">{current.draft.editedSubject ?? current.draft.aiSubject}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-gray-300">
-                    {stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
-                  </p>
+                  {(current.draft.editedSubject || current.draft.editedBody) && (
+                    <p className="mb-2 text-xs font-medium text-sky-400">Saved edits on this draft</p>
+                  )}
+                  <p className="font-medium">{draftSubject(current.draft)}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-gray-300">{draftBody(current.draft)}</p>
                   {current.draft.status === "qa_flagged" && current.draft.qaFlags && (
                     <div className="mt-3 rounded-md border border-red-800 bg-red-950/40 p-2 text-xs text-red-300">
                       QA flagged: {current.draft.qaFlags.map((f) => f.detail).join(" · ")}
@@ -377,21 +487,26 @@ export default function ApprovalQueueClient() {
                 key={action.key}
                 type="button"
                 disabled={busy}
-                onClick={() => (action.key === "approve_with_edits" && !editing ? setEditing(true) : decide(action.key))}
+                onClick={() =>
+                  action.key === "approve_with_edits" && !editing ? setEditing(true) : decide(action.key)
+                }
                 className={`rounded-lg px-3 py-2 text-sm font-medium text-white touch-manipulation disabled:opacity-50 ${action.tone}`}
               >
-                {action.key === "approve_with_edits" && !editing ? "Edit draft" : action.label}{" "}
+                {action.key === "approve_with_edits" && !editing
+                  ? "Edit then approve & launch"
+                  : action.label}{" "}
                 <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
               </button>
             ))}
           </div>
+          {saveStatus && <p className="mt-3 text-xs text-sky-400">{saveStatus}</p>}
           {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; launch email, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
-            <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Approving opens the draft in your default mail app — you send it from
-            there. A link to the experience page (`/book`) is already in the draft body — pricing and
-            other attachments wait until they reply. The full draft is also always copied to
-            your clipboard as a backup.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>e</kbd> edit, <kbd>s</kbd> save draft (while editing),{" "}
+            <kbd>a</kbd> approve &amp; launch email, <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more research,{" "}
+            <kbd>u</kbd> duplicate. Approving opens the draft in your default mail app — you send it from there. A link
+            to the experience page (`/book`) is already in the draft body — pricing and other attachments wait until they
+            reply. The full draft is also always copied to your clipboard as a backup.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>

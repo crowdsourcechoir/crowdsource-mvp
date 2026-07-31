@@ -7,6 +7,7 @@ import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
 import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "../../outreach/bookUrl";
+import { buildHumanEditVoiceExamples } from "../../outreach/editLearning";
 import type { Contact, Organization, Opportunity } from "../../types";
 import type { BriefStageOutput } from "./brief";
 
@@ -122,6 +123,15 @@ export async function runDraftStage(
   const findings = await listFindingsWithSourcesForOpportunity(org.id, opportunity.id);
   const indexed = indexFindingsForPrompt(findings);
 
+  // Pull recent human edits so new drafts converge on Joel's actual revisions over time.
+  let humanEditExamples = "";
+  try {
+    humanEditExamples = await buildHumanEditVoiceExamples(3);
+  } catch {
+    // Non-fatal — static voice references still apply.
+  }
+  const systemPrompt = humanEditExamples ? `${SYSTEM_PROMPT}\n\n${humanEditExamples}` : SYSTEM_PROMPT;
+
   const userContent = [
     `Organization: ${org.name}`,
     `Opportunity: ${opportunity.title}`,
@@ -134,7 +144,7 @@ export async function runDraftStage(
   const result = await callStructured({
     schema: DraftFillSchema,
     schemaName: "draft_fill",
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt,
     userContent,
   });
 
