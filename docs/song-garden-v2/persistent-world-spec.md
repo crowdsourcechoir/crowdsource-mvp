@@ -648,12 +648,12 @@ Keep sales platform untouched.
 
 ## 17. Definition of done (Phase A)
 
-- [ ] Spec reviewed / open choices locked  
-- [ ] Schema applied (prod SQL editor + local store)  
-- [ ] Mutation + snapshot APIs live  
-- [ ] One real multi-show garden (2+ chapters) demoable  
-- [ ] Merch render contract documented (this §10) without storefront  
-- [ ] Architecture.md links here under “Next”
+- [x] Spec reviewed / open choices locked (recommendations in §15)
+- [x] Schema applied (prod SQL editor script + local `.data/local-gardens.json` store)
+- [x] Mutation + snapshot APIs live
+- [ ] One real multi-show garden (2+ chapters) demoable in a live environment
+- [x] Merch render contract documented (this §10) without storefront
+- [x] Architecture.md links here under “Next”
 
 ---
 

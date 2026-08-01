@@ -176,17 +176,25 @@ export async function getConversation(conversationId: string): Promise<{
 export async function sendMessage(
   conversationId: string,
   content: string,
-  options?: { audioDataUrl?: string | null; videoDataUrl?: string | null; captchaToken?: string | null }
+  options?: {
+    audioDataUrl?: string | null;
+    videoDataUrl?: string | null;
+    captchaToken?: string | null;
+    deviceId?: string | null;
+  }
 ): Promise<{
   turn: AgentConversationTurn | null;
   nextMessage: AgentNextMessageResponse;
   agentTurn?: AgentConversationTurn;
+  gardenCelebrationLine?: string | null;
+  gardenWorldVersion?: number | null;
 }> {
   return apiPost(`/api/agent/conversations/${conversationId}/send`, {
     content,
     audioDataUrl: options?.audioDataUrl ?? null,
     videoDataUrl: options?.videoDataUrl ?? null,
     captchaToken: options?.captchaToken ?? null,
+    deviceId: options?.deviceId ?? null,
   });
 }
 

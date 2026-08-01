@@ -28,7 +28,7 @@ type SoundMomentPadProps = {
   /** When set, the participant picks exactly one of [slot, ...alternateSlots] to perform — "add a stomp, clap, or snap" as one moment instead of three. */
   alternateSlots?: GardenSlotDef[];
   /** Called once the clip is durably submitted — parent runs the celebration + advances. */
-  onSubmitted: () => void;
+  onSubmitted: (meta?: { gardenCelebrationLine?: string | null }) => void;
 };
 
 /**
@@ -156,7 +156,7 @@ export default function SoundMomentPad({
       const { blob, durationMs } = await prepareWavFromBlob(pendingClip);
       const filename = sanitizeSoundFilename(activeSlot.label.toLowerCase().replace(/\s+/g, "-"), "wav");
       const credit = contributorName?.trim() || getSonggardenContributorName(eventId)?.trim() || null;
-      await submitSonggardenClip({
+      const submitted = await submitSonggardenClip({
         eventId,
         category: activeSlot.category,
         audio: blob,
@@ -171,7 +171,7 @@ export default function SoundMomentPad({
       saveDoneSlot(eventId, slot.id);
       setPendingClip(null);
       setPhase("done");
-      onSubmitted();
+      onSubmitted({ gardenCelebrationLine: submitted.gardenCelebrationLine });
     } catch (err) {
       setPhase("review");
       setError(err instanceof Error ? err.message : "Couldn't add that sound. Try again.");

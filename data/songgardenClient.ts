@@ -57,6 +57,12 @@ export async function listSonggardenClips(
   return data.clips ?? [];
 }
 
+export type SonggardenSubmitResult = {
+  clip: SonggardenClip;
+  gardenCelebrationLine?: string | null;
+  gardenWorldVersion?: number | null;
+};
+
 export async function submitSonggardenClip(args: {
   eventId: string;
   category: SonggardenCategoryId;
@@ -65,7 +71,7 @@ export async function submitSonggardenClip(args: {
   contributorName?: string | null;
   label?: string | null;
   durationMs?: number | null;
-}): Promise<SonggardenClip> {
+}): Promise<SonggardenSubmitResult> {
   const form = new FormData();
   form.set("eventId", args.eventId);
   form.set("category", args.category);
@@ -81,8 +87,8 @@ export async function submitSonggardenClip(args: {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? "Failed to submit sound");
   }
-  const data = (await res.json()) as { clip: SonggardenClip };
-  return data.clip;
+  const data = (await res.json()) as SonggardenSubmitResult;
+  return data;
 }
 
 export function grantSonggardenAccess(eventId: string): string {

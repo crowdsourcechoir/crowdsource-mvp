@@ -13,6 +13,11 @@ import {
 } from "@/lib/songgarden/rate-limit";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 import { encodeSupabaseBytea } from "@/lib/supabase-bytea";
+import {
+  kindFromSonggardenCategory,
+  recordGardenContribution,
+} from "@/lib/song-garden-v2/garden/store";
+import { effectCelebrationLine } from "@/lib/song-garden-v2/garden/types";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -209,7 +214,19 @@ export async function POST(request: Request) {
       audioBuffer: buffer,
       ext,
     });
-    return NextResponse.json({ clip });
+    const garden = await recordGardenContribution({
+      eventId: trimmedEventId,
+      kind: kindFromSonggardenCategory(String(category)),
+      sourceType: "clip",
+      sourceId: clip.id,
+      deviceId,
+    });
+    return NextResponse.json({
+      clip,
+      gardenEffects: garden?.effects ?? null,
+      gardenCelebrationLine: garden ? effectCelebrationLine(garden.effects) : null,
+      gardenWorldVersion: garden?.worldVersion ?? null,
+    });
   }
 
   if (!supabaseAdmin) {
@@ -238,7 +255,20 @@ export async function POST(request: Request) {
       )
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json({ clip: rowToClip(data) });
+    const clip = rowToClip(data);
+    const garden = await recordGardenContribution({
+      eventId: trimmedEventId,
+      kind: kindFromSonggardenCategory(String(category)),
+      sourceType: "clip",
+      sourceId: clip.id,
+      deviceId,
+    });
+    return NextResponse.json({
+      clip,
+      gardenEffects: garden?.effects ?? null,
+      gardenCelebrationLine: garden ? effectCelebrationLine(garden.effects) : null,
+      gardenWorldVersion: garden?.worldVersion ?? null,
+    });
   } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

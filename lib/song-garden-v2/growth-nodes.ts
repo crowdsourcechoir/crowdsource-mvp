@@ -13,6 +13,8 @@ export type WorldGrowthNode = {
   /** Insertion order — drives the phyllotaxis layout so growth reads as organic, not random. */
   index: number;
   createdAt: number;
+  /** Shared garden field vs this participant's marks. Defaults to personal (local V2). */
+  emphasis?: "personal" | "shared";
 };
 
 function storageKey(eventId: string): string {

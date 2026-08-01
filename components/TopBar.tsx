@@ -9,7 +9,10 @@ type TopBarProps = {
 
 export default function TopBar({ title }: TopBarProps) {
   const pathname = usePathname();
-  const activeEvents = pathname?.startsWith("/admin/events") || pathname?.startsWith("/admin/conductor");
+  const activeEvents =
+    pathname?.startsWith("/admin/events") ||
+    pathname?.startsWith("/admin/conductor") ||
+    pathname?.startsWith("/admin/gardens");
   const activeLive = pathname?.startsWith("/admin/live") || pathname?.startsWith("/admin/live-prompt-game");
   const activeSales = pathname?.startsWith("/admin/sales");
 
@@ -37,10 +40,22 @@ export default function TopBar({ title }: TopBarProps) {
           <Link
             href="/admin/events"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeEvents ? "bg-gray-800 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+              activeEvents && !pathname?.startsWith("/admin/gardens")
+                ? "bg-gray-800 text-white"
+                : "text-gray-400 hover:bg-gray-800 hover:text-white"
             }`}
           >
             Events
+          </Link>
+          <Link
+            href="/admin/gardens"
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              pathname?.startsWith("/admin/gardens")
+                ? "bg-gray-800 text-white"
+                : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            }`}
+          >
+            Gardens
           </Link>
           <Link
             href="/admin/sales"
