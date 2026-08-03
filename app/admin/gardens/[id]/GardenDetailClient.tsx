@@ -92,6 +92,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [orderEdition, setOrderEdition] = useState("");
   const [zones, setZones] = useState<ZoneDraft[]>([]);
   const [sponsors, setSponsors] = useState<SponsorDraft[]>([]);
+  const [mapImageUrl, setMapImageUrl] = useState("");
   const [newZoneLabel, setNewZoneLabel] = useState("");
   const [newZoneBlurb, setNewZoneBlurb] = useState("");
   const [newZonePreset, setNewZonePreset] = useState("nw");
@@ -132,6 +133,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setStatus(gBody.garden?.status ?? "live");
       setZones(zonesFromGarden(gBody.garden ?? null));
       setSponsors(sponsorsFromGarden(gBody.garden ?? null));
+      setMapImageUrl(gBody.garden?.brandKit?.heroArtworkUrl ?? "");
 
       if (eRes.ok) {
         const list = (await eRes.json()) as Event[];
@@ -400,6 +402,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         body: JSON.stringify({
           brandKit: {
             ...(garden?.brandKit ?? {}),
+            heroArtworkUrl: mapImageUrl.trim() || null,
             zones: nextZones,
             sponsors: nextSponsors,
           },
@@ -637,9 +640,27 @@ export default function GardenDetailClient({ gardenId }: Props) {
         <div>
           <h2 className="text-sm font-medium text-gray-200">Fan map</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Add named spots fans can tap on the public garden. No code required.
+            Drop a team aerial or stadium map behind named sponsored zones fans can tap.
           </p>
         </div>
+
+        <label className="block text-xs text-gray-400">
+          Map image URL
+          <input
+            className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+            value={mapImageUrl}
+            onChange={(e) => setMapImageUrl(e.target.value)}
+            placeholder="/fans/ballard-fc/interbay-stadium-map.jpg"
+          />
+        </label>
+        {mapImageUrl.trim() ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={mapImageUrl.trim()}
+            alt=""
+            className="max-h-40 w-full rounded-lg border border-gray-800 object-cover"
+          />
+        ) : null}
 
         {zones.length === 0 ? (
           <p className="text-sm text-gray-500">No zones yet. Add North End / South End to start.</p>

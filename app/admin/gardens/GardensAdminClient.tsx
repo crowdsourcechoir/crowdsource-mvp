@@ -7,10 +7,12 @@ import type { Garden } from "@/lib/song-garden-v2/garden/types";
 export default function GardensAdminClient() {
   const [gardens, setGardens] = useState<Garden[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
+  const [seedingBallard, setSeedingBallard] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,6 +37,7 @@ export default function GardensAdminClient() {
     e.preventDefault();
     setCreating(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch("/api/gardens", {
         method: "POST",
@@ -45,6 +48,7 @@ export default function GardensAdminClient() {
       if (!res.ok) throw new Error(body.error || "Create failed");
       setSlug("");
       setTitle("");
+      setNotice("Garden created.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -53,15 +57,71 @@ export default function GardensAdminClient() {
     }
   }
 
+  async function seedBallardFc() {
+    setSeedingBallard(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/gardens/demos/ballard-fc", { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        publicPath?: string;
+        created?: boolean;
+      };
+      if (!res.ok) throw new Error(body.error || "Could not seed Ballard FC demo");
+      setNotice(
+        body.created
+          ? "Ballard FC Song Garden ready — open the public link to test."
+          : "Ballard FC Song Garden updated with stadium map + zones."
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Seed failed");
+    } finally {
+      setSeedingBallard(false);
+    }
+  }
+
+  const ballard = gardens.find((g) => g.slug === "ballard-fc");
+
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-8 text-gray-100">
       <div>
         <h1 className="text-xl font-semibold text-white">Song Gardens</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Persistent worlds that span multiple show events. Attach events as chapters so
-          contributions grow a shared garden.
+          Persistent worlds for series and team seasons. Fans leave marks on a shared map.
         </p>
       </div>
+
+      <section className="space-y-3 rounded-xl border border-[#CFFF81]/25 bg-[#121214] p-4">
+        <h2 className="text-sm font-medium text-white">Ballard FC demo</h2>
+        <p className="text-xs text-gray-400">
+          Loads Interbay Stadium map with sponsored zones (Supporters, Beer Garden, Tequila Zone,
+          Pagliacci Pitch, …).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={seedingBallard}
+            onClick={() => void seedBallardFc()}
+            className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+          >
+            {seedingBallard
+              ? "Setting up…"
+              : ballard
+                ? "Refresh Ballard FC demo"
+                : "Create Ballard FC demo"}
+          </button>
+          {ballard ? (
+            <Link
+              href="/g/ballard-fc"
+              className="rounded-lg border border-[#CFFF81]/40 px-4 py-2.5 text-sm font-medium text-[#CFFF81]"
+            >
+              Open public garden
+            </Link>
+          ) : null}
+        </div>
+      </section>
 
       <form onSubmit={handleCreate} className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">
         <h2 className="text-sm font-medium text-gray-200">Create garden</h2>
@@ -90,13 +150,16 @@ export default function GardensAdminClient() {
         <button
           type="submit"
           disabled={creating}
-          className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+          className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {creating ? "Creating…" : "Create"}
+          {creating ? "Creating…" : "Create blank garden"}
         </button>
       </form>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {notice && (
+        <p className="rounded-lg bg-[#CFFF81]/10 px-3 py-2 text-sm text-[#CFFF81]">{notice}</p>
+      )}
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
       ) : gardens.length === 0 ? (

@@ -70,8 +70,12 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
   const world = useMemo(() => {
     const base = resolveWorldConfig(fallbackEvent);
     if (!snapshot) return base;
-    return worldConfigFromBrand(snapshot.brand, base);
+    const merged = worldConfigFromBrand(snapshot.brand, base);
+    // Venue / stadium maps belong on the zone card — not as full-bleed stage art.
+    return { ...merged, heroArtworkUrl: null };
   }, [fallbackEvent, snapshot]);
+
+  const mapArtworkUrl = snapshot?.brand.heroArtworkUrl ?? null;
 
   const growthNodes = useMemo((): WorldGrowthNode[] => {
     if (!snapshot) return [];
@@ -162,15 +166,29 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
         </header>
 
         {zones.length > 0 ? (
-          <div className="relative mt-6 aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/15 bg-black/30">
-            <div
-              className="absolute inset-0 opacity-40"
-              style={{
-                background: `radial-gradient(circle at 50% 40%, ${world.accentColor}33, transparent 55%)`,
-              }}
-            />
-            <p className="absolute left-3 top-3 z-10 font-mono text-[10px] uppercase tracking-widest text-white/50">
-              Participation map
+          <div
+            className={`relative mt-6 w-full overflow-hidden rounded-2xl border border-white/15 bg-black/30 ${
+              mapArtworkUrl ? "aspect-[4/3]" : "aspect-[4/5]"
+            }`}
+          >
+            {mapArtworkUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={mapArtworkUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <div
+                className="absolute inset-0 opacity-40"
+                style={{
+                  background: `radial-gradient(circle at 50% 40%, ${world.accentColor}33, transparent 55%)`,
+                }}
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/25" />
+            <p className="absolute left-3 top-3 z-10 font-mono text-[10px] uppercase tracking-widest text-white/80">
+              {mapArtworkUrl ? "Sponsored zones" : "Participation map"}
             </p>
             {zones.map((z) => {
               const active = selectedZone === z.key;
@@ -180,22 +198,26 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   key={z.key}
                   type="button"
                   onClick={() => setSelectedZone(z.key)}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1 text-left text-[11px] font-medium text-white shadow-lg backdrop-blur-sm transition"
+                  className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2.5 py-1.5 text-left text-[11px] font-medium text-white shadow-lg backdrop-blur-sm transition"
                   style={{
                     left: `${z.x * 100}%`,
                     top: `${z.y * 100}%`,
-                    borderColor: active ? world.accentColor : "rgba(255,255,255,0.25)",
-                    background: active ? `${world.accentColor}33` : "rgba(0,0,0,0.55)",
+                    borderColor: active ? world.accentColor : "rgba(255,255,255,0.35)",
+                    background: active ? `${world.accentColor}cc` : "rgba(0,0,0,0.72)",
+                    color: active ? "#0a0a0a" : "#fff",
                     boxShadow: active
                       ? `0 0 18px ${world.accentColor}`
                       : glow > 5
                         ? `0 0 ${8 + glow / 8}px ${world.accentColor}66`
-                        : undefined,
+                        : "0 2px 10px rgba(0,0,0,0.45)",
                   }}
                 >
                   <span className="block whitespace-nowrap">{z.label}</span>
                   {z.sponsor ? (
-                    <span className="block text-[9px] text-white/55">
+                    <span
+                      className="block text-[9px]"
+                      style={{ opacity: active ? 0.75 : 0.7 }}
+                    >
                       {z.sponsor.credit || z.sponsor.name}
                     </span>
                   ) : null}

@@ -190,8 +190,15 @@ curl -X POST "$ORIGIN/api/gardens/$SLUG/pulse" \
 4. Visit `/g/demo-fans`, leave between-show marks (Phase B).
 5. Seal one chapter finale (Phase B).
 6. Pin edition + open merch preview + stub living order (Phase C).
-7. Author zones/sponsors → zone pulses on `/g` → promote ready-shelf goal moment → mark played (Phase D).
+7. Author zones/sponsors (or run **Create Ballard FC demo**) → zone pulses on `/g` → promote ready-shelf goal moment → mark played (Phase D).
 8. Two browsers on `/g` or `/e` to prove shared world version moves for both.
+
+### Ballard FC demo (quick phone test)
+
+1. Admin → Gardens → **Create Ballard FC demo** (or `POST /api/gardens/demos/ballard-fc`).
+2. Open **`/g/ballard-fc`** — Interbay stadium map with sponsored zones.
+3. Tap a zone (Supporters, Beer Garden, Pagliacci Pitch, …) → **Leave a mark**.
+4. Confirm zone energy rises on the card.
 
 ---
 
