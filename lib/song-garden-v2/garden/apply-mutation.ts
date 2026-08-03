@@ -73,9 +73,15 @@ export function applyMutation(
   }
   if (!base.field) base.field = { nodes: [], nextIndex: 0 };
   if (!Array.isArray(base.field.nodes)) base.field.nodes = [];
+  // Backfill zoneKey on nodes persisted before Phase D.
+  base.field.nodes = base.field.nodes.map((n) => ({
+    ...n,
+    zoneKey: n.zoneKey ?? null,
+  }));
   if (!Array.isArray(base.landmarks)) base.landmarks = [];
   if (!base.totals) base.totals = { contributions: 0, participants: 0, byKind: {} };
   if (!base.chapters) base.chapters = { completedIds: [], activeChapterId: null };
+  if (!base.zones || typeof base.zones !== "object") base.zones = {};
 
   const chapterWeight =
     typeof intent.chapterWeight === "number" && Number.isFinite(intent.chapterWeight)
@@ -97,6 +103,7 @@ export function applyMutation(
   const prevLayer = clamp01(Number(base.layers[intent.kind]) || 0);
   const nextLayer = Math.min(policy.layerCap, prevLayer + policy.layerGain * w);
 
+  const zoneKey = intent.zoneKey?.trim() || null;
   const markIndex = base.field.nextIndex;
   const node: SharedGrowthNode = {
     id: `n_${nowMs.toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -104,6 +111,7 @@ export function applyMutation(
     index: markIndex,
     weight: policy.nodeWeight * w,
     chapterId: intent.chapterId,
+    zoneKey,
     createdAt: nowIso,
   };
 
@@ -116,13 +124,35 @@ export function applyMutation(
   if (intent.chapterId) {
     base.chapters.activeChapterId = intent.chapterId;
   }
-  base.updatedAt = nowIso;
-  base.version = (Number(base.version) || 0) + 1;
 
   const effects: WorldEffect[] = [
     { type: "energy_up", delta: energyDelta },
     { type: "layer_up", kind: intent.kind, level: nextLayer },
   ];
+
+  if (zoneKey) {
+    const prevZone = base.zones[zoneKey] ?? {
+      energy: 0,
+      contributions: 0,
+      lastContributionAt: null,
+    };
+    const zoneEnergy = Math.min(policy.energyCap, clamp01(prevZone.energy) + energyDelta);
+    const zoneContributions = (prevZone.contributions || 0) + 1;
+    base.zones[zoneKey] = {
+      energy: zoneEnergy,
+      contributions: zoneContributions,
+      lastContributionAt: nowIso,
+    };
+    effects.push({
+      type: "zone_up",
+      zoneKey,
+      energy: zoneEnergy,
+      contributions: zoneContributions,
+    });
+  }
+
+  base.updatedAt = nowIso;
+  base.version = (Number(base.version) || 0) + 1;
 
   const unlockedKeys = new Set(base.landmarks.map((l) => l.key));
   for (const rule of policy.landmarks) {
@@ -163,6 +193,7 @@ export function applyMutation(
       weight: w,
       damping: damp,
       nodeId: node.id,
+      zoneKey,
     },
     markIndex,
   };
@@ -303,6 +334,8 @@ export function replayMutationsToState(args: {
         sourceId: mut.sourceId,
         deviceId: mut.deviceId,
         forcedWeight: forced,
+        zoneKey:
+          typeof mut.delta.zoneKey === "string" ? String(mut.delta.zoneKey) : null,
         recentDeviceMutationAts: recent,
       },
       args.policy,

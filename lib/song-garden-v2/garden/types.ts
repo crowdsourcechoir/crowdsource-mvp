@@ -21,6 +21,39 @@ export type BrandKit = {
   animationPreset: "particles" | "aurora" | "glow" | "none";
   ambientSoundtrackUrl: string | null;
   bloomStoryboard: WorldStoryboardFrame[];
+  /**
+   * Crowdsource Fans schematic participation map (not a literal seat map).
+   * Choir/conference gardens may leave this empty.
+   */
+  zones: ZoneDef[];
+  /** Optional sponsor catalog referenced by zone.sponsorKey */
+  sponsors: SponsorDef[];
+};
+
+export type ZoneDef = {
+  key: string;
+  label: string;
+  /** Optional sponsor owning/enabling this zone */
+  sponsorKey?: string | null;
+  /** 0..1 position on schematic map */
+  x: number;
+  y: number;
+  /** Short hint shown on the public map */
+  blurb?: string | null;
+};
+
+export type SponsorDef = {
+  key: string;
+  name: string;
+  logoUrl?: string | null;
+  /** Soft in-world credit, e.g. "Enabled by…" */
+  credit?: string | null;
+};
+
+export type ZoneRuntimeState = {
+  energy: number;
+  contributions: number;
+  lastContributionAt: string | null;
 };
 
 export type LandmarkPolicy = {
@@ -57,6 +90,7 @@ export type SharedGrowthNode = {
   index: number;
   weight: number;
   chapterId: string | null;
+  zoneKey: string | null;
   createdAt: string;
 };
 
@@ -87,6 +121,8 @@ export type WorldState = {
     completedIds: string[];
     activeChapterId: string | null;
   };
+  /** Per-zone vitality for Fans schematic map */
+  zones: Record<string, ZoneRuntimeState>;
   renderSeed: string;
 };
 
@@ -94,7 +130,8 @@ export type WorldEffect =
   | { type: "energy_up"; delta: number }
   | { type: "layer_up"; kind: ContributionKind; level: number }
   | { type: "landmark_unlocked"; key: string; label: string }
-  | { type: "chapter_bloom"; chapterId: string };
+  | { type: "chapter_bloom"; chapterId: string }
+  | { type: "zone_up"; zoneKey: string; energy: number; contributions: number };
 
 export type Garden = {
   id: string;
@@ -184,6 +221,8 @@ export type GardenSnapshot = {
   };
   /** When snapshot was rebuilt for a historical `at` / `version` query. */
   asOf: string | null;
+  /** Fans schematic zones from brand kit + live zone vitality from state. */
+  zones: Array<ZoneDef & { runtime: ZoneRuntimeState | null; sponsor: SponsorDef | null }>;
 };
 
 export type WorldMutationIntent = {
@@ -198,8 +237,38 @@ export type WorldMutationIntent = {
   chapterWeight?: number;
   /** When set, skips damping math and uses this weight directly (replay / finale). */
   forcedWeight?: number;
+  /** Fans zone key — scopes growth onto the schematic map. */
+  zoneKey?: string | null;
   /** Recent mutation timestamps for this device (ISO), newest last — for damping. */
   recentDeviceMutationAts?: string[];
+};
+
+/** Curated gameday deliverable shelf — ready for board / PA / social. */
+export type GamedayMomentType =
+  | "kickoff"
+  | "goal"
+  | "halftime"
+  | "timeout"
+  | "walkup"
+  | "rivalry"
+  | "general";
+
+export type GamedayReadyItem = {
+  id: string;
+  gardenId: string;
+  title: string;
+  momentType: GamedayMomentType;
+  zoneKey: string | null;
+  sponsorKey: string | null;
+  sourceType: GardenSourceType | "manual";
+  sourceId: string | null;
+  note: string | null;
+  /** Snapshot fragment useful for ops (energy, zone, landmark labels). */
+  payload: Record<string, unknown>;
+  status: "ready" | "played" | "archived";
+  sortIndex: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export const CONTRIBUTION_KINDS: ContributionKind[] = [
@@ -224,7 +293,49 @@ export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
     animationPreset: partial?.animationPreset || "particles",
     ambientSoundtrackUrl: partial?.ambientSoundtrackUrl?.trim() || null,
     bloomStoryboard: Array.isArray(partial?.bloomStoryboard) ? partial!.bloomStoryboard! : [],
+    zones: normalizeZones(partial?.zones),
+    sponsors: normalizeSponsors(partial?.sponsors),
   };
+}
+
+function normalizeZones(zones: ZoneDef[] | null | undefined): ZoneDef[] {
+  if (!Array.isArray(zones)) return [];
+  return zones
+    .filter((z) => z && typeof z.key === "string" && z.key.trim())
+    .map((z) => ({
+      key: z.key
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+      label: (z.label || z.key).trim(),
+      sponsorKey: z.sponsorKey?.trim() || null,
+      x: clamp01(Number(z.x) || 0.5),
+      y: clamp01(Number(z.y) || 0.5),
+      blurb: z.blurb?.trim() || null,
+    }))
+    .filter((z) => z.key);
+}
+
+function normalizeSponsors(sponsors: SponsorDef[] | null | undefined): SponsorDef[] {
+  if (!Array.isArray(sponsors)) return [];
+  return sponsors
+    .filter((s) => s && typeof s.key === "string" && s.key.trim() && s.name?.trim())
+    .map((s) => ({
+      key: s.key
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+      name: s.name.trim(),
+      logoUrl: s.logoUrl?.trim() || null,
+      credit: s.credit?.trim() || null,
+    }))
+    .filter((s) => s.key);
+}
+
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
 }
 
 export function defaultMutationPolicy(partial?: Partial<MutationPolicy>): MutationPolicy {
@@ -274,6 +385,7 @@ export function emptyWorldState(renderSeed: string, now = new Date().toISOString
       other: 0,
     },
     chapters: { completedIds: [], activeChapterId: null },
+    zones: {},
     renderSeed,
   };
 }
@@ -286,6 +398,10 @@ export function effectCelebrationLine(effects: WorldEffect[]): string | null {
   const landmark = effects.find((e) => e.type === "landmark_unlocked");
   if (landmark && landmark.type === "landmark_unlocked") {
     return `${landmark.label} opened in the garden`;
+  }
+  const zone = effects.find((e) => e.type === "zone_up");
+  if (zone && zone.type === "zone_up") {
+    return "A zone grew louder";
   }
   const layer = effects.find((e) => e.type === "layer_up");
   if (layer && layer.type === "layer_up") {

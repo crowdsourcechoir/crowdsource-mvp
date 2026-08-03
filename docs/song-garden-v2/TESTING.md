@@ -1,0 +1,269 @@
+# Song Garden Persistent World — Testing Guide (Phases A–D)
+
+Use this when you can run the app locally or against a staging deploy. It covers setup, automated smokes, and manual checks for the shared garden through Crowdsource Fans.
+
+**Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)
+
+---
+
+## 0. Quick paths
+
+| Mode | When to use |
+|---|---|
+| **Local JSON store** | Fastest — no Supabase. Set `USE_LOCAL_EVENTS=true` (same flag as local events). Data lives in `.data/local-gardens.json`. |
+| **Supabase** | Staging/prod. Run the SQL scripts below once, then use service-role env vars already used by the app. |
+
+Automated smokes (no browser):
+
+```bash
+npx tsx scripts/test-garden-phase-a.mjs
+npx tsx scripts/test-garden-phase-b.mjs
+npx tsx scripts/test-garden-phase-c.mjs
+npx tsx scripts/test-garden-phase-d.mjs
+```
+
+Typecheck:
+
+```bash
+npx tsc --noEmit
+```
+
+---
+
+## 1. Database setup (Supabase only)
+
+Run in the Supabase SQL Editor **in order**. All scripts are idempotent (`create table if not exists`).
+
+1. **`supabase/song-garden-persistent-world.sql`** — gardens, chapters, mutations, marks, editions, ready shelf (full Phase A–D schema when applied fresh).
+2. **`supabase/song-garden-commerce-orders.sql`** — only if your DB already had an earlier Phase A/B apply **without** orders. Fresh installs that ran the full persistent-world script may already have editions; this adds `garden_orders` if missing.
+3. **`supabase/song-garden-ready-shelf.sql`** — only if your DB already had Phase A–C and needs the additive ready-shelf table. Fresh installs that ran the updated `song-garden-persistent-world.sql` already include it.
+
+Confirm tables exist: `gardens`, `garden_chapters`, `garden_mutations`, `garden_participant_marks`, `garden_editions`, `garden_orders`, `garden_ready_shelf`.
+
+---
+
+## 2. App env
+
+Minimum for local store:
+
+```bash
+USE_LOCAL_EVENTS=true
+```
+
+For Supabase (in addition to existing Next/Supabase admin keys):
+
+- Service role must be able to read/write the garden tables (RLS is enabled with **no anon policies** — routes use the admin client).
+
+Start the app as you usually do (`npm run dev` / deploy preview).
+
+---
+
+## 3. Phase A — Persistent core
+
+### Automated
+
+```bash
+npx tsx scripts/test-garden-phase-a.mjs
+```
+
+Expect: garden create → chapter → mutation → world version bump → marks.
+
+### Manual
+
+1. Open **`/admin/gardens`** → create a garden (slug + title), status **live**.
+2. Open the garden detail → **Attach chapter** to an existing event (show index + label).
+3. Open the event **`/e/[event-slug]`** in **two browsers** (or normal + private).
+4. Complete a contribution (clip / interview turn) in browser A.
+5. Within ~one poll interval, browser B should show shared energy / growth without a full page reload.
+6. Confirm admin debugger shows `world_version` incremented and a recent mutation.
+7. Control: an event **not** attached to any chapter behaves as before (no garden regression).
+
+**APIs to poke (optional):**
+
+- `GET /api/gardens/[idOrSlug]/snapshot`
+- `GET /api/events/[eventId]/garden-snapshot`
+
+---
+
+## 4. Phase B — Series life
+
+### Automated
+
+```bash
+npx tsx scripts/test-garden-phase-b.mjs
+```
+
+Expect: finale bloom + landmark, between-show pulse, historical replay.
+
+### Manual
+
+1. With a **live** garden and at least one chapter, open public **`/g/[garden-slug]`**.
+2. **Leave a mark** (between-show pulse). Energy / version should rise; celebration line may appear.
+3. In admin, on an open chapter → **Seal finale**. Chapter becomes `closed`; world gains a chapter bloom / landmark.
+4. Admin **World debugger**:
+   - Inspect `world_state` JSON + recent mutations.
+   - Set a datetime → **Preview historical state** (`?at=` replay).
+5. Also try snapshot query params:
+   - `GET /api/gardens/[id]/snapshot?at=<ISO>`
+   - `GET /api/gardens/[id]/snapshot?version=<n>`
+
+---
+
+## 5. Phase C — Commerce
+
+### Automated
+
+```bash
+npx tsx scripts/test-garden-phase-c.mjs
+```
+
+Expect: pin edition, deterministic merch nodes, stub living + edition orders.
+
+### Manual
+
+1. Admin garden → **Commerce**:
+   - **Pin edition** (slug e.g. `2026-08`, label e.g. `August 2026`).
+   - Open **Preview PNG** on the edition row.
+   - **Living preview** link (current world).
+   - **Order living one-of-one** and **Order pinned edition** (stub checkout).
+2. Confirm orders list shows `stub` status and frozen world version.
+3. Optional API:
+   - `GET /api/gardens/[id]/merch/preview?format=square_print&living=1`
+   - `GET /api/gardens/[id]/merch/preview?format=hoodie_front&edition=2026-08`
+   - `GET /api/gardens/[id]/editions`
+   - `GET /api/gardens/[id]/orders`
+
+Printful/Shopify fulfillment is **out of scope** (stub only).
+
+---
+
+## 6. Phase D — Crowdsource Fans skin
+
+### Automated
+
+```bash
+npx tsx scripts/test-garden-phase-d.mjs
+```
+
+Expect: zone key normalization, `zone_up` effect, snapshot zones + sponsor, ready shelf create/update, replay keeps `zoneKey`.
+
+### Manual — Fans map
+
+1. Admin garden → **Crowdsource Fans map (Phase D)**.
+2. Paste **Zones JSON**, e.g.:
+
+```json
+[
+  {
+    "key": "north-end",
+    "label": "North End",
+    "x": 0.28,
+    "y": 0.22,
+    "sponsorKey": "acme",
+    "blurb": "Home roar"
+  },
+  {
+    "key": "south-end",
+    "label": "South End",
+    "x": 0.72,
+    "y": 0.78,
+    "blurb": "Away stretch"
+  }
+]
+```
+
+3. Paste **Sponsors JSON**, e.g.:
+
+```json
+[
+  {
+    "key": "acme",
+    "name": "Acme Bank",
+    "credit": "Enabled by Acme Bank"
+  }
+]
+```
+
+4. **Save Fans map**. Keys are normalized (`North End!` → `north-end`).
+5. Open **`/g/[slug]`**:
+   - Participation map dots appear (not a seat map).
+   - Select a zone → **Leave a mark in …**.
+   - Zone energy / marks update; celebration may say a zone grew louder.
+6. Admin **Zone vitality** should list the zone after pulses.
+7. Invalid `zoneKey` on pulse → `409` (when zones are authored).
+
+**Pulse API:**
+
+```bash
+curl -X POST "$ORIGIN/api/gardens/$SLUG/pulse" \
+  -H 'Content-Type: application/json' \
+  -d '{"deviceId":"dev_testdevice01","kind":"text","zoneKey":"north-end"}'
+```
+
+### Manual — Gameday ready shelf
+
+1. Admin → **Gameday ready shelf**:
+   - Title + moment (`kickoff` / `goal` / …) + optional `zoneKey`.
+   - **Add to shelf** (simple item) or **Promote with world payload** (embeds world version, energy, zone stats).
+2. **Mark played** on a ready item.
+3. APIs:
+   - `GET /api/gardens/[id]/ready-shelf`
+   - `POST /api/gardens/[id]/ready-shelf` body: `{ "title", "momentType", "zoneKey?", "sponsorKey?", "promote?" }`
+   - `PATCH /api/gardens/[id]/ready-shelf/[itemId]` body: `{ "status": "played" }`
+
+---
+
+## 7. Suggested end-to-end demo script (one sitting)
+
+1. Create live garden `demo-fans` (kind `season` if available).
+2. Attach 1–2 event chapters.
+3. Contribute on `/e/...` (Phase A shared field).
+4. Visit `/g/demo-fans`, leave between-show marks (Phase B).
+5. Seal one chapter finale (Phase B).
+6. Pin edition + open merch preview + stub living order (Phase C).
+7. Author zones/sponsors → zone pulses on `/g` → promote ready-shelf goal moment → mark played (Phase D).
+8. Two browsers on `/g` or `/e` to prove shared world version moves for both.
+
+---
+
+## 8. What “good” looks like
+
+| Check | Pass |
+|---|---|
+| Shared mutations | `world_version` +1 per accepted contribution; second client sees it |
+| No garden | Unattached events unchanged |
+| Finale | Chapter `closed`; landmark / bloom in state |
+| Historical | `?at=` / `?version=` snapshot differs from live when expected |
+| Edition | PNG preview opens; stub order freezes snapshot version |
+| Zones | Map on `/g`; zone energy rises; invalid zone rejected |
+| Ready shelf | Items list; promote payload has `worldVersion`; played status sticks |
+
+---
+
+## 9. Troubleshooting
+
+| Symptom | Likely fix |
+|---|---|
+| Gardens empty / 500 on APIs | Local: set `USE_LOCAL_EVENTS=true`. Prod: run SQL + check service role. |
+| Ready shelf 500 | Run `song-garden-ready-shelf.sql` (or full persistent-world script). |
+| Orders 500 | Run `song-garden-commerce-orders.sql`. |
+| Pulse 409 | Garden not `live`, or `zoneKey` not in BrandKit zones. |
+| Map empty on `/g` | Zones JSON not saved / empty array on brand kit. |
+| Old nodes missing `zoneKey` | Harmless; engine backfills `null` on next mutation. |
+| Local data weird | Delete `.data/local-gardens.json` and recreate gardens. |
+
+---
+
+## 10. File cheat sheet
+
+| Area | Path |
+|---|---|
+| Types / zones / ready item | `lib/song-garden-v2/garden/types.ts` |
+| Mutations | `lib/song-garden-v2/garden/apply-mutation.ts` |
+| Snapshot + window | `lib/song-garden-v2/garden/snapshot.ts` |
+| Store | `lib/song-garden-v2/garden/store.ts` |
+| Admin | `app/admin/gardens/**` |
+| Public presence | `app/g/[slug]/**` |
+| Ready shelf API | `app/api/gardens/[id]/ready-shelf/**` |
+| SQL | `supabase/song-garden-*.sql` |
+| Smokes | `scripts/test-garden-phase-*.mjs` |

@@ -25,6 +25,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
   const [burstMessage, setBurstMessage] = useState("The garden stirred");
   const [unlocked, setUnlocked] = useState(false);
   const [pulsing, setPulsing] = useState(false);
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const celebration = useCelebration();
 
   const refresh = useCallback(async () => {
@@ -42,10 +43,13 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       const data = (await res.json()) as GardenSnapshot;
       setSnapshot(data);
       setError(null);
+      if (!selectedZone && data.zones?.length === 1) {
+        setSelectedZone(data.zones[0].key);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     }
-  }, [gardenSlug]);
+  }, [gardenSlug, selectedZone]);
 
   useEffect(() => {
     void refresh();
@@ -90,8 +94,13 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
 
   async function handlePulse() {
     if (!snapshot?.window.canContribute || pulsing) return;
+    if ((snapshot.zones?.length ?? 0) > 0 && !selectedZone) {
+      setError("Pick a zone on the map first.");
+      return;
+    }
     setUnlocked(true);
     setPulsing(true);
+    setError(null);
     try {
       const res = await fetch(`/api/gardens/${gardenSlug}/pulse`, {
         method: "POST",
@@ -99,6 +108,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
         body: JSON.stringify({
           deviceId: getOrCreateSonggardenDeviceId(),
           kind: "text",
+          zoneKey: selectedZone,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -122,6 +132,8 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
   const chapterLink = snapshot?.activeChapter?.eventSlug
     ? `/e/${snapshot.activeChapter.eventSlug}`
     : null;
+  const zones = snapshot?.zones ?? [];
+  const selectedMeta = zones.find((z) => z.key === selectedZone) ?? null;
 
   return (
     <WorldStage
@@ -149,7 +161,51 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
           </p>
         </header>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur-md">
+        {zones.length > 0 ? (
+          <div className="relative mt-6 aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/15 bg-black/30">
+            <div
+              className="absolute inset-0 opacity-40"
+              style={{
+                background: `radial-gradient(circle at 50% 40%, ${world.accentColor}33, transparent 55%)`,
+              }}
+            />
+            <p className="absolute left-3 top-3 z-10 font-mono text-[10px] uppercase tracking-widest text-white/50">
+              Participation map
+            </p>
+            {zones.map((z) => {
+              const active = selectedZone === z.key;
+              const glow = Math.round((z.runtime?.energy ?? 0) * 100);
+              return (
+                <button
+                  key={z.key}
+                  type="button"
+                  onClick={() => setSelectedZone(z.key)}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1 text-left text-[11px] font-medium text-white shadow-lg backdrop-blur-sm transition"
+                  style={{
+                    left: `${z.x * 100}%`,
+                    top: `${z.y * 100}%`,
+                    borderColor: active ? world.accentColor : "rgba(255,255,255,0.25)",
+                    background: active ? `${world.accentColor}33` : "rgba(0,0,0,0.55)",
+                    boxShadow: active
+                      ? `0 0 18px ${world.accentColor}`
+                      : glow > 5
+                        ? `0 0 ${8 + glow / 8}px ${world.accentColor}66`
+                        : undefined,
+                  }}
+                >
+                  <span className="block whitespace-nowrap">{z.label}</span>
+                  {z.sponsor ? (
+                    <span className="block text-[9px] text-white/55">
+                      {z.sponsor.credit || z.sponsor.name}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur-md">
           <dl className="grid grid-cols-3 gap-3 text-center text-xs text-white/70">
             <div>
               <dt className="uppercase tracking-wide text-white/40">Energy</dt>
@@ -169,7 +225,16 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
             </div>
           </dl>
 
-          {snapshot?.state.landmarks?.length ? (
+          {selectedMeta ? (
+            <div className="mt-4 border-t border-white/10 pt-4 text-left text-sm text-white/75">
+              <p className="font-medium text-white">{selectedMeta.label}</p>
+              {selectedMeta.blurb ? <p className="mt-1 text-white/55">{selectedMeta.blurb}</p> : null}
+              <p className="mt-1 font-mono text-xs text-white/45">
+                zone energy {(selectedMeta.runtime?.energy ?? 0).toFixed(2)} ·{" "}
+                {selectedMeta.runtime?.contributions ?? 0} marks
+              </p>
+            </div>
+          ) : snapshot?.state.landmarks?.length ? (
             <ul className="mt-4 space-y-1 border-t border-white/10 pt-4 text-left text-sm text-white/75">
               {snapshot.state.landmarks.slice(-5).map((lm) => (
                 <li key={lm.id}>· {lm.label}</li>
@@ -177,7 +242,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
             </ul>
           ) : (
             <p className="mt-4 border-t border-white/10 pt-4 text-sm text-white/50">
-              Landmarks will open as the garden grows.
+              {zones.length ? "Select a zone, then leave a mark." : "Landmarks will open as the garden grows."}
             </p>
           )}
 
@@ -190,7 +255,11 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 className="rounded-xl px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
                 style={{ background: world.accentColor }}
               >
-                {pulsing ? "Leaving a mark…" : "Leave a mark"}
+                {pulsing
+                  ? "Leaving a mark…"
+                  : selectedMeta
+                    ? `Leave a mark in ${selectedMeta.label}`
+                    : "Leave a mark"}
               </button>
             ) : (
               <p className="text-center text-sm text-white/50">Contributions are closed for now.</p>

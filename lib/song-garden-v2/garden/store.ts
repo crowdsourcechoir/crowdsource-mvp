@@ -7,21 +7,25 @@ import {
   localCreateEdition,
   localCreateGarden,
   localCreateOrder,
+  localCreateReadyItem,
   localGetChapterByEventId,
   localGetChapterById,
   localGetEdition,
   localGetGardenByIdOrSlug,
   localGetOrder,
+  localGetReadyItem,
   localListChapters,
   localListEditions,
   localListGardens,
   localListMarks,
   localListMutations,
   localListOrders,
+  localListReadyShelf,
   localPersistMutation,
   localRecentDeviceMutationAts,
   localUpdateChapter,
   localUpdateGarden,
+  localUpdateReadyItem,
 } from "./local-garden-store";
 import { buildMerchRenderInput, buildPinnedMerchSnapshot, editionToMerchInput } from "./merch-render";
 import {
@@ -42,6 +46,8 @@ import {
   type GardenSnapshot,
   type GardenSourceType,
   type GardenStatus,
+  type GamedayMomentType,
+  type GamedayReadyItem,
   type MerchFormat,
   type MerchRenderInput,
   type MutationPolicy,
@@ -697,6 +703,7 @@ export async function recordBetweenShowPulse(args: {
   kind?: ContributionKind;
   deviceId?: string | null;
   note?: string | null;
+  zoneKey?: string | null;
 }): Promise<RecordContributionResult | null> {
   try {
     const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
@@ -704,13 +711,23 @@ export async function recordBetweenShowPulse(args: {
 
     const chapters = await listChapters(garden.id);
     const open = chapters.find((c) => c.status === "open") ?? null;
-    // Pulses are for between-show; if a chapter is open, still allow but tag chapter.
     const deviceId = args.deviceId?.trim() || null;
     const recent = deviceId ? await recentDeviceMutationAts(garden.id, deviceId) : [];
     const kind = args.kind && isContributionKind(args.kind) ? args.kind : "text";
     const weight = open
       ? open.chapterWeight
       : garden.mutationPolicy.betweenChapterWeight;
+
+    const zoneKeyRaw = args.zoneKey?.trim() || null;
+    const knownZones = garden.brandKit.zones ?? [];
+    let zoneKey: string | null = null;
+    if (zoneKeyRaw) {
+      if (knownZones.length === 0 || knownZones.some((z) => z.key === zoneKeyRaw)) {
+        zoneKey = zoneKeyRaw;
+      } else {
+        return null; // invalid zone for authored map
+      }
+    }
 
     const applied = applyMutation(
       garden.worldState,
@@ -723,6 +740,7 @@ export async function recordBetweenShowPulse(args: {
         deviceId,
         chapterIndex: open?.index ?? null,
         chapterWeight: weight,
+        zoneKey,
         recentDeviceMutationAts: recent,
       },
       garden.mutationPolicy
@@ -1187,4 +1205,170 @@ export async function resolveMerchPreviewInput(args: {
       personalMarks: marks,
     }),
   };
+}
+
+function rowToReadyItem(row: Record<string, unknown>): GamedayReadyItem {
+  return {
+    id: String(row.id),
+    gardenId: String(row.garden_id),
+    title: String(row.title ?? ""),
+    momentType: (row.moment_type as GamedayMomentType) || "general",
+    zoneKey: row.zone_key != null ? String(row.zone_key) : null,
+    sponsorKey: row.sponsor_key != null ? String(row.sponsor_key) : null,
+    sourceType: (row.source_type as GamedayReadyItem["sourceType"]) || "manual",
+    sourceId: row.source_id != null ? String(row.source_id) : null,
+    note: row.note != null ? String(row.note) : null,
+    payload: (row.payload as Record<string, unknown>) ?? {},
+    status: (row.status as GamedayReadyItem["status"]) || "ready",
+    sortIndex: Number(row.sort_index) || 0,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+  };
+}
+
+export async function listReadyShelf(gardenId: string): Promise<GamedayReadyItem[]> {
+  if (USE_LOCAL()) return localListReadyShelf(gardenId);
+  if (!supabaseAdmin) return [];
+  const { data, error } = await supabaseAdmin
+    .from("garden_ready_shelf")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .order("sort_index", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (error || !data) {
+    console.warn("[gardens] list ready shelf failed:", error?.message);
+    return [];
+  }
+  return data.map((r) => rowToReadyItem(r as Record<string, unknown>));
+}
+
+export async function createReadyShelfItem(args: {
+  gardenIdOrSlug: string;
+  title: string;
+  momentType?: GamedayMomentType;
+  zoneKey?: string | null;
+  sponsorKey?: string | null;
+  sourceType?: GamedayReadyItem["sourceType"];
+  sourceId?: string | null;
+  note?: string | null;
+  payload?: Record<string, unknown>;
+  sortIndex?: number;
+}): Promise<GamedayReadyItem> {
+  const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+  if (!garden) throw new Error("Garden not found.");
+  const title = args.title.trim();
+  if (!title) throw new Error("title is required");
+
+  if (USE_LOCAL()) {
+    return localCreateReadyItem({
+      gardenId: garden.id,
+      title,
+      momentType: args.momentType ?? "general",
+      zoneKey: args.zoneKey?.trim() || null,
+      sponsorKey: args.sponsorKey?.trim() || null,
+      sourceType: args.sourceType ?? "manual",
+      sourceId: args.sourceId ?? null,
+      note: args.note?.trim() || null,
+      payload: args.payload ?? {},
+      status: "ready",
+      sortIndex: args.sortIndex ?? 0,
+    });
+  }
+  if (!supabaseAdmin) throw new Error("Database not configured.");
+  const { data, error } = await supabaseAdmin
+    .from("garden_ready_shelf")
+    .insert({
+      garden_id: garden.id,
+      title,
+      moment_type: args.momentType ?? "general",
+      zone_key: args.zoneKey?.trim() || null,
+      sponsor_key: args.sponsorKey?.trim() || null,
+      source_type: args.sourceType ?? "manual",
+      source_id: args.sourceId ?? null,
+      note: args.note?.trim() || null,
+      payload: args.payload ?? {},
+      status: "ready",
+      sort_index: args.sortIndex ?? 0,
+    })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create ready item.");
+  return rowToReadyItem(data as Record<string, unknown>);
+}
+
+export async function updateReadyShelfItem(
+  itemId: string,
+  updates: Partial<
+    Pick<
+      GamedayReadyItem,
+      "title" | "momentType" | "zoneKey" | "sponsorKey" | "note" | "payload" | "status" | "sortIndex"
+    >
+  >
+): Promise<GamedayReadyItem | null> {
+  if (USE_LOCAL()) return localUpdateReadyItem(itemId, updates);
+  if (!supabaseAdmin) throw new Error("Database not configured.");
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (updates.title != null) patch.title = updates.title;
+  if (updates.momentType != null) patch.moment_type = updates.momentType;
+  if (updates.zoneKey !== undefined) patch.zone_key = updates.zoneKey;
+  if (updates.sponsorKey !== undefined) patch.sponsor_key = updates.sponsorKey;
+  if (updates.note !== undefined) patch.note = updates.note;
+  if (updates.payload != null) patch.payload = updates.payload;
+  if (updates.status != null) patch.status = updates.status;
+  if (updates.sortIndex != null) patch.sort_index = updates.sortIndex;
+  const { data, error } = await supabaseAdmin
+    .from("garden_ready_shelf")
+    .update(patch)
+    .eq("id", itemId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? rowToReadyItem(data as Record<string, unknown>) : null;
+}
+
+/** Promote a recent zone pulse / contribution onto the gameday ready shelf. */
+export async function promoteToReadyShelf(args: {
+  gardenIdOrSlug: string;
+  title: string;
+  momentType?: GamedayMomentType;
+  zoneKey?: string | null;
+  note?: string | null;
+}): Promise<GamedayReadyItem> {
+  const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+  if (!garden) throw new Error("Garden not found.");
+  const zoneKey = args.zoneKey?.trim() || null;
+  const zoneDef = zoneKey
+    ? garden.brandKit.zones.find((z) => z.key === zoneKey) ?? null
+    : null;
+  const runtime = zoneKey ? garden.worldState.zones?.[zoneKey] ?? null : null;
+  const sponsorKey = zoneDef?.sponsorKey ?? null;
+
+  return createReadyShelfItem({
+    gardenIdOrSlug: garden.id,
+    title: args.title,
+    momentType: args.momentType ?? "general",
+    zoneKey,
+    sponsorKey,
+    sourceType: "pulse",
+    sourceId: null,
+    note: args.note,
+    payload: {
+      worldVersion: garden.worldVersion,
+      energy: garden.worldState.energy,
+      zoneEnergy: runtime?.energy ?? null,
+      zoneContributions: runtime?.contributions ?? null,
+      landmarks: garden.worldState.landmarks.map((l) => l.label),
+    },
+  });
+}
+
+export async function getReadyItem(itemId: string): Promise<GamedayReadyItem | null> {
+  if (USE_LOCAL()) return localGetReadyItem(itemId);
+  if (!supabaseAdmin) return null;
+  const { data } = await supabaseAdmin
+    .from("garden_ready_shelf")
+    .select("*")
+    .eq("id", itemId)
+    .maybeSingle();
+  return data ? rowToReadyItem(data as Record<string, unknown>) : null;
 }

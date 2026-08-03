@@ -39,16 +39,32 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [editionLabel, setEditionLabel] = useState("");
   const [orderFormat, setOrderFormat] = useState<MerchFormat>("square_print");
   const [orderEdition, setOrderEdition] = useState("");
+  const [zonesJson, setZonesJson] = useState("[]");
+  const [sponsorsJson, setSponsorsJson] = useState("[]");
+  const [shelfTitle, setShelfTitle] = useState("");
+  const [shelfMoment, setShelfMoment] = useState("goal");
+  const [shelfZone, setShelfZone] = useState("");
+  const [readyItems, setReadyItems] = useState<
+    Array<{
+      id: string;
+      title: string;
+      momentType: string;
+      zoneKey: string | null;
+      status: string;
+      payload: Record<string, unknown>;
+    }>
+  >([]);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [gRes, eRes, dRes, edRes, oRes] = await Promise.all([
+      const [gRes, eRes, dRes, edRes, oRes, shelfRes] = await Promise.all([
         fetch(`/api/gardens/${gardenId}`, { cache: "no-store" }),
         fetch("/api/events", { cache: "no-store" }),
         fetch(`/api/gardens/${gardenId}/debug?limit=30`, { cache: "no-store" }),
         fetch(`/api/gardens/${gardenId}/editions`, { cache: "no-store" }),
         fetch(`/api/gardens/${gardenId}/orders`, { cache: "no-store" }),
+        fetch(`/api/gardens/${gardenId}/ready-shelf`, { cache: "no-store" }),
       ]);
       const gBody = (await gRes.json().catch(() => ({}))) as {
         garden?: Garden;
@@ -59,6 +75,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setGarden(gBody.garden ?? null);
       setChapters(gBody.chapters ?? []);
       setStatus(gBody.garden?.status ?? "live");
+      setZonesJson(JSON.stringify(gBody.garden?.brandKit?.zones ?? [], null, 2));
+      setSponsorsJson(JSON.stringify(gBody.garden?.brandKit?.sponsors ?? [], null, 2));
 
       if (eRes.ok) {
         const list = (await eRes.json()) as Event[];
@@ -80,6 +98,10 @@ export default function GardenDetailClient({ gardenId }: Props) {
       if (oRes.ok) {
         const oBody = (await oRes.json()) as { orders?: GardenOrder[] };
         setOrders(oBody.orders ?? []);
+      }
+      if (shelfRes.ok) {
+        const sBody = (await shelfRes.json()) as { items?: typeof readyItems };
+        setReadyItems(sBody.items ?? []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -215,6 +237,72 @@ export default function GardenDetailClient({ gardenId }: Props) {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Stub order failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveFansMap() {
+    setSaving(true);
+    setError(null);
+    try {
+      const zones = JSON.parse(zonesJson);
+      const sponsors = JSON.parse(sponsorsJson);
+      const res = await fetch(`/api/gardens/${gardenId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brandKit: {
+            ...(garden?.brandKit ?? {}),
+            zones,
+            sponsors,
+          },
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Failed to save Fans map");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save Fans map (check JSON)");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddReadyItem(promote: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/ready-shelf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: shelfTitle,
+          momentType: shelfMoment,
+          zoneKey: shelfZone || null,
+          promote,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Ready shelf save failed");
+      setShelfTitle("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ready shelf save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function markPlayed(itemId: string) {
+    setSaving(true);
+    try {
+      await fetch(`/api/gardens/${gardenId}/ready-shelf/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "played" }),
+      });
+      await load();
     } finally {
       setSaving(false);
     }
@@ -388,6 +476,171 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </ul>
         </section>
       ) : null}
+
+      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+        <h2 className="text-sm font-medium text-gray-200">Crowdsource Fans map (Phase D)</h2>
+        <p className="text-xs text-gray-500">
+          Author zones and sponsors on the BrandKit. Public{" "}
+          {publicHref ? (
+            <Link href={publicHref} className="text-[#CFFF81] underline">
+              {publicHref}
+            </Link>
+          ) : (
+            <code className="text-gray-400">/g/[slug]</code>
+          )}{" "}
+          shows a participation map (not a seat map). Pulses can target a zone.
+        </p>
+
+        <div>
+          <label className="block text-xs text-gray-400">
+            Zones JSON
+            <textarea
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 font-mono text-[11px] text-white"
+              rows={8}
+              value={zonesJson}
+              onChange={(e) => setZonesJson(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+          <p className="mt-1 text-[11px] text-gray-600">
+            Example: key, label, x/y (0–1), optional sponsorKey + blurb
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-400">
+            Sponsors JSON
+            <textarea
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 font-mono text-[11px] text-white"
+              rows={5}
+              value={sponsorsJson}
+              onChange={(e) => setSponsorsJson(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+        </div>
+
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void handleSaveFansMap()}
+          className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+        >
+          Save Fans map
+        </button>
+
+        {Object.keys(garden?.worldState?.zones ?? {}).length ? (
+          <div>
+            <h3 className="text-xs uppercase tracking-wide text-gray-500">Zone vitality</h3>
+            <ul className="mt-2 space-y-1 text-xs text-gray-400">
+              {Object.entries(garden!.worldState.zones).map(([key, z]) => (
+                <li key={key}>
+                  <span className="text-gray-200">{key}</span> · energy{" "}
+                  {z.energy.toFixed(3)} · {z.contributions} marks
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="space-y-3 border-t border-gray-800 pt-4">
+          <h3 className="text-xs uppercase tracking-wide text-gray-500">
+            Gameday ready shelf
+          </h3>
+          <p className="text-xs text-gray-500">
+            Queue clips for matchday / conference delivery. Promote captures current
+            world + zone vitality into the item payload.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs text-gray-400">
+              Title
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={shelfTitle}
+                onChange={(e) => setShelfTitle(e.target.value)}
+                placeholder="North End kickoff swell"
+              />
+            </label>
+            <label className="block text-xs text-gray-400">
+              Moment
+              <select
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={shelfMoment}
+                onChange={(e) => setShelfMoment(e.target.value)}
+              >
+                <option value="kickoff">kickoff</option>
+                <option value="goal">goal</option>
+                <option value="halftime">halftime</option>
+                <option value="timeout">timeout</option>
+                <option value="walkup">walkup</option>
+                <option value="rivalry">rivalry</option>
+                <option value="general">general</option>
+              </select>
+            </label>
+            <label className="block text-xs text-gray-400">
+              zoneKey (optional)
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={shelfZone}
+                onChange={(e) => setShelfZone(e.target.value)}
+                placeholder="north-end"
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={saving || !shelfTitle.trim()}
+              onClick={() => void handleAddReadyItem(false)}
+              className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Add to shelf
+            </button>
+            <button
+              type="button"
+              disabled={saving || !shelfTitle.trim()}
+              onClick={() => void handleAddReadyItem(true)}
+              className="rounded-lg border border-[#CFFF81]/40 px-3 py-2 text-sm text-[#CFFF81] disabled:opacity-50"
+            >
+              Promote with world payload
+            </button>
+          </div>
+
+          {readyItems.length === 0 ? (
+            <p className="text-sm text-gray-600">No ready-shelf items yet.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {readyItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 px-3 py-2"
+                >
+                  <span>
+                    <span className="text-white">{item.title}</span>
+                    <span className="text-gray-500">
+                      {" "}
+                      · {item.momentType} · {item.status}
+                      {item.zoneKey ? ` · zone ${item.zoneKey}` : ""}
+                    </span>
+                  </span>
+                  {item.status === "ready" ? (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void markPlayed(item.id)}
+                      className="text-xs text-amber-300 underline disabled:opacity-50"
+                    >
+                      Mark played
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-600">{item.status}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
 
       <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
         <h2 className="text-sm font-medium text-gray-200">Commerce (Phase C)</h2>

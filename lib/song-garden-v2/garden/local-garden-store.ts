@@ -18,6 +18,7 @@ import {
   type GardenMutationRecord,
   type GardenOrder,
   type GardenStatus,
+  type GamedayReadyItem,
   type MutationPolicy,
   type ParticipantMark,
   type WorldEffect,
@@ -31,6 +32,7 @@ type LocalDb = {
   marks: ParticipantMark[];
   editions: GardenEdition[];
   orders: GardenOrder[];
+  readyShelf: GamedayReadyItem[];
 };
 
 const EMPTY: LocalDb = {
@@ -40,6 +42,7 @@ const EMPTY: LocalDb = {
   marks: [],
   editions: [],
   orders: [],
+  readyShelf: [],
 };
 
 let cache: LocalDb | null = null;
@@ -59,6 +62,7 @@ function ensureLoaded(): LocalDb {
       marks: [],
       editions: [],
       orders: [],
+      readyShelf: [],
     };
     return cache;
   }
@@ -71,6 +75,7 @@ function ensureLoaded(): LocalDb {
       marks: Array.isArray(parsed.marks) ? parsed.marks : [],
       editions: Array.isArray(parsed.editions) ? parsed.editions : [],
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      readyShelf: Array.isArray(parsed.readyShelf) ? parsed.readyShelf : [],
     };
   } catch {
     cache = {
@@ -80,6 +85,7 @@ function ensureLoaded(): LocalDb {
       marks: [],
       editions: [],
       orders: [],
+      readyShelf: [],
     };
   }
   return cache;
@@ -418,4 +424,60 @@ export function localCreateOrder(
   db.orders.push(row);
   persist();
   return row;
+}
+
+export function localListReadyShelf(gardenId: string): GamedayReadyItem[] {
+  return ensureLoaded()
+    .readyShelf.filter((i) => i.gardenId === gardenId)
+    .sort((a, b) => a.sortIndex - b.sortIndex || (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export function localGetReadyItem(id: string): GamedayReadyItem | null {
+  return ensureLoaded().readyShelf.find((i) => i.id === id) ?? null;
+}
+
+export function localCreateReadyItem(
+  item: Omit<GamedayReadyItem, "id" | "createdAt" | "updatedAt"> & {
+    id?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }
+): GamedayReadyItem {
+  const db = ensureLoaded();
+  if (!db.gardens.some((g) => g.id === item.gardenId)) {
+    throw new Error("Garden not found.");
+  }
+  const now = new Date().toISOString();
+  const row: GamedayReadyItem = {
+    ...item,
+    id: item.id ?? nextId("shelf"),
+    createdAt: item.createdAt ?? now,
+    updatedAt: item.updatedAt ?? now,
+  };
+  db.readyShelf.push(row);
+  persist();
+  return row;
+}
+
+export function localUpdateReadyItem(
+  id: string,
+  updates: Partial<
+    Pick<
+      GamedayReadyItem,
+      "title" | "momentType" | "zoneKey" | "sponsorKey" | "note" | "payload" | "status" | "sortIndex"
+    >
+  >
+): GamedayReadyItem | null {
+  const db = ensureLoaded();
+  const idx = db.readyShelf.findIndex((i) => i.id === id);
+  if (idx < 0) return null;
+  const prev = db.readyShelf[idx];
+  const next: GamedayReadyItem = {
+    ...prev,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+  db.readyShelf[idx] = next;
+  persist();
+  return next;
 }

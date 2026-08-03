@@ -81,6 +81,12 @@ export function buildGardenSnapshot(args: {
       : null,
     window,
     asOf,
+    zones: (garden.brandKit.zones ?? []).map((z) => ({
+      ...z,
+      runtime: garden.worldState.zones?.[z.key] ?? null,
+      sponsor:
+        (garden.brandKit.sponsors ?? []).find((s) => s.key === z.sponsorKey) ?? null,
+    })),
   };
 }
 

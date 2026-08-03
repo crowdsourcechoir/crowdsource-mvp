@@ -1,8 +1,9 @@
 # Song Garden Persistent World — Spec (v0)
 
-Status: **spec / ready to implement**  
+Status: **implemented through Phase D** (A–D in repo; external print fulfillment still deferred)  
 Depends on: `docs/song-garden-v2/architecture.md` (V2 WorldJourney, WorldConfig, local growth)  
-Consumers: Crowdsource Choir series runs · Crowdsource Fans team seasons · commerce (edition + living merch)
+Consumers: Crowdsource Choir series runs · Crowdsource Fans team seasons · commerce (edition + living merch)  
+**Testing:** [`TESTING.md`](./TESTING.md)
 
 ---
 
@@ -587,8 +588,10 @@ Unchanged V2 (localStorage growth, personal energy storyboard).
 
 ### Phase D — Fans skin
 
-- Zones on BrandKit + zone-scoped mutations  
-- Sponsor keys + gameday “ready shelf” (separate spec)
+- [x] Zones on BrandKit (`zones` / `sponsors`) + zone-scoped mutations (`zone_up`, `WorldState.zones`)
+- [x] Public `/g/[slug]` participation map + pulse `zoneKey`
+- [x] Sponsor keys on zones + gameday ready shelf (`garden_ready_shelf`, admin + APIs)
+- [x] Testing guide: [`TESTING.md`](./TESTING.md)
 
 ---
 
@@ -599,11 +602,16 @@ Unchanged V2 (localStorage growth, personal energy storyboard).
 | Types + defaults | `lib/song-garden-v2/garden/types.ts` |
 | Mutation engine | `lib/song-garden-v2/garden/apply-mutation.ts` |
 | Snapshot builder | `lib/song-garden-v2/garden/snapshot.ts` |
+| Merch render | `lib/song-garden-v2/garden/merch-render.ts` |
 | Server repos | `lib/song-garden-v2/garden/store.ts` |
+| Local store | `lib/song-garden-v2/garden/local-garden-store.ts` |
 | API | `app/api/gardens/**`, `app/api/events/[id]/garden-snapshot/route.ts` |
 | Admin UI | `app/admin/gardens/**` |
+| Public garden | `app/g/[slug]/**` |
 | Client hook | `lib/song-garden-v2/garden/use-garden-snapshot.ts` |
-| SQL | `supabase/song-garden-persistent-world.sql` |
+| SQL | `supabase/song-garden-persistent-world.sql`, `supabase/song-garden-commerce-orders.sql`, `supabase/song-garden-ready-shelf.sql` |
+| Smoke tests | `scripts/test-garden-phase-{a,b,c,d}.mjs` |
+| Testing guide | `docs/song-garden-v2/TESTING.md` |
 | This spec | `docs/song-garden-v2/persistent-world-spec.md` |
 
 Keep sales platform untouched.

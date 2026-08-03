@@ -429,4 +429,5 @@ Crowdsource Fans seasons), with contribution → mutation rules, a snapshot API
 for UI + commerce (edition / living merch), and backward-compatible event
 chapters.
 
-**Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)
+**Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)  
+**Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)
