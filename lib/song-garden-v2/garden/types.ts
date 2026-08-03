@@ -37,6 +37,10 @@ export type MutationPolicy = {
   layerGain: number;
   layerCap: number;
   chapterWeightDefault: number;
+  /** Weight for between-show pulses when no chapter is open (garden status live). */
+  betweenChapterWeight: number;
+  /** Extra weight applied once when a chapter is finalized. */
+  chapterFinaleWeight: number;
   landmarks: LandmarkPolicy[];
   maxNodes: number;
   nodeWeight: number;
@@ -119,13 +123,15 @@ export type GardenChapter = {
   status: ChapterStatus;
 };
 
+export type GardenSourceType = "clip" | "turn" | "pulse" | "finale";
+
 export type ParticipantMark = {
   id: string;
   gardenId: string;
   deviceId: string;
   kind: ContributionKind;
   index: number;
-  sourceType: "clip" | "turn";
+  sourceType: GardenSourceType;
   sourceId: string;
   createdAt: string;
 };
@@ -136,7 +142,7 @@ export type GardenMutationRecord = {
   chapterId: string | null;
   deviceId: string | null;
   kind: ContributionKind;
-  sourceType: "clip" | "turn";
+  sourceType: GardenSourceType;
   sourceId: string;
   delta: Record<string, unknown>;
   effects: WorldEffect[];
@@ -170,18 +176,28 @@ export type GardenSnapshot = {
     energy: number;
     frame: WorldStoryboardFrame;
   } | null;
+  /** Phase B: whether fans can contribute right now (chapter open or between-show). */
+  window: {
+    mode: "chapter" | "between" | "closed";
+    canContribute: boolean;
+    message: string;
+  };
+  /** When snapshot was rebuilt for a historical `at` / `version` query. */
+  asOf: string | null;
 };
 
 export type WorldMutationIntent = {
   gardenId: string;
   chapterId: string | null;
   kind: ContributionKind;
-  sourceType: "clip" | "turn";
+  sourceType: GardenSourceType;
   sourceId: string;
   deviceId: string | null;
   /** Chapter show index (1-based) for landmark thresholds; optional. */
   chapterIndex?: number | null;
   chapterWeight?: number;
+  /** When set, skips damping math and uses this weight directly (replay / finale). */
+  forcedWeight?: number;
   /** Recent mutation timestamps for this device (ISO), newest last — for damping. */
   recentDeviceMutationAts?: string[];
 };
@@ -218,6 +234,8 @@ export function defaultMutationPolicy(partial?: Partial<MutationPolicy>): Mutati
     layerGain: partial?.layerGain ?? 0.02,
     layerCap: partial?.layerCap ?? 1,
     chapterWeightDefault: partial?.chapterWeightDefault ?? 1,
+    betweenChapterWeight: partial?.betweenChapterWeight ?? 0.5,
+    chapterFinaleWeight: partial?.chapterFinaleWeight ?? 1.5,
     landmarks: Array.isArray(partial?.landmarks)
       ? partial!.landmarks!
       : [

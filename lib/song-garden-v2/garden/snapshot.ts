@@ -15,8 +15,17 @@ export function buildGardenSnapshot(args: {
   chapter?: GardenChapter | null;
   eventSlug?: string | null;
   myMarks?: ParticipantMark[];
+  asOf?: string | null;
+  window?: GardenSnapshot["window"];
 }): GardenSnapshot {
-  const { garden, chapter = null, eventSlug = null, myMarks = [] } = args;
+  const {
+    garden,
+    chapter = null,
+    eventSlug = null,
+    myMarks = [],
+    asOf = null,
+    window: windowOverride,
+  } = args;
   const brand = garden.brandKit;
   const bloomWorld = {
     title: brand.title,
@@ -33,6 +42,12 @@ export function buildGardenSnapshot(args: {
   } satisfies WorldConfig;
 
   const resolved = resolveStoryboardFrame(bloomWorld, garden.worldState.energy);
+  const window =
+    windowOverride ??
+    resolveContributionWindow({
+      gardenStatus: garden.status,
+      activeChapter: chapter,
+    });
 
   return {
     garden: {
@@ -64,6 +79,37 @@ export function buildGardenSnapshot(args: {
           frame: resolved.frame,
         }
       : null,
+    window,
+    asOf,
+  };
+}
+
+export function resolveContributionWindow(args: {
+  gardenStatus: Garden["status"];
+  activeChapter?: GardenChapter | null;
+}): GardenSnapshot["window"] {
+  if (args.gardenStatus === "archived" || args.gardenStatus === "draft") {
+    return {
+      mode: "closed",
+      canContribute: false,
+      message:
+        args.gardenStatus === "draft"
+          ? "This garden is still being prepared."
+          : "This garden is archived.",
+    };
+  }
+  if (args.activeChapter?.status === "open") {
+    return {
+      mode: "chapter",
+      canContribute: true,
+      message: `${args.activeChapter.label || "This show"} is open — your contributions grow the garden.`,
+    };
+  }
+  // Live garden with no open chapter = between-show window
+  return {
+    mode: "between",
+    canContribute: true,
+    message: "Between shows — leave a mark and keep the garden alive.",
   };
 }
 

@@ -573,10 +573,10 @@ Unchanged V2 (localStorage growth, personal energy storyboard).
 
 ### Phase B — Series life
 
-- Between-chapter contribution windows  
-- Chapter finale weight + auto landmark  
-- Historical snapshot `at=` via editions or log replay  
-- Admin world debugger (state JSON + recent mutations)
+- [x] Between-chapter contribution windows (`live` garden + `/g/[slug]` pulses)
+- [x] Chapter finale weight + auto landmark (`POST .../chapters/[id]/finalize`)
+- [x] Historical snapshot `at=` / `version=` via mutation log replay
+- [x] Admin world debugger (state JSON + recent mutations + historical preview)
 
 ### Phase C — Commerce contract
 

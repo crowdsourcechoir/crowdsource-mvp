@@ -112,6 +112,15 @@ export default function GardensAdminClient() {
                 <p className="text-xs text-gray-500">
                   /{g.slug} · {g.status} · v{g.worldVersion} · energy{" "}
                   {(g.worldState?.energy ?? 0).toFixed(2)}
+                  {g.status === "live" ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <Link href={`/g/${g.slug}`} className="text-[#CFFF81] underline">
+                        public
+                      </Link>
+                    </>
+                  ) : null}
                 </p>
               </div>
               <Link

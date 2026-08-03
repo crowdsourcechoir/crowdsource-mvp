@@ -1,17 +1,20 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localEventsGetById } from "@/lib/local-events-store";
-import { applyMutation } from "./apply-mutation";
-import { buildGardenSnapshot } from "./snapshot";
+import { applyChapterFinale, applyMutation, replayMutationsToState } from "./apply-mutation";
+import { buildGardenSnapshot, resolveContributionWindow } from "./snapshot";
 import {
   localAddChapter,
   localCreateGarden,
   localGetChapterByEventId,
+  localGetChapterById,
   localGetGardenByIdOrSlug,
   localListChapters,
   localListGardens,
   localListMarks,
+  localListMutations,
   localPersistMutation,
   localRecentDeviceMutationAts,
+  localUpdateChapter,
   localUpdateGarden,
 } from "./local-garden-store";
 import {
@@ -24,7 +27,9 @@ import {
   type Garden,
   type GardenChapter,
   type GardenKind,
+  type GardenMutationRecord,
   type GardenSnapshot,
+  type GardenSourceType,
   type GardenStatus,
   type MutationPolicy,
   type ParticipantMark,
@@ -73,14 +78,38 @@ function rowToChapter(row: Record<string, unknown>): GardenChapter {
 }
 
 function rowToMark(row: Record<string, unknown>): ParticipantMark {
+  const sourceType = normalizeSourceType(row.source_type);
   return {
     id: String(row.id),
     gardenId: String(row.garden_id),
     deviceId: String(row.device_id),
     kind: isContributionKind(row.kind) ? row.kind : "other",
     index: Number(row.idx) || 0,
-    sourceType: row.source_type === "clip" ? "clip" : "turn",
+    sourceType,
     sourceId: String(row.source_id),
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
+}
+
+function normalizeSourceType(value: unknown): GardenSourceType {
+  if (value === "clip" || value === "turn" || value === "pulse" || value === "finale") {
+    return value;
+  }
+  return "turn";
+}
+
+function rowToMutation(row: Record<string, unknown>): GardenMutationRecord {
+  return {
+    id: String(row.id),
+    gardenId: String(row.garden_id),
+    chapterId: row.chapter_id != null ? String(row.chapter_id) : null,
+    deviceId: row.device_id != null ? String(row.device_id) : null,
+    kind: isContributionKind(row.kind) ? row.kind : "other",
+    sourceType: normalizeSourceType(row.source_type),
+    sourceId: String(row.source_id),
+    delta: (row.delta as Record<string, unknown>) ?? {},
+    effects: Array.isArray(row.effects) ? (row.effects as WorldEffect[]) : [],
+    worldVersion: Number(row.world_version) || 0,
     createdAt: String(row.created_at ?? new Date().toISOString()),
   };
 }
@@ -454,7 +483,7 @@ async function insertMutationAndMark(args: {
   chapterId: string | null;
   deviceId: string | null;
   kind: ContributionKind;
-  sourceType: "clip" | "turn";
+  sourceType: GardenSourceType;
   sourceId: string;
   delta: Record<string, unknown>;
   effects: WorldEffect[];
@@ -485,6 +514,82 @@ async function insertMutationAndMark(args: {
   }
 }
 
+async function persistAppliedMutation(args: {
+  garden: Garden;
+  chapterId: string | null;
+  deviceId: string | null;
+  kind: ContributionKind;
+  sourceType: GardenSourceType;
+  sourceId: string;
+  applied: {
+    nextState: WorldState;
+    effects: WorldEffect[];
+    delta: Record<string, unknown>;
+    markIndex: number;
+  };
+}): Promise<RecordContributionResult | null> {
+  const { garden, applied } = args;
+  if (USE_LOCAL()) {
+    const persisted = localPersistMutation({
+      gardenId: garden.id,
+      chapterId: args.chapterId,
+      deviceId: args.deviceId,
+      kind: args.kind,
+      sourceType: args.sourceType,
+      sourceId: args.sourceId,
+      delta: applied.delta,
+      effects: applied.effects,
+      nextState: applied.nextState,
+      markIndex: applied.markIndex,
+    });
+    return {
+      garden: persisted.garden,
+      effects: applied.effects,
+      worldVersion: persisted.garden.worldVersion,
+      mark: persisted.mark,
+    };
+  }
+  if (!supabaseAdmin) return null;
+
+  const now = new Date().toISOString();
+  const { data: updated, error: upErr } = await supabaseAdmin
+    .from("gardens")
+    .update({
+      world_state: applied.nextState,
+      world_version: applied.nextState.version,
+      updated_at: now,
+    })
+    .eq("id", garden.id)
+    .eq("world_version", garden.worldVersion)
+    .select("*")
+    .maybeSingle();
+
+  if (upErr || !updated) {
+    console.warn("[gardens] persist mutation failed:", upErr?.message ?? "version conflict");
+    return null;
+  }
+
+  await insertMutationAndMark({
+    gardenId: garden.id,
+    chapterId: args.chapterId,
+    deviceId: args.deviceId,
+    kind: args.kind,
+    sourceType: args.sourceType,
+    sourceId: args.sourceId,
+    delta: applied.delta,
+    effects: applied.effects,
+    worldVersion: applied.nextState.version,
+    markIndex: applied.markIndex,
+  });
+
+  return {
+    garden: rowToGarden(updated as Record<string, unknown>),
+    effects: applied.effects,
+    worldVersion: applied.nextState.version,
+    mark: null,
+  };
+}
+
 async function resolveEventSlug(eventId: string): Promise<string> {
   if (USE_LOCAL()) {
     return localEventsGetById(eventId)?.slug ?? "";
@@ -498,11 +603,186 @@ async function resolveEventSlug(eventId: string): Promise<string> {
   return data?.slug ? String(data.slug) : "";
 }
 
+export async function listRecentMutations(
+  gardenId: string,
+  limit = 40
+): Promise<GardenMutationRecord[]> {
+  if (USE_LOCAL()) return localListMutations(gardenId, { limit });
+  if (!supabaseAdmin) return [];
+  const { data, error } = await supabaseAdmin
+    .from("garden_mutations")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) {
+    console.warn("[gardens] list mutations failed:", error?.message);
+    return [];
+  }
+  return data.map((r) => rowToMutation(r as Record<string, unknown>));
+}
+
+export async function listMutationsThrough(
+  gardenId: string,
+  beforeIso: string
+): Promise<GardenMutationRecord[]> {
+  if (USE_LOCAL()) return localListMutations(gardenId, { beforeIso });
+  if (!supabaseAdmin) return [];
+  const { data, error } = await supabaseAdmin
+    .from("garden_mutations")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .lte("created_at", beforeIso)
+    .order("created_at", { ascending: true });
+  if (error || !data) {
+    console.warn("[gardens] list mutations through failed:", error?.message);
+    return [];
+  }
+  return data.map((r) => rowToMutation(r as Record<string, unknown>));
+}
+
+export async function updateChapter(
+  chapterId: string,
+  updates: Partial<Pick<GardenChapter, "status" | "label" | "chapterWeight" | "opensAt" | "closesAt">>
+): Promise<GardenChapter | null> {
+  if (USE_LOCAL()) return localUpdateChapter(chapterId, updates);
+  if (!supabaseAdmin) throw new Error("Database not configured.");
+  const patch: Record<string, unknown> = {};
+  if (updates.status != null) patch.status = updates.status;
+  if (updates.label != null) patch.label = updates.label;
+  if (updates.chapterWeight != null) patch.chapter_weight = updates.chapterWeight;
+  if (updates.opensAt !== undefined) patch.opens_at = updates.opensAt;
+  if (updates.closesAt !== undefined) patch.closes_at = updates.closesAt;
+  const { data, error } = await supabaseAdmin
+    .from("garden_chapters")
+    .update(patch)
+    .eq("id", chapterId)
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to update chapter.");
+  return rowToChapter(data as Record<string, unknown>);
+}
+
+export async function getChapterById(chapterId: string): Promise<GardenChapter | null> {
+  if (USE_LOCAL()) return localGetChapterById(chapterId);
+  if (!supabaseAdmin) return null;
+  const { data, error } = await supabaseAdmin
+    .from("garden_chapters")
+    .select("*")
+    .eq("id", chapterId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToChapter(data as Record<string, unknown>);
+}
+
+/**
+ * Between-show pulse — allowed when garden is live and no chapter is required.
+ */
+export async function recordBetweenShowPulse(args: {
+  gardenIdOrSlug: string;
+  kind?: ContributionKind;
+  deviceId?: string | null;
+  note?: string | null;
+}): Promise<RecordContributionResult | null> {
+  try {
+    const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+    if (!garden || garden.status !== "live") return null;
+
+    const chapters = await listChapters(garden.id);
+    const open = chapters.find((c) => c.status === "open") ?? null;
+    // Pulses are for between-show; if a chapter is open, still allow but tag chapter.
+    const deviceId = args.deviceId?.trim() || null;
+    const recent = deviceId ? await recentDeviceMutationAts(garden.id, deviceId) : [];
+    const kind = args.kind && isContributionKind(args.kind) ? args.kind : "text";
+    const weight = open
+      ? open.chapterWeight
+      : garden.mutationPolicy.betweenChapterWeight;
+
+    const applied = applyMutation(
+      garden.worldState,
+      {
+        gardenId: garden.id,
+        chapterId: open?.id ?? null,
+        kind,
+        sourceType: "pulse",
+        sourceId: `pulse_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        deviceId,
+        chapterIndex: open?.index ?? null,
+        chapterWeight: weight,
+        recentDeviceMutationAts: recent,
+      },
+      garden.mutationPolicy
+    );
+
+    return persistAppliedMutation({
+      garden,
+      chapterId: open?.id ?? null,
+      deviceId,
+      kind,
+      sourceType: "pulse",
+      sourceId: String(applied.delta.nodeId ?? `pulse_${Date.now()}`),
+      applied,
+    });
+  } catch (err) {
+    console.warn("[gardens] recordBetweenShowPulse error:", err);
+    return null;
+  }
+}
+
+export async function finalizeChapter(args: {
+  gardenIdOrSlug: string;
+  chapterId: string;
+}): Promise<{ chapter: GardenChapter; result: RecordContributionResult } | null> {
+  try {
+    const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+    if (!garden) return null;
+    const chapter = await getChapterById(args.chapterId);
+    if (!chapter || chapter.gardenId !== garden.id) return null;
+    if (chapter.status === "closed") {
+      return null;
+    }
+
+    const applied = applyChapterFinale(
+      garden.worldState,
+      {
+        gardenId: garden.id,
+        chapterId: chapter.id,
+        chapterIndex: chapter.index,
+        chapterLabel: chapter.label,
+      },
+      garden.mutationPolicy
+    );
+
+    const result = await persistAppliedMutation({
+      garden,
+      chapterId: chapter.id,
+      deviceId: null,
+      kind: "other",
+      sourceType: "finale",
+      sourceId: `finale_${chapter.id}`,
+      applied,
+    });
+    if (!result) return null;
+
+    const updatedChapter = await updateChapter(chapter.id, {
+      status: "closed",
+      closesAt: new Date().toISOString(),
+    });
+    if (!updatedChapter) return null;
+    return { chapter: updatedChapter, result };
+  } catch (err) {
+    console.warn("[gardens] finalizeChapter error:", err);
+    return null;
+  }
+}
+
 export async function getGardenSnapshot(args: {
   gardenIdOrSlug: string;
   chapterId?: string | null;
   eventId?: string | null;
   deviceId?: string | null;
+  at?: string | null;
+  version?: number | null;
 }): Promise<GardenSnapshot | null> {
   const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
   if (!garden) return null;
@@ -523,15 +803,56 @@ export async function getGardenSnapshot(args: {
 
   const eventSlug = chapter ? await resolveEventSlug(chapter.eventId) : "";
   const myMarks =
-    args.deviceId && args.deviceId.trim()
+    args.deviceId && args.deviceId.trim() && !args.at && args.version == null
       ? await listMarks(garden.id, args.deviceId.trim())
       : [];
 
+  let gardenForSnap = garden;
+  let asOf: string | null = null;
+
+  if (args.at || args.version != null) {
+    const mutations = args.at
+      ? await listMutationsThrough(garden.id, args.at)
+      : await listMutationsThrough(garden.id, new Date().toISOString());
+    const filtered =
+      args.version != null
+        ? mutations.filter((m) => m.worldVersion <= Number(args.version))
+        : mutations;
+    const rebuilt = replayMutationsToState({
+      gardenId: garden.id,
+      renderSeed: garden.worldState.renderSeed || `garden_${garden.id.slice(0, 8)}`,
+      policy: garden.mutationPolicy,
+      mutations: filtered,
+    });
+    // Align reported version to last mutation version when available
+    const lastVersion = filtered.length
+      ? filtered[filtered.length - 1].worldVersion
+      : 0;
+    rebuilt.version = lastVersion;
+    gardenForSnap = {
+      ...garden,
+      worldState: rebuilt,
+      worldVersion: lastVersion,
+    };
+    asOf = args.at ?? filtered[filtered.length - 1]?.createdAt ?? null;
+  }
+
+  // For event-scoped snapshots, prefer chapter window; for garden home, use open chapter or between.
+  const windowChapter =
+    args.eventId && chapter
+      ? chapter
+      : (await listChapters(garden.id)).find((c) => c.status === "open") ?? null;
+
   return buildGardenSnapshot({
-    garden,
+    garden: gardenForSnap,
     chapter,
     eventSlug,
     myMarks,
+    asOf,
+    window: resolveContributionWindow({
+      gardenStatus: garden.status,
+      activeChapter: windowChapter,
+    }),
   });
 }
 

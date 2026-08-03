@@ -11,19 +11,30 @@ export async function GET(request: Request, context: Ctx) {
     const deviceId = searchParams.get("deviceId");
     const chapterId = searchParams.get("chapterId");
     const eventId = searchParams.get("eventId");
+    const at = searchParams.get("at");
+    const versionRaw = searchParams.get("version");
+    const version =
+      versionRaw != null && versionRaw !== "" && Number.isFinite(Number(versionRaw))
+        ? Number(versionRaw)
+        : null;
     const snapshot = await getGardenSnapshot({
       gardenIdOrSlug: context.params.id,
       deviceId,
       chapterId,
       eventId,
+      at,
+      version,
     });
     if (!snapshot) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    const etagBase = snapshot.asOf
+      ? `hist-${snapshot.garden.worldVersion}-${snapshot.asOf}`
+      : `v${snapshot.garden.worldVersion}`;
     return NextResponse.json(snapshot, {
       headers: {
-        "Cache-Control": "public, max-age=5",
-        ETag: `"v${snapshot.garden.worldVersion}"`,
+        "Cache-Control": snapshot.asOf ? "public, max-age=30" : "public, max-age=5",
+        ETag: `"${etagBase}"`,
       },
     });
   } catch (err) {

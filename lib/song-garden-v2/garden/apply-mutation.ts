@@ -81,8 +81,14 @@ export function applyMutation(
     typeof intent.chapterWeight === "number" && Number.isFinite(intent.chapterWeight)
       ? intent.chapterWeight
       : policy.chapterWeightDefault;
-  const damp = deviceDampingFactor(policy, intent.recentDeviceMutationAts, nowMs);
-  const w = chapterWeight * damp;
+  const damp =
+    typeof intent.forcedWeight === "number" && Number.isFinite(intent.forcedWeight)
+      ? 1
+      : deviceDampingFactor(policy, intent.recentDeviceMutationAts, nowMs);
+  const w =
+    typeof intent.forcedWeight === "number" && Number.isFinite(intent.forcedWeight)
+      ? intent.forcedWeight
+      : chapterWeight * damp;
 
   const energyDelta = policy.energyPerContribution * w;
   const prevEnergy = clamp01(Number(base.energy) || 0);
@@ -160,4 +166,153 @@ export function applyMutation(
     },
     markIndex,
   };
+}
+
+/**
+ * Chapter finale — closes the ritual with a heavier bloom and a chapter landmark.
+ */
+export function applyChapterFinale(
+  prev: WorldState | null | undefined,
+  args: {
+    gardenId: string;
+    chapterId: string;
+    chapterIndex: number;
+    chapterLabel: string;
+    finaleWeight?: number;
+  },
+  policyInput?: Partial<MutationPolicy> | null,
+  now = new Date()
+): ApplyMutationResult {
+  const policy = defaultMutationPolicy(policyInput ?? undefined);
+  const finaleWeight = args.finaleWeight ?? policy.chapterFinaleWeight;
+  const applied = applyMutation(
+    prev,
+    {
+      gardenId: args.gardenId,
+      chapterId: args.chapterId,
+      kind: "other",
+      sourceType: "finale",
+      sourceId: `finale_${args.chapterId}`,
+      deviceId: null,
+      chapterIndex: args.chapterIndex,
+      forcedWeight: finaleWeight,
+    },
+    policy,
+    now
+  );
+
+  const state = applied.nextState;
+  const nowIso = state.updatedAt;
+  const landmarkKey = `chapter_${args.chapterIndex}`;
+  const landmarkLabel = `${args.chapterLabel || `Show ${args.chapterIndex}`} sealed`;
+  const effects = [...applied.effects];
+
+  if (!state.chapters.completedIds.includes(args.chapterId)) {
+    state.chapters.completedIds = [...state.chapters.completedIds, args.chapterId];
+  }
+  state.chapters.activeChapterId = null;
+
+  if (!state.landmarks.some((l) => l.key === landmarkKey)) {
+    state.landmarks.push({
+      id: `lm_${landmarkKey}_${Date.now().toString(36)}`,
+      key: landmarkKey,
+      label: landmarkLabel,
+      unlockedAt: nowIso,
+      unlockedBy: "chapter",
+    });
+    effects.push({
+      type: "landmark_unlocked",
+      key: landmarkKey,
+      label: landmarkLabel,
+    });
+  }
+  effects.push({ type: "chapter_bloom", chapterId: args.chapterId });
+
+  return {
+    nextState: state,
+    effects,
+    delta: {
+      ...applied.delta,
+      finale: true,
+      chapterId: args.chapterId,
+      chapterIndex: args.chapterIndex,
+    },
+    markIndex: applied.markIndex,
+  };
+}
+
+/** Rebuild world state by replaying mutations up to (and including) a cutoff. */
+export function replayMutationsToState(args: {
+  gardenId: string;
+  renderSeed: string;
+  policy: MutationPolicy;
+  mutations: Array<{
+    chapterId: string | null;
+    deviceId: string | null;
+    kind: ContributionKind;
+    sourceType: WorldMutationIntent["sourceType"];
+    sourceId: string;
+    delta: Record<string, unknown>;
+    effects: WorldEffect[];
+    createdAt: string;
+  }>;
+}): WorldState {
+  let state = emptyWorldState(args.renderSeed);
+  const deviceAts = new Map<string, string[]>();
+
+  for (const mut of args.mutations) {
+    // Finale mutations are reconstructed from stored delta/effects when possible.
+    if (mut.sourceType === "finale") {
+      const chapterId = mut.chapterId;
+      const chapterIndex =
+        typeof mut.delta.chapterIndex === "number" ? mut.delta.chapterIndex : 1;
+      const unlocked = mut.effects.find((e) => e.type === "landmark_unlocked");
+      const label =
+        unlocked && unlocked.type === "landmark_unlocked"
+          ? unlocked.label.replace(/ sealed$/, "")
+          : `Show ${chapterIndex}`;
+      if (chapterId) {
+        const finale = applyChapterFinale(
+          state,
+          {
+            gardenId: args.gardenId,
+            chapterId,
+            chapterIndex,
+            chapterLabel: label,
+            finaleWeight:
+              typeof mut.delta.weight === "number" ? Number(mut.delta.weight) : undefined,
+          },
+          args.policy,
+          new Date(mut.createdAt)
+        );
+        state = finale.nextState;
+        continue;
+      }
+    }
+
+    const recent = mut.deviceId ? deviceAts.get(mut.deviceId) ?? [] : [];
+    const forced =
+      typeof mut.delta.weight === "number" ? Number(mut.delta.weight) : undefined;
+    const applied = applyMutation(
+      state,
+      {
+        gardenId: args.gardenId,
+        chapterId: mut.chapterId,
+        kind: mut.kind,
+        sourceType: mut.sourceType,
+        sourceId: mut.sourceId,
+        deviceId: mut.deviceId,
+        forcedWeight: forced,
+        recentDeviceMutationAts: recent,
+      },
+      args.policy,
+      new Date(mut.createdAt)
+    );
+    state = applied.nextState;
+    if (mut.deviceId) {
+      const next = [...(deviceAts.get(mut.deviceId) ?? []), mut.createdAt];
+      deviceAts.set(mut.deviceId, next.slice(-20));
+    }
+  }
+  return state;
 }

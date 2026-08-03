@@ -195,6 +195,51 @@ export function localAddChapter(input: {
   return chapter;
 }
 
+export function localListMutations(
+  gardenId: string,
+  opts?: { beforeIso?: string | null; limit?: number }
+): GardenMutationRecord[] {
+  let list = ensureLoaded()
+    .mutations.filter((m) => m.gardenId === gardenId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  if (opts?.beforeIso) {
+    const cut = Date.parse(opts.beforeIso);
+    if (Number.isFinite(cut)) {
+      list = list.filter((m) => Date.parse(m.createdAt) <= cut);
+    }
+  }
+  if (opts?.limit != null && opts.limit > 0 && !opts.beforeIso) {
+    // recent-first for debugger when no historical cutoff
+    return [...list].reverse().slice(0, opts.limit);
+  }
+  return list;
+}
+
+export function localUpdateChapter(
+  chapterId: string,
+  updates: Partial<Pick<GardenChapter, "status" | "label" | "chapterWeight" | "opensAt" | "closesAt">>
+): GardenChapter | null {
+  const db = ensureLoaded();
+  const idx = db.chapters.findIndex((c) => c.id === chapterId);
+  if (idx < 0) return null;
+  const prev = db.chapters[idx];
+  const next: GardenChapter = {
+    ...prev,
+    status: updates.status ?? prev.status,
+    label: updates.label?.trim() || prev.label,
+    chapterWeight: updates.chapterWeight ?? prev.chapterWeight,
+    opensAt: updates.opensAt !== undefined ? updates.opensAt : prev.opensAt,
+    closesAt: updates.closesAt !== undefined ? updates.closesAt : prev.closesAt,
+  };
+  db.chapters[idx] = next;
+  persist();
+  return next;
+}
+
+export function localGetChapterById(chapterId: string): GardenChapter | null {
+  return ensureLoaded().chapters.find((c) => c.id === chapterId) ?? null;
+}
+
 export function localListMarks(gardenId: string, deviceId: string): ParticipantMark[] {
   return ensureLoaded()
     .marks.filter((m) => m.gardenId === gardenId && m.deviceId === deviceId)
@@ -218,7 +263,7 @@ export function localPersistMutation(args: {
   chapterId: string | null;
   deviceId: string | null;
   kind: ContributionKind;
-  sourceType: "clip" | "turn";
+  sourceType: import("./types").GardenSourceType;
   sourceId: string;
   delta: Record<string, unknown>;
   effects: WorldEffect[];
