@@ -149,48 +149,17 @@ Expect: zone key normalization, `zone_up` effect, snapshot zones + sponsor, read
 
 ### Manual — Fans map
 
-1. Admin garden → **Crowdsource Fans map (Phase D)**.
-2. Paste **Zones JSON**, e.g.:
-
-```json
-[
-  {
-    "key": "north-end",
-    "label": "North End",
-    "x": 0.28,
-    "y": 0.22,
-    "sponsorKey": "acme",
-    "blurb": "Home roar"
-  },
-  {
-    "key": "south-end",
-    "label": "South End",
-    "x": 0.72,
-    "y": 0.78,
-    "blurb": "Away stretch"
-  }
-]
-```
-
-3. Paste **Sponsors JSON**, e.g.:
-
-```json
-[
-  {
-    "key": "acme",
-    "name": "Acme Bank",
-    "credit": "Enabled by Acme Bank"
-  }
-]
-```
-
-4. **Save Fans map**. Keys are normalized (`North End!` → `north-end`).
-5. Open **`/g/[slug]`**:
+1. Admin garden → **Fan map**.
+2. **Add a zone**: name e.g. `North End`, optional hint, map spot (top left / bottom right / …) → **Add zone**. Repeat for `South End`.
+3. Optional: **Add sponsor** (e.g. `Acme Bank`), then assign it on a zone card.
+4. Tap **Save map**. Keys are normalized (`North End!` → `north-end`).
+5. Tap **Open public garden** (or `/g/[slug]`):
    - Participation map dots appear (not a seat map).
    - Select a zone → **Leave a mark in …**.
    - Zone energy / marks update; celebration may say a zone grew louder.
-6. Admin **Zone vitality** should list the zone after pulses.
+6. Admin **Zone energy** should list the zone after pulses.
 7. Invalid `zoneKey` on pulse → `409` (when zones are authored).
+8. Commerce + world debugger live under **Advanced** (collapsed by default).
 
 **Pulse API:**
 
@@ -200,12 +169,12 @@ curl -X POST "$ORIGIN/api/gardens/$SLUG/pulse" \
   -d '{"deviceId":"dev_testdevice01","kind":"text","zoneKey":"north-end"}'
 ```
 
-### Manual — Gameday ready shelf
+### Manual — Gameday checklist
 
-1. Admin → **Gameday ready shelf**:
-   - Title + moment (`kickoff` / `goal` / …) + optional `zoneKey`.
-   - **Add to shelf** (simple item) or **Promote with world payload** (embeds world version, energy, zone stats).
-2. **Mark played** on a ready item.
+1. Admin → **Gameday checklist**:
+   - Title + moment (`kickoff` / `goal` / …) + optional zone (dropdown from Fan map).
+   - **Add to checklist** or **Add with world snapshot** (embeds world version, energy, zone stats).
+2. Tap **Mark played** — row should show a green **Played ✓** badge and a success notice. (Fan public page does not change yet.)
 3. APIs:
    - `GET /api/gardens/[id]/ready-shelf`
    - `POST /api/gardens/[id]/ready-shelf` body: `{ "title", "momentType", "zoneKey?", "sponsorKey?", "promote?" }`
