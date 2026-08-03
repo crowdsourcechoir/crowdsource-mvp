@@ -13,8 +13,10 @@ import {
   type ContributionKind,
   type Garden,
   type GardenChapter,
+  type GardenEdition,
   type GardenKind,
   type GardenMutationRecord,
+  type GardenOrder,
   type GardenStatus,
   type MutationPolicy,
   type ParticipantMark,
@@ -27,9 +29,18 @@ type LocalDb = {
   chapters: GardenChapter[];
   mutations: GardenMutationRecord[];
   marks: ParticipantMark[];
+  editions: GardenEdition[];
+  orders: GardenOrder[];
 };
 
-const EMPTY: LocalDb = { gardens: [], chapters: [], mutations: [], marks: [] };
+const EMPTY: LocalDb = {
+  gardens: [],
+  chapters: [],
+  mutations: [],
+  marks: [],
+  editions: [],
+  orders: [],
+};
 
 let cache: LocalDb | null = null;
 
@@ -41,7 +52,14 @@ function ensureLoaded(): LocalDb {
   if (cache) return cache;
   const filePath = dataPath();
   if (!existsSync(filePath)) {
-    cache = { ...EMPTY, gardens: [], chapters: [], mutations: [], marks: [] };
+    cache = {
+      gardens: [],
+      chapters: [],
+      mutations: [],
+      marks: [],
+      editions: [],
+      orders: [],
+    };
     return cache;
   }
   try {
@@ -51,9 +69,18 @@ function ensureLoaded(): LocalDb {
       chapters: Array.isArray(parsed.chapters) ? parsed.chapters : [],
       mutations: Array.isArray(parsed.mutations) ? parsed.mutations : [],
       marks: Array.isArray(parsed.marks) ? parsed.marks : [],
+      editions: Array.isArray(parsed.editions) ? parsed.editions : [],
+      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
     };
   } catch {
-    cache = { gardens: [], chapters: [], mutations: [], marks: [] };
+    cache = {
+      gardens: [],
+      chapters: [],
+      mutations: [],
+      marks: [],
+      editions: [],
+      orders: [],
+    };
   }
   return cache;
 }
@@ -315,4 +342,80 @@ export function localPersistMutation(args: {
 
   persist();
   return { garden, mutation, mark };
+}
+
+export function localListEditions(gardenId: string): GardenEdition[] {
+  return ensureLoaded()
+    .editions.filter((e) => e.gardenId === gardenId)
+    .sort((a, b) => (a.pinnedAt < b.pinnedAt ? 1 : -1));
+}
+
+export function localGetEdition(
+  gardenId: string,
+  editionIdOrSlug: string
+): GardenEdition | null {
+  return (
+    ensureLoaded().editions.find(
+      (e) =>
+        e.gardenId === gardenId &&
+        (e.id === editionIdOrSlug || e.slug === editionIdOrSlug)
+    ) ?? null
+  );
+}
+
+export function localCreateEdition(input: {
+  gardenId: string;
+  slug: string;
+  label: string;
+  pinnedSnapshot: import("./types").PinnedMerchSnapshot;
+  renderSeed: string;
+}): GardenEdition {
+  const db = ensureLoaded();
+  if (!db.gardens.some((g) => g.id === input.gardenId)) {
+    throw new Error("Garden not found.");
+  }
+  const slug = input.slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+  if (!slug) throw new Error("slug is required");
+  if (db.editions.some((e) => e.gardenId === input.gardenId && e.slug === slug)) {
+    throw new Error("An edition with that slug already exists for this garden.");
+  }
+  const edition: GardenEdition = {
+    id: nextId("edition"),
+    gardenId: input.gardenId,
+    slug,
+    label: input.label.trim() || slug,
+    pinnedSnapshot: input.pinnedSnapshot,
+    renderSeed: input.renderSeed,
+    pinnedAt: new Date().toISOString(),
+  };
+  db.editions.push(edition);
+  persist();
+  return edition;
+}
+
+export function localListOrders(gardenId: string): GardenOrder[] {
+  return ensureLoaded()
+    .orders.filter((o) => o.gardenId === gardenId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export function localGetOrder(orderId: string): GardenOrder | null {
+  return ensureLoaded().orders.find((o) => o.id === orderId) ?? null;
+}
+
+export function localCreateOrder(
+  order: Omit<GardenOrder, "id" | "createdAt"> & { id?: string; createdAt?: string }
+): GardenOrder {
+  const db = ensureLoaded();
+  if (!db.gardens.some((g) => g.id === order.gardenId)) {
+    throw new Error("Garden not found.");
+  }
+  const row: GardenOrder = {
+    ...order,
+    id: order.id ?? nextId("order"),
+    createdAt: order.createdAt ?? new Date().toISOString(),
+  };
+  db.orders.push(row);
+  persist();
+  return row;
 }

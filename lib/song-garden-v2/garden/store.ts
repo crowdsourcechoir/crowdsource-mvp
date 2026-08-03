@@ -4,35 +4,49 @@ import { applyChapterFinale, applyMutation, replayMutationsToState } from "./app
 import { buildGardenSnapshot, resolveContributionWindow } from "./snapshot";
 import {
   localAddChapter,
+  localCreateEdition,
   localCreateGarden,
+  localCreateOrder,
   localGetChapterByEventId,
   localGetChapterById,
+  localGetEdition,
   localGetGardenByIdOrSlug,
+  localGetOrder,
   localListChapters,
+  localListEditions,
   localListGardens,
   localListMarks,
   localListMutations,
+  localListOrders,
   localPersistMutation,
   localRecentDeviceMutationAts,
   localUpdateChapter,
   localUpdateGarden,
 } from "./local-garden-store";
+import { buildMerchRenderInput, buildPinnedMerchSnapshot, editionToMerchInput } from "./merch-render";
 import {
   defaultBrandKit,
   defaultMutationPolicy,
   emptyWorldState,
   isContributionKind,
+  isMerchFormat,
   type BrandKit,
   type ContributionKind,
   type Garden,
   type GardenChapter,
+  type GardenEdition,
   type GardenKind,
   type GardenMutationRecord,
+  type GardenOrder,
+  type GardenOrderKind,
   type GardenSnapshot,
   type GardenSourceType,
   type GardenStatus,
+  type MerchFormat,
+  type MerchRenderInput,
   type MutationPolicy,
   type ParticipantMark,
+  type PinnedMerchSnapshot,
   type WorldEffect,
   type WorldState,
 } from "./types";
@@ -885,4 +899,292 @@ export function kindFromInterviewMedia(args: {
   if (args.hasVideo) return "video";
   if (args.hasAudio) return "voice";
   return "text";
+}
+
+function rowToEdition(row: Record<string, unknown>): GardenEdition {
+  return {
+    id: String(row.id),
+    gardenId: String(row.garden_id),
+    slug: String(row.slug),
+    label: String(row.label ?? ""),
+    pinnedSnapshot: row.pinned_snapshot as PinnedMerchSnapshot,
+    renderSeed: String(row.render_seed ?? ""),
+    pinnedAt: String(row.pinned_at ?? new Date().toISOString()),
+  };
+}
+
+function rowToOrder(row: Record<string, unknown>): GardenOrder {
+  return {
+    id: String(row.id),
+    gardenId: String(row.garden_id),
+    kind: (row.kind as GardenOrderKind) || "living",
+    editionId: row.edition_id != null ? String(row.edition_id) : null,
+    editionSlug: row.edition_slug != null ? String(row.edition_slug) : null,
+    format: isMerchFormat(row.format) ? row.format : "square_print",
+    deviceId: row.device_id != null ? String(row.device_id) : null,
+    orderedSnapshot: row.ordered_snapshot as PinnedMerchSnapshot,
+    merchInput: row.merch_input as MerchRenderInput,
+    status: (row.status as GardenOrder["status"]) || "stub",
+    note: row.note != null ? String(row.note) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
+}
+
+export async function listEditions(gardenId: string): Promise<GardenEdition[]> {
+  if (USE_LOCAL()) return localListEditions(gardenId);
+  if (!supabaseAdmin) return [];
+  const { data, error } = await supabaseAdmin
+    .from("garden_editions")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .order("pinned_at", { ascending: false });
+  if (error || !data) {
+    console.warn("[gardens] list editions failed:", error?.message);
+    return [];
+  }
+  return data.map((r) => rowToEdition(r as Record<string, unknown>));
+}
+
+export async function getEdition(
+  gardenId: string,
+  editionIdOrSlug: string
+): Promise<GardenEdition | null> {
+  if (USE_LOCAL()) return localGetEdition(gardenId, editionIdOrSlug);
+  if (!supabaseAdmin) return null;
+  const byId = await supabaseAdmin
+    .from("garden_editions")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .eq("id", editionIdOrSlug)
+    .maybeSingle();
+  if (byId.data) return rowToEdition(byId.data as Record<string, unknown>);
+  const bySlug = await supabaseAdmin
+    .from("garden_editions")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .eq("slug", editionIdOrSlug)
+    .maybeSingle();
+  if (bySlug.data) return rowToEdition(bySlug.data as Record<string, unknown>);
+  return null;
+}
+
+/** Pin the current (or historical) garden state as a monthly edition. */
+export async function pinGardenEdition(args: {
+  gardenIdOrSlug: string;
+  slug: string;
+  label: string;
+  at?: string | null;
+  version?: number | null;
+}): Promise<GardenEdition> {
+  const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+  if (!garden) throw new Error("Garden not found.");
+
+  let state = garden.worldState;
+  let worldVersion = garden.worldVersion;
+  if (args.at || args.version != null) {
+    const snap = await getGardenSnapshot({
+      gardenIdOrSlug: garden.id,
+      at: args.at,
+      version: args.version,
+    });
+    if (!snap) throw new Error("Could not rebuild historical snapshot for edition.");
+    state = snap.state;
+    worldVersion = snap.garden.worldVersion;
+  }
+
+  const pinnedSnapshot = buildPinnedMerchSnapshot({
+    garden,
+    state,
+    worldVersion,
+  });
+  const renderSeed = `${state.renderSeed}:edition:${args.slug.trim()}:v${worldVersion}`;
+
+  if (USE_LOCAL()) {
+    return localCreateEdition({
+      gardenId: garden.id,
+      slug: args.slug,
+      label: args.label,
+      pinnedSnapshot,
+      renderSeed,
+    });
+  }
+  if (!supabaseAdmin) throw new Error("Database not configured.");
+  const slug = args.slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+  const { data, error } = await supabaseAdmin
+    .from("garden_editions")
+    .insert({
+      garden_id: garden.id,
+      slug,
+      label: args.label.trim() || slug,
+      pinned_snapshot: pinnedSnapshot,
+      render_seed: renderSeed,
+    })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to pin edition.");
+  return rowToEdition(data as Record<string, unknown>);
+}
+
+export async function listOrders(gardenId: string): Promise<GardenOrder[]> {
+  if (USE_LOCAL()) return localListOrders(gardenId);
+  if (!supabaseAdmin) return [];
+  const { data, error } = await supabaseAdmin
+    .from("garden_orders")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .order("created_at", { ascending: false });
+  if (error || !data) {
+    console.warn("[gardens] list orders failed:", error?.message);
+    return [];
+  }
+  return data.map((r) => rowToOrder(r as Record<string, unknown>));
+}
+
+export async function getOrder(orderId: string): Promise<GardenOrder | null> {
+  if (USE_LOCAL()) return localGetOrder(orderId);
+  if (!supabaseAdmin) return null;
+  const { data, error } = await supabaseAdmin
+    .from("garden_orders")
+    .select("*")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToOrder(data as Record<string, unknown>);
+}
+
+/**
+ * Stub checkout — freezes the print contract (edition pin or living snapshot) on the order.
+ */
+export async function createStubOrder(args: {
+  gardenIdOrSlug: string;
+  kind: GardenOrderKind;
+  format: MerchFormat;
+  editionIdOrSlug?: string | null;
+  deviceId?: string | null;
+  note?: string | null;
+}): Promise<GardenOrder> {
+  const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+  if (!garden) throw new Error("Garden not found.");
+
+  let edition: GardenEdition | null = null;
+  let orderedSnapshot: PinnedMerchSnapshot;
+  let merchInput: MerchRenderInput;
+  const marks =
+    args.deviceId?.trim()
+      ? await listMarks(garden.id, args.deviceId.trim())
+      : [];
+
+  if (args.kind === "edition") {
+    if (!args.editionIdOrSlug?.trim()) {
+      throw new Error("editionIdOrSlug is required for edition orders.");
+    }
+    edition = await getEdition(garden.id, args.editionIdOrSlug.trim());
+    if (!edition) throw new Error("Edition not found.");
+    orderedSnapshot = edition.pinnedSnapshot;
+    merchInput = editionToMerchInput(edition, args.format, marks);
+  } else {
+    orderedSnapshot = buildPinnedMerchSnapshot({ garden });
+    merchInput = buildMerchRenderInput({
+      brand: garden.brandKit,
+      state: {
+        energy: garden.worldState.energy,
+        layers: garden.worldState.layers,
+        landmarks: garden.worldState.landmarks,
+        totals: garden.worldState.totals,
+        renderSeed: garden.worldState.renderSeed,
+        version: garden.worldState.version,
+      },
+      format: args.format,
+      personalMarks: marks,
+    });
+  }
+
+  if (USE_LOCAL()) {
+    return localCreateOrder({
+      gardenId: garden.id,
+      kind: args.kind,
+      editionId: edition?.id ?? null,
+      editionSlug: edition?.slug ?? null,
+      format: args.format,
+      deviceId: args.deviceId?.trim() || null,
+      orderedSnapshot,
+      merchInput,
+      status: "stub",
+      note: args.note?.trim() || null,
+    });
+  }
+  if (!supabaseAdmin) throw new Error("Database not configured.");
+  const { data, error } = await supabaseAdmin
+    .from("garden_orders")
+    .insert({
+      garden_id: garden.id,
+      kind: args.kind,
+      edition_id: edition?.id ?? null,
+      edition_slug: edition?.slug ?? null,
+      format: args.format,
+      device_id: args.deviceId?.trim() || null,
+      ordered_snapshot: orderedSnapshot,
+      merch_input: merchInput,
+      status: "stub",
+      note: args.note?.trim() || null,
+    })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create order.");
+  return rowToOrder(data as Record<string, unknown>);
+}
+
+export async function resolveMerchPreviewInput(args: {
+  gardenIdOrSlug: string;
+  format: MerchFormat;
+  editionIdOrSlug?: string | null;
+  living?: boolean;
+  deviceId?: string | null;
+  at?: string | null;
+  version?: number | null;
+}): Promise<{ garden: Garden; input: MerchRenderInput; edition: GardenEdition | null }> {
+  const garden = await getGardenByIdOrSlug(args.gardenIdOrSlug);
+  if (!garden) throw new Error("Garden not found.");
+  const marks =
+    args.deviceId?.trim()
+      ? await listMarks(garden.id, args.deviceId.trim())
+      : [];
+
+  if (args.editionIdOrSlug?.trim() && !args.living) {
+    const edition = await getEdition(garden.id, args.editionIdOrSlug.trim());
+    if (!edition) throw new Error("Edition not found.");
+    return {
+      garden,
+      edition,
+      input: editionToMerchInput(edition, args.format, marks),
+    };
+  }
+
+  let state = garden.worldState;
+  if (args.at || args.version != null) {
+    const snap = await getGardenSnapshot({
+      gardenIdOrSlug: garden.id,
+      at: args.at,
+      version: args.version,
+    });
+    if (snap) state = snap.state;
+  }
+
+  return {
+    garden,
+    edition: null,
+    input: buildMerchRenderInput({
+      brand: garden.brandKit,
+      state: {
+        energy: state.energy,
+        layers: state.layers,
+        landmarks: state.landmarks,
+        totals: state.totals,
+        renderSeed: state.renderSeed,
+        version: state.version,
+      },
+      format: args.format,
+      personalMarks: marks,
+    }),
+  };
 }

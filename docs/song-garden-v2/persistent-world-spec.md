@@ -580,10 +580,10 @@ Unchanged V2 (localStorage growth, personal energy storyboard).
 
 ### Phase C — Commerce contract
 
-- `garden_editions` pin flow  
-- `MerchRenderInput` → PNG preview endpoint  
-- Stub checkout that stores ordered snapshot blob  
-- (External) Printful/Shopify mapping later
+- [x] `garden_editions` pin flow (`POST /api/gardens/[id]/editions`)
+- [x] `MerchRenderInput` → PNG preview (`GET /api/gardens/[id]/merch/preview`)
+- [x] Stub checkout storing ordered snapshot blob (`POST /api/gardens/[id]/orders`)
+- [ ] (External) Printful/Shopify mapping later
 
 ### Phase D — Fans skin
 

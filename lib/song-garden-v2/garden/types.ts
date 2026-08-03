@@ -296,3 +296,61 @@ export function effectCelebrationLine(effects: WorldEffect[]): string | null {
   }
   return null;
 }
+
+export type MerchFormat = "hoodie_front" | "hoodie_allover" | "square_print";
+
+export type MerchRenderInput = {
+  brand: Pick<BrandKit, "primaryColor" | "accentColor" | "logoUrl" | "title">;
+  state: Pick<WorldState, "energy" | "layers" | "landmarks" | "totals" | "renderSeed"> & {
+    version?: number;
+  };
+  personal?: { kinds: ContributionKind[]; count: number };
+  format: MerchFormat;
+};
+
+/** Frozen print contract stored on an edition pin. */
+export type PinnedMerchSnapshot = {
+  gardenId: string;
+  gardenSlug: string;
+  title: string;
+  worldVersion: number;
+  brand: MerchRenderInput["brand"];
+  state: MerchRenderInput["state"];
+  pinnedAt: string;
+};
+
+export type GardenEdition = {
+  id: string;
+  gardenId: string;
+  slug: string;
+  label: string;
+  pinnedSnapshot: PinnedMerchSnapshot;
+  renderSeed: string;
+  pinnedAt: string;
+};
+
+export type GardenOrderKind = "edition" | "living";
+export type GardenOrderStatus = "stub" | "queued" | "fulfilled";
+
+/** Stub checkout line — holds the ordered snapshot blob for later print fulfillment. */
+export type GardenOrder = {
+  id: string;
+  gardenId: string;
+  kind: GardenOrderKind;
+  editionId: string | null;
+  editionSlug: string | null;
+  format: MerchFormat;
+  deviceId: string | null;
+  /** Frozen snapshot at purchase time — print must use this, not live world. */
+  orderedSnapshot: PinnedMerchSnapshot;
+  merchInput: MerchRenderInput;
+  status: GardenOrderStatus;
+  note: string | null;
+  createdAt: string;
+};
+
+export const MERCH_FORMATS: MerchFormat[] = ["hoodie_front", "hoodie_allover", "square_print"];
+
+export function isMerchFormat(value: unknown): value is MerchFormat {
+  return typeof value === "string" && (MERCH_FORMATS as string[]).includes(value);
+}

@@ -6,7 +6,10 @@ import type { Event } from "@/data/mockEvents";
 import type {
   Garden,
   GardenChapter,
+  GardenEdition,
   GardenMutationRecord,
+  GardenOrder,
+  MerchFormat,
   WorldState,
 } from "@/lib/song-garden-v2/garden/types";
 
@@ -30,14 +33,22 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [debug, setDebug] = useState<DebugPayload | null>(null);
   const [histAt, setHistAt] = useState("");
   const [histPreview, setHistPreview] = useState<string | null>(null);
+  const [editions, setEditions] = useState<GardenEdition[]>([]);
+  const [orders, setOrders] = useState<GardenOrder[]>([]);
+  const [editionSlug, setEditionSlug] = useState("");
+  const [editionLabel, setEditionLabel] = useState("");
+  const [orderFormat, setOrderFormat] = useState<MerchFormat>("square_print");
+  const [orderEdition, setOrderEdition] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [gRes, eRes, dRes] = await Promise.all([
+      const [gRes, eRes, dRes, edRes, oRes] = await Promise.all([
         fetch(`/api/gardens/${gardenId}`, { cache: "no-store" }),
         fetch("/api/events", { cache: "no-store" }),
         fetch(`/api/gardens/${gardenId}/debug?limit=30`, { cache: "no-store" }),
+        fetch(`/api/gardens/${gardenId}/editions`, { cache: "no-store" }),
+        fetch(`/api/gardens/${gardenId}/orders`, { cache: "no-store" }),
       ]);
       const gBody = (await gRes.json().catch(() => ({}))) as {
         garden?: Garden;
@@ -60,6 +71,15 @@ export default function GardenDetailClient({ gardenId }: Props) {
           worldState: dBody.worldState,
           recentMutations: dBody.recentMutations ?? [],
         });
+      }
+
+      if (edRes.ok) {
+        const edBody = (await edRes.json()) as { editions?: GardenEdition[] };
+        setEditions(edBody.editions ?? []);
+      }
+      if (oRes.ok) {
+        const oBody = (await oRes.json()) as { orders?: GardenOrder[] };
+        setOrders(oBody.orders ?? []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -149,6 +169,54 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setHistPreview(JSON.stringify(body.state ?? body, null, 2));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Historical snapshot failed");
+    }
+  }
+
+  async function handlePinEdition(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/editions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: editionSlug,
+          label: editionLabel,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Failed to pin edition");
+      setEditionSlug("");
+      setEditionLabel("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to pin edition");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleStubOrder(kind: "living" | "edition") {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          format: orderFormat,
+          editionIdOrSlug: kind === "edition" ? orderEdition || undefined : undefined,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Stub order failed");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Stub order failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -320,6 +388,150 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </ul>
         </section>
       ) : null}
+
+      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+        <h2 className="text-sm font-medium text-gray-200">Commerce (Phase C)</h2>
+        <p className="text-xs text-gray-500">
+          Pin monthly editions, preview deterministic merch art, and create stub checkout
+          orders that freeze the print snapshot.
+        </p>
+
+        <form onSubmit={handlePinEdition} className="space-y-3 border-b border-gray-800 pb-4">
+          <h3 className="text-xs uppercase tracking-wide text-gray-500">Pin edition</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs text-gray-400">
+              Slug
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={editionSlug}
+                onChange={(e) => setEditionSlug(e.target.value)}
+                placeholder="2026-03"
+                required
+              />
+            </label>
+            <label className="block text-xs text-gray-400">
+              Label
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={editionLabel}
+                onChange={(e) => setEditionLabel(e.target.value)}
+                placeholder="March 2026"
+                required
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+          >
+            Pin current world
+          </button>
+        </form>
+
+        <div>
+          <h3 className="text-xs uppercase tracking-wide text-gray-500">Editions</h3>
+          {editions.length === 0 ? (
+            <p className="mt-2 text-sm text-gray-600">No editions pinned yet.</p>
+          ) : (
+            <ul className="mt-2 space-y-2 text-sm">
+              {editions.map((ed) => (
+                <li
+                  key={ed.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-800 px-3 py-2"
+                >
+                  <span>
+                    <span className="text-white">{ed.label}</span>
+                    <span className="text-gray-500">
+                      {" "}
+                      · /{ed.slug} · world v{ed.pinnedSnapshot.worldVersion}
+                    </span>
+                  </span>
+                  <a
+                    href={`/api/gardens/${gardenId}/merch/preview?format=square_print&edition=${ed.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-[#CFFF81] underline"
+                  >
+                    Preview PNG
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t border-gray-800 pt-4">
+          <h3 className="text-xs uppercase tracking-wide text-gray-500">Stub checkout</h3>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block text-xs text-gray-400">
+              Format
+              <select
+                className="mt-1 block rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={orderFormat}
+                onChange={(e) => setOrderFormat(e.target.value as MerchFormat)}
+              >
+                <option value="square_print">square_print</option>
+                <option value="hoodie_front">hoodie_front</option>
+                <option value="hoodie_allover">hoodie_allover</option>
+              </select>
+            </label>
+            <label className="block text-xs text-gray-400">
+              Edition (for edition order)
+              <select
+                className="mt-1 block rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={orderEdition}
+                onChange={(e) => setOrderEdition(e.target.value)}
+              >
+                <option value="">Select…</option>
+                {editions.map((ed) => (
+                  <option key={ed.id} value={ed.slug}>
+                    {ed.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void handleStubOrder("living")}
+              className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Order living one-of-one
+            </button>
+            <button
+              type="button"
+              disabled={saving || !orderEdition}
+              onClick={() => void handleStubOrder("edition")}
+              className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Order pinned edition
+            </button>
+            <a
+              href={`/api/gardens/${gardenId}/merch/preview?format=${orderFormat}&living=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-[#CFFF81]"
+            >
+              Living preview
+            </a>
+          </div>
+
+          {orders.length ? (
+            <ul className="space-y-2 text-xs text-gray-400">
+              {orders.map((o) => (
+                <li key={o.id} className="rounded border border-gray-800 px-2 py-1.5">
+                  <span className="text-gray-200">{o.kind}</span> · {o.format} · {o.status} · v
+                  {o.orderedSnapshot.worldVersion} · {new Date(o.createdAt).toLocaleString()}
+                  {o.editionSlug ? ` · edition /${o.editionSlug}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-600">No stub orders yet.</p>
+          )}
+        </div>
+      </section>
 
       <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
         <h2 className="text-sm font-medium text-gray-200">World debugger</h2>
