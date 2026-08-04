@@ -23,3 +23,7 @@ create index if not exists idx_songgarden_clips_event_device_submitted
   on public.songgarden_clips(event_id, device_id, submitted_at desc);
 
 comment on table public.songgarden_clips is 'Pre-show audio samples dropped into the Songgarden canvas';
+
+-- Service-role-only access (Next.js API routes). Deny anon/authenticated PostgREST.
+-- Also clears Security Advisor sensitive_columns_exposed (session_token / ip_hash).
+alter table if exists public.songgarden_clips enable row level security;

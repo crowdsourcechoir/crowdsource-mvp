@@ -2,6 +2,9 @@
 -- All access to these tables goes through Next.js API routes using SUPABASE_SERVICE_ROLE_KEY
 -- (service role bypasses RLS). Enabling RLS with no policies denies anon/authenticated
 -- PostgREST access entirely. Run in the Supabase SQL Editor after sales-platform-tables.sql.
+--
+-- Prefer re-running supabase/security-enable-rls-public-tables.sql to lock down the whole
+-- project (includes these tables plus events / songgarden / agent / gardens).
 
 alter table if exists public.industry_segments enable row level security;
 alter table if exists public.organization_types enable row level security;

@@ -71,3 +71,10 @@ create table if not exists public.prompt_game_ai_outputs (
 
 create index if not exists idx_prompt_game_ai_outputs_session
   on public.prompt_game_ai_outputs(session_id);
+
+-- Service-role-only access (Next.js API routes). Deny anon/authenticated PostgREST.
+alter table if exists public.prompt_game_sessions enable row level security;
+alter table if exists public.prompt_game_rounds enable row level security;
+alter table if exists public.prompt_game_submissions enable row level security;
+alter table if exists public.prompt_game_votes enable row level security;
+alter table if exists public.prompt_game_ai_outputs enable row level security;

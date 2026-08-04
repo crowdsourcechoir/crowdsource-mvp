@@ -32,3 +32,6 @@ alter table public.events
   add column if not exists anthem_completion_message text not null default 'Thanks! Your answers will help shape the song we''re making.';
 alter table public.events
   add column if not exists allow_audio_video_prompt boolean not null default true;
+
+-- Service-role-only access (Next.js API routes). Deny anon/authenticated PostgREST.
+alter table if exists public.events enable row level security;

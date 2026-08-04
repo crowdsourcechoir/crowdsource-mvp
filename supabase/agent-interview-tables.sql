@@ -123,3 +123,12 @@ alter table public.song_seeds
   add column if not exists suno_prompts jsonb not null default '[]';
 
 comment on column public.song_seeds.suno_prompts is 'Array of 3 ready-to-paste prompts for Suno song engine, generated from this seed';
+
+-- Service-role-only access (Next.js API routes). Deny anon/authenticated PostgREST.
+-- Clears Security Advisor rls_disabled_in_public + sensitive_columns_exposed
+-- (agent_participants.email / session_token).
+alter table if exists public.agent_themes enable row level security;
+alter table if exists public.agent_participants enable row level security;
+alter table if exists public.agent_conversations enable row level security;
+alter table if exists public.agent_conversation_turns enable row level security;
+alter table if exists public.song_seeds enable row level security;

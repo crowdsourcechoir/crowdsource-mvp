@@ -172,6 +172,7 @@ const sqlFiles = [
   "supabase/agent-turn-transcripts.sql",
   "supabase/songgarden-tables.sql",
   "supabase/songgarden-spam-columns.sql (if songgarden exists)",
+  "supabase/security-enable-rls-public-tables.sql  ← REQUIRED (clears Security Advisor critical issues)",
 ];
 sqlFiles.forEach((f) => console.log(`   • ${f}`));
 
