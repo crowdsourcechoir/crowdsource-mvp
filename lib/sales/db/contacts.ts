@@ -60,7 +60,8 @@ export async function getContact(id: string): Promise<Contact | null> {
   return data ? rowToContact(data) : null;
 }
 
-/** Dedupe within an org: by normalized email if present, else by exact full name match. */
+/** Dedupe within an org: by normalized email if present, else by exact full name match.
+ * limit(1) instead of maybeSingle — duplicate contact rows must not crash discovery/pipeline. */
 export async function findExistingContact(organizationId: string, email?: string | null, fullName?: string | null): Promise<Contact | null> {
   const db = requireSupabaseAdmin();
   const normalized = normalizeEmail(email);
@@ -70,9 +71,10 @@ export async function findExistingContact(organizationId: string, email?: string
       .select("*")
       .eq("organization_id", organizationId)
       .eq("normalized_email", normalized)
-      .maybeSingle();
+      .order("created_at", { ascending: true })
+      .limit(1);
     if (error) throw new Error(error.message);
-    if (data) return rowToContact(data);
+    if (data?.[0]) return rowToContact(data[0]);
   }
   if (fullName) {
     const { data, error } = await db
@@ -80,9 +82,10 @@ export async function findExistingContact(organizationId: string, email?: string
       .select("*")
       .eq("organization_id", organizationId)
       .ilike("full_name", fullName)
-      .maybeSingle();
+      .order("created_at", { ascending: true })
+      .limit(1);
     if (error) throw new Error(error.message);
-    if (data) return rowToContact(data);
+    if (data?.[0]) return rowToContact(data[0]);
   }
   return null;
 }

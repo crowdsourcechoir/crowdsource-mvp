@@ -112,27 +112,37 @@ export async function runDiscoveryRun(trigger: DiscoveryRun["trigger"] = "manual
           continue;
         }
 
-        const existing = await findExistingOrganization(name, candidate.websiteUrl);
-        if (existing) {
-          candidatesDuplicate += 1;
-          createdNormalizedNamesThisRun.add(normalized);
-          continue;
-        }
+        try {
+          const existing = await findExistingOrganization(name, candidate.websiteUrl);
+          if (existing) {
+            candidatesDuplicate += 1;
+            createdNormalizedNamesThisRun.add(normalized);
+            continue;
+          }
 
-        const created = await createOrganization({
-          name,
-          websiteUrl: candidate.websiteUrl,
-          source: "ai_discovered",
-          importMetadata: {
-            discoveryQuery: candidate.query,
-            discoverySourceUrl: candidate.sourceUrl,
-            discoveryRationale: candidate.rationale,
-            discoveryRunId: discoveryRun.id,
-          },
-        });
-        createdNormalizedNamesThisRun.add(normalized);
-        createdOrganizationIds.push(created.id);
-        candidatesNew += 1;
+          const created = await createOrganization({
+            name,
+            websiteUrl: candidate.websiteUrl,
+            source: "ai_discovered",
+            importMetadata: {
+              discoveryQuery: candidate.query,
+              discoverySourceUrl: candidate.sourceUrl,
+              discoveryRationale: candidate.rationale,
+              discoveryRunId: discoveryRun.id,
+            },
+          });
+          createdNormalizedNamesThisRun.add(normalized);
+          createdOrganizationIds.push(created.id);
+          candidatesNew += 1;
+        } catch (candidateErr) {
+          // One bad candidate (e.g. insert race) must not abort the whole discovery run —
+          // otherwise the overnight top-up loop finds candidates but creates zero orgs and
+          // the morning digest stays under its 10×70 target.
+          console.error(
+            `[discovery] candidate "${name}" failed:`,
+            candidateErr instanceof Error ? candidateErr.message : candidateErr
+          );
+        }
       }
     }
   } catch (err) {
