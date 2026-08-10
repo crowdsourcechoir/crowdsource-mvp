@@ -48,11 +48,12 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       },
     ],
     zones: [
+      // Coordinates tuned to Interbay stadium map (1600×1102). Drag in admin to fine-tune.
       zone({
         key: "supporters",
         label: "Supporters",
-        x: 0.7,
-        y: 0.2,
+        x: 0.78,
+        y: 0.24,
         blurb: "Loudest end — leave a mark with the ultras.",
         sponsorKey: null,
         prompt: "What's your chant idea for the next game?",
@@ -62,8 +63,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "beer-garden",
         label: "Beer Garden",
-        x: 0.88,
-        y: 0.3,
+        x: 0.9,
+        y: 0.38,
         blurb: "Service Station #1 — Stoup sideline energy.",
         sponsorKey: "stoup",
         prompt: "What song should blast at the Stoup stand?",
@@ -73,8 +74,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "tequila-zone",
         label: "Tequila Zone",
-        x: 0.88,
-        y: 0.55,
+        x: 0.86,
+        y: 0.58,
         blurb: "21+ corner — Orgullo Ajeno.",
         sponsorKey: "orgullo-ajeno",
         prompt: "Drop a toast for the 21+ corner.",
@@ -84,8 +85,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "standing-room",
         label: "Standing Room",
-        x: 0.3,
-        y: 0.22,
+        x: 0.32,
+        y: 0.3,
         blurb: "On your feet along the north stand.",
         sponsorKey: null,
         prompt: "Who are you standing with tonight?",
@@ -95,8 +96,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "family",
         label: "Family Section",
-        x: 0.42,
-        y: 0.22,
+        x: 0.44,
+        y: 0.3,
         blurb: "Alcohol-free GA — bring the kids.",
         sponsorKey: null,
         prompt: "What's your family's matchday ritual?",
@@ -106,8 +107,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "merch-tent",
         label: "Merch Tent",
-        x: 0.22,
-        y: 0.17,
+        x: 0.2,
+        y: 0.26,
         blurb: "Kits, scarves, and matchday gear.",
         sponsorKey: null,
         prompt: "What kit piece should Ballard drop next?",
@@ -117,8 +118,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "pagliacci-pitch",
         label: "Pagliacci Pitch",
-        x: 0.48,
-        y: 0.52,
+        x: 0.5,
+        y: 0.56,
         blurb: "Center circle — the shared Song Garden heart.",
         sponsorKey: "pagliacci",
         prompt: "What's your chant idea for the next game?",
@@ -128,8 +129,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "south-new",
         label: "South Stand",
-        x: 0.55,
-        y: 0.86,
+        x: 0.52,
+        y: 0.9,
         blurb: "New / coming seating — claim the south roar.",
         sponsorKey: null,
         prompt: "Claim the south roar — what should it sound like?",
@@ -139,8 +140,8 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       zone({
         key: "bike-parking",
         label: "Bike Parking",
-        x: 0.18,
-        y: 0.12,
+        x: 0.12,
+        y: 0.16,
         blurb: "Roll up with Wombi.",
         sponsorKey: "wombi",
         prompt: "How did you roll into Interbay?",
