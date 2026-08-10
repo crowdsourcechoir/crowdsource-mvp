@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 
 export type EditableZonePin = {
   key: string;
@@ -35,7 +35,6 @@ export default function ZoneMapEditor({
   onMove,
 }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const [aspect, setAspect] = useState(1600 / 1102);
   const dragKey = useRef<string | null>(null);
 
   const pointFromEvent = useCallback((clientX: number, clientY: number) => {
@@ -86,14 +85,16 @@ export default function ZoneMapEditor({
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-500">
-        Drag a zone pin to line it up with the map. Tap the map to nudge the selected zone.
+        Drag pins on the same cover crop fans see in the public world. Tap the map to nudge the
+        selected zone.
       </p>
       <div
         className="relative mx-auto w-full overflow-hidden rounded-xl border border-gray-700 bg-black"
         style={{
-          aspectRatio: String(aspect),
-          maxHeight: "min(55dvh, 420px)",
-          maxWidth: `min(100%, calc(min(55dvh, 420px) * ${aspect}))`,
+          // Phone-like portrait frame so cover crop matches /g
+          aspectRatio: "9 / 16",
+          maxHeight: "min(60dvh, 480px)",
+          maxWidth: "min(100%, 280px)",
         }}
         ref={boxRef}
         onPointerDown={onBackgroundClick}
@@ -103,13 +104,7 @@ export default function ZoneMapEditor({
           src={mapImageUrl}
           alt=""
           draggable={false}
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-          onLoad={(e) => {
-            const img = e.currentTarget;
-            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-              setAspect(img.naturalWidth / img.naturalHeight);
-            }
-          }}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
         />
         {zones.map((z) => {
           const active = selectedKey === z.key;
