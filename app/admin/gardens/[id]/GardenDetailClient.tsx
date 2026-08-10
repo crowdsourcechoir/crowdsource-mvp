@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Event } from "@/data/mockEvents";
+import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
 import type {
   Garden,
   GardenChapter,
@@ -29,6 +30,9 @@ type ZoneDraft = {
   y: number;
   blurb: string;
   sponsorKey: string;
+  prompt: string;
+  ctaLabel: string;
+  inputPlaceholder: string;
 };
 
 type SponsorDraft = {
@@ -60,6 +64,9 @@ function zonesFromGarden(garden: Garden | null): ZoneDraft[] {
     y: z.y,
     blurb: z.blurb ?? "",
     sponsorKey: z.sponsorKey ?? "",
+    prompt: z.prompt ?? "",
+    ctaLabel: z.ctaLabel ?? "",
+    inputPlaceholder: z.inputPlaceholder ?? "",
   }));
 }
 
@@ -93,6 +100,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [zones, setZones] = useState<ZoneDraft[]>([]);
   const [sponsors, setSponsors] = useState<SponsorDraft[]>([]);
   const [mapImageUrl, setMapImageUrl] = useState("");
+  const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
   const [newZoneLabel, setNewZoneLabel] = useState("");
   const [newZoneBlurb, setNewZoneBlurb] = useState("");
   const [newZonePreset, setNewZonePreset] = useState("nw");
@@ -339,8 +347,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
         y: preset.y,
         blurb: newZoneBlurb.trim(),
         sponsorKey: "",
+        prompt: "",
+        ctaLabel: "",
+        inputPlaceholder: "",
       },
     ]);
+    setSelectedZoneKey(key);
     setNewZoneLabel("");
     setNewZoneBlurb("");
     setError(null);
@@ -350,6 +362,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   function removeZone(key: string) {
     setZones((prev) => prev.filter((z) => z.key !== key));
     if (shelfZone === key) setShelfZone("");
+    if (selectedZoneKey === key) setSelectedZoneKey(null);
   }
 
   function addSponsor() {
@@ -386,6 +399,9 @@ export default function GardenDetailClient({ gardenId }: Props) {
           y: Math.min(1, Math.max(0, Number(z.y) || 0.5)),
           blurb: z.blurb.trim() || null,
           sponsorKey: z.sponsorKey.trim() || null,
+          prompt: z.prompt.trim() || null,
+          ctaLabel: z.ctaLabel.trim() || null,
+          inputPlaceholder: z.inputPlaceholder.trim() || null,
         }))
         .filter((z) => z.key && z.label);
 
@@ -653,12 +669,18 @@ export default function GardenDetailClient({ gardenId }: Props) {
             placeholder="/fans/ballard-fc/interbay-stadium-map.jpg"
           />
         </label>
-        {mapImageUrl.trim() ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={mapImageUrl.trim()}
-            alt=""
-            className="max-h-40 w-full rounded-lg border border-gray-800 object-cover"
+
+        {mapImageUrl.trim() && zones.length > 0 ? (
+          <ZoneMapEditor
+            mapImageUrl={mapImageUrl.trim()}
+            zones={zones.map((z) => ({ key: z.key, label: z.label, x: z.x, y: z.y }))}
+            accentColor={garden?.brandKit?.accentColor || "#CFFF81"}
+            selectedKey={selectedZoneKey}
+            onSelect={setSelectedZoneKey}
+            onMove={(key, x, y) => {
+              setZones((prev) => prev.map((row) => (row.key === key ? { ...row, x, y } : row)));
+              setSelectedZoneKey(key);
+            }}
           />
         ) : null}
 
@@ -667,12 +689,23 @@ export default function GardenDetailClient({ gardenId }: Props) {
         ) : (
           <ul className="space-y-3">
             {zones.map((z) => (
-              <li key={z.key} className="rounded-lg border border-gray-800 p-3">
+              <li
+                key={z.key}
+                className={`rounded-lg border p-3 ${
+                  selectedZoneKey === z.key ? "border-[#CFFF81]/50" : "border-gray-800"
+                }`}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
+                  <button
+                    type="button"
+                    className="text-left"
+                    onClick={() => setSelectedZoneKey(z.key)}
+                  >
                     <p className="text-sm font-medium text-white">{z.label}</p>
-                    <p className="text-[11px] text-gray-500">id: {z.key}</p>
-                  </div>
+                    <p className="text-[11px] text-gray-500">
+                      id: {z.key} · x {z.x.toFixed(2)} · y {z.y.toFixed(2)}
+                    </p>
+                  </button>
                   <button
                     type="button"
                     onClick={() => removeZone(z.key)}
@@ -681,6 +714,36 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     Remove
                   </button>
                 </div>
+                <label className="mt-2 block text-xs text-gray-400">
+                  Fan prompt
+                  <input
+                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    value={z.prompt}
+                    onChange={(e) =>
+                      setZones((prev) =>
+                        prev.map((row) =>
+                          row.key === z.key ? { ...row, prompt: e.target.value } : row
+                        )
+                      )
+                    }
+                    placeholder="What's your chant idea for the next game?"
+                  />
+                </label>
+                <label className="mt-2 block text-xs text-gray-400">
+                  CTA label
+                  <input
+                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    value={z.ctaLabel}
+                    onChange={(e) =>
+                      setZones((prev) =>
+                        prev.map((row) =>
+                          row.key === z.key ? { ...row, ctaLabel: e.target.value } : row
+                        )
+                      )
+                    }
+                    placeholder="Share your chant"
+                  />
+                </label>
                 <label className="mt-2 block text-xs text-gray-400">
                   Short hint
                   <input
@@ -694,31 +757,44 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     placeholder="Home roar"
                   />
                 </label>
-                <label className="mt-2 block text-xs text-gray-400">
-                  Map spot
-                  <select
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-                    value={
-                      POSITION_PRESETS.find((p) => Math.abs(p.x - z.x) < 0.03 && Math.abs(p.y - z.y) < 0.03)
-                        ?.id ?? "c"
-                    }
-                    onChange={(e) => {
-                      const preset = POSITION_PRESETS.find((p) => p.id === e.target.value);
-                      if (!preset) return;
-                      setZones((prev) =>
-                        prev.map((row) =>
-                          row.key === z.key ? { ...row, x: preset.x, y: preset.y } : row
-                        )
-                      );
-                    }}
-                  >
-                    {POSITION_PRESETS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label className="block text-xs text-gray-400">
+                    X (0–1)
+                    <input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      value={Number(z.x.toFixed(3))}
+                      onChange={(e) => {
+                        const x = Math.min(1, Math.max(0, Number(e.target.value) || 0));
+                        setZones((prev) =>
+                          prev.map((row) => (row.key === z.key ? { ...row, x } : row))
+                        );
+                        setSelectedZoneKey(z.key);
+                      }}
+                    />
+                  </label>
+                  <label className="block text-xs text-gray-400">
+                    Y (0–1)
+                    <input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      value={Number(z.y.toFixed(3))}
+                      onChange={(e) => {
+                        const y = Math.min(1, Math.max(0, Number(e.target.value) || 0));
+                        setZones((prev) =>
+                          prev.map((row) => (row.key === z.key ? { ...row, y } : row))
+                        );
+                        setSelectedZoneKey(z.key);
+                      }}
+                    />
+                  </label>
+                </div>
                 {sponsors.length ? (
                   <label className="mt-2 block text-xs text-gray-400">
                     Sponsor (optional)
