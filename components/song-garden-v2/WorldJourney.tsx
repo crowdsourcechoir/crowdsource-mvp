@@ -11,6 +11,7 @@ import {
 } from "@/data/agentInterview";
 import {
   grantSonggardenAccess,
+  getOrCreateSonggardenDeviceId,
   getSonggardenContributorName,
   setSonggardenContributorName,
 } from "@/data/songgardenClient";
@@ -53,6 +54,8 @@ import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
 import { requestTiltPermission } from "@/lib/song-garden-v2/tilt";
 import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
+import { worldConfigFromBrand } from "@/lib/song-garden-v2/garden/snapshot";
+import { useGardenSnapshot } from "@/lib/song-garden-v2/garden/use-garden-snapshot";
 import { writeWorldThemeCache } from "@/lib/song-garden-v2/world-theme-cache";
 import {
   appendGrowthNode,
@@ -148,7 +151,15 @@ function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["sug
  * (name / text / sound in any order).
  */
 export default function WorldJourney({ event }: WorldJourneyProps) {
-  const world = useMemo(() => resolveWorldConfig(event), [event]);
+  const baseWorld = useMemo(() => resolveWorldConfig(event), [event]);
+  const gardenSnap = useGardenSnapshot(event.id);
+  const world = useMemo(
+    () =>
+      gardenSnap.linked && gardenSnap.snapshot
+        ? worldConfigFromBrand(gardenSnap.snapshot.brand, baseWorld)
+        : baseWorld,
+    [baseWorld, gardenSnap.linked, gardenSnap.snapshot]
+  );
   const interviewVersion = eventInterviewVersion(event);
   const journeySteps = useMemo(() => resolveJourneySteps(event), [event]);
 
@@ -182,19 +193,67 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const contributionConsentLabel = contributionConsentText(event);
   const [worldUnlocked, setWorldUnlocked] = useState(false);
   const [burstMessage, setBurstMessage] = useState("Got it");
-  const [growthNodes, setGrowthNodes] = useState<WorldGrowthNode[]>(() => loadGrowthNodes(event.id));
+  const [localGrowthNodes, setLocalGrowthNodes] = useState<WorldGrowthNode[]>(() =>
+    loadGrowthNodes(event.id)
+  );
   const [selectedChannel, setSelectedChannel] = useState<AnswerChannel | null>(null);
+
+  const growthNodes = useMemo((): WorldGrowthNode[] => {
+    if (!gardenSnap.linked || !gardenSnap.snapshot) return localGrowthNodes;
+    const markIndexes = new Set(gardenSnap.snapshot.myMarks.map((m) => m.index));
+    const shared = gardenSnap.snapshot.state.field.nodes.map((n) => ({
+      id: `shared_${n.id}`,
+      kind: n.kind,
+      index: n.index,
+      createdAt: Date.parse(n.createdAt) || Date.now(),
+      emphasis: "shared" as const,
+    }));
+    const personal = gardenSnap.snapshot.myMarks.map((m) => ({
+      id: `mark_${m.id}`,
+      kind: m.kind,
+      index: m.index,
+      createdAt: Date.parse(m.createdAt) || Date.now(),
+      emphasis: "personal" as const,
+    }));
+    const optimistic = localGrowthNodes.filter(
+      (n) => n.id.startsWith("local_") && !markIndexes.has(n.index)
+    );
+    return [...shared, ...personal, ...optimistic];
+  }, [gardenSnap.linked, gardenSnap.snapshot, localGrowthNodes]);
 
   const growNode = useCallback(
     (kind: WorldGrowthNode["kind"]) => {
-      setGrowthNodes(appendGrowthNode(event.id, kind));
+      if (gardenSnap.linked) {
+        // Optimistic personal spark while snapshot refreshes from the server.
+        setLocalGrowthNodes((prev) => [
+          ...prev.filter((n) => n.id.startsWith("local_")),
+          {
+            id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            kind,
+            index: (gardenSnap.snapshot?.state.field.nextIndex ?? prev.length) + prev.length,
+            createdAt: Date.now(),
+            emphasis: "personal",
+          },
+        ]);
+        return;
+      }
+      setLocalGrowthNodes(appendGrowthNode(event.id, kind));
     },
-    [event.id]
+    [event.id, gardenSnap.linked, gardenSnap.snapshot]
   );
 
   const responseInputRef = useRef<HTMLTextAreaElement | null>(null);
   const ensuringConversation = useRef(false);
   const celebration = useCelebration();
+
+  // Drop optimistic locals once the server snapshot catches up.
+  useEffect(() => {
+    if (!gardenSnap.linked || !gardenSnap.snapshot) return;
+    setLocalGrowthNodes((prev) => {
+      if (!prev.some((n) => n.id.startsWith("local_"))) return prev;
+      return prev.filter((n) => !n.id.startsWith("local_"));
+    });
+  }, [gardenSnap.linked, gardenSnap.snapshot?.garden.worldVersion]);
 
   const setPositionPersisted = useCallback(
     (next: Omit<JourneyPosition, "interviewVersion"> & Partial<Pick<JourneyPosition, "interviewVersion">>) => {
@@ -218,7 +277,13 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     activeStep?.kind === "prompt" ? resolveSoundStep(activeStep) : null;
 
   const progress = journeyProgress(event, position);
-  const energyLevel = progress.total > 0 ? Math.min(1, progress.completed / progress.total) : 0;
+  const personalEnergy =
+    progress.total > 0 ? Math.min(1, progress.completed / progress.total) : 0;
+  /** Shared garden bloom when linked; otherwise personal journey energy (V2). */
+  const energyLevel =
+    gardenSnap.linked && gardenSnap.snapshot
+      ? gardenSnap.snapshot.state.energy
+      : personalEnergy;
   const showProgress = journeyStarted && position.phase !== "final";
 
   const currentSuggestedAnswerTypes = activeStep ? suggestedTypesForStep(activeStep) : ["text"];
@@ -427,8 +492,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         return;
       }
 
-      await sendMessage(convId, textValue, {
+      const sent = await sendMessage(convId, textValue, {
         captchaToken: captchaGateActive ? emailCaptchaToken : null,
+        deviceId: getOrCreateSonggardenDeviceId(),
       });
       setEmailCaptchaToken(null);
       setSending(false);
@@ -440,7 +506,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
       growNode("text");
       pulseHaptic();
-      setBurstMessage("Got it");
+      setBurstMessage(sent.gardenCelebrationLine?.trim() || "Got it");
+      if (gardenSnap.linked) void gardenSnap.refresh();
 
       celebration.celebrate(() => {
         goToStep(stepIndex + 1);
@@ -451,18 +518,22 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     }
   }
 
-  const handleSlotSubmitted = useCallback(() => {
-    if (!activeSound) return;
+  const handleSlotSubmitted = useCallback(
+    (meta?: { gardenCelebrationLine?: string | null }) => {
+      if (!activeSound) return;
 
-    const category = activeSound.slot.category;
-    growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
-    pulseHaptic();
-    setBurstMessage("Added to the song garden");
+      const category = activeSound.slot.category;
+      growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
+      pulseHaptic();
+      setBurstMessage(meta?.gardenCelebrationLine?.trim() || "Added to the song garden");
+      if (gardenSnap.linked) void gardenSnap.refresh();
 
-    celebration.celebrate(() => {
-      goToStep(stepIndex + 1);
-    });
-  }, [activeSound, celebration, goToStep, growNode, stepIndex]);
+      celebration.celebrate(() => {
+        goToStep(stepIndex + 1);
+      });
+    },
+    [activeSound, celebration, gardenSnap, goToStep, growNode, stepIndex]
+  );
 
   const handleVoiceSubmitted = useCallback(
     async (blob: Blob) => {
@@ -476,11 +547,15 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           throw new Error("Could not start the conversation. Try again.");
         }
         const audioDataUrl = await blobToDataUrl(blob);
-        await sendMessage(convId, "(recording)", { audioDataUrl });
+        const sent = await sendMessage(convId, "(recording)", {
+          audioDataUrl,
+          deviceId: getOrCreateSonggardenDeviceId(),
+        });
         setSending(false);
         growNode("voice");
         pulseHaptic();
-        setBurstMessage("Got it");
+        setBurstMessage(sent.gardenCelebrationLine?.trim() || "Got it");
+        if (gardenSnap.linked) void gardenSnap.refresh();
         celebration.celebrate(() => {
           goToStep(stepIndex + 1);
         });
@@ -489,7 +564,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         throw err instanceof Error ? err : new Error("Submit failed");
       }
     },
-    [celebration, ensureConversation, goToStep, growNode, stepIndex]
+    [celebration, ensureConversation, gardenSnap, goToStep, growNode, stepIndex]
   );
 
   const handleVideoSubmitted = useCallback(
@@ -504,11 +579,15 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           throw new Error("Could not start the conversation. Try again.");
         }
         const videoDataUrl = await blobToDataUrl(blob);
-        await sendMessage(convId, "(recording)", { videoDataUrl });
+        const sent = await sendMessage(convId, "(recording)", {
+          videoDataUrl,
+          deviceId: getOrCreateSonggardenDeviceId(),
+        });
         setSending(false);
         growNode("video");
         pulseHaptic();
-        setBurstMessage("Got it");
+        setBurstMessage(sent.gardenCelebrationLine?.trim() || "Got it");
+        if (gardenSnap.linked) void gardenSnap.refresh();
         celebration.celebrate(() => {
           goToStep(stepIndex + 1);
         });
@@ -517,14 +596,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         throw err instanceof Error ? err : new Error("Submit failed");
       }
     },
-    [celebration, ensureConversation, goToStep, growNode, stepIndex]
+    [celebration, ensureConversation, gardenSnap, goToStep, growNode, stepIndex]
   );
 
   function handleParticipateAgain() {
     clearJourneySession(event, interviewVersion, activeSessionToken);
     clearDoneSlots(event.id);
     clearGrowthNodes(event.id);
-    setGrowthNodes([]);
+    setLocalGrowthNodes([]);
     ensuringConversation.current = false;
     setJourneyStarted(false);
     setPosition({ phase: "landing", gardenSlotIndex: 0, stepIndex: 0, interviewVersion });

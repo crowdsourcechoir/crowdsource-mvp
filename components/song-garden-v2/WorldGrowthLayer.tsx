@@ -48,7 +48,11 @@ export default function WorldGrowthLayer({ nodes, accentColor }: WorldGrowthLaye
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
       {placed.map(({ node, pos }) => {
         const shape = KIND_SHAPE[node.kind];
-        const floatX = (pseudoRandom(node.index, 5) - 0.5) * 2 * (10 + shape.size);
+        const shared = node.emphasis === "shared";
+        const size = shared ? Math.max(6, shape.size - 2) : shape.size;
+        const glow = shared ? Math.max(4, shape.glow - 6) : shape.glow;
+        const opacityLoop = shared ? ([0.22, 0.38, 0.22] as const) : ([0.55, 0.85, 0.55] as const);
+        const floatX = (pseudoRandom(node.index, 5) - 0.5) * 2 * (10 + size);
         const floatY = (pseudoRandom(node.index, 6) - 0.5) * 2 * 16;
         const floatDuration = 6 + pseudoRandom(node.index, 7) * 6;
         const pulseDuration = 5 + (node.index % 6);
@@ -59,18 +63,18 @@ export default function WorldGrowthLayer({ nodes, accentColor }: WorldGrowthLaye
             style={{
               left: `${pos.xPct}%`,
               top: `${pos.yPct}%`,
-              width: shape.size,
-              height: shape.size,
-              marginLeft: -shape.size / 2,
-              marginTop: -shape.size / 2,
+              width: size,
+              height: size,
+              marginLeft: -size / 2,
+              marginTop: -size / 2,
               borderRadius: shape.radius,
               background: accentColor,
-              boxShadow: `0 0 ${shape.glow}px ${accentColor}`,
+              boxShadow: `0 0 ${glow}px ${accentColor}`,
             }}
             initial={{ scale: 0, opacity: 0, x: 0, y: 40 }}
             animate={{
-              scale: [1, 1.18, 1],
-              opacity: [0.55, 0.85, 0.55],
+              scale: shared ? [1, 1.08, 1] : [1, 1.18, 1],
+              opacity: [...opacityLoop],
               x: [0, floatX, 0],
               y: [0, floatY, 0],
             }}

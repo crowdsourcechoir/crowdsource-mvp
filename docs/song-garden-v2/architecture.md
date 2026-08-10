@@ -419,3 +419,15 @@ recording) — but always calls `saveDoneSlot()` with the step's original,
 configured `slotId`, since `firstIncompleteGardenIndex`/
 `allEnabledGardenSlotsDone` key progress off that nominal id regardless of
 which alternate the participant actually chose.
+
+## 12. Persistent shared world (next platform cut)
+
+V2 growth (§8a) is still **per-device / per-event theater** (`localStorage`
+nodes; personal journey `%` drives storyboard energy). The next platform cut
+makes Song Garden a **canonical shared world** across a run of shows (and later
+Crowdsource Fans seasons), with contribution → mutation rules, a snapshot API
+for UI + commerce (edition / living merch), and backward-compatible event
+chapters.
+
+**Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)  
+**Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)

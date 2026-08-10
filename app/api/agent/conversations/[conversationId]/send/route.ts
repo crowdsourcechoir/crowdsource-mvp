@@ -18,8 +18,47 @@ import {
   participantDisplayName,
   participantNameUpdatePayload,
 } from "@/lib/agent-participant-db";
+import {
+  kindFromInterviewMedia,
+  recordGardenContribution,
+} from "@/lib/song-garden-v2/garden/store";
+import { effectCelebrationLine, type WorldEffect } from "@/lib/song-garden-v2/garden/types";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
+
+async function gardenPayloadForTurn(args: {
+  eventId: string;
+  turnId: string;
+  content: string;
+  hasAudio: boolean;
+  hasVideo: boolean;
+  deviceId: string | null;
+}): Promise<{
+  gardenEffects: WorldEffect[] | null;
+  gardenCelebrationLine: string | null;
+  gardenWorldVersion: number | null;
+}> {
+  const kind = kindFromInterviewMedia({
+    content: args.content,
+    hasAudio: args.hasAudio,
+    hasVideo: args.hasVideo,
+  });
+  if (!kind) {
+    return { gardenEffects: null, gardenCelebrationLine: null, gardenWorldVersion: null };
+  }
+  const garden = await recordGardenContribution({
+    eventId: args.eventId,
+    kind,
+    sourceType: "turn",
+    sourceId: args.turnId,
+    deviceId: args.deviceId,
+  });
+  return {
+    gardenEffects: garden?.effects ?? null,
+    gardenCelebrationLine: garden ? effectCelebrationLine(garden.effects) : null,
+    gardenWorldVersion: garden?.worldVersion ?? null,
+  };
+}
 
 function rowToTurn(row: Record<string, unknown>) {
   return {
@@ -157,6 +196,10 @@ export async function POST(
       const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
       const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
       const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
+      const deviceId =
+        typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
+          ? body.deviceId.trim()
+          : null;
 
       const local = await localGetConversation(conversationId);
       if (!local) return NextResponse.json(null, { status: 404 });
@@ -323,6 +366,15 @@ export async function POST(
         content: nextResult.agentMessage,
       });
 
+      const gardenFields = await gardenPayloadForTurn({
+        eventId: eventData.id,
+        turnId: userTurnInserted.id,
+        content,
+        hasAudio: Boolean(audioDataUrl),
+        hasVideo: Boolean(videoDataUrl),
+        deviceId,
+      });
+
       return NextResponse.json({
         turn: {
           id: userTurnInserted.id,
@@ -354,6 +406,7 @@ export async function POST(
           videoTranscript: agentTurnInserted.videoTranscript,
           createdAt: agentTurnInserted.createdAt,
         },
+        ...gardenFields,
       });
     } catch (err) {
       console.error("Local agent send error:", err);
@@ -378,6 +431,10 @@ export async function POST(
     const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
     const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
+    const deviceId =
+      typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
+        ? body.deviceId.trim()
+        : null;
     const storedAudioUrl = await persistMedia(conversationId, "audio", audioDataUrl);
     const storedVideoUrl = await persistMedia(conversationId, "video", videoDataUrl);
 
@@ -666,6 +723,27 @@ export async function POST(
       .update({ updated_at: new Date().toISOString() })
       .eq("id", conversationId);
 
+    const eventIdForGarden = String(
+      (USE_LOCAL_EVENTS && conv.local_event_id ? conv.local_event_id : null) ||
+        conv.event_id ||
+        eventData.id
+    );
+    const gardenFields =
+      userTurn != null
+        ? await gardenPayloadForTurn({
+            eventId: eventIdForGarden,
+            turnId: String((userTurn as { id: string }).id),
+            content,
+            hasAudio: Boolean(storedAudioUrl || audioDataUrl),
+            hasVideo: Boolean(storedVideoUrl || videoDataUrl),
+            deviceId,
+          })
+        : {
+            gardenEffects: null,
+            gardenCelebrationLine: null,
+            gardenWorldVersion: null,
+          };
+
     return NextResponse.json({
       turn: userTurn ? rowToTurn(userTurn) : null,
       nextMessage: {
@@ -675,6 +753,7 @@ export async function POST(
         stopReason: nextResult.stopReason,
       },
       agentTurn: rowToTurn(agentTurnRow),
+      ...gardenFields,
     });
   } catch (err) {
     console.error("Agent send error:", err);

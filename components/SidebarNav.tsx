@@ -16,6 +16,12 @@ export default function SidebarNav() {
         Events
       </Link>
       <Link
+        href="/admin/gardens"
+        className="rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white"
+      >
+        Gardens
+      </Link>
+      <Link
         href="/admin/composition/brief"
         className="rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white"
       >
