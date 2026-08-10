@@ -149,6 +149,26 @@ export async function updateDraftDecision(
   return rowToDraft(data);
 }
 
+/** Persist human edits without approving or changing draft status. */
+export async function updateDraftEdits(
+  id: string,
+  input: { editedSubject: string; editedBody: string }
+): Promise<OutreachDraft> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("outreach_drafts")
+    .update({
+      edited_subject: input.editedSubject,
+      edited_body: input.editedBody,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToDraft(data);
+}
+
 export async function getDraft(id: string): Promise<OutreachDraft | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db.from("outreach_drafts").select("*").eq("id", id).maybeSingle();

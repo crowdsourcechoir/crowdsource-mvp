@@ -92,6 +92,44 @@ export default function ApprovalQueueClient() {
     setMobileDetailOpen(true);
   }, []);
 
+  const saveDraft = useCallback(async () => {
+    if (!current?.draft || busy) return;
+    // Only persist from the editor so we don't rewrite stored bodies with display-only stripping.
+    if (!editing) {
+      setEditing(true);
+      showCopyStatus("Edit the draft, then Save draft (or ⌘S). Nothing sent.");
+      return;
+    }
+    const cleanedEditedBody = stripEmailSignature(editedBody);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/save-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          editedSubject,
+          editedBody: cleanedEditedBody,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
+      setItems((prev) =>
+        prev.map((item) =>
+          item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item
+        )
+      );
+      setEditedSubject(saved.editedSubject ?? saved.aiSubject);
+      setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
+      setEditing(false);
+      showCopyStatus("Draft saved — still in queue, not sent.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [current, busy, editing, editedSubject, editedBody, showCopyStatus]);
+
   const decide = useCallback(
     async (action: ActionKey) => {
       if (!current || busy) return;
@@ -159,6 +197,11 @@ export default function ApprovalQueueClient() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && current?.draft) {
+        e.preventDefault();
+        void saveDraft();
+        return;
+      }
       if (editing) return;
       const target = e.target as HTMLElement;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
@@ -173,6 +216,9 @@ export default function ApprovalQueueClient() {
       } else if (e.key === "Escape" && mobileDetailOpen) {
         e.preventDefault();
         setMobileDetailOpen(false);
+      } else if (e.key.toLowerCase() === "s" && current?.draft) {
+        e.preventDefault();
+        void saveDraft();
       } else {
         const action = ACTIONS.find((a) => a.shortcut.toLowerCase() === e.key.toLowerCase());
         if (action && action.key !== "approve_with_edits") {
@@ -186,7 +232,7 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items.length, decide, editing, mobileDetailOpen]);
+  }, [items.length, decide, saveDraft, editing, mobileDetailOpen, current?.draft]);
 
   const pendingCount = items.length;
 
@@ -437,12 +483,22 @@ export default function ApprovalQueueClient() {
                 <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
               </button>
             ))}
+            {current.draft && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void saveDraft()}
+                className="rounded-lg bg-gray-600 px-3 py-2 text-sm font-medium text-white touch-manipulation hover:bg-gray-500 disabled:opacity-50"
+              >
+                Save draft <span className="ml-1 text-xs opacity-70">(S)</span>
+              </button>
+            )}
           </div>
           {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; send, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
-            <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. With Gmail connected, approve sends from your inbox and tracks the
-            thread for replies.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; send, <kbd>s</kbd> / <kbd>⌘S</kbd> save
+            draft (no send), <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. With
+            Gmail connected, approve sends from your inbox and tracks the thread for replies.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>

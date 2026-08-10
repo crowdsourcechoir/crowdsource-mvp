@@ -1,0 +1,17 @@
+---
+description: Always ship finished work to production (main) — Joel is the only user
+alwaysApply: true
+---
+
+# Always deploy to live
+
+Joel is the only user. There is no separate staging/test environment to hand off to.
+
+When a feature or fix is ready to use:
+
+1. **Commit** the change (unless he explicitly says not to).
+2. **Push to `main`** so Vercel production (`app.crowdsourcechoir.com`) picks it up.
+3. **Confirm** the GitHub/Vercel deploy status succeeds before telling him it’s live.
+4. Do **not** leave finished work only on a local branch, Preview-only branch, or “ask before push” by default.
+
+Exceptions (ask first): secrets, destructive DB migrations, force-push, or anything he marked as WIP/experiment.
