@@ -14,8 +14,13 @@ function rowToQueueItem(row: Record<string, unknown>): ApprovalQueueItem {
     decidedBy: (row.decided_by as string | null) ?? null,
     decidedAt: (row.decided_at as string | null) ?? null,
     deferredUntil: (row.deferred_until as string | null) ?? null,
+    lastDigestedAt: (row.last_digested_at as string | null) ?? null,
     createdAt: row.created_at as string,
   };
+}
+
+function isMissingLastDigestedColumn(message: string): boolean {
+  return /last_digested_at/i.test(message) || /column .* does not exist/i.test(message);
 }
 
 /** Upserts the *initial* pipeline queue row for an opportunity (partial unique on kind=initial). */
@@ -115,6 +120,46 @@ export async function listQueueItemsCreatedSince(sinceIso: string): Promise<Appr
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToQueueItem);
+}
+
+/**
+ * Pending queue items that have never been included in a digest email.
+ * Returns `null` when the `last_digested_at` column isn't migrated yet so callers can fall back.
+ */
+export async function listPendingNeverDigestedQueueItems(): Promise<ApprovalQueueItem[] | null> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .select("*")
+    .eq("status", "pending")
+    .is("last_digested_at", null)
+    .order("created_at", { ascending: true });
+  if (error) {
+    if (isMissingLastDigestedColumn(error.message)) return null;
+    throw new Error(error.message);
+  }
+  return (data ?? []).map(rowToQueueItem);
+}
+
+/**
+ * Marks queue rows as included in a digest. No-op (warn) if the tracking column isn't migrated.
+ */
+export async function markQueueItemsDigested(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = requireSupabaseAdmin();
+  const { error } = await db
+    .from("approval_queue_items")
+    .update({ last_digested_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) {
+    if (isMissingLastDigestedColumn(error.message)) {
+      console.warn(
+        "[digest] last_digested_at column missing — run supabase/sales-platform-add-digest-item-tracking.sql"
+      );
+      return;
+    }
+    throw new Error(error.message);
+  }
 }
 
 /** Total pending backlog size, regardless of when it was created — included in the digest as a health signal. */

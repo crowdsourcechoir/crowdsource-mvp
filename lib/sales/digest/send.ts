@@ -1,5 +1,11 @@
 import { Resend } from "resend";
-import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems } from "../db/queue";
+import {
+  listQueueItems,
+  listQueueItemsCreatedSince,
+  listPendingNeverDigestedQueueItems,
+  markQueueItemsDigested,
+  countPendingQueueItems,
+} from "../db/queue";
 import { assembleQueueItemDetail } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
 import { renderDigestEmail } from "./render";
@@ -27,13 +33,13 @@ async function assembleMany(queueItems: ApprovalQueueItem[]): Promise<QueueItemD
 /**
  * Loads pending queue items that clear the digest min-score bar.
  *
- * Cutoff uses the last digest that actually delivered leads (item_count > 0), so empty heartbeat
- * sends cannot strand the pending 70+ backlog. Prefer brand-new leads since that cutoff; if still
- * under target, backfill from older pending 70+ when:
- * - the last succeeded digest was empty (one-shot recovery), or
- * - we are due for another morning send (last delivered digest is older than the already-sent
- *   window) — so a discovery/pipeline stall cannot silence the inbox for days while dozens of
- *   unreviewed 70+ leads sit in the queue.
+ * Preference order:
+ * 1. Pending 70+ never included in a prior digest (`last_digested_at` null) — survives force-sends
+ * 2. Else brand-new since last delivered digest, with overdue backfill from older pending 70+
+ *
+ * Overdue backfill: if under target and the last delivered digest is older than the already-sent
+ * window (or the last succeeded send was empty), top up from older pending 70+ so a discovery
+ * stall cannot silence the inbox for days.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
@@ -46,8 +52,44 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
     lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
   const targetCount = getDigestTargetCount();
   const alreadySentWindowMs = getDigestAlreadySentWindowMs();
+  const backlogCount = await countPendingQueueItems();
 
-  const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
+  // Prefer never-digested pending when the tracking column exists.
+  const neverDigested = await listPendingNeverDigestedQueueItems();
+  if (neverDigested) {
+    const undigested = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(neverDigested), minScore));
+    if (undigested.length >= targetCount) {
+      return { items: undigested, sinceIso, backlogCount, backfilled: false };
+    }
+    // Under target: still return what we have (ensureDigestTarget will top up discovery/pipeline).
+    // Also allow overdue backfill from already-digested-but-still-pending only when due.
+    const lastDeliveredAgeMs = lastDelivered?.finishedAt
+      ? Date.now() - Date.parse(lastDelivered.finishedAt)
+      : Number.POSITIVE_INFINITY;
+    const dueForMorningSend = lastDeliveredAgeMs >= alreadySentWindowMs;
+    if (undigested.length < targetCount && dueForMorningSend) {
+      const allPending = await listQueueItems("pending");
+      const older = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
+      const seen = new Set(undigested.map((i) => i.queueItem.id));
+      const merged = [...undigested];
+      for (const item of older) {
+        if (seen.has(item.queueItem.id)) continue;
+        seen.add(item.queueItem.id);
+        merged.push(item);
+        if (merged.length >= targetCount) break;
+      }
+      return {
+        items: merged,
+        sinceIso,
+        backlogCount,
+        backfilled: merged.length > undigested.length,
+      };
+    }
+    return { items: undigested, sinceIso, backlogCount, backfilled: false };
+  }
+
+  // Fallback when last_digested_at isn't migrated yet.
+  const [newQueueItems] = await Promise.all([listQueueItemsCreatedSince(sinceIso)]);
   const newItems = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(newQueueItems), minScore));
   let items = newItems;
   let backfilled = false;
@@ -164,6 +206,7 @@ export async function sendDailyDigest(
       recipient: to,
       providerMessageId: data?.id ?? null,
     });
+    await markQueueItemsDigested(loaded.items.map((i) => i.queueItem.id));
     return { status: "succeeded", itemCount: loaded.items.length, minScore };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

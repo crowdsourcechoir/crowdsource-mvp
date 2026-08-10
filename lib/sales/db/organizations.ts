@@ -78,6 +78,34 @@ export async function getOrganization(id: string): Promise<Organization | null> 
   return data ? rowToOrganization(data) : null;
 }
 
+/**
+ * Domains already in the org table — used by discovery to append `-site:` excludes so SERPs
+ * dig past the seeded CSV head. Newest-first so the rotating exclude window still cycles.
+ */
+export async function listKnownOrganizationDomains(limit: number): Promise<string[]> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("organizations")
+    .select("domain")
+    .not("domain", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, limit * 3));
+  if (error) throw new Error(error.message);
+  const seen = new Set<string>();
+  const domains: string[] = [];
+  for (const row of data ?? []) {
+    const domain = String(row.domain ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/^www\./, "");
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    domains.push(domain);
+    if (domains.length >= limit) break;
+  }
+  return domains;
+}
+
 /** Finds an existing org by domain first (strongest signal), then normalized name.
  * Uses limit(1) rather than maybeSingle: duplicate domain/normalized_name rows exist in
  * production (no unique constraint), and maybeSingle throws

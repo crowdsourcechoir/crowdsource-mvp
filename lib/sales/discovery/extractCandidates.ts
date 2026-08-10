@@ -26,13 +26,15 @@ function buildExtractionUserContent(query: string, results: SearchQueryResult["r
   ].join("\n\n");
 }
 
-const SYSTEM_PROMPT = `You extract candidate organizations (associations, conferences, companies, schools, sports leagues, festivals, etc.) that could be a sales prospect for a company selling a participatory choir/anthem-style live audience experience for gatherings/events. Rules:
+const SYSTEM_PROMPT = `You extract candidate organizations (associations, conferences, companies, schools, sports leagues, festivals, DMOs, event agencies, etc.) that could be a sales prospect for a company selling a participatory choir/anthem-style live audience experience for gatherings/events. Rules:
 - Only extract an organization that is explicitly named in the provided search results. NEVER invent, guess, or infer an organization that isn't actually present in the text.
 - If a result describes an EVENT hosted by an organization (e.g. "X Conference" run by "The Y Association"), extract the hosting organization's name, not the event name, as organizationName — unless the event itself IS the organization's own name/brand with no separate parent org mentioned.
 - websiteUrl must be the organization's own official site if it's identifiable from the result's url/content; otherwise null. Never guess a domain.
 - sourceUrl must be the exact url of the specific search result you extracted this candidate from.
 - rationale is one short sentence on why this looks like a plausible fit (e.g. "hosts an annual member conference with several hundred attendees").
-- Skip results that are directories/aggregators/listicles with no single identifiable organization, or that are about an organization already obviously a general news/media outlet unrelated to hosting gatherings.
+- DIRECTORIES / LISTICLES / "best of" / "top conferences" pages: DO extract every distinct hosting organization clearly named on that page (up to 8). These are high-value long-tail sources — do not skip the whole result just because it lists multiple orgs.
+- Still skip pure news/media outlets with no gathering they host, and skip ticketing mega-platforms (Eventbrite, Ticketmaster) as the organization itself.
+- Prefer mid-size / regional / state / niche organizations over globally famous brands when both appear.
 - If nothing in the results names a real, usable organization, return an empty candidates array — do not force a result.`;
 
 export async function extractCandidatesFromSearchResult(

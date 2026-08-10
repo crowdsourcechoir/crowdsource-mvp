@@ -16,6 +16,22 @@ export function activeSearchProvider(): SearchProvider | null {
   return null;
 }
 
+/**
+ * Append a rotating slice of `-site:domain` clauses so queries dig past orgs we already have.
+ * Kept short — search engines truncate very long queries.
+ */
+export function withExcludedDomains(query: string, domains: string[], daySalt = 0): string {
+  if (domains.length === 0) return query;
+  const maxExcludes = 8;
+  const start = domains.length === 0 ? 0 : daySalt % domains.length;
+  const rotated = [...domains.slice(start), ...domains.slice(0, start)];
+  const excludes = rotated
+    .slice(0, maxExcludes)
+    .map((d) => `-site:${d}`)
+    .join(" ");
+  return `${query} ${excludes}`.trim();
+}
+
 export async function runSearch(query: string): Promise<SearchQueryResult | null> {
   const provider = activeSearchProvider();
   if (!provider) return null;

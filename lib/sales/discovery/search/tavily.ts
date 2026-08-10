@@ -1,8 +1,8 @@
+import { getDiscoveryMaxResultsPerQuery } from "../config";
 import type { SearchQueryResult, SearchResultItem } from "./types";
 
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 const FETCH_TIMEOUT_MS = 15000;
-const MAX_RESULTS_PER_QUERY = 8;
 
 /**
  * Tavily Search API — self-serve REST API purpose-built for feeding LLM pipelines (results
@@ -16,6 +16,8 @@ export async function searchWithTavily(query: string): Promise<SearchQueryResult
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) return { provider: "tavily", query, results: [], error: "TAVILY_API_KEY not configured" };
 
+  const maxResults = getDiscoveryMaxResultsPerQuery();
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -23,7 +25,7 @@ export async function searchWithTavily(query: string): Promise<SearchQueryResult
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ query, search_depth: "basic", max_results: MAX_RESULTS_PER_QUERY }),
+      body: JSON.stringify({ query, search_depth: "basic", max_results: maxResults }),
     });
     clearTimeout(timeout);
 
