@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 
 export type EditableZonePin = {
   key: string;
@@ -35,7 +35,6 @@ export default function ZoneMapEditor({
   onMove,
 }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const [aspect, setAspect] = useState(1600 / 1102);
   const dragKey = useRef<string | null>(null);
 
   const pointFromEvent = useCallback((clientX: number, clientY: number) => {
@@ -106,12 +105,6 @@ export default function ZoneMapEditor({
           alt=""
           draggable={false}
           className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-          onLoad={(e) => {
-            const img = e.currentTarget;
-            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-              setAspect(img.naturalWidth / img.naturalHeight);
-            }
-          }}
         />
         {zones.map((z) => {
           const active = selectedKey === z.key;
