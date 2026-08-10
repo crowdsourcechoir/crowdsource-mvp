@@ -141,7 +141,7 @@ Each stage below follows the same shape:
 - **Learning:** `approve_with_edits` / `reject` write `outreach_feedback`; recent accepted edits are injected as few-shots into draft + nudge prompts, with a soft `confidence_score` for queue sorting.
 
 ### 10.6. Post-approval funnel tracking + reply sync
-- **Trigger:** approval sets `relationship_stage` to `awareness`. Gmail reply sync (`/api/sales/cron/gmail-sync`, every 15 minutes) matches inbound messages by `gmail_thread_id` (else contact email), writes `replied` activities, sets `last_inbound_at`, clears `next_follow_up_at`, and advances Awareness → Interest.
+- **Trigger:** approval sets `relationship_stage` to `awareness`. Gmail reply sync (`/api/sales/cron/gmail-sync`, hourly 09:00–22:00 UTC on Hobby) matches inbound messages by `gmail_thread_id` (else contact email), writes `replied` activities, sets `last_inbound_at`, clears `next_follow_up_at`, and advances Awareness → Interest.
 - **What it tracks:** `opportunities.relationship_stage` — **Awareness → Interest → Purchase**, plus terminal **Lost** — distinct from `opportunities.status`. Humans can still move stages manually at `/admin/sales/funnel`.
 - **Where it's visible:** funnel cards show awaiting-reply / needs-nudge and a link into the Gmail thread.
 - **Not Mailchimp:** 1:1 CRM is Gmail-only. Resend remains for the internal morning digest only.

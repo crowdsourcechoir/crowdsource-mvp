@@ -186,7 +186,7 @@ HubSpot and Mailchimp are **not** used for prospect outreach. Gmail is the sende
 
 - **Auth:** Google OAuth (offline access) for a single operator — connect UI on `/admin/sales`. Refresh token encrypted at rest (`GMAIL_TOKEN_ENCRYPTION_KEY`) in `gmail_connections`.
 - **Send:** on queue approve / approve-with-edits, server sends via Gmail API (`lib/sales/gmail/`). Fail-closed when connected (send error → item stays pending).
-- **Reply sync:** Vercel Cron `/api/sales/cron/gmail-sync` every 15 minutes (`users.history.list` + inbox fallback).
+- **Reply sync:** Vercel Cron `/api/sales/cron/gmail-sync` hourly 09:00–22:00 UTC (Hobby-safe once-per-day expressions; upgrade to Pro for true every-15-min). Uses `users.history.list` + inbox fallback.
 - **Nudges:** Cron `/api/sales/cron/nudges` drafts follow-ups into the approval queue; human approve sends in-thread. Never auto-send.
 - **Activities:** `outreach_activities` + opportunity touch columns (`last_outbound_at`, `last_inbound_at`, `next_follow_up_at`, `gmail_thread_id`).
 - **Learning:** `outreach_feedback` from edits/rejects feeds draft/nudge few-shots.
