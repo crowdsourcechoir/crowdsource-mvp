@@ -1,0 +1,26 @@
+---
+description: Remaining Gmail 1:1 sales assistant setup steps (Joel still needs to finish OAuth)
+alwaysApply: true
+---
+
+# Gmail setup — still pending
+
+SQL migration (`supabase/sales-platform-add-gmail.sql`) is done. Local `.env.local` already has `GMAIL_TOKEN_ENCRYPTION_KEY` and `NEXT_PUBLIC_APP_URL=http://localhost:3000` on the machine that started setup — **other devices need those env vars too** (and Vercel Project Settings for production).
+
+## Joel still needs to do
+
+1. [Google Cloud credentials](https://console.cloud.google.com/apis/credentials) — pick/create project, enable **Gmail API**.
+2. **OAuth consent screen** (External or Internal); if External, add Joel’s email as a test user.
+3. **Create OAuth client ID → Web application** with redirect URIs:
+   - `http://localhost:3000/api/sales/gmail/callback`
+   - `https://app.crowdsourcechoir.com/api/sales/gmail/callback`
+4. Put into `.env.local` (and Vercel):
+   - `GOOGLE_CLIENT_ID=`
+   - `GOOGLE_CLIENT_SECRET=`
+   - `GMAIL_TOKEN_ENCRYPTION_KEY=` (generate with `openssl rand -hex 32` if missing on this machine)
+   - `NEXT_PUBLIC_APP_URL=` (`http://localhost:3000` locally; prod app URL in Vercel)
+5. Restart the Next.js server, open `/admin/sales` → **Connect Gmail**.
+
+Mailchimp/HubSpot are not used for 1:1 outreach. Resend = internal digest only. Details: `docs/sales-platform/ai-workflow.md` §10.5, `.env.example` Gmail section.
+
+When Joel finishes Connect Gmail successfully, delete or update this rule so it stops surfacing as pending.

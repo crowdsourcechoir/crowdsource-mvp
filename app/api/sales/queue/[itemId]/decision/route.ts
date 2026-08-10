@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
-import { updateDraftDecision } from "@/lib/sales/db/outreach";
-import { updateOpportunityStatus, updateOpportunityRelationshipStage } from "@/lib/sales/db/opportunities";
+import { updateDraftDecision, getDraft } from "@/lib/sales/db/outreach";
+import {
+  getOpportunity,
+  updateOpportunityStatus,
+  updateOpportunityRelationshipStage,
+  updateOpportunityTouchTimestamps,
+} from "@/lib/sales/db/opportunities";
+import { getContact } from "@/lib/sales/db/contacts";
+import { getOrganization } from "@/lib/sales/db/organizations";
+import { resolveIndustrySegmentIdForOrganization } from "@/lib/sales/db/lookups";
+import { createOutreachActivity, listActivitiesForOpportunity } from "@/lib/sales/db/activities";
+import { createOutreachFeedback } from "@/lib/sales/db/feedback";
+import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
+import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
+import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -37,37 +50,163 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
     const item = await getQueueItem(itemId);
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (item.status !== "pending") {
+      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    }
+
+    const draft = item.outreachDraftId ? await getDraft(item.outreachDraftId) : null;
+    const opportunity = await getOpportunity(item.opportunityId);
+    if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
+
+    // Prefer any edited subject/body the client sent, even if the action was plain "approve"
+    // (the queue UI upgrades to approve_with_edits when dirty; this is the server-side backstop).
+    const providedEditedSubject =
+      typeof body?.editedSubject === "string" ? (body.editedSubject as string) : undefined;
+    const providedEditedBody = typeof body?.editedBody === "string" ? (body.editedBody as string) : undefined;
+    const hasProvidedEdits = providedEditedSubject !== undefined || providedEditedBody !== undefined;
+    const effectiveAction =
+      (action === "approve" || action === "approve_with_edits") && hasProvidedEdits
+        ? "approve_with_edits"
+        : action;
+    const effectiveQueueStatus = ACTION_TO_QUEUE_STATUS[effectiveAction] ?? queueStatus;
+    const isApprove = effectiveAction === "approve" || effectiveAction === "approve_with_edits";
+    const finalSubject =
+      providedEditedSubject ?? draft?.editedSubject ?? draft?.aiSubject ?? null;
+    const finalBody = providedEditedBody ?? draft?.editedBody ?? draft?.aiBody ?? null;
+
+    let gmailSend: { messageId: string; threadId: string } | null = null;
+    let gmailStatus = await getGmailConnectionStatus();
+
+    // Fail-closed: if Gmail is connected, send before marking approved. If not connected, approve
+    // without send (clipboard/mailto fallback on the client).
+    if (isApprove && draft && finalSubject && finalBody) {
+      const contact = draft.contactId ? await getContact(draft.contactId) : null;
+      if (!contact?.email) {
+        return NextResponse.json({ error: "Cannot approve — draft has no contact email." }, { status: 400 });
+      }
+
+      if (gmailStatus.connected) {
+        try {
+          let inReplyTo: string | null = null;
+          let threadId = opportunity.gmailThreadId;
+          if (item.kind === "nudge" && threadId) {
+            const activities = await listActivitiesForOpportunity(opportunity.id);
+            const lastSent = [...activities].reverse().find((a) => a.activityType === "sent" && a.gmailMessageId);
+            if (lastSent?.gmailMessageId) {
+              inReplyTo = await getGmailRfcMessageId(lastSent.gmailMessageId);
+            }
+          }
+          gmailSend = await sendGmailMessage({
+            to: contact.email,
+            subject: finalSubject,
+            body: finalBody,
+            threadId: item.kind === "nudge" ? threadId : null,
+            inReplyTo,
+            references: inReplyTo,
+          });
+        } catch (err) {
+          return NextResponse.json(
+            {
+              error: `Gmail send failed — draft was NOT approved. ${err instanceof Error ? err.message : String(err)}`,
+              gmailConnected: true,
+            },
+            { status: 502 }
+          );
+        }
+      }
+    }
 
     const updated = await decideQueueItem(itemId, {
-      status: queueStatus,
+      status: effectiveQueueStatus,
       decisionNotes: body?.notes ?? null,
       decidedBy: body?.decidedBy ?? "operator",
       deferredUntil: body?.deferredUntil ?? undefined,
     });
 
-    await updateOpportunityStatus(item.opportunityId, QUEUE_STATUS_TO_OPPORTUNITY_STATUS[queueStatus]);
-
-    // The "email was launched" moment (see ai-workflow.md §10.5) — enters the funnel at
-    // Awareness. Distinct from the queue/pipeline status above: this is Joel's own
-    // Awareness→Interest→Purchase relationship model, tracked in /admin/sales/funnel.
-    if (action === "approve" || action === "approve_with_edits") {
-      await updateOpportunityRelationshipStage(item.opportunityId, "awareness");
+    // Nudge decisions shouldn't bounce the opportunity out of the funnel / change pipeline status
+    // back to rejected etc. in surprising ways — only initial items drive opportunity.status.
+    if (item.kind === "initial") {
+      await updateOpportunityStatus(item.opportunityId, QUEUE_STATUS_TO_OPPORTUNITY_STATUS[effectiveQueueStatus]);
     }
 
-    if (item.outreachDraftId && (action === "approve" || action === "approve_with_edits")) {
-      await updateDraftDecision(item.outreachDraftId, {
-        status: action === "approve_with_edits" ? "approved_with_edits" : "approved",
-        editedSubject: action === "approve_with_edits" ? body?.editedSubject ?? undefined : undefined,
-        editedBody: action === "approve_with_edits" ? body?.editedBody ?? undefined : undefined,
+    if (isApprove) {
+      if (item.kind === "initial" || !opportunity.relationshipStage) {
+        await updateOpportunityRelationshipStage(item.opportunityId, "awareness");
+      }
+
+      await createOutreachActivity({
+        opportunityId: item.opportunityId,
+        contactId: draft?.contactId ?? null,
+        activityType: "approved",
+        metadata: { queueItemId: item.id, kind: item.kind, viaGmail: Boolean(gmailSend) },
+        gmailThreadId: gmailSend?.threadId ?? opportunity.gmailThreadId,
       });
-    } else if (item.outreachDraftId && action === "reject") {
-      await updateDraftDecision(item.outreachDraftId, { status: "rejected" });
+
+      if (gmailSend) {
+        const now = new Date().toISOString();
+        await createOutreachActivity({
+          opportunityId: item.opportunityId,
+          contactId: draft?.contactId ?? null,
+          activityType: "sent",
+          occurredAt: now,
+          metadata: { kind: item.kind, queueItemId: item.id },
+          gmailMessageId: gmailSend.messageId,
+          gmailThreadId: gmailSend.threadId,
+        });
+        await updateOpportunityTouchTimestamps(item.opportunityId, {
+          lastOutboundAt: now,
+          nextFollowUpAt: addDaysIso(now, NUDGE_DUE_AFTER_DAYS),
+          gmailThreadId: gmailSend.threadId,
+        });
+      }
     }
 
-    // HubSpot sync on approval is intentionally not implemented in v1 (Phase 2, see docs/sales-platform/roadmap.md)
-    // and is fully decoupled from this decision either way — a future sync failure must never affect approval state.
+    if (draft && isApprove) {
+      await updateDraftDecision(draft.id, {
+        status: effectiveAction === "approve_with_edits" ? "approved_with_edits" : "approved",
+        editedSubject: effectiveAction === "approve_with_edits" ? providedEditedSubject ?? finalSubject : undefined,
+        editedBody: effectiveAction === "approve_with_edits" ? providedEditedBody ?? finalBody : undefined,
+      });
+    } else if (draft && effectiveAction === "reject") {
+      await updateDraftDecision(draft.id, { status: "rejected" });
+    }
 
-    return NextResponse.json({ queueItem: updated });
+    // Learning loop: persist edits / rejections for future draft few-shots.
+    if (draft && (effectiveAction === "approve_with_edits" || effectiveAction === "reject")) {
+      try {
+        const organization = await getOrganization(opportunity.organizationId);
+        const contact = draft.contactId ? await getContact(draft.contactId) : null;
+        const segmentId = organization ? await resolveIndustrySegmentIdForOrganization(organization) : null;
+        await createOutreachFeedback({
+          opportunityId: opportunity.id,
+          outreachDraftId: draft.id,
+          contactId: draft.contactId,
+          opportunityTypeId: opportunity.opportunityTypeId,
+          industrySegmentId: segmentId,
+          outreachPersona: contact?.outreachPersona ?? null,
+          decision: effectiveAction === "reject" ? "rejected" : "approved_with_edits",
+          originalSubject: draft.aiSubject,
+          originalBody: draft.aiBody,
+          editedSubject: effectiveAction === "approve_with_edits" ? (providedEditedSubject ?? finalSubject ?? null) : null,
+          editedBody: effectiveAction === "approve_with_edits" ? (providedEditedBody ?? finalBody ?? null) : null,
+          rejectionReason: effectiveAction === "reject" ? (body?.notes as string | null) ?? null : null,
+        });
+      } catch {
+        // Feedback must never block the decision itself.
+      }
+    }
+
+    gmailStatus = await getGmailConnectionStatus();
+    return NextResponse.json({
+      queueItem: updated,
+      gmail: {
+        connected: gmailStatus.connected,
+        email: gmailStatus.email,
+        sent: Boolean(gmailSend),
+        messageId: gmailSend?.messageId ?? null,
+        threadId: gmailSend?.threadId ?? null,
+      },
+    });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
   }

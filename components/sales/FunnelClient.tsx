@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
+import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 
 const STAGES: { key: RelationshipStage; label: string; accent: string }[] = [
   { key: "awareness", label: "Awareness", accent: "border-sky-800" },
@@ -40,6 +41,20 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
         {item.contact ? `${item.contact.fullName ?? "Unnamed"} — ${item.contact.roleTitle ?? "unknown role"}` : "No contact on record"}
       </p>
       <p className="mt-1 text-xs text-gray-600">{days === null ? "—" : days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`}</p>
+      {item.needsNudge && <p className="mt-1 text-xs font-medium text-amber-400">Needs nudge</p>}
+      {item.opportunity.lastOutboundAt && !item.opportunity.lastInboundAt && item.opportunity.relationshipStage === "awareness" && (
+        <p className="mt-1 text-xs text-sky-400">Awaiting reply</p>
+      )}
+      {item.opportunity.gmailThreadId && (
+        <a
+          href={gmailThreadUrl(item.opportunity.gmailThreadId)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 block text-xs text-sky-400 underline"
+        >
+          Open Gmail thread
+        </a>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {advance && (

@@ -5,18 +5,15 @@ import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 
 /**
- * Standalone "Open in email client" trigger, shared between the approval queue and the single-
- * opportunity detail page. A single click both attempts the `mailto:` handoff AND copies the
- * draft to the clipboard as a fallback — see lib/sales/outreach/mailto.ts for why the fallback
- * matters (webmail providers like Gmail only catch `mailto:` in a browser that's been explicitly
- * granted handler permission there; otherwise the click does nothing visible at all).
+ * Fallback "copy / open mailto" trigger when Gmail API isn't connected. Approve & send in the
+ * queue is the primary path once Gmail is linked.
  */
 export default function EmailLaunchLink({
   to,
   subject,
   body,
   className,
-  label = "Open in email client ↗",
+  label = "Copy draft / mailto fallback ↗",
 }: {
   to: string;
   subject: string;
@@ -36,14 +33,12 @@ export default function EmailLaunchLink({
   const handleClick = useCallback(() => {
     // Strip any previously embedded press-quote block — Gmail appends Joel's signature itself.
     const cleanBody = stripEmailSignature(body);
-    // Fire the mailto navigation synchronously, in the same click event, before touching the
-    // clipboard API — same user-gesture reasoning as the approve flow in ApprovalQueueClient.
     launchMailto(buildMailtoUrl(to, subject, cleanBody));
 
     if (clearTimer.current) clearTimeout(clearTimer.current);
 
     copyEmailToClipboard(to, subject, cleanBody)
-      .then(() => setStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
+      .then(() => setStatus(`Draft copied — paste into a new email to ${to} if needed.`))
       .catch(() => setStatus("Couldn't copy the draft to your clipboard automatically."));
 
     clearTimer.current = setTimeout(() => setStatus(null), 6000);

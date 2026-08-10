@@ -119,6 +119,14 @@
     {
       "path": "/api/sales/cron/pipeline",
       "schedule": "20 16 * * *"
+    },
+    {
+      "path": "/api/sales/cron/gmail-sync",
+      "schedule": "0,15,30,45 * * * *"
+    },
+    {
+      "path": "/api/sales/cron/nudges",
+      "schedule": "30 10 * * *"
     }
   ]
 }

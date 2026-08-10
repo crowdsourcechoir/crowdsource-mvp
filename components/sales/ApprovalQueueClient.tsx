@@ -11,8 +11,8 @@ import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
 const ACTIONS: { key: ActionKey; label: string; shortcut: string; tone: string }[] = [
-  { key: "approve", label: "Approve & launch email", shortcut: "A", tone: "bg-emerald-600 hover:bg-emerald-500" },
-  { key: "approve_with_edits", label: "Approve w/ edits & launch email", shortcut: "E", tone: "bg-emerald-800 hover:bg-emerald-700" },
+  { key: "approve", label: "Approve & send", shortcut: "A", tone: "bg-emerald-600 hover:bg-emerald-500" },
+  { key: "approve_with_edits", label: "Approve edits & send", shortcut: "E", tone: "bg-emerald-800 hover:bg-emerald-700" },
   { key: "reject", label: "Reject", shortcut: "R", tone: "bg-red-700 hover:bg-red-600" },
   { key: "defer", label: "Defer", shortcut: "D", tone: "bg-amber-700 hover:bg-amber-600" },
   { key: "request_more_research", label: "More research", shortcut: "M", tone: "bg-sky-700 hover:bg-sky-600" },
@@ -37,6 +37,8 @@ export default function ApprovalQueueClient() {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showCopyStatus = useCallback((message: string) => {
@@ -58,6 +60,8 @@ export default function ApprovalQueueClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load queue");
       setItems(data.items ?? []);
+      setGmailConnected(Boolean(data.gmail?.connected));
+      setGmailEmail(data.gmail?.email ?? null);
       setError(null);
       setSelectedIndex(0);
       setMobileDetailOpen(false);
@@ -92,27 +96,35 @@ export default function ApprovalQueueClient() {
     async (action: ActionKey) => {
       if (!current || busy) return;
 
-      // Must happen synchronously in the click handler, before any `await` — browsers (Safari in
-      // particular) only allow a mailto: navigation to open the OS mail client as a direct result
-      // of a user gesture, and that permission is lost once control returns from an awaited
-      // promise. Doing it first, before the decision API call below, is what makes "Approve"
-      // double as "launch the email," not two separate clicks. Dispatching via a programmatically
-      // clicked <a> (launchMailto), rather than reassigning window.location.href, is the more
-      // broadly-reliable way browsers route mailto: navigation to a registered handler.
-      if ((action === "approve" || action === "approve_with_edits") && current.contact?.email && current.draft) {
-        const to = current.contact.email;
-        const subject = action === "approve_with_edits" ? editedSubject : current.draft.editedSubject ?? current.draft.aiSubject;
-        const body = stripEmailSignature(
-          action === "approve_with_edits" ? editedBody : current.draft.editedBody ?? current.draft.aiBody
-        );
-        launchMailto(buildMailtoUrl(to, subject, body));
+      // If the reviewer edited the draft (edit mode, or fields differ from what's stored), treat
+      // plain "approve" as approve-with-edits so the edited subject/body are what get sent + saved.
+      const originalSubject = current.draft?.editedSubject ?? current.draft?.aiSubject ?? "";
+      const originalBody = stripEmailSignature(current.draft?.editedBody ?? current.draft?.aiBody ?? "");
+      const cleanedEditedBody = stripEmailSignature(editedBody);
+      const draftWasEdited =
+        Boolean(current.draft) &&
+        (editing || editedSubject !== originalSubject || cleanedEditedBody !== originalBody);
+      const effectiveAction: ActionKey =
+        (action === "approve" || action === "approve_with_edits") && draftWasEdited
+          ? "approve_with_edits"
+          : action;
+      const finalSubject = draftWasEdited ? editedSubject : originalSubject;
+      const finalBody = draftWasEdited ? cleanedEditedBody : originalBody;
 
-        // We have no reliable signal on whether a mail client actually opened (a webmail handler
-        // like Gmail only catches mailto: if explicitly granted permission in this browser — see
-        // lib/sales/outreach/mailto.ts), so always also copy the draft to the clipboard as a
-        // fallback the reviewer can paste into a fresh email.
-        copyEmailToClipboard(to, subject, body)
-          .then(() => showCopyStatus(`Draft copied to clipboard — paste into a new email to ${to} if your mail client didn't open.`))
+      // When Gmail isn't connected, keep the mailto + clipboard fallback (must run before any
+      // await so the browser treats it as a user gesture).
+      if (
+        !gmailConnected &&
+        (effectiveAction === "approve" || effectiveAction === "approve_with_edits") &&
+        current.contact?.email &&
+        current.draft
+      ) {
+        const to = current.contact.email;
+        launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
+        copyEmailToClipboard(to, finalSubject, finalBody)
+          .then(() =>
+            showCopyStatus(`Gmail not connected — draft copied for ${to}. Connect Gmail on Sales overview for tracked send.`)
+          )
           .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
       }
 
@@ -122,14 +134,17 @@ export default function ApprovalQueueClient() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action,
+            action: effectiveAction,
             notes: notes || null,
-            editedSubject: action === "approve_with_edits" ? editedSubject : undefined,
-            editedBody: action === "approve_with_edits" ? stripEmailSignature(editedBody) : undefined,
+            editedSubject: effectiveAction === "approve_with_edits" ? editedSubject : undefined,
+            editedBody: effectiveAction === "approve_with_edits" ? cleanedEditedBody : undefined,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Decision failed");
+        if (data.gmail?.sent) {
+          showCopyStatus(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}.`);
+        }
         setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
         setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
         setMobileDetailOpen(false);
@@ -139,7 +154,7 @@ export default function ApprovalQueueClient() {
         setBusy(false);
       }
     },
-    [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus]
+    [current, busy, notes, editedSubject, editedBody, editing, items.length, showCopyStatus, gmailConnected]
   );
 
   useEffect(() => {
@@ -201,10 +216,19 @@ export default function ApprovalQueueClient() {
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate">
-                  <span className="block truncate font-medium">{item.organization.name}</span>
+                  <span className="block truncate font-medium">
+                    {item.queueItem.kind === "nudge" && <span className="mr-1 text-amber-400">Nudge · </span>}
+                    {item.organization.name}
+                  </span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunity.title}</span>
                 </span>
-                {item.score && <ScoreBadge score={item.score.totalScore} />}
+                {item.score ? (
+                  <ScoreBadge score={item.score.totalScore} />
+                ) : item.draft?.confidenceScore != null ? (
+                  <span className="rounded-md border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+                    {Math.round(item.draft.confidenceScore * 100)}%
+                  </span>
+                ) : null}
               </button>
             </li>
           ))}
@@ -223,7 +247,14 @@ export default function ApprovalQueueClient() {
 
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-white">{current.organization.name}</h2>
+              <h2 className="text-xl font-semibold text-white">
+                {current.queueItem.kind === "nudge" && (
+                  <span className="mr-2 rounded-md border border-amber-700 px-2 py-0.5 text-xs font-medium text-amber-300">
+                    Nudge
+                  </span>
+                )}
+                {current.organization.name}
+              </h2>
               <p className="text-sm text-gray-400">
                 {current.organizationTypeLabel ?? "Type unknown"} · {current.opportunity.title}
                 {current.opportunityTypeLabel ? ` (${current.opportunityTypeLabel})` : ""}
@@ -282,8 +313,30 @@ export default function ApprovalQueueClient() {
               )}
             </div>
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">HubSpot status</h3>
-              <p className="mt-1 text-sm text-gray-500">Not synced (Phase 2)</p>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Gmail status</h3>
+              {gmailConnected ? (
+                <p className="mt-1 text-sm text-emerald-400">
+                  Connected{gmailEmail ? ` · ${gmailEmail}` : ""} — approve will send
+                  {current.queueItem.kind === "nudge" && current.opportunity.gmailThreadId ? " in-thread" : ""}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-amber-300">
+                  Not connected — approve uses mailto/clipboard.{" "}
+                  <Link href="/admin/sales" className="underline">
+                    Connect Gmail
+                  </Link>
+                </p>
+              )}
+              {current.opportunity.gmailThreadId && (
+                <a
+                  href={`https://mail.google.com/mail/u/0/#inbox/${current.opportunity.gmailThreadId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 block text-xs text-sky-400 underline"
+                >
+                  Open Gmail thread
+                </a>
+              )}
             </div>
           </div>
 
@@ -387,19 +440,12 @@ export default function ApprovalQueueClient() {
           </div>
           {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; launch email, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
-            <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Approving opens the draft in your default mail app — you send it from
-            there. A link to the experience page (`/book`) is already in the draft body — pricing and
-            other attachments wait until they reply. The full draft is also always copied to
-            your clipboard as a backup.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; send, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
+            <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. With Gmail connected, approve sends from your inbox and tracks the
+            thread for replies.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>
-          </p>
-          <p className="mt-1 text-xs text-gray-600">
-            Note: a webmail inbox (e.g. Gmail) only opens automatically if you’ve explicitly granted it mailto: handler permission in
-            this browser — setting it as your OS’s default mail app isn’t enough. In Chrome, grant it via the address-bar prompt on
-            gmail.com or under <code>chrome://settings/handlers</code>.
           </p>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
-import type { OutreachDraft, OutreachDraftStatus, OutreachTemplate } from "../types";
+import type { OutreachDraft, OutreachDraftKind, OutreachDraftStatus, OutreachTemplate } from "../types";
 
 function rowToTemplate(row: Record<string, unknown>): OutreachTemplate {
   return {
@@ -17,14 +17,16 @@ function rowToDraft(row: Record<string, unknown>): OutreachDraft {
     id: row.id as string,
     opportunityId: row.opportunity_id as string,
     contactId: (row.contact_id as string | null) ?? null,
-    pipelineRunId: row.pipeline_run_id as string,
+    pipelineRunId: (row.pipeline_run_id as string | null) ?? null,
     templateId: (row.template_id as string | null) ?? null,
+    kind: ((row.kind as OutreachDraftKind | null) ?? "initial") as OutreachDraftKind,
     aiSubject: row.ai_subject as string,
     aiBody: row.ai_body as string,
     editedSubject: (row.edited_subject as string | null) ?? null,
     editedBody: (row.edited_body as string | null) ?? null,
     qaFlags: (row.qa_flags as OutreachDraft["qaFlags"]) ?? null,
     status: row.status as OutreachDraftStatus,
+    confidenceScore: row.confidence_score == null ? null : Number(row.confidence_score),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -83,11 +85,13 @@ export async function findApprovedTemplate(
 export async function createOutreachDraft(input: {
   opportunityId: string;
   contactId?: string | null;
-  pipelineRunId: string;
+  pipelineRunId?: string | null;
   templateId?: string | null;
+  kind?: OutreachDraftKind;
   aiSubject: string;
   aiBody: string;
   status?: OutreachDraftStatus;
+  confidenceScore?: number | null;
 }): Promise<OutreachDraft> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db
@@ -95,16 +99,29 @@ export async function createOutreachDraft(input: {
     .insert({
       opportunity_id: input.opportunityId,
       contact_id: input.contactId ?? null,
-      pipeline_run_id: input.pipelineRunId,
+      pipeline_run_id: input.pipelineRunId ?? null,
       template_id: input.templateId ?? null,
+      kind: input.kind ?? "initial",
       ai_subject: input.aiSubject,
       ai_body: input.aiBody,
       status: input.status ?? "draft",
+      confidence_score: input.confidenceScore ?? null,
     })
     .select()
     .single();
   if (error) throw new Error(error.message);
   return rowToDraft(data);
+}
+
+export async function listDraftsForOpportunity(opportunityId: string): Promise<OutreachDraft[]> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("outreach_drafts")
+    .select("*")
+    .eq("opportunity_id", opportunityId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToDraft);
 }
 
 export async function updateDraftQa(id: string, status: OutreachDraftStatus, qaFlags: OutreachDraft["qaFlags"]): Promise<OutreachDraft> {

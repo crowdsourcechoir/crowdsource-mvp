@@ -132,25 +132,23 @@ Each stage below follows the same shape:
 - **Retry:** idempotent (unique on `opportunity_id`); re-running after a verified contact shows up naturally creates the queue row then (`awaiting_contact` is in `UNDECIDED_STATUSES`, see stage 4)
 - **Failure isolation:** terminal stage for the review path; failure here just means the item isn't visible yet (or the `awaiting_contact` status update didn't take), nothing else is affected
 
-### 10.5. Launching the email
-- **Trigger:** clicking Approve / Approve w/ edits in the queue UI, or the standalone "Open in email client" link on the queue item / opportunity detail page — never automatic.
-- **Mechanism:** builds a `mailto:` URL (`lib/sales/outreach/mailto.ts`) with the contact's email, subject, and body pre-filled, and navigates the browser to it. This invokes whatever mail client is set as the OS/browser default (Mail.app, Outlook, a configured webmail handler) with a fully composed draft — the human still reviews it there and clicks send themselves. Not a real send API (no SMTP/SendGrid/Resend integration, no deliverability tracking, no reply handling) — that's a deliberately bigger, separate feature if ever wanted; this is the minimal thing that removes copy/paste from the loop while keeping a human's own inbox as the actual sender of record.
-- **Materials (one branded URL, not attachments):** cold outreach embeds `{{book_url}}` (default `https://www.crowdsourcechoir.com/book`) — the page that sells the experience. Pricing PDFs and other attachments wait until they reply. Already-queued drafts written before that template change keep the old “I've attached…” wording until those orgs are reprocessed.
-- **Timing constraint:** the mailto navigation has to happen synchronously inside the button's click handler, before any `await` — Safari in particular revokes the "this came from a user gesture" permission once control returns from an awaited promise, so triggering it after the decision API call would silently fail on some browsers. `ApprovalQueueClient.tsx#decide` does the mailto navigation first, then makes the decision API call.
+### 10.5. Sending the email (Gmail)
+- **Trigger:** clicking Approve / Approve w/ edits in the queue UI — never automatic, never Mailchimp.
+- **Primary mechanism:** when Gmail is connected (`gmail_connections`, OAuth via `/api/sales/gmail/connect`), the decision route (`app/api/sales/queue/[itemId]/decision/route.ts`) sends via the Gmail API (`lib/sales/gmail/send.ts`) **before** marking the item approved (fail-closed: a send failure leaves the item pending). Writes `outreach_activities` (`approved`, `sent`) with `gmail_message_id` / `gmail_thread_id`, and sets `opportunities.last_outbound_at`, `gmail_thread_id`, and `next_follow_up_at` (+5 days).
+- **Fallback:** if Gmail is not connected, approve still records the decision and the client falls back to `mailto:` + clipboard (`lib/sales/outreach/mailto.ts`) — no thread tracking until Connect Gmail on `/admin/sales`.
+- **Materials (one branded URL, not attachments):** cold outreach embeds `{{book_url}}` (default `https://www.crowdsourcechoir.com/book`). Pricing PDFs wait until they reply.
+- **Nudges:** daily cron `/api/sales/cron/nudges` drafts personalized follow-ups (`kind = 'nudge'`) into the same approval queue; approve sends **in-thread**. Max 1 pending nudge + 2 sent nudges per opportunity. Never auto-sent.
+- **Learning:** `approve_with_edits` / `reject` write `outreach_feedback`; recent accepted edits are injected as few-shots into draft + nudge prompts, with a soft `confidence_score` for queue sorting.
 
-### 10.6. Post-approval funnel tracking
-- **Trigger:** automatic the moment an opportunity is approved (`action` is `approve` or `approve_with_edits` in `app/api/sales/queue/[itemId]/decision/route.ts`) — same request as stage 10.5's mailto launch, no separate step for a human to remember. Manual thereafter, whenever the human actually hears back.
-- **What it tracks:** `opportunities.relationship_stage` — Joel's own mental model, **Awareness → Interest → Purchase**, plus a terminal, non-funnel **Lost** bucket for anything that goes cold — distinct from `opportunities.status` (the AI pipeline's own new/researching/ready_for_review/approved/... state, see `database.md`). Approval sets it to `awareness`; a human moves it forward (or back, for corrections — this is a human-maintained record, not a one-way pipeline) via `app/api/sales/opportunities/[oppId]/stage/route.ts`, bumping `stage_updated_at` each time.
-- **Where it's visible:** `/admin/sales/funnel` (`components/sales/FunnelClient.tsx`), four columns matching the stages above, one card per opportunity showing the org, contact, opportunity title, and days since `stage_updated_at` — reusing the same opportunity→organization→contact→draft join shape as the approval queue (`assembleFunnelItems` in `lib/sales/db/assemble.ts`, alongside `assembleQueueItemDetail`) rather than a new one.
-- **Deliberately bespoke, not Mailchimp-driven:** this is tracking only — no automated send of any kind, same human-in-the-loop principle as the rest of this system. See `roadmap.md` Open Question 7 for the still-open question of whether a Mailchimp-driven automated nudge sits on top of this later.
-- **Failure isolation:** entirely decoupled from the queue decision itself — same pattern as HubSpot sync below; a failure here should never block or reverse an approval.
+### 10.6. Post-approval funnel tracking + reply sync
+- **Trigger:** approval sets `relationship_stage` to `awareness`. Gmail reply sync (`/api/sales/cron/gmail-sync`, every 15 minutes) matches inbound messages by `gmail_thread_id` (else contact email), writes `replied` activities, sets `last_inbound_at`, clears `next_follow_up_at`, and advances Awareness → Interest.
+- **What it tracks:** `opportunities.relationship_stage` — **Awareness → Interest → Purchase**, plus terminal **Lost** — distinct from `opportunities.status`. Humans can still move stages manually at `/admin/sales/funnel`.
+- **Where it's visible:** funnel cards show awaiting-reply / needs-nudge and a link into the Gmail thread.
+- **Not Mailchimp:** 1:1 CRM is Gmail-only. Resend remains for the internal morning digest only.
+- **Failure isolation:** reply sync / nudge cron failures never reverse an approval.
 
-### 11. HubSpot synchronization
-- **Trigger:** **not** part of the automatic pipeline run — this stage only fires after a human approval decision (see `architecture.md` §7). Included here for completeness of the stage-tracking model (it still gets an `agent_runs` row for provenance/cost tracking).
-- **Input:** approved organization/contact/opportunity/draft
-- **Output:** `hubspot_sync_records` rows (company, contact, note)
-- **Retry:** independent, safe to retry indefinitely (idempotent upsert by domain/email hash)
-- **Failure isolation:** fully decoupled — never blocks or reverses the approval decision
+### 11. HubSpot synchronization (dropped)
+- HubSpot sync is **not implemented** and is no longer planned for 1:1 outreach. The `hubspot_sync` pipeline stage enum value and `hubspot_sync_records` table remain as unused schema leftovers. CRM tracking is Gmail + `outreach_activities` instead.
 
 ## Provenance & cost tracking
 
