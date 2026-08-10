@@ -26,6 +26,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
   const [unlocked, setUnlocked] = useState(false);
   const [pulsing, setPulsing] = useState(false);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [response, setResponse] = useState("");
   const celebration = useCelebration();
 
   const refresh = useCallback(async () => {
@@ -96,10 +97,16 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     return [...shared, ...personal];
   }, [snapshot]);
 
+  function selectZone(key: string) {
+    setSelectedZone(key);
+    setResponse("");
+    setError(null);
+  }
+
   async function handlePulse() {
     if (!snapshot?.window.canContribute || pulsing) return;
     if ((snapshot.zones?.length ?? 0) > 0 && !selectedZone) {
-      setError("Pick a zone on the map first.");
+      setError("Tap a zone on the map to engage.");
       return;
     }
     setUnlocked(true);
@@ -113,6 +120,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
           deviceId: getOrCreateSonggardenDeviceId(),
           kind: "text",
           zoneKey: selectedZone,
+          note: response.trim() || undefined,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -122,6 +130,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       if (!res.ok) throw new Error(body.error || "Could not leave a mark");
       pulseHaptic();
       setBurstMessage(body.gardenCelebrationLine?.trim() || "You left a mark");
+      setResponse("");
       celebration.celebrate(() => {
         void refresh();
       });
@@ -138,6 +147,15 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     : null;
   const zones = snapshot?.zones ?? [];
   const selectedMeta = zones.find((z) => z.key === selectedZone) ?? null;
+  const prompt =
+    selectedMeta?.prompt?.trim() ||
+    selectedMeta?.blurb?.trim() ||
+    "Leave a mark in this zone.";
+  const cta =
+    selectedMeta?.ctaLabel?.trim() ||
+    (selectedMeta ? `Leave a mark in ${selectedMeta.label}` : "Leave a mark");
+  const placeholder =
+    selectedMeta?.inputPlaceholder?.trim() || "Type your response…";
 
   return (
     <WorldStage
@@ -147,28 +165,29 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       soundtrackUnlocked={unlocked}
       growthNodes={growthNodes}
     >
-      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-4 pb-10 pt-[max(1.5rem,env(safe-area-inset-top))]">
-        <header className="text-center">
-          {world.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={world.logoUrl} alt="" className="mx-auto mb-2 h-8 w-auto opacity-90" />
-          ) : null}
-          <p
-            className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"
-            style={{ color: world.accentColor, opacity: 0.85 }}
-          >
-            {snapshot?.brand.title || gardenTitle}
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">Song Garden</h1>
-          <p className="mt-2 text-sm text-white/70">
-            {snapshot?.window.message ?? "Loading the living world…"}
-          </p>
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <header className="flex items-center justify-between gap-3 px-1">
+          <div className="min-w-0 text-left">
+            {world.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={world.logoUrl} alt="" className="mb-1 h-7 w-auto opacity-90" />
+            ) : null}
+            <p
+              className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.28em]"
+              style={{ color: world.accentColor, opacity: 0.9 }}
+            >
+              {snapshot?.brand.title || gardenTitle}
+            </p>
+          </div>
+          <div className="shrink-0 rounded-full border border-white/15 bg-black/45 px-3 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
+            {energy.toFixed(2)} · {snapshot?.state.totals.contributions ?? 0} marks
+          </div>
         </header>
 
         {zones.length > 0 ? (
           <div
-            className={`relative mt-6 w-full overflow-hidden rounded-2xl border border-white/15 bg-black/30 ${
-              mapArtworkUrl ? "aspect-[4/3]" : "aspect-[4/5]"
+            className={`relative mt-3 flex-1 overflow-hidden rounded-2xl border border-white/15 bg-black/30 ${
+              mapArtworkUrl ? "min-h-[70dvh]" : "min-h-[65dvh]"
             }`}
           >
             {mapArtworkUrl ? (
@@ -186,10 +205,14 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 }}
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/25" />
-            <p className="absolute left-3 top-3 z-10 font-mono text-[10px] uppercase tracking-widest text-white/80">
-              {mapArtworkUrl ? "Sponsored zones" : "Participation map"}
-            </p>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/30" />
+
+            {!selectedMeta ? (
+              <p className="absolute left-3 right-3 top-3 z-10 text-center font-mono text-[10px] uppercase tracking-widest text-white/75">
+                Tap a zone to engage
+              </p>
+            ) : null}
+
             {zones.map((z) => {
               const active = selectedZone === z.key;
               const glow = Math.round((z.runtime?.energy ?? 0) * 100);
@@ -197,7 +220,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 <button
                   key={z.key}
                   type="button"
-                  onClick={() => setSelectedZone(z.key)}
+                  onClick={() => selectZone(z.key)}
                   className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2.5 py-1.5 text-left text-[11px] font-medium text-white shadow-lg backdrop-blur-sm transition"
                   style={{
                     left: `${z.x * 100}%`,
@@ -213,91 +236,105 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   }}
                 >
                   <span className="block whitespace-nowrap">{z.label}</span>
-                  {z.sponsor ? (
-                    <span
-                      className="block text-[9px]"
-                      style={{ opacity: active ? 0.75 : 0.7 }}
-                    >
-                      {z.sponsor.credit || z.sponsor.name}
-                    </span>
-                  ) : null}
                 </button>
               );
             })}
+
+            {/* Engagement lives on the map — not a separate panel below */}
+            {selectedMeta ? (
+              <div className="absolute inset-x-0 bottom-0 z-20 p-3 pt-10">
+                <div className="rounded-2xl border border-white/20 bg-black/80 p-4 shadow-2xl backdrop-blur-md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">{selectedMeta.label}</p>
+                      {selectedMeta.sponsor ? (
+                        <p className="mt-0.5 text-[11px] text-white/55">
+                          {selectedMeta.sponsor.credit || selectedMeta.sponsor.name}
+                        </p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedZone(null);
+                        setResponse("");
+                      }}
+                      className="shrink-0 rounded-full px-2 py-1 text-xs text-white/50 hover:text-white"
+                      aria-label="Close zone"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <p className="mt-3 text-sm leading-snug text-white/85">{prompt}</p>
+
+                  {snapshot?.window.canContribute ? (
+                    <>
+                      <label className="sr-only" htmlFor="zone-response">
+                        Your response
+                      </label>
+                      <textarea
+                        id="zone-response"
+                        value={response}
+                        onChange={(e) => setResponse(e.target.value)}
+                        rows={2}
+                        maxLength={280}
+                        placeholder={placeholder}
+                        className="mt-3 w-full resize-none rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-white/40 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handlePulse()}
+                        disabled={pulsing}
+                        className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
+                        style={{ background: world.accentColor }}
+                      >
+                        {pulsing ? "Sending…" : cta}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="mt-3 text-sm text-white/50">
+                      Contributions are closed for now.
+                    </p>
+                  )}
+
+                  <p className="mt-2 font-mono text-[10px] text-white/40">
+                    {(selectedMeta.runtime?.contributions ?? 0)} marks here · energy{" "}
+                    {(selectedMeta.runtime?.energy ?? 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-
-        <div className="mt-6 rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur-md">
-          <dl className="grid grid-cols-3 gap-3 text-center text-xs text-white/70">
-            <div>
-              <dt className="uppercase tracking-wide text-white/40">Energy</dt>
-              <dd className="mt-1 font-mono text-base text-white">{energy.toFixed(2)}</dd>
-            </div>
-            <div>
-              <dt className="uppercase tracking-wide text-white/40">Marks</dt>
-              <dd className="mt-1 font-mono text-base text-white">
-                {snapshot?.state.totals.contributions ?? 0}
-              </dd>
-            </div>
-            <div>
-              <dt className="uppercase tracking-wide text-white/40">Version</dt>
-              <dd className="mt-1 font-mono text-base text-white">
-                v{snapshot?.garden.worldVersion ?? 0}
-              </dd>
-            </div>
-          </dl>
-
-          {selectedMeta ? (
-            <div className="mt-4 border-t border-white/10 pt-4 text-left text-sm text-white/75">
-              <p className="font-medium text-white">{selectedMeta.label}</p>
-              {selectedMeta.blurb ? <p className="mt-1 text-white/55">{selectedMeta.blurb}</p> : null}
-              <p className="mt-1 font-mono text-xs text-white/45">
-                zone energy {(selectedMeta.runtime?.energy ?? 0).toFixed(2)} ·{" "}
-                {selectedMeta.runtime?.contributions ?? 0} marks
-              </p>
-            </div>
-          ) : snapshot?.state.landmarks?.length ? (
-            <ul className="mt-4 space-y-1 border-t border-white/10 pt-4 text-left text-sm text-white/75">
-              {snapshot.state.landmarks.slice(-5).map((lm) => (
-                <li key={lm.id}>· {lm.label}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 border-t border-white/10 pt-4 text-sm text-white/50">
-              {zones.length ? "Select a zone, then leave a mark." : "Landmarks will open as the garden grows."}
+        ) : (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur-md">
+            <p className="text-sm text-white/60">
+              {snapshot?.window.message ?? "Loading the living world…"}
             </p>
-          )}
-
-          <div className="mt-5 flex flex-col gap-3">
             {snapshot?.window.canContribute ? (
               <button
                 type="button"
                 onClick={() => void handlePulse()}
                 disabled={pulsing}
-                className="rounded-xl px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
+                className="mt-4 w-full rounded-xl px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
                 style={{ background: world.accentColor }}
               >
-                {pulsing
-                  ? "Leaving a mark…"
-                  : selectedMeta
-                    ? `Leave a mark in ${selectedMeta.label}`
-                    : "Leave a mark"}
+                {pulsing ? "Leaving a mark…" : "Leave a mark"}
               </button>
-            ) : (
-              <p className="text-center text-sm text-white/50">Contributions are closed for now.</p>
-            )}
-            {chapterLink && snapshot?.window.mode === "chapter" ? (
-              <Link
-                href={chapterLink}
-                className="rounded-xl border border-white/20 px-4 py-3 text-center text-sm text-white hover:bg-white/5"
-              >
-                Enter {snapshot.activeChapter?.label || "this show"}
-              </Link>
             ) : null}
           </div>
-        </div>
+        )}
 
-        {error ? <p className="mt-4 text-center text-sm text-red-300">{error}</p> : null}
+        {chapterLink && snapshot?.window.mode === "chapter" ? (
+          <Link
+            href={chapterLink}
+            className="mt-3 rounded-xl border border-white/20 px-4 py-3 text-center text-sm text-white hover:bg-white/5"
+          >
+            Enter {snapshot.activeChapter?.label || "this show"}
+          </Link>
+        ) : null}
+
+        {error ? <p className="mt-3 text-center text-sm text-red-300">{error}</p> : null}
       </div>
 
       <CelebrationBurst

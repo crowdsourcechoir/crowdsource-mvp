@@ -746,6 +746,11 @@ export async function recordBetweenShowPulse(args: {
       garden.mutationPolicy
     );
 
+    const note = args.note?.trim().slice(0, 280) || null;
+    if (note) {
+      applied.delta = { ...applied.delta, note };
+    }
+
     return persistAppliedMutation({
       garden,
       chapterId: open?.id ?? null,
