@@ -3,6 +3,7 @@ import { DraftFillSchema } from "../../openai/schemas";
 import { listFindingsWithSourcesForOpportunity } from "../../db/research";
 import { findApprovedTemplate, createOutreachDraft } from "../../db/outreach";
 import { resolveIndustrySegmentIdForOrganization } from "../../db/lookups";
+import { estimateDraftConfidence, formatFeedbackFewShots, listRecentAcceptedEditFeedback } from "../../db/feedback";
 import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
@@ -122,6 +123,20 @@ export async function runDraftStage(
   const findings = await listFindingsWithSourcesForOpportunity(org.id, opportunity.id);
   const indexed = indexFindingsForPrompt(findings);
 
+  let fewShots = "";
+  let confidenceScore: number | null = null;
+  try {
+    const feedback = await listRecentAcceptedEditFeedback({
+      outreachPersona: contact.outreachPersona,
+      industrySegmentId,
+      limit: 3,
+    });
+    fewShots = formatFeedbackFewShots(feedback);
+    confidenceScore = estimateDraftConfidence(feedback);
+  } catch {
+    // outreach_feedback may not exist until sales-platform-add-gmail.sql is applied.
+  }
+
   const userContent = [
     `Organization: ${org.name}`,
     `Opportunity: ${opportunity.title}`,
@@ -134,7 +149,7 @@ export async function runDraftStage(
   const result = await callStructured({
     schema: DraftFillSchema,
     schemaName: "draft_fill",
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: fewShots ? `${SYSTEM_PROMPT}\n\n${fewShots}` : SYSTEM_PROMPT,
     userContent,
   });
 
@@ -162,8 +177,10 @@ export async function runDraftStage(
     contactId: contact.id,
     pipelineRunId,
     templateId: template.id,
+    kind: "initial",
     aiSubject: result.parsed.subject,
     aiBody: body,
+    confidenceScore,
   });
 
   return {

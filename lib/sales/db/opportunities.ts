@@ -15,6 +15,10 @@ function rowToOpportunity(row: Record<string, unknown>): Opportunity {
     targetContactRoleHint: (row.target_contact_role_hint as string | null) ?? null,
     relationshipStage: (row.relationship_stage as RelationshipStage | null) ?? null,
     stageUpdatedAt: (row.stage_updated_at as string | null) ?? null,
+    gmailThreadId: (row.gmail_thread_id as string | null) ?? null,
+    lastOutboundAt: (row.last_outbound_at as string | null) ?? null,
+    lastInboundAt: (row.last_inbound_at as string | null) ?? null,
+    nextFollowUpAt: (row.next_follow_up_at as string | null) ?? null,
     importMetadata: (row.import_metadata as Record<string, unknown> | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -125,4 +129,46 @@ export async function updateOpportunityRelationshipStage(id: string, stage: Rela
     .single();
   if (error) throw new Error(error.message);
   return rowToOpportunity(data);
+}
+
+export async function updateOpportunityTouchTimestamps(
+  id: string,
+  input: {
+    lastOutboundAt?: string | null;
+    lastInboundAt?: string | null;
+    nextFollowUpAt?: string | null;
+    gmailThreadId?: string | null;
+  }
+): Promise<Opportunity> {
+  const db = requireSupabaseAdmin();
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.lastOutboundAt !== undefined) row.last_outbound_at = input.lastOutboundAt;
+  if (input.lastInboundAt !== undefined) row.last_inbound_at = input.lastInboundAt;
+  if (input.nextFollowUpAt !== undefined) row.next_follow_up_at = input.nextFollowUpAt;
+  if (input.gmailThreadId !== undefined) row.gmail_thread_id = input.gmailThreadId;
+  const { data, error } = await db.from("opportunities").update(row).eq("id", id).select().single();
+  if (error) throw new Error(error.message);
+  return rowToOpportunity(data);
+}
+
+/** Opportunities due for an AI nudge draft (no pending nudge yet — enforced by caller). */
+export async function listOpportunitiesDueForNudge(nowIso: string = new Date().toISOString()): Promise<Opportunity[]> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("opportunities")
+    .select("*")
+    .lte("next_follow_up_at", nowIso)
+    .in("relationship_stage", ["awareness", "interest"])
+    .not("gmail_thread_id", "is", null)
+    .order("next_follow_up_at", { ascending: true })
+    .limit(25);
+  if (error) throw new Error(error.message);
+  return (data ?? [])
+    .map(rowToOpportunity)
+    .filter((opp) => {
+      // No inbound since last outbound (or never inbound).
+      if (!opp.lastOutboundAt) return false;
+      if (!opp.lastInboundAt) return true;
+      return new Date(opp.lastInboundAt).getTime() < new Date(opp.lastOutboundAt).getTime();
+    });
 }

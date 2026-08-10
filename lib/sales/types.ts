@@ -132,6 +132,11 @@ export type Opportunity = {
   targetContactRoleHint: string | null;
   relationshipStage: RelationshipStage | null;
   stageUpdatedAt: string | null;
+  /** Gmail thread for the outreach conversation (set on first successful send). */
+  gmailThreadId: string | null;
+  lastOutboundAt: string | null;
+  lastInboundAt: string | null;
+  nextFollowUpAt: string | null;
   importMetadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -242,19 +247,23 @@ export type OutreachTemplate = {
 };
 
 export type OutreachDraftStatus = "draft" | "qa_passed" | "qa_flagged" | "approved" | "approved_with_edits" | "rejected";
+export type OutreachDraftKind = "initial" | "nudge";
 
 export type OutreachDraft = {
   id: string;
   opportunityId: string;
   contactId: string | null;
-  pipelineRunId: string;
+  pipelineRunId: string | null;
   templateId: string | null;
+  kind: OutreachDraftKind;
   aiSubject: string;
   aiBody: string;
   editedSubject: string | null;
   editedBody: string | null;
   qaFlags: { type: string; detail: string }[] | null;
   status: OutreachDraftStatus;
+  /** Soft 0–1 heuristic for queue sorting — still human-approved. */
+  confidenceScore: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -268,17 +277,71 @@ export type ApprovalQueueItemStatus =
   | "needs_more_research"
   | "duplicate";
 
+export type ApprovalQueueItemKind = "initial" | "nudge";
+
 export type ApprovalQueueItem = {
   id: string;
   opportunityId: string;
   outreachDraftId: string | null;
   prospectScoreId: string | null;
+  kind: ApprovalQueueItemKind;
   duplicateWarning: boolean;
   status: ApprovalQueueItemStatus;
   decisionNotes: string | null;
   decidedBy: string | null;
   decidedAt: string | null;
   deferredUntil: string | null;
+  createdAt: string;
+};
+
+export type OutreachActivityType =
+  | "approved"
+  | "sent"
+  | "opened"
+  | "replied"
+  | "bounced"
+  | "follow_up_due"
+  | "note"
+  | "send_failed";
+
+export type OutreachActivity = {
+  id: string;
+  opportunityId: string;
+  contactId: string | null;
+  activityType: OutreachActivityType;
+  occurredAt: string;
+  metadata: Record<string, unknown> | null;
+  gmailMessageId: string | null;
+  gmailThreadId: string | null;
+};
+
+export type GmailConnection = {
+  id: string;
+  ownerKey: string;
+  email: string;
+  refreshTokenEncrypted: string;
+  historyId: string | null;
+  scopes: string[];
+  connectedAt: string;
+  updatedAt: string;
+};
+
+export type OutreachFeedbackDecision = "approved_with_edits" | "rejected";
+
+export type OutreachFeedback = {
+  id: string;
+  opportunityId: string;
+  outreachDraftId: string | null;
+  contactId: string | null;
+  opportunityTypeId: string | null;
+  industrySegmentId: string | null;
+  outreachPersona: string | null;
+  decision: OutreachFeedbackDecision;
+  originalSubject: string;
+  originalBody: string;
+  editedSubject: string | null;
+  editedBody: string | null;
+  rejectionReason: string | null;
   createdAt: string;
 };
 
@@ -341,6 +404,15 @@ export type QueueItemDetail = {
   findings: (ResearchFinding & { sourceUrl: string })[];
 };
 
+/** Opportunity detail page (funnel / deep link) — QueueItemDetail plus CRM context. */
+export type OpportunityPageDetail = QueueItemDetail & {
+  contacts: Contact[];
+  emailSentAt: string | null;
+  emailRepliedAt: string | null;
+  /** Distinct useful links: org site + conference/event research pages. */
+  links: { url: string; label: string; kind: "organization" | "conference" | "research" }[];
+};
+
 /** One card's worth of data for /admin/sales/funnel — deliberately reuses the same
  * queue-item→draft→contact join shape as QueueItemDetail (via assembleFunnelItems in
  * lib/sales/db/assemble.ts) rather than inventing a new one. */
@@ -352,4 +424,6 @@ export type FunnelItemDetail = {
   /** approval_queue_items.decided_at — "when this was approved/launched," used as the "days
    * since" anchor if stageUpdatedAt is ever unexpectedly null. */
   approvedAt: string | null;
+  /** True when nextFollowUpAt is due and there's been no inbound since last outbound. */
+  needsNudge: boolean;
 };

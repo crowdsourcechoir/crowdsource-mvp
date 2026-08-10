@@ -1,5 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
-import type { ApprovalQueueItem, ApprovalQueueItemStatus } from "../types";
+import type { ApprovalQueueItem, ApprovalQueueItemKind, ApprovalQueueItemStatus } from "../types";
 
 function rowToQueueItem(row: Record<string, unknown>): ApprovalQueueItem {
   return {
@@ -7,6 +7,7 @@ function rowToQueueItem(row: Record<string, unknown>): ApprovalQueueItem {
     opportunityId: row.opportunity_id as string,
     outreachDraftId: (row.outreach_draft_id as string | null) ?? null,
     prospectScoreId: (row.prospect_score_id as string | null) ?? null,
+    kind: ((row.kind as ApprovalQueueItemKind | null) ?? "initial") as ApprovalQueueItemKind,
     duplicateWarning: (row.duplicate_warning as boolean) ?? false,
     status: (row.status as ApprovalQueueItemStatus) ?? "pending",
     decisionNotes: (row.decision_notes as string | null) ?? null,
@@ -17,6 +18,7 @@ function rowToQueueItem(row: Record<string, unknown>): ApprovalQueueItem {
   };
 }
 
+/** Upserts the *initial* pipeline queue row for an opportunity (partial unique on kind=initial). */
 export async function createOrUpdateQueueItem(input: {
   opportunityId: string;
   outreachDraftId?: string | null;
@@ -24,21 +26,72 @@ export async function createOrUpdateQueueItem(input: {
   duplicateWarning?: boolean;
 }): Promise<ApprovalQueueItem> {
   const db = requireSupabaseAdmin();
-  const { data, error } = await db
-    .from("approval_queue_items")
-    .upsert(
-      {
-        opportunity_id: input.opportunityId,
+  const existing = await getInitialQueueItemByOpportunity(input.opportunityId);
+  if (existing) {
+    // Only refresh draft/score pointers while still pending — never clobber a human decision.
+    if (existing.status !== "pending") return existing;
+    const { data, error } = await db
+      .from("approval_queue_items")
+      .update({
         outreach_draft_id: input.outreachDraftId ?? null,
         prospect_score_id: input.prospectScoreId ?? null,
         duplicate_warning: input.duplicateWarning ?? false,
-      },
-      { onConflict: "opportunity_id" }
-    )
+        kind: "initial",
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return rowToQueueItem(data);
+  }
+
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .insert({
+      opportunity_id: input.opportunityId,
+      outreach_draft_id: input.outreachDraftId ?? null,
+      prospect_score_id: input.prospectScoreId ?? null,
+      duplicate_warning: input.duplicateWarning ?? false,
+      kind: "initial",
+    })
     .select()
     .single();
   if (error) throw new Error(error.message);
   return rowToQueueItem(data);
+}
+
+export async function createNudgeQueueItem(input: {
+  opportunityId: string;
+  outreachDraftId: string;
+  prospectScoreId?: string | null;
+}): Promise<ApprovalQueueItem> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .insert({
+      opportunity_id: input.opportunityId,
+      outreach_draft_id: input.outreachDraftId,
+      prospect_score_id: input.prospectScoreId ?? null,
+      duplicate_warning: false,
+      kind: "nudge",
+      status: "pending",
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToQueueItem(data);
+}
+
+export async function hasPendingNudgeQueueItem(opportunityId: string): Promise<boolean> {
+  const db = requireSupabaseAdmin();
+  const { count, error } = await db
+    .from("approval_queue_items")
+    .select("id", { count: "exact", head: true })
+    .eq("opportunity_id", opportunityId)
+    .eq("kind", "nudge")
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
 }
 
 export async function listQueueItems(status?: ApprovalQueueItemStatus): Promise<ApprovalQueueItem[]> {
@@ -79,20 +132,46 @@ export async function getQueueItem(id: string): Promise<ApprovalQueueItem | null
   return data ? rowToQueueItem(data) : null;
 }
 
+export async function getInitialQueueItemByOpportunity(opportunityId: string): Promise<ApprovalQueueItem | null> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .select("*")
+    .eq("opportunity_id", opportunityId)
+    .eq("kind", "initial")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? rowToQueueItem(data) : null;
+}
+
+/** Prefer a pending item for this opportunity, else the most recently created row. */
 export async function getQueueItemByOpportunity(opportunityId: string): Promise<ApprovalQueueItem | null> {
   const db = requireSupabaseAdmin();
-  const { data, error } = await db.from("approval_queue_items").select("*").eq("opportunity_id", opportunityId).maybeSingle();
+  const { data: pending, error: pendingErr } = await db
+    .from("approval_queue_items")
+    .select("*")
+    .eq("opportunity_id", opportunityId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (pendingErr) throw new Error(pendingErr.message);
+  if (pending) return rowToQueueItem(pending);
+
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .select("*")
+    .eq("opportunity_id", opportunityId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   return data ? rowToQueueItem(data) : null;
 }
 
 /**
  * Removes a stale, never-decided queue row for an opportunity that a re-run has now determined
- * is NOT actually contact-ready (see stages/queue.ts's `contactIsQueueReady` gate) — e.g. it was
- * queued before that gate existed, or before a research-quality fix, on a contact that no longer
- * clears the bar. ONLY deletes if the item is still `pending` — a human decision (approved,
- * rejected, deferred, etc.) is never touched or erased by a pipeline re-run, full stop. Returns
- * whether anything was actually retracted, purely for observability in the stage's output.
+ * is NOT actually contact-ready. ONLY deletes pending *initial* items — nudge drafts are left alone.
  */
 export async function retractPendingQueueItemForOpportunity(opportunityId: string): Promise<boolean> {
   const db = requireSupabaseAdmin();
@@ -101,6 +180,7 @@ export async function retractPendingQueueItemForOpportunity(opportunityId: strin
     .delete()
     .eq("opportunity_id", opportunityId)
     .eq("status", "pending")
+    .eq("kind", "initial")
     .select("id");
   if (error) throw new Error(error.message);
   return (data ?? []).length > 0;
