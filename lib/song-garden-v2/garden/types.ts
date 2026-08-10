@@ -40,6 +40,15 @@ export type ZoneDef = {
   y: number;
   /** Short hint shown on the public map */
   blurb?: string | null;
+  /**
+   * Fan-facing prompt for this zone (chant idea, check-in, etc.).
+   * The map interaction surface shows this when the zone is selected.
+   */
+  prompt?: string | null;
+  /** Primary CTA label, e.g. "Leave a mark" / "Share your chant" */
+  ctaLabel?: string | null;
+  /** Placeholder for the inline response field */
+  inputPlaceholder?: string | null;
 };
 
 export type SponsorDef = {
@@ -313,6 +322,9 @@ function normalizeZones(zones: ZoneDef[] | null | undefined): ZoneDef[] {
       x: clamp01(Number(z.x) || 0.5),
       y: clamp01(Number(z.y) || 0.5),
       blurb: z.blurb?.trim() || null,
+      prompt: z.prompt?.trim() || null,
+      ctaLabel: z.ctaLabel?.trim() || null,
+      inputPlaceholder: z.inputPlaceholder?.trim() || null,
     }))
     .filter((z) => z.key);
 }
