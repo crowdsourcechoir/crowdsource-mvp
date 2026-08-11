@@ -53,7 +53,7 @@ async function runwayFetch(path: string, init: RequestInit = {}): Promise<Respon
 
   if (!res.ok) {
     let bodyText = "";
-    let parsed: { error?: string; message?: string } | null = null;
+    let parsed: { error?: string; message?: string; issues?: unknown } | null = null;
     try {
       bodyText = await res.text();
       parsed = bodyText ? JSON.parse(bodyText) : null;
@@ -62,7 +62,11 @@ async function runwayFetch(path: string, init: RequestInit = {}): Promise<Respon
     }
     // eslint-disable-next-line no-console
     console.error(`[runway] ${res.status} ${path} ->`, bodyText);
-    const message = parsed?.error || parsed?.message || bodyText || `Runway request failed (${res.status}).`;
+    const message =
+      parsed?.error ||
+      parsed?.message ||
+      bodyText ||
+      `Runway request failed (${res.status}).`;
     const lower = message.toLowerCase();
 
     if (res.status === 401 || res.status === 403) {
@@ -77,7 +81,13 @@ async function runwayFetch(path: string, init: RequestInit = {}): Promise<Respon
     if (res.status === 429) {
       throw new RunwayError("rate_limited", "Runway rate-limited this request — wait a moment and try again.");
     }
-    throw new RunwayError("api_error", message);
+    const detail =
+      parsed?.issues != null
+        ? ` ${typeof parsed.issues === "string" ? parsed.issues : JSON.stringify(parsed.issues)}`
+        : bodyText && bodyText !== message
+          ? ` ${bodyText.slice(0, 400)}`
+          : "";
+    throw new RunwayError("api_error", `${message}${detail}`.trim());
   }
 
   return res;

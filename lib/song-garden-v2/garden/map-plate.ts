@@ -49,6 +49,27 @@ export function absoluteMediaUrl(url: string): string {
   return trimmed;
 }
 
+/**
+ * Fetch an image and return a data URI so Runway doesn't need to crawl our CDN.
+ * Falls back to the absolute URL if download fails.
+ */
+async function runwayImageUri(url: string): Promise<string> {
+  const abs = absoluteMediaUrl(url);
+  if (abs.startsWith("data:") || abs.startsWith("runway://")) return abs;
+  try {
+    const res = await fetch(abs);
+    if (!res.ok) return abs;
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    if (!contentType.startsWith("image/")) return abs;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    // Keep payloads reasonable for Runway request bodies.
+    if (bytes.length > 4_500_000) return abs;
+    return `data:${contentType};base64,${bytes.toString("base64")}`;
+  } catch {
+    return abs;
+  }
+}
+
 const IMAGE_SUFFIX =
   "Premium cinematic wide stadium participation map concept art, top-down or elevated schematic of a sports venue and surrounding fan zones, tack-sharp focus, high detail, crisp textures, no soft focus, no heavy fog, no people in foreground, no readable text or logos, no seat numbers; follow the vibe prompt color palette.";
 
