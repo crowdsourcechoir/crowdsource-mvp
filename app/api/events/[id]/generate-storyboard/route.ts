@@ -162,7 +162,7 @@ async function generateOneFrame(opts: {
     promptText: buildMotionPrompt(vibePrompt, frameIndex, frameCount),
     model: "gen4_turbo",
     duration: VIDEO_DURATION_SEC,
-    ratio: "1920:1080",
+    ratio: "1280:768",
   });
   const videoFilename = `${eventId}-frame-${frameIndex + 1}-${Date.now()}.mp4`;
   const videoUrl = await persistGeneratedMedia(runwayVideoUrl, videoFilename, "video/mp4");

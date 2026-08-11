@@ -152,7 +152,8 @@ async function startImageToVideo(opts: ImageToVideoOptions): Promise<string> {
       model: opts.model ?? "gen4_turbo",
       promptImage: opts.promptImage,
       promptText: opts.promptText,
-      ratio: opts.ratio ?? "1920:1080",
+      // gen4_turbo (API 2024-11-06) accepts pixel ratios like 1280:768, not 1920:1080.
+      ratio: opts.ratio ?? "1280:768",
       duration: opts.duration ?? 10,
     }),
   });

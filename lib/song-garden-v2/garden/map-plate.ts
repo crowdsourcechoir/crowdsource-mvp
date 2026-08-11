@@ -327,7 +327,7 @@ export async function generateMapPlateMotion(
     promptText,
     model: "gen4_turbo",
     duration: VIDEO_DURATION_SEC,
-    ratio: "1920:1080",
+    ratio: "1280:768",
   });
   const videoFilename = `garden-${garden.id}-map-ambient-${Date.now()}.mp4`;
   const ambientVideoUrl = await persistGeneratedMedia(
@@ -412,7 +412,7 @@ export async function generateMapPlateVariant(
       promptText: motionPrompt,
       model: "gen4_turbo",
       duration: VIDEO_DURATION_SEC,
-      ratio: "1920:1080",
+      ratio: "1280:768",
     });
     videoUrl = await persistGeneratedMedia(
       runwayVideoUrl,
