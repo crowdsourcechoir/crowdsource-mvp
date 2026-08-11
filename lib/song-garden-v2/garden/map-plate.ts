@@ -344,7 +344,7 @@ export async function generateMapPlateMotion(
   const promptText = `${condense(vibe)}. ${MOTION_SUFFIX}`.slice(0, 1000);
 
   const runwayVideoUrl = await generateVideoFromImage({
-    promptImage: absoluteMediaUrl(stillUrl),
+    promptImage: await runwayImageUri(stillUrl),
     promptText,
     model: "gen4_turbo",
     duration: VIDEO_DURATION_SEC,
@@ -429,7 +429,7 @@ export async function generateMapPlateVariant(
       1000
     );
     const runwayVideoUrl = await generateVideoFromImage({
-      promptImage: absoluteMediaUrl(stillUrl),
+      promptImage: await runwayImageUri(stillUrl),
       promptText: motionPrompt,
       model: "gen4_turbo",
       duration: VIDEO_DURATION_SEC,
