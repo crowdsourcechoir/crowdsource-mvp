@@ -133,14 +133,30 @@ function levenshteinRatio(a: string, b: string): number {
 export function formatFeedbackFewShots(feedback: OutreachFeedback[]): string {
   if (feedback.length === 0) return "";
   const blocks = feedback.slice(0, 3).map((f, i) => {
+    const editedSubject = f.editedSubject ?? f.originalSubject;
+    const editedBody = f.editedBody ?? f.originalBody;
+    const lessons: string[] = [];
+    if (/educator/i.test(f.originalBody) && /higher education leader/i.test(editedBody)) {
+      lessons.push("Prefer specific audience (higher education leaders) over generic educators.");
+    }
+    if (/partnered with organizations like yours|worked with (groups|organizations) like yours/i.test(f.originalBody)) {
+      lessons.push("Do not invent past partnerships / 'organizations like yours' social proof.");
+    }
+    if (/music city|nashville/i.test(editedBody) && !/music city|nashville/i.test(f.originalBody.slice(0, 400))) {
+      lessons.push("Lead with the distinctive place/theme hook (e.g. Music City) instead of burying it.");
+    }
+    if (/building (stronger )?communities/i.test(editedBody)) {
+      lessons.push("Connect fit to the audience's actual work (e.g. building communities).");
+    }
+    const lessonBlock = lessons.length > 0 ? `\nWHAT IMPROVED:\n- ${lessons.join("\n- ")}` : "";
     return `--- ACCEPTED EDIT ${i + 1} ---
 ORIGINAL SUBJECT: ${f.originalSubject}
-EDITED SUBJECT: ${f.editedSubject ?? f.originalSubject}
+EDITED SUBJECT: ${editedSubject}
 ORIGINAL BODY:
 ${f.originalBody}
 
-EDITED BODY:
-${f.editedBody ?? f.originalBody}`;
+EDITED BODY (prefer this voice/structure):
+${editedBody}${lessonBlock}`;
   });
-  return `The operator has recently edited drafts like these — prefer the EDITED voice/structure when filling fields:\n\n${blocks.join("\n\n")}`;
+  return `The operator has recently edited drafts like these — prefer the EDITED voice/structure and the WHAT IMPROVED notes when filling fields:\n\n${blocks.join("\n\n")}`;
 }

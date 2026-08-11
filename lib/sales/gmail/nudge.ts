@@ -10,6 +10,7 @@ import { createOutreachDraft, listDraftsForOpportunity } from "../db/outreach";
 import { createNudgeQueueItem, hasPendingNudgeQueueItem } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
 import { MAX_NUDGES_PER_OPPORTUNITY } from "./constants";
+import { OUTREACH_STYLE_LESSONS } from "../outreach/styleLessons";
 
 const NudgeDraftSchema = z.object({
   subject: z.string(),
@@ -81,7 +82,7 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
       const result = await callStructured({
         schema: NudgeDraftSchema,
         schemaName: "nudge_draft",
-        systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`,
+        systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. Never invent past partnerships. Prefer specific leadership audiences over vague sector labels. Lead with the strongest remaining hook if one exists.\n\n${OUTREACH_STYLE_LESSONS}\n\n${fewShots}`,
         userContent: JSON.stringify({
           contactFirstName: firstName,
           organizationName: organization.name,
