@@ -12,6 +12,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { getOrCreateSonggardenDeviceId } from "@/data/songgardenClient";
 import type { ContributionKind, GardenSnapshot } from "@/lib/song-garden-v2/garden/types";
+import { pointInZoneHit, zoneHitRegion } from "@/lib/song-garden-v2/garden/types";
 import { worldConfigFromBrand } from "@/lib/song-garden-v2/garden/snapshot";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
 import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
@@ -253,6 +254,44 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     }
   }
 
+  const clientToMapPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = surfaceRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      const vx = clientX - rect.left;
+      const vy = clientY - rect.top;
+      const cam = cameraRef.current;
+      // Inverse of: screen = center + (mapPoint - focus) * mapSize * scale
+      const mapX = cam.focusX + (vx - rect.width / 2) / (mapSize.w * cam.scale);
+      const mapY = cam.focusY + (vy - rect.height / 2) / (mapSize.h * cam.scale);
+      return { x: mapX, y: mapY };
+    },
+    [mapSize.w, mapSize.h]
+  );
+
+  const zoneAtPoint = useCallback(
+    (px: number, py: number) => {
+      // Prefer smallest containing region so nested/overlapping areas resolve cleanly.
+      const hits = zones.filter((z) => pointInZoneHit(px, py, z));
+      if (!hits.length) return null;
+      hits.sort((a, b) => {
+        const ha = zoneHitRegion(a);
+        const hb = zoneHitRegion(b);
+        const area = (h: ReturnType<typeof zoneHitRegion>, z: { x: number; y: number }) => {
+          if (h.type === "circle") return Math.PI * h.r * h.r;
+          // rough polygon bbox area
+          const xs = h.points.map((p) => p.x);
+          const ys = h.points.map((p) => p.y);
+          return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+        };
+        return area(ha, a) - area(hb, b);
+      });
+      return hits[0];
+    },
+    [zones]
+  );
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     // Ignore multi-touch / UI chrome; only primary pointer on the map surface.
     if (e.button !== 0 && e.pointerType === "mouse") return;
@@ -309,6 +348,15 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       stepZone(dx < 0 ? 1 : -1);
       dragRef.current = null;
       return;
+    }
+
+    // Tap the painted zone (not the bubble) to enter it.
+    if (!d.moved) {
+      const p = clientToMapPoint(d.lastX, d.lastY);
+      if (p) {
+        const hit = zoneAtPoint(p.x, p.y);
+        if (hit) selectZone(hit.key);
+      }
     }
 
     dragRef.current = null;
@@ -393,38 +441,63 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   }}
                 />
 
+                {/* Clickable painted regions (fans tap the zone, not the bubble) */}
+                <svg
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                  viewBox="0 0 1 1"
+                  preserveAspectRatio="none"
+                >
+                  {zones.map((z) => {
+                    const hit = zoneHitRegion(z);
+                    const active = selectedZone === z.key;
+                    const fill = active ? `${world.accentColor}44` : "rgba(255,255,255,0.06)";
+                    const stroke = active ? world.accentColor : "rgba(255,255,255,0.22)";
+                    if (hit.type === "circle") {
+                      return (
+                        <circle
+                          key={z.key}
+                          cx={z.x}
+                          cy={z.y}
+                          r={hit.r}
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={0.004}
+                        />
+                      );
+                    }
+                    const d =
+                      hit.points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ") +
+                      " Z";
+                    return (
+                      <path
+                        key={z.key}
+                        d={d}
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={0.004}
+                      />
+                    );
+                  })}
+                </svg>
+
+                {/* Labels only — not the hit target */}
                 {zones.map((z) => {
                   const active = selectedZone === z.key;
-                  const glow = Math.round((z.runtime?.energy ?? 0) * 100);
                   return (
-                    <button
+                    <div
                       key={z.key}
-                      type="button"
-                      onPointerDown={(e) => {
-                        // Let a clear tap on a pin select it; don't start map drag from the pin.
-                        e.stopPropagation();
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectZone(z.key);
-                      }}
-                      className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2.5 py-1.5 text-left text-[11px] font-medium shadow-lg backdrop-blur-sm"
+                      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1 text-[10px] font-medium shadow-lg backdrop-blur-sm sm:text-[11px]"
                       style={{
                         left: `${z.x * 100}%`,
                         top: `${z.y * 100}%`,
-                        borderColor: active ? world.accentColor : "rgba(255,255,255,0.4)",
-                        background: active ? `${world.accentColor}cc` : "rgba(0,0,0,0.75)",
+                        borderColor: active ? world.accentColor : "rgba(255,255,255,0.35)",
+                        background: active ? `${world.accentColor}cc` : "rgba(0,0,0,0.65)",
                         color: active ? "#0a0a0a" : "#fff",
-                        opacity: zoomed && !active ? 0.55 : 1,
-                        boxShadow: active
-                          ? `0 0 22px ${world.accentColor}`
-                          : glow > 5
-                            ? `0 0 ${8 + glow / 8}px ${world.accentColor}66`
-                            : "0 2px 10px rgba(0,0,0,0.45)",
+                        opacity: zoomed && !active ? 0.35 : 1,
                       }}
                     >
                       <span className="block whitespace-nowrap">{z.label}</span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -485,7 +558,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 exit={{ opacity: 0 }}
                 className="pointer-events-none absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-20 px-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-white/75 sm:text-[11px]"
               >
-                Drag to explore · tap a zone · swipe for next
+                Drag to explore · tap a zone area · swipe for next
               </motion.p>
             ) : null}
           </AnimatePresence>
@@ -503,13 +576,23 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
               >
                 <div className="mx-auto max-w-lg rounded-2xl border border-white/20 bg-black/70 p-3.5 shadow-2xl backdrop-blur-md sm:p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{selectedMeta.label}</p>
-                      {selectedMeta.sponsor ? (
-                        <p className="mt-0.5 text-[11px] text-white/55">
-                          {selectedMeta.sponsor.credit || selectedMeta.sponsor.name}
-                        </p>
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      {selectedMeta.logoUrl || selectedMeta.sponsor?.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={selectedMeta.logoUrl || selectedMeta.sponsor?.logoUrl || ""}
+                          alt=""
+                          className="mt-0.5 h-9 w-9 shrink-0 rounded-md border border-white/15 bg-white/5 object-contain p-1"
+                        />
                       ) : null}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{selectedMeta.label}</p>
+                        {selectedMeta.sponsor ? (
+                          <p className="mt-0.5 text-[11px] text-white/55">
+                            {selectedMeta.sponsor.credit || selectedMeta.sponsor.name}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <button
                       type="button"

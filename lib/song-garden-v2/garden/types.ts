@@ -30,14 +30,30 @@ export type BrandKit = {
   sponsors: SponsorDef[];
 };
 
+export type ZoneHitPoint = { x: number; y: number };
+
+/**
+ * Clickable area on the map (the painted zone), not the label bubble.
+ * Coordinates are 0..1 in map image space (same as x/y).
+ */
+export type ZoneHitRegion =
+  | { type: "circle"; /** Radius in map-normalized units (0..~0.5) */ r: number }
+  | { type: "polygon"; points: ZoneHitPoint[] };
+
 export type ZoneDef = {
   key: string;
   label: string;
   /** Optional sponsor owning/enabling this zone */
   sponsorKey?: string | null;
-  /** 0..1 position on schematic map */
+  /** Label anchor 0..1 on the map */
   x: number;
   y: number;
+  /** Optional zone / partner mark shown in the engage sheet */
+  logoUrl?: string | null;
+  /**
+   * Clickable painted region. If omitted, a small circle around x/y is used.
+   */
+  hit?: ZoneHitRegion | null;
   /** Short hint shown on the public map */
   blurb?: string | null;
   /**
@@ -321,12 +337,63 @@ function normalizeZones(zones: ZoneDef[] | null | undefined): ZoneDef[] {
       sponsorKey: z.sponsorKey?.trim() || null,
       x: clamp01(Number(z.x) || 0.5),
       y: clamp01(Number(z.y) || 0.5),
+      logoUrl: z.logoUrl?.trim() || null,
+      hit: normalizeHit(z.hit),
       blurb: z.blurb?.trim() || null,
       prompt: z.prompt?.trim() || null,
       ctaLabel: z.ctaLabel?.trim() || null,
       inputPlaceholder: z.inputPlaceholder?.trim() || null,
     }))
     .filter((z) => z.key);
+}
+
+function normalizeHit(hit: ZoneHitRegion | null | undefined): ZoneHitRegion | null {
+  if (!hit || typeof hit !== "object") return null;
+  if (hit.type === "circle") {
+    const r = Number(hit.r);
+    if (!Number.isFinite(r) || r <= 0) return null;
+    return { type: "circle", r: Math.max(0.02, Math.min(0.45, r)) };
+  }
+  if (hit.type === "polygon" && Array.isArray(hit.points)) {
+    const points = hit.points
+      .filter((p) => p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y)))
+      .map((p) => ({ x: clamp01(Number(p.x)), y: clamp01(Number(p.y)) }));
+    if (points.length < 3) return null;
+    return { type: "polygon", points };
+  }
+  return null;
+}
+
+/** Effective hit region for interaction — authored hit or fallback circle at the label. */
+export function zoneHitRegion(zone: Pick<ZoneDef, "x" | "y" | "hit">): ZoneHitRegion {
+  if (zone.hit) return zone.hit;
+  return { type: "circle", r: 0.07 };
+}
+
+export function pointInZoneHit(
+  px: number,
+  py: number,
+  zone: Pick<ZoneDef, "x" | "y" | "hit">
+): boolean {
+  const hit = zoneHitRegion(zone);
+  if (hit.type === "circle") {
+    const dx = px - zone.x;
+    const dy = py - zone.y;
+    return dx * dx + dy * dy <= hit.r * hit.r;
+  }
+  // Ray casting
+  const pts = hit.points;
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x;
+    const yi = pts[i].y;
+    const xj = pts[j].x;
+    const yj = pts[j].y;
+    const intersect =
+      yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
 
 function normalizeSponsors(sponsors: SponsorDef[] | null | undefined): SponsorDef[] {
