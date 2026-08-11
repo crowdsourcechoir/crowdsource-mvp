@@ -71,23 +71,24 @@ async function runwayImageUri(url: string): Promise<string> {
 }
 
 const IMAGE_SUFFIX =
-  "Stylized game-world stadium map, elevated top-down view matching the venue reference, tack-sharp focus, crisp readable forms, no soft focus, no heavy fog, no photoreal photography, no people in foreground, no readable text or logos, no seat numbers; premium Crowdsource Fans Song Garden art direction.";
+  "Flat top-down map view matching @venue camera angle, community sports pitch scale, open sidelines, tack-sharp stylized game-world art, no soft focus, no heavy fog, no photoreal photo, no people in foreground, no readable text or logos, no seat numbers.";
 
 const MOTION_SUFFIX =
   "Subtle ambient motion only, slow drifting light and soft zone glow pulses, camera locked in place, seamless looping atmosphere, keep the scene sharp and clear, no soft focus, no heavy haze or blur, no people walking into frame, no text or logos.";
 
+/** Hard anti-bias: models love inventing MLS bowls when they hear “stadium”. */
 const TWIN_LOCK =
-  "DIGITAL TWIN LOCK: This must be clearly the same stadium as @venue — same pitch orientation and proportions, same stand and amenity silhouettes, same surrounding context (parking, trees, roads). Do not invent a different or generic stadium. Restyle into a luminous game-world / digital-twin map: stylized materials, matchday energy lighting, painted fan zones — not a photo, not photoreal CGI.";
+  "DIGITAL TWIN LOCK from @venue: copy the REAL ground’s footprint — same top-down camera, same pitch size and orientation, same open community/college field character, same parking, trees, tents, low buildings, and sparse sideline seating. FORBIDDEN: stadium bowl, multi-tier grandstands, enclosed arena, thousands of seats, corner floodlight towers as a pro bowl, inventing a bigger venue. Restyle materials and night/game energy only — luminous Song Garden digital twin, not a photo, not a generic pro stadium.";
 
 const VARIANT_MOOD: Record<Exclude<MapPlateVariantKey, "default">, string> = {
   kickoff:
     "Kickoff energy — floodlights rising, pitch freshly lit, anticipation, cooler blue hour warming into match light",
-  goal: "Goal roar — explosive chartreuse and white light bloom from the stands, victorious surge, electric night",
+  goal: "Goal roar — explosive chartreuse and white light bloom along the real sidelines, victorious surge, electric night",
   halftime:
-    "Halftime breath — softer sidelight, warm spill from concessions, quieter mid-match lull, still alive",
+    "Halftime breath — softer sidelight, warm spill from concessions tents, quieter mid-match lull, still alive",
   rivalry:
     "Rivalry night — higher contrast, sharper accents, tense charged atmosphere, deeper shadows, fierce energy",
-  night: "Night match — deep navy sky, bright pitch island, bioluminescent zone glows, cinematic darkness",
+  night: "Night match — deep navy sky, bright pitch island, bioluminescent zone glows on the real footprint, cinematic darkness",
 };
 
 function condense(text: string, max = MAX_VIBE_CHARS): string {
@@ -152,6 +153,12 @@ export function buildMapPlatePrompt(opts: {
         "Use @layout only for fan-zone glow placement on top of @venue’s real geometry."
       );
     }
+    const extra = tags.filter((t) => t !== "layout" && t !== "venue");
+    if (extra.length > 0) {
+      refParts.push(
+        `Also match structure from ${extra.map((t) => `@${t}`).join(", ")} (additional real aerials of the same pitch).`
+      );
+    }
   } else {
     if (tags.includes("layout")) {
       refParts.push(
@@ -179,7 +186,7 @@ export function buildMapPlatePrompt(opts: {
     : `Matchday energy for ${opts.brand.title}, deep ${opts.brand.primaryColor} night with ${opts.brand.accentColor} accents.`;
 
   const twinLead = twin
-    ? `Stylized digital twin of ${opts.brand.title}'s real home ground — game environment inspired by the actual stadium.`
+    ? `Stylized digital twin of ${opts.brand.title}'s real community pitch — game map of THIS open field, not a pro arena.`
     : `Crowdsource Fans Song Garden season map for ${opts.brand.title}.`;
 
   return `${vibe}. ${twinLead} ${zoneClause} ${notes} ${layoutClause} ${refParts.join(" ")} ${IMAGE_SUFFIX}`
@@ -190,7 +197,8 @@ export function buildMapPlatePrompt(opts: {
 
 /**
  * Build Runway reference set.
- * Twin mode: @venue (first photo) first, then @layout, then extra refs.
+ * Twin mode: @venue only (or venue + one extra photo). Skip the abstract layout
+ * schematic PNG — it draws a generic pitch and pulls the model toward invented bowls.
  * Invent mode: @layout first (if guided), then place refs.
  */
 export function buildMapPlateReferences(opts: {
@@ -209,13 +217,12 @@ export function buildMapPlateReferences(opts: {
   }
 
   if (opts.twinMode && urls[0]) {
+    // Venue photo dominates. Optional second real aerial can reinforce structure.
     push(urls[0], "venue");
-    if (opts.layoutGuided && opts.layoutSchematicUrl) {
-      push(opts.layoutSchematicUrl, "layout");
-    }
     for (let i = 1; i < urls.length; i += 1) {
       push(urls[i], `ref${i + 1}`);
     }
+    // Zone anchors stay in the text prompt — do not send schematic PNG in twin mode.
   } else {
     if (opts.layoutGuided && opts.layoutSchematicUrl) {
       push(opts.layoutSchematicUrl, "layout");

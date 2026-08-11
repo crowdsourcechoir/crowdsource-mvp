@@ -55,7 +55,8 @@ async function main() {
 
   assert.ok(twinPrompt.includes("DIGITAL TWIN") || twinPrompt.includes("digital twin"), "twin lock");
   assert.ok(twinPrompt.includes("@venue"), "prompt references venue");
-  assert.ok(twinPrompt.includes("west parking") || twinPrompt.includes("Venue landmarks"), "venue notes");
+  assert.ok(twinPrompt.toLowerCase().includes("bowl") || twinPrompt.includes("FORBIDDEN"), "anti-bowl");
+  assert.ok(twinPrompt.includes("west parking") || twinPrompt.includes("Venue landmarks") || twinPrompt.includes("parking"), "venue notes");
   assert.ok(!twinPrompt.toLowerCase().includes("invent a new song garden map plate rather than copying"), "must not invent-away the venue");
   assert.ok(twinPrompt.length <= 1000, "prompt fits Runway limit");
 
@@ -68,15 +69,24 @@ async function main() {
   });
   assert.ok(inventPrompt.includes("fantasy") || inventPrompt.includes("Ballard"), "invent mode still works");
 
-  const refs = buildMapPlateReferences({
-    referenceUrls: ["/fans/ballard-fc/interbay-stadium-map.jpg", "https://example.com/extra.jpg"],
+  const twinRefs = buildMapPlateReferences({
+    referenceUrls: ["/fans/ballard-fc/interbay-stadium-map.jpg", "https://example.com/earth.jpg"],
     layoutSchematicUrl: "https://example.com/layout.png",
     layoutGuided: true,
     twinMode: true,
   });
-  assert.equal(refs[0].tag, "venue", "twin puts venue first");
-  assert.equal(refs[1].tag, "layout", "layout second in twin");
-  assert.ok(refs.length <= 3);
+  assert.equal(twinRefs[0].tag, "venue", "twin puts venue first");
+  assert.ok(!twinRefs.some((r) => r.tag === "layout"), "twin skips schematic PNG");
+  assert.equal(twinRefs[1].tag, "ref2", "second aerial allowed");
+  assert.ok(twinRefs.length <= 3);
+
+  const inventRefs = buildMapPlateReferences({
+    referenceUrls: ["/fans/ballard-fc/interbay-stadium-map.jpg"],
+    layoutSchematicUrl: "https://example.com/layout.png",
+    layoutGuided: true,
+    twinMode: false,
+  });
+  assert.equal(inventRefs[0].tag, "layout", "invent mode can use layout first");
 
   assert.equal(
     absoluteMediaUrl("/fans/ballard-fc/x.jpg").endsWith("/fans/ballard-fc/x.jpg"),

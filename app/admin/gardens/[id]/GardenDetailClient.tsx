@@ -937,7 +937,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               onChange={(e) => setMapTwinMode(e.target.checked)}
               className="rounded border-gray-600"
             />
-            Digital twin — lock real stadium geometry from the first reference (stylized, not photoreal)
+            Digital twin — lock THIS community pitch from the first aerial (no inventing a stadium bowl)
           </label>
 
           <label className="flex items-center gap-2 text-xs text-gray-300">
@@ -947,13 +947,14 @@ export default function GardenDetailClient({ gardenId }: Props) {
               onChange={(e) => setMapLayoutGuided(e.target.checked)}
               className="rounded border-gray-600"
             />
-            Layout-guided (M2) — zone schematic steers fan-zone placement
+            Layout-guided — zone positions in the prompt (twin mode skips the schematic image so it won’t invent a bowl)
           </label>
 
           <div className="space-y-2">
             <p className="text-xs text-gray-400">
-              Reference photos — <span className="text-gray-300">first URL is the venue lock</span>{" "}
-              (stadium aerial / map)
+              References — <span className="text-gray-300">#1 = venue lock</span> (real aerial /
+              map). Optional #2: clean Google Earth / satellite of the same pitch helps strip
+              graphic overlays.
             </p>
             {mapRefs.map((url, i) => (
               <div key={`ref-${i}`} className="flex gap-2">
