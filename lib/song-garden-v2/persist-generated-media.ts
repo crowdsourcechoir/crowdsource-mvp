@@ -62,6 +62,15 @@ export async function persistGeneratedMedia(
   return uploadBytes(bytes, `storyboards/${filename}`, contentType, "generated");
 }
 
+/** Persist raw bytes (e.g. layout schematic PNG) to the same media bucket. */
+export async function persistGeneratedBytes(
+  bytes: Buffer,
+  filename: string,
+  contentType: string
+): Promise<string> {
+  return uploadBytes(bytes, `storyboards/${filename}`, contentType, "generated");
+}
+
 const DATA_URL_RE = /^data:([^;]+);base64,([\s\S]+)$/;
 
 /**

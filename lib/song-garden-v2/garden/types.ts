@@ -13,10 +13,27 @@ export type ContributionKind =
   | "other";
 
 /**
- * Season map plate (M1): AI-generated still that fans see as the world map.
+ * Season map plate workflow (M1–M4):
+ * M1 pin still · M2 layout-guided gen · M3 ambient loop · M4 matchday variants.
  * Draft is preview-only until pinned; pin writes `heroArtworkUrl` and must not
  * clear zone hit regions.
  */
+export type MapPlateVariantKey =
+  | "default"
+  | "kickoff"
+  | "goal"
+  | "halftime"
+  | "rivalry"
+  | "night";
+
+export type MapPlateVariant = {
+  key: MapPlateVariantKey;
+  label: string;
+  stillUrl: string;
+  videoUrl: string | null;
+  generatedAt: string;
+};
+
 export type MapPlateMeta = {
   /** Place / atmosphere reference photos (Runway uses up to 3). */
   referenceUrls: string[];
@@ -29,6 +46,35 @@ export type MapPlateMeta = {
   pinnedAt: string | null;
   /** Human label, e.g. "2026 season". */
   seasonLabel: string;
+  /** M2 — last draft/pin used zone layout schematic as a Runway reference. */
+  layoutGuided: boolean;
+  /** M2 — persisted schematic used for the last layout-guided generate (optional). */
+  layoutSchematicUrl: string | null;
+  /** M3 — looping ambient video for the pinned (or active variant) plate. */
+  ambientVideoUrl: string | null;
+  ambientVideoGeneratedAt: string | null;
+  /** M4 — matchday still/video variants; hit regions stay on base plate space. */
+  variants: MapPlateVariant[];
+  /** M4 — which variant `/g` shows; null/default → heroArtworkUrl. */
+  activeVariantKey: MapPlateVariantKey | null;
+};
+
+export const MAP_PLATE_VARIANT_KEYS: MapPlateVariantKey[] = [
+  "default",
+  "kickoff",
+  "goal",
+  "halftime",
+  "rivalry",
+  "night",
+];
+
+export const MAP_PLATE_VARIANT_LABELS: Record<MapPlateVariantKey, string> = {
+  default: "Default season",
+  kickoff: "Kickoff",
+  goal: "Goal roar",
+  halftime: "Halftime",
+  rivalry: "Rivalry night",
+  night: "Night match",
 };
 
 export type BrandKit = {
@@ -337,6 +383,12 @@ export function defaultMapPlate(partial?: Partial<MapPlateMeta> | null): MapPlat
         .filter(Boolean)
         .slice(0, 8)
     : [];
+  const variants = normalizeMapPlateVariants(partial?.variants);
+  const activeRaw = partial?.activeVariantKey;
+  const activeVariantKey =
+    typeof activeRaw === "string" && MAP_PLATE_VARIANT_KEYS.includes(activeRaw as MapPlateVariantKey)
+      ? (activeRaw as MapPlateVariantKey)
+      : null;
   return {
     referenceUrls: refs,
     vibePrompt: typeof partial?.vibePrompt === "string" ? partial.vibePrompt.trim() : "",
@@ -344,7 +396,58 @@ export function defaultMapPlate(partial?: Partial<MapPlateMeta> | null): MapPlat
     draftGeneratedAt: partial?.draftGeneratedAt?.trim() || null,
     pinnedAt: partial?.pinnedAt?.trim() || null,
     seasonLabel: typeof partial?.seasonLabel === "string" ? partial.seasonLabel.trim() : "",
+    layoutGuided: Boolean(partial?.layoutGuided),
+    layoutSchematicUrl: partial?.layoutSchematicUrl?.trim() || null,
+    ambientVideoUrl: partial?.ambientVideoUrl?.trim() || null,
+    ambientVideoGeneratedAt: partial?.ambientVideoGeneratedAt?.trim() || null,
+    variants,
+    activeVariantKey,
   };
+}
+
+function normalizeMapPlateVariants(
+  variants: MapPlateVariant[] | null | undefined
+): MapPlateVariant[] {
+  if (!Array.isArray(variants)) return [];
+  const out: MapPlateVariant[] = [];
+  const seen = new Set<string>();
+  for (const v of variants) {
+    if (!v || typeof v !== "object") continue;
+    const key = v.key as MapPlateVariantKey;
+    if (!MAP_PLATE_VARIANT_KEYS.includes(key) || key === "default") continue;
+    if (seen.has(key)) continue;
+    const stillUrl = typeof v.stillUrl === "string" ? v.stillUrl.trim() : "";
+    if (!stillUrl) continue;
+    seen.add(key);
+    out.push({
+      key,
+      label: (typeof v.label === "string" && v.label.trim()) || MAP_PLATE_VARIANT_LABELS[key],
+      stillUrl,
+      videoUrl: v.videoUrl?.trim() || null,
+      generatedAt: v.generatedAt?.trim() || new Date(0).toISOString(),
+    });
+  }
+  return out;
+}
+
+/** Public map still URL: active matchday variant, else pinned hero. */
+export function resolveMapPlateStillUrl(brand: Pick<BrandKit, "heroArtworkUrl" | "mapPlate">): string | null {
+  const key = brand.mapPlate.activeVariantKey;
+  if (key && key !== "default") {
+    const variant = brand.mapPlate.variants.find((v) => v.key === key);
+    if (variant?.stillUrl) return variant.stillUrl;
+  }
+  return brand.heroArtworkUrl?.trim() || null;
+}
+
+/** Public map ambient video: active variant loop, else season ambient. */
+export function resolveMapPlateVideoUrl(brand: Pick<BrandKit, "mapPlate">): string | null {
+  const key = brand.mapPlate.activeVariantKey;
+  if (key && key !== "default") {
+    const variant = brand.mapPlate.variants.find((v) => v.key === key);
+    if (variant?.videoUrl) return variant.videoUrl;
+  }
+  return brand.mapPlate.ambientVideoUrl?.trim() || null;
 }
 
 export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {

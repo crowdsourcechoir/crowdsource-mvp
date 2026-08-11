@@ -12,11 +12,17 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { getOrCreateSonggardenDeviceId } from "@/data/songgardenClient";
 import type { ContributionKind, GardenSnapshot } from "@/lib/song-garden-v2/garden/types";
-import { pointInZoneHit, zoneHitRegion } from "@/lib/song-garden-v2/garden/types";
+import {
+  pointInZoneHit,
+  resolveMapPlateStillUrl,
+  resolveMapPlateVideoUrl,
+  zoneHitRegion,
+} from "@/lib/song-garden-v2/garden/types";
 import { worldConfigFromBrand } from "@/lib/song-garden-v2/garden/snapshot";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
 import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
 import WorldStage from "@/components/song-garden-v2/WorldStage";
+import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
 import CelebrationBurst from "@/components/song-garden-v2/CelebrationBurst";
 import { useCelebration } from "@/components/song-garden-v2/engine/useCelebration";
 import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
@@ -140,7 +146,8 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     return { ...merged, heroArtworkUrl: null };
   }, [fallbackEvent, snapshot]);
 
-  const mapArtworkUrl = snapshot?.brand.heroArtworkUrl ?? null;
+  const mapArtworkUrl = snapshot ? resolveMapPlateStillUrl(snapshot.brand) : null;
+  const mapVideoUrl = snapshot ? resolveMapPlateVideoUrl(snapshot.brand) : null;
 
   const growthNodes = useMemo((): WorldGrowthNode[] => {
     if (!snapshot) return [];
@@ -419,19 +426,44 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
               }}
             >
               <div className="relative h-full w-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={mapArtworkUrl}
-                  alt=""
-                  draggable={false}
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                      setMapAspect(img.naturalWidth / img.naturalHeight);
-                    }
-                  }}
-                />
+                {mapVideoUrl ? (
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                    <LoopingVideo
+                      src={mapVideoUrl}
+                      poster={mapArtworkUrl ?? undefined}
+                      veilColor={world.primaryColor}
+                    />
+                  </div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mapArtworkUrl}
+                    alt=""
+                    draggable={false}
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                        setMapAspect(img.naturalWidth / img.naturalHeight);
+                      }
+                    }}
+                  />
+                )}
+                {/* Hidden img keeps aspect ratio when video is active */}
+                {mapVideoUrl && mapArtworkUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mapArtworkUrl}
+                    alt=""
+                    className="pointer-events-none absolute h-0 w-0 opacity-0"
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                        setMapAspect(img.naturalWidth / img.naturalHeight);
+                      }
+                    }}
+                  />
+                ) : null}
                 <div
                   className="pointer-events-none absolute inset-0"
                   style={{
@@ -441,7 +473,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   }}
                 />
 
-                {/* Clickable painted regions (fans tap the zone, not the bubble) */}
+                {/* Clickable painted regions — energy glow scales with zone vitality (M3) */}
                 <svg
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   viewBox="0 0 1 1"
@@ -450,19 +482,44 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   {zones.map((z) => {
                     const hit = zoneHitRegion(z);
                     const active = selectedZone === z.key;
-                    const fill = active ? `${world.accentColor}44` : "rgba(255,255,255,0.06)";
-                    const stroke = active ? world.accentColor : "rgba(255,255,255,0.22)";
+                    const zoneEnergy = Math.min(1, Math.max(0, z.runtime?.energy ?? 0));
+                    const glow = 0.06 + zoneEnergy * 0.42;
+                    const fill = active
+                      ? `${world.accentColor}66`
+                      : `${world.accentColor}${Math.round(glow * 255)
+                          .toString(16)
+                          .padStart(2, "0")}`;
+                    const stroke = active
+                      ? world.accentColor
+                      : zoneEnergy > 0.08
+                        ? `${world.accentColor}99`
+                        : "rgba(255,255,255,0.22)";
+                    const pulseR =
+                      hit.type === "circle" ? hit.r * (1 + zoneEnergy * 0.12) : null;
                     if (hit.type === "circle") {
                       return (
-                        <circle
-                          key={z.key}
-                          cx={z.x}
-                          cy={z.y}
-                          r={hit.r}
-                          fill={fill}
-                          stroke={stroke}
-                          strokeWidth={0.004}
-                        />
+                        <g key={z.key}>
+                          {zoneEnergy > 0.05 ? (
+                            <circle
+                              cx={z.x}
+                              cy={z.y}
+                              r={(pulseR ?? hit.r) * 1.35}
+                              fill={`${world.accentColor}14`}
+                              className="origin-center"
+                              style={{
+                                animation: `garden-zone-pulse ${2.4 - zoneEnergy}s ease-in-out infinite`,
+                              }}
+                            />
+                          ) : null}
+                          <circle
+                            cx={z.x}
+                            cy={z.y}
+                            r={pulseR ?? hit.r}
+                            fill={fill}
+                            stroke={stroke}
+                            strokeWidth={0.004}
+                          />
+                        </g>
                       );
                     }
                     const d =

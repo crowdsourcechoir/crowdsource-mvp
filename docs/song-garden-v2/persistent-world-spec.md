@@ -135,8 +135,9 @@ type BrandKit = {
   zones?: ZoneDef[];         // see §11
   sponsors?: SponsorDef[];
   /**
-   * M1 — Season map plate workflow. Generate drafts via Runway; pin writes
-   * `heroArtworkUrl` once for the season. Regenerating drafts must not clear zones/hits.
+   * M1–M4 — Season map plate workflow.
+   * M1 pin still · M2 layout-guided gen · M3 ambient loop · M4 matchday variants.
+   * Regenerating drafts must not clear zones/hits.
    */
   mapPlate?: MapPlateMeta;
 };

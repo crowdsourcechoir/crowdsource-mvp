@@ -31,6 +31,12 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
       draftGeneratedAt: null,
       pinnedAt: null,
       seasonLabel: "2026 season",
+      layoutGuided: true,
+      layoutSchematicUrl: null,
+      ambientVideoUrl: null,
+      ambientVideoGeneratedAt: null,
+      variants: [],
+      activeVariantKey: null,
     },
     sponsors: [
       {

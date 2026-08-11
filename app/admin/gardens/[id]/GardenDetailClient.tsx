@@ -10,11 +10,17 @@ import type {
   GardenEdition,
   GardenMutationRecord,
   GardenOrder,
+  MapPlateVariant,
+  MapPlateVariantKey,
   MerchFormat,
   SponsorDef,
   WorldState,
   ZoneDef,
   ZoneHitRegion,
+} from "@/lib/song-garden-v2/garden/types";
+import {
+  MAP_PLATE_VARIANT_KEYS,
+  MAP_PLATE_VARIANT_LABELS,
 } from "@/lib/song-garden-v2/garden/types";
 
 type Props = { gardenId: string };
@@ -114,8 +120,16 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [mapSeasonLabel, setMapSeasonLabel] = useState("");
   const [mapDraftUrl, setMapDraftUrl] = useState<string | null>(null);
   const [mapPinnedAt, setMapPinnedAt] = useState<string | null>(null);
+  const [mapLayoutGuided, setMapLayoutGuided] = useState(true);
+  const [mapAmbientVideoUrl, setMapAmbientVideoUrl] = useState<string | null>(null);
+  const [mapVariants, setMapVariants] = useState<MapPlateVariant[]>([]);
+  const [mapActiveVariant, setMapActiveVariant] = useState<MapPlateVariantKey | "default">(
+    "default"
+  );
   const [generatingPlate, setGeneratingPlate] = useState(false);
   const [pinningPlate, setPinningPlate] = useState(false);
+  const [generatingMotion, setGeneratingMotion] = useState(false);
+  const [generatingVariantKey, setGeneratingVariantKey] = useState<string | null>(null);
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
   const [newZoneLabel, setNewZoneLabel] = useState("");
   const [newZoneBlurb, setNewZoneBlurb] = useState("");
@@ -164,6 +178,10 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setMapSeasonLabel(plate?.seasonLabel ?? "");
       setMapDraftUrl(plate?.draftUrl ?? null);
       setMapPinnedAt(plate?.pinnedAt ?? null);
+      setMapLayoutGuided(plate?.layoutGuided ?? true);
+      setMapAmbientVideoUrl(plate?.ambientVideoUrl ?? null);
+      setMapVariants(plate?.variants ?? []);
+      setMapActiveVariant(plate?.activeVariantKey ?? "default");
 
       if (eRes.ok) {
         const list = (await eRes.json()) as Event[];
@@ -459,6 +477,10 @@ export default function GardenDetailClient({ gardenId }: Props) {
               draftUrl: mapDraftUrl,
               draftGeneratedAt: garden?.brandKit?.mapPlate?.draftGeneratedAt ?? null,
               pinnedAt: mapPinnedAt,
+              layoutGuided: mapLayoutGuided,
+              ambientVideoUrl: mapAmbientVideoUrl,
+              variants: mapVariants,
+              activeVariantKey: mapActiveVariant === "default" ? null : mapActiveVariant,
             },
           },
         }),
@@ -487,18 +509,22 @@ export default function GardenDetailClient({ gardenId }: Props) {
           vibePrompt: mapVibe.trim(),
           referenceUrls,
           seasonLabel: mapSeasonLabel.trim(),
+          layoutGuided: mapLayoutGuided,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
         draftUrl?: string;
+        layoutGuided?: boolean;
         garden?: Garden;
       };
       if (!res.ok) throw new Error(body.error || "Failed to generate map plate");
       setMapDraftUrl(body.draftUrl ?? body.garden?.brandKit?.mapPlate?.draftUrl ?? null);
       if (body.garden) setGarden(body.garden);
       setNotice(
-        "Draft season map ready. Preview below, then Pin for season when it looks right. Zone hit regions stay put."
+        body.layoutGuided
+          ? "Layout-guided draft ready. Preview, then Pin for season. Zone hits stay put."
+          : "Draft season map ready. Preview below, then Pin for season."
       );
       await load();
     } catch (err) {
@@ -516,7 +542,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
     const replacing = Boolean(mapPinnedAt && garden?.brandKit?.heroArtworkUrl);
     if (replacing) {
       const ok = window.confirm(
-        "Replace the pinned season map plate? Zone hit regions will stay; you may need to nudge labels if the new art shifts landmarks."
+        "Replace the pinned season map plate? Zone hit regions will stay; ambient motion will clear until you regenerate it."
       );
       if (!ok) return;
     }
@@ -546,6 +572,83 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setError(err instanceof Error ? err.message : "Failed to pin map plate");
     } finally {
       setPinningPlate(false);
+    }
+  }
+
+  async function handleGenerateMotion() {
+    setGeneratingMotion(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/motion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        ambientVideoUrl?: string;
+      };
+      if (!res.ok) throw new Error(body.error || "Failed to generate ambient motion");
+      setMapAmbientVideoUrl(body.ambientVideoUrl ?? null);
+      setNotice("Ambient loop ready — /g will play it over the pinned plate.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate ambient motion");
+    } finally {
+      setGeneratingMotion(false);
+    }
+  }
+
+  async function handleGenerateVariant(key: Exclude<MapPlateVariantKey, "default">) {
+    setGeneratingVariantKey(key);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/variants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, withMotion: false }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        variant?: MapPlateVariant;
+      };
+      if (!res.ok) throw new Error(body.error || "Failed to generate variant");
+      setNotice(`${MAP_PLATE_VARIANT_LABELS[key]} variant ready. Activate it for /g when you want.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate variant");
+    } finally {
+      setGeneratingVariantKey(null);
+    }
+  }
+
+  async function handleSetActiveVariant(key: MapPlateVariantKey | "default") {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/variants`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activeVariantKey: key === "default" ? null : key,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Failed to set active variant");
+      setMapActiveVariant(key);
+      setNotice(
+        key === "default"
+          ? "Showing default season plate on /g."
+          : `Showing ${MAP_PLATE_VARIANT_LABELS[key]} on /g.`
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set active variant");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -781,8 +884,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
               Season map plate
             </h3>
             <p className="mt-1 text-[11px] text-gray-500">
-              AI still for the whole season. Pin when it looks right — public{" "}
-              <code className="text-gray-400">/g</code> uses the pinned plate.
+              M1 pin · M2 layout-guided · M3 ambient loop · M4 matchday variants. Public{" "}
+              <code className="text-gray-400">/g</code> uses the active still (and loop if set).
             </p>
           </div>
 
@@ -806,8 +909,18 @@ export default function GardenDetailClient({ gardenId }: Props) {
             />
           </label>
 
+          <label className="flex items-center gap-2 text-xs text-gray-300">
+            <input
+              type="checkbox"
+              checked={mapLayoutGuided}
+              onChange={(e) => setMapLayoutGuided(e.target.checked)}
+              className="rounded border-gray-600"
+            />
+            Layout-guided (M2) — zone schematic steers Runway placement
+          </label>
+
           <div className="space-y-2">
-            <p className="text-xs text-gray-400">Reference photos (up to 3 used)</p>
+            <p className="text-xs text-gray-400">Reference photos (up to 2 with layout; 3 max)</p>
             {mapRefs.map((url, i) => (
               <div key={`ref-${i}`} className="flex gap-2">
                 <input
@@ -857,12 +970,22 @@ export default function GardenDetailClient({ gardenId }: Props) {
             >
               {pinningPlate ? "Pinning…" : "Pin for season"}
             </button>
+            <button
+              type="button"
+              disabled={generatingMotion || saving || !mapImageUrl.trim()}
+              onClick={() => void handleGenerateMotion()}
+              className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-200 disabled:opacity-50"
+            >
+              {generatingMotion ? "Motion…" : "Generate ambient loop (M3)"}
+            </button>
           </div>
 
           {mapPinnedAt ? (
             <p className="text-[11px] text-gray-500">
               Pinned {new Date(mapPinnedAt).toLocaleString()}
               {mapSeasonLabel ? ` · ${mapSeasonLabel}` : ""}
+              {mapLayoutGuided ? " · layout-guided" : ""}
+              {mapAmbientVideoUrl ? " · ambient loop on" : ""}
             </p>
           ) : (
             <p className="text-[11px] text-amber-200/80">No season plate pinned yet.</p>
@@ -894,6 +1017,75 @@ export default function GardenDetailClient({ gardenId }: Props) {
               ) : null}
             </div>
           )}
+
+          <div className="space-y-2 border-t border-gray-800 pt-3">
+            <h4 className="text-xs font-medium text-gray-300">Matchday variants (M4)</h4>
+            <p className="text-[11px] text-gray-500">
+              Same layout as the pinned plate — lighting/mood only. Hit regions stay aligned.
+            </p>
+            <label className="block text-xs text-gray-400">
+              Active on /g
+              <select
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={mapActiveVariant}
+                onChange={(e) =>
+                  void handleSetActiveVariant(e.target.value as MapPlateVariantKey | "default")
+                }
+                disabled={saving}
+              >
+                <option value="default">Default season plate</option>
+                {mapVariants.map((v) => (
+                  <option key={v.key} value={v.key}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ul className="space-y-2">
+              {MAP_PLATE_VARIANT_KEYS.filter((k) => k !== "default").map((key) => {
+                const existing = mapVariants.find((v) => v.key === key);
+                return (
+                  <li
+                    key={key}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-white">{MAP_PLATE_VARIANT_LABELS[key]}</p>
+                      <p className="text-[11px] text-gray-500">
+                        {existing
+                          ? `Generated ${new Date(existing.generatedAt).toLocaleString()}`
+                          : "Not generated"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {existing?.stillUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={existing.stillUrl}
+                          alt=""
+                          className="h-10 w-16 rounded object-cover"
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={
+                          Boolean(generatingVariantKey) || saving || !mapImageUrl.trim()
+                        }
+                        onClick={() => void handleGenerateVariant(key)}
+                        className="rounded border border-gray-600 px-2 py-1 text-xs text-gray-200 disabled:opacity-50"
+                      >
+                        {generatingVariantKey === key
+                          ? "…"
+                          : existing
+                            ? "Regen"
+                            : "Generate"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
 
         <label className="block text-xs text-gray-400">

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGardenByIdOrSlug } from "@/lib/song-garden-v2/garden/store";
-import { generateMapPlateDraft } from "@/lib/song-garden-v2/garden/map-plate";
+import { generateMapPlateMotion } from "@/lib/song-garden-v2/garden/map-plate";
 import { isRunwayConfigured, RunwayError } from "@/lib/song-garden-v2/runway";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +10,7 @@ const NO_STORE = { headers: { "Cache-Control": "no-store" } };
 
 type Ctx = { params: { id: string } };
 
-/**
- * Generate a season map plate draft via Runway (M1 + M2 layout-guided).
- * Does not change live `heroArtworkUrl` until pin. Zone hits never modified.
- */
+/** M3 — ambient looping video from the pinned season plate. */
 export async function POST(request: Request, context: Ctx) {
   try {
     if (!isRunwayConfigured()) {
@@ -32,33 +29,16 @@ export async function POST(request: Request, context: Ctx) {
       return NextResponse.json({ error: "Not found" }, { status: 404, ...NO_STORE });
     }
 
-    let body: {
-      vibePrompt?: string;
-      referenceUrls?: string[];
-      seasonLabel?: string;
-      layoutGuided?: boolean;
-    } = {};
+    let body: { stillUrl?: string } = {};
     try {
       body = (await request.json()) as typeof body;
     } catch {
       body = {};
     }
 
-    const result = await generateMapPlateDraft(garden, {
-      vibePrompt: body.vibePrompt,
-      referenceUrls: body.referenceUrls,
-      seasonLabel: body.seasonLabel,
-      layoutGuided: body.layoutGuided,
-    });
-
+    const result = await generateMapPlateMotion(garden, { stillUrl: body.stillUrl });
     return NextResponse.json(
-      {
-        garden: result.garden,
-        draftUrl: result.draftUrl,
-        promptText: result.promptText,
-        layoutGuided: result.layoutGuided,
-        layoutSchematicUrl: result.layoutSchematicUrl,
-      },
+      { garden: result.garden, ambientVideoUrl: result.ambientVideoUrl },
       NO_STORE
     );
   } catch (err) {
@@ -77,6 +57,7 @@ export async function POST(request: Request, context: Ctx) {
       );
     }
     const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ error: message }, { status: 500, ...NO_STORE });
+    const status = message.includes("Pin a season") ? 400 : 500;
+    return NextResponse.json({ error: message }, { status, ...NO_STORE });
   }
 }

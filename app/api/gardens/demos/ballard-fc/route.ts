@@ -46,6 +46,15 @@ export async function POST() {
             draftUrl: existing.brandKit.mapPlate.draftUrl,
             draftGeneratedAt: existing.brandKit.mapPlate.draftGeneratedAt,
             pinnedAt: existing.brandKit.mapPlate.pinnedAt,
+            layoutGuided:
+              existing.brandKit.mapPlate.layoutGuided || brandKit.mapPlate!.layoutGuided,
+            layoutSchematicUrl: existing.brandKit.mapPlate.layoutSchematicUrl,
+            ambientVideoUrl: existing.brandKit.mapPlate.ambientVideoUrl,
+            ambientVideoGeneratedAt: existing.brandKit.mapPlate.ambientVideoGeneratedAt,
+            variants: existing.brandKit.mapPlate.variants.length
+              ? existing.brandKit.mapPlate.variants
+              : brandKit.mapPlate!.variants,
+            activeVariantKey: existing.brandKit.mapPlate.activeVariantKey,
           },
         },
       });

@@ -49,6 +49,16 @@ input[type="checkbox"] {
   }
 }
 
+@keyframes garden-zone-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .songgarden-rec-pulse {
   animation: songgarden-rec-pulse 0.9s ease-in-out infinite;
 }
