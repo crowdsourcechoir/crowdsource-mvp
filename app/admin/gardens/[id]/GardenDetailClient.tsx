@@ -505,9 +505,24 @@ export default function GardenDetailClient({ gardenId }: Props) {
   }
 
   async function handleUploadMapRefs(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+    const picked = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (files.length === 0) return;
+    if (picked.length === 0) return;
+
+    const isImageFile = (f: File) =>
+      f.type.startsWith("image/") ||
+      (!f.type && /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name));
+
+    const files = picked.filter(isImageFile);
+    if (files.length === 0) {
+      setError(
+        "That file didn’t look like an image. Use JPEG, PNG, or WebP (HEIC may need converting)."
+      );
+      return;
+    }
+    if (files.length < picked.length) {
+      setNotice("Skipped non-image files. Uploading the rest…");
+    }
 
     const filled = mapRefs.map((u) => u.trim()).filter(Boolean);
     const room = Math.max(0, 8 - filled.length);
@@ -527,12 +542,27 @@ export default function GardenDetailClient({ gardenId }: Props) {
     setError(null);
     setNotice(null);
     try {
-      const form = new FormData();
-      for (const file of batch) form.append("files", file);
-      form.append("append", "true");
+      // Prefer JSON data-URLs — more reliable than multipart File/Blob quirks.
+      const images = await Promise.all(
+        batch.map(
+          (file) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result;
+                if (typeof result === "string" && result.startsWith("data:")) resolve(result);
+                else reject(new Error(`Could not read “${file.name}”.`));
+              };
+              reader.onerror = () => reject(new Error(`Could not read “${file.name}”.`));
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+
       const res = await fetch(`/api/gardens/${gardenId}/map-plate/refs`, {
         method: "POST",
-        body: form,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images, append: true }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -547,7 +577,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setNotice(
         `Uploaded ${body.urls?.length ?? batch.length} reference photo${
           (body.urls?.length ?? batch.length) === 1 ? "" : "s"
-        }. #1 is the venue lock — drag order with Move up.`
+        }. #1 is the venue lock — use Move up if needed.`
       );
       await load();
     } catch (err) {

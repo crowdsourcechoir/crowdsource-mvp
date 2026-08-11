@@ -12,29 +12,45 @@ const MAX_BYTES = 4.5 * 1024 * 1024;
 type Ctx = { params: { id: string } };
 
 const DATA_URL_RE = /^data:([^;]+);base64,([\s\S]+)$/;
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i;
 
-function extFor(contentType: string): string {
+function extFor(contentType: string, fallbackName = ""): string {
   if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
   if (contentType.includes("webp")) return "webp";
   if (contentType.includes("gif")) return "gif";
+  if (contentType.includes("heic") || contentType.includes("heif")) return "heic";
+  if (contentType.includes("avif")) return "avif";
+  const fromName = IMAGE_EXT_RE.exec(fallbackName)?.[1]?.toLowerCase();
+  if (fromName === "jpeg") return "jpg";
+  if (fromName) return fromName;
   return "png";
 }
 
-async function fileToDataUrl(file: File): Promise<string> {
-  if (file.size > MAX_BYTES) {
-    throw new Error(`“${file.name}” is too large (max ~4.5MB). Try a smaller JPEG.`);
+function isImageBlob(blob: Blob, name = ""): boolean {
+  if (blob.type.startsWith("image/")) return true;
+  // Some browsers/OS leave type empty — fall back to extension.
+  if (!blob.type && IMAGE_EXT_RE.test(name)) return true;
+  return false;
+}
+
+async function blobToDataUrl(blob: Blob, name = ""): Promise<string> {
+  if (blob.size > MAX_BYTES) {
+    throw new Error(`“${name || "Image"}” is too large (max ~4.5MB). Try a smaller JPEG.`);
   }
-  if (!file.type.startsWith("image/")) {
-    throw new Error(`“${file.name}” is not an image.`);
+  if (!isImageBlob(blob, name)) {
+    throw new Error(`“${name || "File"}” is not an image.`);
   }
-  const bytes = Buffer.from(await file.arrayBuffer());
-  return `data:${file.type || "image/jpeg"};base64,${bytes.toString("base64")}`;
+  const bytes = Buffer.from(await blob.arrayBuffer());
+  const contentType =
+    blob.type && blob.type.startsWith("image/")
+      ? blob.type
+      : `image/${extFor("", name) === "jpg" ? "jpeg" : extFor("", name) || "jpeg"}`;
+  return `data:${contentType};base64,${bytes.toString("base64")}`;
 }
 
 /**
  * Upload one or more map-plate reference photos.
- * Accepts multipart FormData (`files` field, multiple) or JSON `{ images: dataUrl[] }`.
- * Returns hosted URLs; optionally appends them to brandKit.mapPlate.referenceUrls.
+ * Accepts multipart FormData (`files` / `file`) or JSON `{ images: dataUrl[] }`.
  */
 export async function POST(request: Request, context: Ctx) {
   try {
@@ -50,26 +66,39 @@ export async function POST(request: Request, context: Ctx) {
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
       append = form.get("append") !== "false";
-      const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-      if (files.length === 0) {
-        // Also accept single `file`
-        const one = form.get("file");
-        if (one instanceof File && one.size > 0) files.push(one);
+      const entries = [
+        ...form.getAll("files"),
+        ...form.getAll("file"),
+      ];
+      const blobs: { blob: Blob; name: string }[] = [];
+      for (const entry of entries) {
+        // Next/Node may give Blob instead of File — accept both.
+        if (entry instanceof Blob && entry.size > 0) {
+          const name = "name" in entry && typeof (entry as File).name === "string"
+            ? (entry as File).name
+            : "upload.jpg";
+          blobs.push({ blob: entry, name });
+        }
       }
-      if (files.length === 0) {
+      if (blobs.length === 0) {
         return NextResponse.json(
           { error: "No image files uploaded. Use field name “files”." },
           { status: 400, ...NO_STORE }
         );
       }
-      for (const file of files.slice(0, MAX_FILES)) {
-        dataUrls.push(await fileToDataUrl(file));
+      for (const { blob, name } of blobs.slice(0, MAX_FILES)) {
+        dataUrls.push(await blobToDataUrl(blob, name));
       }
     } else {
-      const body = (await request.json()) as {
-        images?: string[];
-        append?: boolean;
-      };
+      let body: { images?: string[]; append?: boolean };
+      try {
+        body = (await request.json()) as typeof body;
+      } catch {
+        return NextResponse.json(
+          { error: "Expected multipart files or JSON { images: dataUrl[] }." },
+          { status: 400, ...NO_STORE }
+        );
+      }
       append = body.append !== false;
       const images = Array.isArray(body.images) ? body.images : [];
       for (const raw of images.slice(0, MAX_FILES)) {
@@ -90,10 +119,7 @@ export async function POST(request: Request, context: Ctx) {
         dataUrls.push(raw);
       }
       if (dataUrls.length === 0) {
-        return NextResponse.json(
-          { error: "No images provided." },
-          { status: 400, ...NO_STORE }
-        );
+        return NextResponse.json({ error: "No images provided." }, { status: 400, ...NO_STORE });
       }
     }
 
@@ -132,10 +158,7 @@ export async function POST(request: Request, context: Ctx) {
       },
     });
 
-    return NextResponse.json(
-      { urls, referenceUrls, garden: updated },
-      NO_STORE
-    );
+    return NextResponse.json({ urls, referenceUrls, garden: updated }, NO_STORE);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json({ error: message }, { status: 500, ...NO_STORE });
