@@ -27,10 +27,27 @@ import type {
   ZoneDef,
 } from "@/lib/song-garden-v2/garden/types";
 import { MAP_PLATE_VARIANT_LABELS } from "@/lib/song-garden-v2/garden/types";
+import { siteUrl } from "@/lib/site-url";
 
 const MAX_VIBE_CHARS = 360;
 const MAX_REFS = 3;
 const VIDEO_DURATION_SEC = 10;
+
+/** Runway needs https/data URIs — expand site-relative paths. */
+export function absoluteMediaUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  if (
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("runway://")
+  ) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("/")) return `${siteUrl()}${trimmed}`;
+  return trimmed;
+}
 
 const IMAGE_SUFFIX =
   "Premium cinematic wide stadium participation map concept art, top-down or elevated schematic of a sports venue and surrounding fan zones, tack-sharp focus, high detail, crisp textures, no soft focus, no heavy fog, no people in foreground, no readable text or logos, no seat numbers; follow the vibe prompt color palette.";
@@ -124,7 +141,7 @@ function placeRefsFromPlate(plate: MapPlateMeta): RunwayReferenceImage[] {
   for (let i = 0; i < plate.referenceUrls.length && out.length < MAX_REFS; i += 1) {
     const uri = plate.referenceUrls[i]?.trim();
     if (!uri) continue;
-    out.push({ uri, tag: `ref${i + 1}` });
+    out.push({ uri: absoluteMediaUrl(uri), tag: `ref${i + 1}` });
   }
   return out;
 }
@@ -183,7 +200,7 @@ export async function generateMapPlateDraft(
       `garden-${garden.id}-layout-${Date.now()}.png`,
       "image/png"
     );
-    referenceImages.push({ uri: layoutSchematicUrl, tag: "layout" });
+    referenceImages.push({ uri: absoluteMediaUrl(layoutSchematicUrl), tag: "layout" });
   }
 
   for (const ref of placeRefsFromPlate(workingPlate)) {
@@ -306,7 +323,7 @@ export async function generateMapPlateMotion(
   const promptText = `${condense(vibe)}. ${MOTION_SUFFIX}`.slice(0, 1000);
 
   const runwayVideoUrl = await generateVideoFromImage({
-    promptImage: stillUrl,
+    promptImage: absoluteMediaUrl(stillUrl),
     promptText,
     model: "gen4_turbo",
     duration: VIDEO_DURATION_SEC,
@@ -360,10 +377,12 @@ export async function generateMapPlateVariant(
   const vibe = garden.brandKit.mapPlate.vibePrompt.trim();
   const layoutClause = buildLayoutGuideClause(garden.brandKit.zones);
 
-  const referenceImages: RunwayReferenceImage[] = [{ uri: baseStill, tag: "plate" }];
+  const referenceImages: RunwayReferenceImage[] = [
+    { uri: absoluteMediaUrl(baseStill), tag: "plate" },
+  ];
   if (garden.brandKit.mapPlate.layoutSchematicUrl && referenceImages.length < MAX_REFS) {
     referenceImages.push({
-      uri: garden.brandKit.mapPlate.layoutSchematicUrl,
+      uri: absoluteMediaUrl(garden.brandKit.mapPlate.layoutSchematicUrl),
       tag: "layout",
     });
   }
@@ -389,7 +408,7 @@ export async function generateMapPlateVariant(
       1000
     );
     const runwayVideoUrl = await generateVideoFromImage({
-      promptImage: stillUrl,
+      promptImage: absoluteMediaUrl(stillUrl),
       promptText: motionPrompt,
       model: "gen4_turbo",
       duration: VIDEO_DURATION_SEC,

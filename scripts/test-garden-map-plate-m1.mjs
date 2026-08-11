@@ -11,7 +11,7 @@ async function load(rel) {
 }
 
 async function main() {
-  const { buildMapPlatePrompt, buildLayoutGuideClause } = await load(
+  const { buildMapPlatePrompt, buildLayoutGuideClause, absoluteMediaUrl } = await load(
     "lib/song-garden-v2/garden/map-plate.ts"
   );
   const { buildLayoutSchematicPng } = await load(
@@ -52,6 +52,13 @@ async function main() {
   assert.ok(prompt.includes("@layout"), "prompt references layout tag");
   assert.ok(prompt.includes("80%"), "prompt includes layout percents");
   assert.ok(prompt.length <= 1000, "prompt fits Runway limit");
+
+  assert.equal(
+    absoluteMediaUrl("/fans/ballard-fc/x.jpg").endsWith("/fans/ballard-fc/x.jpg"),
+    true
+  );
+  assert.ok(absoluteMediaUrl("/fans/x.jpg").startsWith("http"));
+  assert.equal(absoluteMediaUrl("https://cdn.example/a.jpg"), "https://cdn.example/a.jpg");
 
   const png = buildLayoutSchematicPng({
     zones: brand.zones,
