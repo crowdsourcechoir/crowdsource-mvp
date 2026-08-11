@@ -71,10 +71,13 @@ async function runwayImageUri(url: string): Promise<string> {
 }
 
 const IMAGE_SUFFIX =
-  "Premium cinematic wide stadium participation map concept art, top-down or elevated schematic of a sports venue and surrounding fan zones, tack-sharp focus, high detail, crisp textures, no soft focus, no heavy fog, no people in foreground, no readable text or logos, no seat numbers; follow the vibe prompt color palette.";
+  "Stylized game-world stadium map, elevated top-down view matching the venue reference, tack-sharp focus, crisp readable forms, no soft focus, no heavy fog, no photoreal photography, no people in foreground, no readable text or logos, no seat numbers; premium Crowdsource Fans Song Garden art direction.";
 
 const MOTION_SUFFIX =
   "Subtle ambient motion only, slow drifting light and soft zone glow pulses, camera locked in place, seamless looping atmosphere, keep the scene sharp and clear, no soft focus, no heavy haze or blur, no people walking into frame, no text or logos.";
+
+const TWIN_LOCK =
+  "DIGITAL TWIN LOCK: This must be clearly the same stadium as @venue — same pitch orientation and proportions, same stand and amenity silhouettes, same surrounding context (parking, trees, roads). Do not invent a different or generic stadium. Restyle into a luminous game-world / digital-twin map: stylized materials, matchday energy lighting, painted fan zones — not a photo, not photoreal CGI.";
 
 const VARIANT_MOOD: Record<Exclude<MapPlateVariantKey, "default">, string> = {
   kickoff:
@@ -109,62 +112,120 @@ export function buildLayoutGuideClause(zones: ZoneDef[]): string {
     const pctY = Math.round(z.y * 100);
     return `${z.label} at ${pctX}% from left, ${pctY}% from top (${quadrant(z.x, z.y)})`;
   });
-  return `Respect this exact fan-zone layout (painted regions, not seats): ${parts.join("; ")}. Keep the pitch/central field near the middle; place each named zone where listed so tap targets stay aligned.`;
+  return `Fan-zone anchors on this same venue geometry (painted regions, not seats): ${parts.join("; ")}.`;
 }
 
 export function buildMapPlatePrompt(opts: {
   brand: Pick<BrandKit, "title" | "primaryColor" | "accentColor">;
   zones: ZoneDef[];
   vibePrompt: string;
+  venueNotes?: string;
   referenceTags?: string[];
   layoutGuided?: boolean;
+  twinMode?: boolean;
 }): string {
+  const twin = Boolean(opts.twinMode);
+  const tags = opts.referenceTags ?? [];
+  const hasVenue = tags.includes("venue");
+
   const zoneList = opts.zones
     .map((z) => z.label.trim())
     .filter(Boolean)
     .slice(0, 12);
   const zoneClause =
     zoneList.length > 0
-      ? `Named fan participation zones as distinct painted areas (not seats): ${zoneList.join(", ")}.`
+      ? `Named fan participation zones as distinct painted game-world areas (not seats, not sponsor banners): ${zoneList.join(", ")}.`
       : "Imply a few distinct fan gathering zones around the pitch.";
 
   const layoutClause =
     opts.layoutGuided && opts.zones.length > 0 ? buildLayoutGuideClause(opts.zones) : "";
 
+  const notes = opts.venueNotes?.trim()
+    ? `Venue landmarks to keep recognizable: ${condense(opts.venueNotes, 220)}.`
+    : "";
+
   const refParts: string[] = [];
-  if (opts.referenceTags?.includes("layout")) {
-    refParts.push(
-      "Follow @layout for zone placement — glowing blobs mark where each zone must sit; invent rich stadium art that matches those positions."
-    );
-  }
-  const placeTags = (opts.referenceTags ?? []).filter((t) => t !== "layout");
-  if (placeTags.length > 0) {
-    refParts.push(
-      `Inspired by ${placeTags.map((t) => `@${t}`).join(", ")} — place/atmosphere reference; invent a new Song Garden map plate rather than copying any photo literally.`
-    );
-  }
-  if (refParts.length === 0) {
-    refParts.push("Invent a stylized stadium world map for this club.");
+  if (twin && hasVenue) {
+    refParts.push(TWIN_LOCK);
+    if (tags.includes("layout")) {
+      refParts.push(
+        "Use @layout only for fan-zone glow placement on top of @venue’s real geometry."
+      );
+    }
+  } else {
+    if (tags.includes("layout")) {
+      refParts.push(
+        "Follow @layout for zone placement — glowing blobs mark where each zone must sit."
+      );
+    }
+    if (hasVenue) {
+      refParts.push(
+        "Take place and structure cues from @venue; stylize into Song Garden art rather than copying the photo."
+      );
+    }
+    const other = tags.filter((t) => t !== "layout" && t !== "venue");
+    if (other.length > 0) {
+      refParts.push(
+        `Also inspired by ${other.map((t) => `@${t}`).join(", ")} for atmosphere.`
+      );
+    }
+    if (refParts.length === 0) {
+      refParts.push("Invent a stylized stadium world map for this club.");
+    }
   }
 
   const vibe = opts.vibePrompt.trim()
-    ? condense(opts.vibePrompt)
+    ? condense(opts.vibePrompt, twin ? 280 : MAX_VIBE_CHARS)
     : `Matchday energy for ${opts.brand.title}, deep ${opts.brand.primaryColor} night with ${opts.brand.accentColor} accents.`;
 
-  return `${vibe}. Crowdsource Fans Song Garden season map for ${opts.brand.title}. ${zoneClause} ${layoutClause} ${refParts.join(" ")} ${IMAGE_SUFFIX}`
+  const twinLead = twin
+    ? `Stylized digital twin of ${opts.brand.title}'s real home ground — game environment inspired by the actual stadium.`
+    : `Crowdsource Fans Song Garden season map for ${opts.brand.title}.`;
+
+  return `${vibe}. ${twinLead} ${zoneClause} ${notes} ${layoutClause} ${refParts.join(" ")} ${IMAGE_SUFFIX}`
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 1000);
 }
 
-function placeRefsFromPlate(plate: MapPlateMeta): RunwayReferenceImage[] {
-  const out: RunwayReferenceImage[] = [];
-  for (let i = 0; i < plate.referenceUrls.length && out.length < MAX_REFS; i += 1) {
-    const uri = plate.referenceUrls[i]?.trim();
-    if (!uri) continue;
-    out.push({ uri: absoluteMediaUrl(uri), tag: `ref${i + 1}` });
+/**
+ * Build Runway reference set.
+ * Twin mode: @venue (first photo) first, then @layout, then extra refs.
+ * Invent mode: @layout first (if guided), then place refs.
+ */
+export function buildMapPlateReferences(opts: {
+  referenceUrls: string[];
+  layoutSchematicUrl?: string | null;
+  layoutGuided: boolean;
+  twinMode: boolean;
+}): RunwayReferenceImage[] {
+  const refs: RunwayReferenceImage[] = [];
+  const urls = opts.referenceUrls.map((u) => u.trim()).filter(Boolean);
+
+  function push(uri: string, tag: string) {
+    if (refs.length >= MAX_REFS) return;
+    if (refs.some((r) => r.uri === uri || r.tag === tag)) return;
+    refs.push({ uri: absoluteMediaUrl(uri), tag });
   }
-  return out;
+
+  if (opts.twinMode && urls[0]) {
+    push(urls[0], "venue");
+    if (opts.layoutGuided && opts.layoutSchematicUrl) {
+      push(opts.layoutSchematicUrl, "layout");
+    }
+    for (let i = 1; i < urls.length; i += 1) {
+      push(urls[i], `ref${i + 1}`);
+    }
+  } else {
+    if (opts.layoutGuided && opts.layoutSchematicUrl) {
+      push(opts.layoutSchematicUrl, "layout");
+    }
+    for (let i = 0; i < urls.length; i += 1) {
+      push(urls[i], i === 0 ? "venue" : `ref${i + 1}`);
+    }
+  }
+
+  return refs.slice(0, MAX_REFS);
 }
 
 export type GenerateMapPlateResult = {
@@ -172,6 +233,7 @@ export type GenerateMapPlateResult = {
   draftUrl: string;
   promptText: string;
   layoutGuided: boolean;
+  twinMode: boolean;
   layoutSchematicUrl: string | null;
 };
 
@@ -179,10 +241,13 @@ export async function generateMapPlateDraft(
   garden: Garden,
   opts?: {
     vibePrompt?: string;
+    venueNotes?: string;
     referenceUrls?: string[];
     seasonLabel?: string;
     /** Default true when zones exist. */
     layoutGuided?: boolean;
+    /** Default true — stylized digital twin of the real venue. */
+    twinMode?: boolean;
   }
 ): Promise<GenerateMapPlateResult> {
   if (!isRunwayConfigured()) {
@@ -197,19 +262,28 @@ export async function generateMapPlateDraft(
         : garden.brandKit.mapPlate.referenceUrls,
     vibePrompt:
       opts?.vibePrompt != null ? opts.vibePrompt.trim() : garden.brandKit.mapPlate.vibePrompt,
+    venueNotes:
+      opts?.venueNotes != null ? opts.venueNotes.trim() : garden.brandKit.mapPlate.venueNotes,
     seasonLabel:
       opts?.seasonLabel != null
         ? opts.seasonLabel.trim()
         : garden.brandKit.mapPlate.seasonLabel,
+    twinMode:
+      opts?.twinMode != null ? Boolean(opts.twinMode) : garden.brandKit.mapPlate.twinMode !== false,
   };
 
   const zones = garden.brandKit.zones;
   const layoutGuided =
     opts?.layoutGuided != null ? Boolean(opts.layoutGuided) : zones.length > 0;
+  const twinMode = workingPlate.twinMode;
 
-  const referenceImages: RunwayReferenceImage[] = [];
+  if (twinMode && workingPlate.referenceUrls.length === 0) {
+    throw new Error(
+      "Digital twin mode needs at least one venue reference photo (the real stadium map or aerial)."
+    );
+  }
+
   let layoutSchematicUrl: string | null = workingPlate.layoutSchematicUrl;
-
   if (layoutGuided && zones.length > 0) {
     const png = buildLayoutSchematicPng({
       zones,
@@ -221,20 +295,23 @@ export async function generateMapPlateDraft(
       `garden-${garden.id}-layout-${Date.now()}.png`,
       "image/png"
     );
-    referenceImages.push({ uri: absoluteMediaUrl(layoutSchematicUrl), tag: "layout" });
   }
 
-  for (const ref of placeRefsFromPlate(workingPlate)) {
-    if (referenceImages.length >= MAX_REFS) break;
-    referenceImages.push(ref);
-  }
+  const referenceImages = buildMapPlateReferences({
+    referenceUrls: workingPlate.referenceUrls,
+    layoutSchematicUrl,
+    layoutGuided,
+    twinMode,
+  });
 
   const promptText = buildMapPlatePrompt({
     brand: garden.brandKit,
     zones,
     vibePrompt: workingPlate.vibePrompt,
+    venueNotes: workingPlate.venueNotes,
     referenceTags: referenceImages.map((r) => r.tag),
     layoutGuided,
+    twinMode,
   });
 
   const runwayUrl = await generateImageFromText({
@@ -255,13 +332,21 @@ export async function generateMapPlateDraft(
         draftUrl,
         draftGeneratedAt: now,
         layoutGuided,
+        twinMode,
         layoutSchematicUrl,
       },
     },
   });
   if (!updated) throw new Error("Garden not found after generate.");
 
-  return { garden: updated, draftUrl, promptText, layoutGuided, layoutSchematicUrl };
+  return {
+    garden: updated,
+    draftUrl,
+    promptText,
+    layoutGuided,
+    twinMode,
+    layoutSchematicUrl,
+  };
 }
 
 export type PinMapPlateResult = {
@@ -408,7 +493,7 @@ export async function generateMapPlateVariant(
     });
   }
 
-  const promptText = `${condense(vibe || `${garden.brandKit.title} Song Garden`)}. ${mood}. Same continuous stadium map as @plate — keep identical layout, zone positions, and composition; only change lighting, atmosphere, and energy. ${layoutClause} ${IMAGE_SUFFIX}`
+  const promptText = `${condense(vibe || `${garden.brandKit.title} Song Garden`, 240)}. ${mood}. Same continuous digital-twin stadium map as @plate — keep identical venue geometry, pitch orientation, stand silhouettes, and zone positions; only change lighting, atmosphere, and energy. ${layoutClause} ${IMAGE_SUFFIX}`
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 1000);

@@ -34,9 +34,11 @@ export async function POST(request: Request, context: Ctx) {
 
     let body: {
       vibePrompt?: string;
+      venueNotes?: string;
       referenceUrls?: string[];
       seasonLabel?: string;
       layoutGuided?: boolean;
+      twinMode?: boolean;
     } = {};
     try {
       body = (await request.json()) as typeof body;
@@ -46,9 +48,11 @@ export async function POST(request: Request, context: Ctx) {
 
     const result = await generateMapPlateDraft(garden, {
       vibePrompt: body.vibePrompt,
+      venueNotes: body.venueNotes,
       referenceUrls: body.referenceUrls,
       seasonLabel: body.seasonLabel,
       layoutGuided: body.layoutGuided,
+      twinMode: body.twinMode,
     });
 
     return NextResponse.json(
@@ -57,6 +61,7 @@ export async function POST(request: Request, context: Ctx) {
         draftUrl: result.draftUrl,
         promptText: result.promptText,
         layoutGuided: result.layoutGuided,
+        twinMode: result.twinMode,
         layoutSchematicUrl: result.layoutSchematicUrl,
       },
       NO_STORE

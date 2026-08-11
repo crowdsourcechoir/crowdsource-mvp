@@ -26,7 +26,10 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
     mapPlate: {
       referenceUrls: ["/fans/ballard-fc/interbay-stadium-map.jpg"],
       vibePrompt:
-        "Ballard FC Interbay Stadium matchday night, deep navy Pacific Northwest pitch, chartreuse accents, stylized fan participation zones around the field, cinematic schematic map energy",
+        "Ballard FC Interbay / Pagliacci Pitch matchday night, deep navy Pacific Northwest, chartreuse accents, stylized game-world twin of the real ground — intimate campus stadium energy, not a mega-arena",
+      venueNotes:
+        "Horizontal pitch center; west parking lot + SPU fence; north amenity strip (bike parking, merch, family, concessions, food tents, supporters); east sideline beer garden / tequila; south stand expansion; trees around perimeter; recognizable as Interbay, not a generic stadium",
+      twinMode: true,
       draftUrl: null,
       draftGeneratedAt: null,
       pinnedAt: null,

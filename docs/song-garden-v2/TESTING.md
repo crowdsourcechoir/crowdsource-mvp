@@ -165,9 +165,9 @@ Expect: zone key normalization, `zone_up` effect, snapshot zones + sponsor, read
 ### Manual — Season map plate (M1–M4)
 
 1. Admin garden → **Fan map** → **Season map plate**.
-2. Author zones first (positions matter for M2). Add 1–2 reference photo URLs + vibe.
-3. Leave **Layout-guided** on → **Generate draft** (needs `RUNWAYML_API_SECRET`).
-4. Preview draft + optional layout schematic in brand kit; confirm zones unchanged.
+2. Author zones first (positions matter for M2). Add the **real stadium aerial/map as the first reference**, plus a short vibe and **venue landmarks** (pitch orientation, stands, parking…).
+3. Leave **Digital twin** + **Layout-guided** on → **Generate draft** (needs `RUNWAYML_API_SECRET`).
+4. Draft should read as *this* stadium restyled as a game world — not a generic invented venue. Confirm zones unchanged.
 5. **Pin for season** — live map URL becomes the draft.
 6. **Generate ambient loop (M3)** — `/g` plays the loop over the plate; zone glows scale with energy.
 7. **Matchday variants (M4)** — Generate Kickoff / Goal / … then set **Active on /g**.

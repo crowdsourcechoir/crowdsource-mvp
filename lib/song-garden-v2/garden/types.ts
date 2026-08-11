@@ -35,10 +35,20 @@ export type MapPlateVariant = {
 };
 
 export type MapPlateMeta = {
-  /** Place / atmosphere reference photos (Runway uses up to 3). */
+  /** Place / atmosphere reference photos (Runway uses up to 3). First URL is the venue lock in twin mode. */
   referenceUrls: string[];
   /** Season vibe brief for generation. */
   vibePrompt: string;
+  /**
+   * Recognizable venue landmarks for twin mode (pitch orientation, stands, parking, trees…).
+   * Free text — helps the model keep the real stadium’s identity without going photoreal.
+   */
+  venueNotes: string;
+  /**
+   * Stylized digital twin: lock real stadium geometry from the first reference;
+   * restyle materials/lighting into a game-world Song Garden (not invent a new venue).
+   */
+  twinMode: boolean;
   /** Last generated still — not live until pinned. */
   draftUrl: string | null;
   draftGeneratedAt: string | null;
@@ -392,6 +402,9 @@ export function defaultMapPlate(partial?: Partial<MapPlateMeta> | null): MapPlat
   return {
     referenceUrls: refs,
     vibePrompt: typeof partial?.vibePrompt === "string" ? partial.vibePrompt.trim() : "",
+    venueNotes: typeof partial?.venueNotes === "string" ? partial.venueNotes.trim() : "",
+    // Default on when unset — twin is the Fans product intent.
+    twinMode: partial?.twinMode !== false,
     draftUrl: partial?.draftUrl?.trim() || null,
     draftGeneratedAt: partial?.draftGeneratedAt?.trim() || null,
     pinnedAt: partial?.pinnedAt?.trim() || null,

@@ -117,10 +117,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [mapImageUrl, setMapImageUrl] = useState("");
   const [mapRefs, setMapRefs] = useState<string[]>([]);
   const [mapVibe, setMapVibe] = useState("");
+  const [mapVenueNotes, setMapVenueNotes] = useState("");
   const [mapSeasonLabel, setMapSeasonLabel] = useState("");
   const [mapDraftUrl, setMapDraftUrl] = useState<string | null>(null);
   const [mapPinnedAt, setMapPinnedAt] = useState<string | null>(null);
   const [mapLayoutGuided, setMapLayoutGuided] = useState(true);
+  const [mapTwinMode, setMapTwinMode] = useState(true);
   const [mapAmbientVideoUrl, setMapAmbientVideoUrl] = useState<string | null>(null);
   const [mapVariants, setMapVariants] = useState<MapPlateVariant[]>([]);
   const [mapActiveVariant, setMapActiveVariant] = useState<MapPlateVariantKey | "default">(
@@ -175,10 +177,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
       const plate = gBody.garden?.brandKit?.mapPlate;
       setMapRefs(plate?.referenceUrls?.length ? [...plate.referenceUrls] : [""]);
       setMapVibe(plate?.vibePrompt ?? "");
+      setMapVenueNotes(plate?.venueNotes ?? "");
       setMapSeasonLabel(plate?.seasonLabel ?? "");
       setMapDraftUrl(plate?.draftUrl ?? null);
       setMapPinnedAt(plate?.pinnedAt ?? null);
       setMapLayoutGuided(plate?.layoutGuided ?? true);
+      setMapTwinMode(plate?.twinMode !== false);
       setMapAmbientVideoUrl(plate?.ambientVideoUrl ?? null);
       setMapVariants(plate?.variants ?? []);
       setMapActiveVariant(plate?.activeVariantKey ?? "default");
@@ -473,11 +477,13 @@ export default function GardenDetailClient({ gardenId }: Props) {
               ...(garden?.brandKit?.mapPlate ?? {}),
               referenceUrls,
               vibePrompt: mapVibe.trim(),
+              venueNotes: mapVenueNotes.trim(),
               seasonLabel: mapSeasonLabel.trim(),
               draftUrl: mapDraftUrl,
               draftGeneratedAt: garden?.brandKit?.mapPlate?.draftGeneratedAt ?? null,
               pinnedAt: mapPinnedAt,
               layoutGuided: mapLayoutGuided,
+              twinMode: mapTwinMode,
               ambientVideoUrl: mapAmbientVideoUrl,
               variants: mapVariants,
               activeVariantKey: mapActiveVariant === "default" ? null : mapActiveVariant,
@@ -507,24 +513,29 @@ export default function GardenDetailClient({ gardenId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vibePrompt: mapVibe.trim(),
+          venueNotes: mapVenueNotes.trim(),
           referenceUrls,
           seasonLabel: mapSeasonLabel.trim(),
           layoutGuided: mapLayoutGuided,
+          twinMode: mapTwinMode,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
         draftUrl?: string;
         layoutGuided?: boolean;
+        twinMode?: boolean;
         garden?: Garden;
       };
       if (!res.ok) throw new Error(body.error || "Failed to generate map plate");
       setMapDraftUrl(body.draftUrl ?? body.garden?.brandKit?.mapPlate?.draftUrl ?? null);
       if (body.garden) setGarden(body.garden);
       setNotice(
-        body.layoutGuided
-          ? "Layout-guided draft ready. Preview, then Pin for season. Zone hits stay put."
-          : "Draft season map ready. Preview below, then Pin for season."
+        body.twinMode
+          ? "Digital-twin draft ready — should read as this stadium, game-world stylized. Pin when it feels right."
+          : body.layoutGuided
+            ? "Layout-guided draft ready. Preview, then Pin for season. Zone hits stay put."
+            : "Draft season map ready. Preview below, then Pin for season."
       );
       await load();
     } catch (err) {
@@ -909,6 +920,26 @@ export default function GardenDetailClient({ gardenId }: Props) {
             />
           </label>
 
+          <label className="block text-xs text-gray-400">
+            Venue landmarks (digital twin cues)
+            <textarea
+              className="mt-1 min-h-[64px] w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              value={mapVenueNotes}
+              onChange={(e) => setMapVenueNotes(e.target.value)}
+              placeholder="Horizontal pitch; west parking; north concessions strip; east beer garden; south stand; surrounding trees…"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 text-xs text-gray-300">
+            <input
+              type="checkbox"
+              checked={mapTwinMode}
+              onChange={(e) => setMapTwinMode(e.target.checked)}
+              className="rounded border-gray-600"
+            />
+            Digital twin — lock real stadium geometry from the first reference (stylized, not photoreal)
+          </label>
+
           <label className="flex items-center gap-2 text-xs text-gray-300">
             <input
               type="checkbox"
@@ -916,11 +947,14 @@ export default function GardenDetailClient({ gardenId }: Props) {
               onChange={(e) => setMapLayoutGuided(e.target.checked)}
               className="rounded border-gray-600"
             />
-            Layout-guided (M2) — zone schematic steers Runway placement
+            Layout-guided (M2) — zone schematic steers fan-zone placement
           </label>
 
           <div className="space-y-2">
-            <p className="text-xs text-gray-400">Reference photos (up to 2 with layout; 3 max)</p>
+            <p className="text-xs text-gray-400">
+              Reference photos — <span className="text-gray-300">first URL is the venue lock</span>{" "}
+              (stadium aerial / map)
+            </p>
             {mapRefs.map((url, i) => (
               <div key={`ref-${i}`} className="flex gap-2">
                 <input
@@ -984,6 +1018,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             <p className="text-[11px] text-gray-500">
               Pinned {new Date(mapPinnedAt).toLocaleString()}
               {mapSeasonLabel ? ` · ${mapSeasonLabel}` : ""}
+              {mapTwinMode ? " · digital twin" : ""}
               {mapLayoutGuided ? " · layout-guided" : ""}
               {mapAmbientVideoUrl ? " · ambient loop on" : ""}
             </p>

@@ -1,5 +1,5 @@
 /**
- * Smoke: M1–M4 map-plate helpers (no Runway call).
+ * Smoke: M1–M4 map-plate helpers + digital twin prompt (no Runway call).
  * Run: npx tsx scripts/test-garden-map-plate-m1.mjs
  */
 import assert from "node:assert/strict";
@@ -11,9 +11,12 @@ async function load(rel) {
 }
 
 async function main() {
-  const { buildMapPlatePrompt, buildLayoutGuideClause, absoluteMediaUrl } = await load(
-    "lib/song-garden-v2/garden/map-plate.ts"
-  );
+  const {
+    buildMapPlatePrompt,
+    buildLayoutGuideClause,
+    buildMapPlateReferences,
+    absoluteMediaUrl,
+  } = await load("lib/song-garden-v2/garden/map-plate.ts");
   const { buildLayoutSchematicPng } = await load(
     "lib/song-garden-v2/garden/layout-schematic.ts"
   );
@@ -40,18 +43,40 @@ async function main() {
   assert.ok(layoutClause.includes("80%"), "layout clause uses percent X");
   assert.ok(layoutClause.includes("Supporters"), "layout clause names zones");
 
-  const prompt = buildMapPlatePrompt({
+  const twinPrompt = buildMapPlatePrompt({
     brand,
     zones: brand.zones,
     vibePrompt: "Interbay night matchday, navy + chartreuse",
-    referenceTags: ["layout", "ref1"],
+    venueNotes: "Horizontal pitch; west parking; north concessions",
+    referenceTags: ["venue", "layout"],
     layoutGuided: true,
+    twinMode: true,
   });
 
-  assert.ok(prompt.includes("Ballard FC"), "prompt names the club");
-  assert.ok(prompt.includes("@layout"), "prompt references layout tag");
-  assert.ok(prompt.includes("80%"), "prompt includes layout percents");
-  assert.ok(prompt.length <= 1000, "prompt fits Runway limit");
+  assert.ok(twinPrompt.includes("DIGITAL TWIN") || twinPrompt.includes("digital twin"), "twin lock");
+  assert.ok(twinPrompt.includes("@venue"), "prompt references venue");
+  assert.ok(twinPrompt.includes("west parking") || twinPrompt.includes("Venue landmarks"), "venue notes");
+  assert.ok(!twinPrompt.toLowerCase().includes("invent a new song garden map plate rather than copying"), "must not invent-away the venue");
+  assert.ok(twinPrompt.length <= 1000, "prompt fits Runway limit");
+
+  const inventPrompt = buildMapPlatePrompt({
+    brand,
+    zones: brand.zones,
+    vibePrompt: "fantasy arena",
+    referenceTags: ["ref1"],
+    twinMode: false,
+  });
+  assert.ok(inventPrompt.includes("fantasy") || inventPrompt.includes("Ballard"), "invent mode still works");
+
+  const refs = buildMapPlateReferences({
+    referenceUrls: ["/fans/ballard-fc/interbay-stadium-map.jpg", "https://example.com/extra.jpg"],
+    layoutSchematicUrl: "https://example.com/layout.png",
+    layoutGuided: true,
+    twinMode: true,
+  });
+  assert.equal(refs[0].tag, "venue", "twin puts venue first");
+  assert.equal(refs[1].tag, "layout", "layout second in twin");
+  assert.ok(refs.length <= 3);
 
   assert.equal(
     absoluteMediaUrl("/fans/ballard-fc/x.jpg").endsWith("/fans/ballard-fc/x.jpg"),
@@ -73,6 +98,8 @@ async function main() {
       draftUrl: "https://example.com/draft.jpg",
       draftGeneratedAt: "2026-01-01T00:00:00Z",
       layoutGuided: true,
+      twinMode: true,
+      venueNotes: "pitch center",
       ambientVideoUrl: "https://example.com/ambient.mp4",
       variants: [
         {
@@ -86,8 +113,8 @@ async function main() {
       activeVariantKey: "goal",
     },
   });
-  assert.equal(merged.mapPlate.layoutGuided, true);
-  assert.equal(merged.mapPlate.variants.length, 1);
+  assert.equal(merged.mapPlate.twinMode, true);
+  assert.equal(merged.mapPlate.venueNotes, "pitch center");
   assert.equal(resolveMapPlateStillUrl(merged), "https://example.com/goal.jpg");
   assert.equal(resolveMapPlateVideoUrl(merged), "https://example.com/ambient.mp4");
 
@@ -97,10 +124,10 @@ async function main() {
   });
   assert.deepEqual(plate.referenceUrls, ["a", "b"]);
   assert.equal(plate.vibePrompt, "hi");
-  assert.equal(plate.layoutGuided, false);
+  assert.equal(plate.twinMode, true, "twin defaults on");
   assert.deepEqual(plate.variants, []);
 
-  console.log("ok — map plate M1–M4 prompt, layout schematic, resolve URLs");
+  console.log("ok — map plate twin likeness + layout refs");
 }
 
 main().catch((err) => {

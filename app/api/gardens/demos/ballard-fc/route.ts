@@ -41,6 +41,11 @@ export async function POST() {
                 : brandKit.mapPlate!.referenceUrls,
             vibePrompt:
               existing.brandKit.mapPlate.vibePrompt || brandKit.mapPlate!.vibePrompt,
+            venueNotes:
+              existing.brandKit.mapPlate.venueNotes || brandKit.mapPlate!.venueNotes,
+            twinMode:
+              existing.brandKit.mapPlate.twinMode !== false &&
+              brandKit.mapPlate!.twinMode !== false,
             seasonLabel:
               existing.brandKit.mapPlate.seasonLabel || brandKit.mapPlate!.seasonLabel,
             draftUrl: existing.brandKit.mapPlate.draftUrl,
