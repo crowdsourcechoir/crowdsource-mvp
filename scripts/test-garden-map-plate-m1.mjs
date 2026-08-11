@@ -41,7 +41,11 @@ async function main() {
 
   const layoutClause = buildLayoutGuideClause(brand.zones);
   assert.ok(layoutClause.includes("80%"), "layout clause uses percent X");
-  assert.ok(layoutClause.includes("Supporters"), "layout clause names zones");
+  assert.ok(
+    layoutClause.toLowerCase().includes("unlabeled") || layoutClause.toLowerCase().includes("no words"),
+    "layout avoids painted names"
+  );
+  assert.ok(!layoutClause.includes("Supporters"), "layout omits zone names (they become fake signs)");
 
   const twinPrompt = buildMapPlatePrompt({
     brand,
@@ -58,6 +62,9 @@ async function main() {
   assert.ok(twinPrompt.toLowerCase().includes("bowl") || twinPrompt.includes("FORBIDDEN"), "anti-bowl");
   assert.ok(twinPrompt.includes("west parking") || twinPrompt.includes("Venue landmarks") || twinPrompt.includes("parking"), "venue notes");
   assert.ok(!twinPrompt.toLowerCase().includes("invent a new song garden map plate rather than copying"), "must not invent-away the venue");
+  assert.ok(twinPrompt.includes("TEXT-FREE"), "anti-text lock present");
+  assert.ok(twinPrompt.includes("FORBIDDEN"), "anti-bowl survives char budget");
+  assert.ok(!twinPrompt.includes("Beer Garden"), "must not list zone labels (drives fake signage)");
   assert.ok(twinPrompt.length <= 1000, "prompt fits Runway limit");
 
   const inventPrompt = buildMapPlatePrompt({

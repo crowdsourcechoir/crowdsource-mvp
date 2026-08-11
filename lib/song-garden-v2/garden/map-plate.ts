@@ -70,15 +70,19 @@ async function runwayImageUri(url: string): Promise<string> {
   }
 }
 
+/** Models love inventing UI panels, scoreboard glyphs, and fake zone signage. */
+const NO_TEXT_LOCK =
+  "TEXT-FREE: no letters, numbers, words, logos, UI chrome, scoreboard glyphs, or gibberish. Zones = unlabeled color/glow patches only.";
+
 const IMAGE_SUFFIX =
-  "Flat top-down map view matching @venue camera angle, community sports pitch scale, open sidelines, tack-sharp stylized game-world art, no soft focus, no heavy fog, no photoreal photo, no people in foreground, no readable text or logos, no seat numbers.";
+  "Flat top-down @venue-angle map, community pitch, open sidelines, tack-sharp stylized game-world art, no soft focus, no fog, no photoreal, no people, no seat numbers, no lettering.";
 
 const MOTION_SUFFIX =
-  "Subtle ambient motion only, slow drifting light and soft zone glow pulses, camera locked in place, seamless looping atmosphere, keep the scene sharp and clear, no soft focus, no heavy haze or blur, no people walking into frame, no text or logos.";
+  "Subtle ambient motion only, slow drifting light and soft zone glow pulses, camera locked, seamless loop, sharp and clear, no soft focus, no haze, no people walking into frame, no text logos or UI.";
 
 /** Hard anti-bias: models love inventing MLS bowls when they hear “stadium”. */
 const TWIN_LOCK =
-  "DIGITAL TWIN LOCK from @venue: copy the REAL ground’s footprint — same top-down camera, same pitch size and orientation, same open community/college field character, same parking, trees, tents, low buildings, and sparse sideline seating. FORBIDDEN: stadium bowl, multi-tier grandstands, enclosed arena, thousands of seats, corner floodlight towers as a pro bowl, inventing a bigger venue. Restyle materials and night/game energy only — luminous Song Garden digital twin, not a photo, not a generic pro stadium.";
+  "DIGITAL TWIN LOCK from @venue: copy REAL footprint — same camera, pitch size/orientation, open community field, parking, trees, tents, low buildings, sparse sideline seating. FORBIDDEN: stadium bowl, multi-tier grandstands, enclosed arena, inventing a bigger venue. Restyle materials/night energy only — luminous digital twin, not a photo.";
 
 const VARIANT_MOOD: Record<Exclude<MapPlateVariantKey, "default">, string> = {
   kickoff:
@@ -105,15 +109,18 @@ function quadrant(x: number, y: number): string {
   return `${tb}-${lr}`;
 }
 
-/** M2 — precise authored layout for the prompt. */
+/**
+ * M2 — precise authored layout for the prompt.
+ * Deliberately omits zone names: listing “Beer Garden” etc. makes Runway paint fake signs.
+ */
 export function buildLayoutGuideClause(zones: ZoneDef[]): string {
   if (!zones.length) return "";
   const parts = zones.slice(0, 12).map((z) => {
     const pctX = Math.round(z.x * 100);
     const pctY = Math.round(z.y * 100);
-    return `${z.label} at ${pctX}% from left, ${pctY}% from top (${quadrant(z.x, z.y)})`;
+    return `${pctX}% left / ${pctY}% top (${quadrant(z.x, z.y)})`;
   });
-  return `Fan-zone anchors on this same venue geometry (painted regions, not seats): ${parts.join("; ")}.`;
+  return `Unlabeled zone glows (no words) at: ${parts.join("; ")}.`;
 }
 
 export function buildMapPlatePrompt(opts: {
@@ -129,34 +136,29 @@ export function buildMapPlatePrompt(opts: {
   const tags = opts.referenceTags ?? [];
   const hasVenue = tags.includes("venue");
 
-  const zoneList = opts.zones
-    .map((z) => z.label.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  const zoneCount = opts.zones.filter((z) => z.label.trim() || z.key.trim()).length;
   const zoneClause =
-    zoneList.length > 0
-      ? `Named fan participation zones as distinct painted game-world areas (not seats, not sponsor banners): ${zoneList.join(", ")}.`
-      : "Imply a few distinct fan gathering zones around the pitch.";
+    zoneCount > 0
+      ? `${zoneCount} distinct unlabeled fan zones as painted color/glow regions (not seats, not banners, not lettered signs).`
+      : "Imply a few unlabeled fan gathering zones as color patches around the pitch.";
 
   const layoutClause =
     opts.layoutGuided && opts.zones.length > 0 ? buildLayoutGuideClause(opts.zones) : "";
 
   const notes = opts.venueNotes?.trim()
-    ? `Venue landmarks to keep recognizable: ${condense(opts.venueNotes, 220)}.`
+    ? `Venue landmarks: ${condense(opts.venueNotes, twin ? 100 : 220)}.`
     : "";
 
   const refParts: string[] = [];
   if (twin && hasVenue) {
-    refParts.push(TWIN_LOCK);
+    // TWIN_LOCK is injected early below — keep only secondary ref cues here.
     if (tags.includes("layout")) {
-      refParts.push(
-        "Use @layout only for fan-zone glow placement on top of @venue’s real geometry."
-      );
+      refParts.push("Use @layout only for fan-zone glow placement on @venue geometry.");
     }
     const extra = tags.filter((t) => t !== "layout" && t !== "venue");
     if (extra.length > 0) {
       refParts.push(
-        `Also match structure from ${extra.map((t) => `@${t}`).join(", ")} (additional real aerials of the same pitch).`
+        `Also match structure from ${extra.map((t) => `@${t}`).join(", ")} (same pitch aerials).`
       );
     }
   } else {
@@ -182,17 +184,39 @@ export function buildMapPlatePrompt(opts: {
   }
 
   const vibe = opts.vibePrompt.trim()
-    ? condense(opts.vibePrompt, twin ? 280 : MAX_VIBE_CHARS)
+    ? condense(opts.vibePrompt, twin ? 160 : MAX_VIBE_CHARS)
     : `Matchday energy for ${opts.brand.title}, deep ${opts.brand.primaryColor} night with ${opts.brand.accentColor} accents.`;
 
   const twinLead = twin
-    ? `Stylized digital twin of ${opts.brand.title}'s real community pitch — game map of THIS open field, not a pro arena.`
+    ? `Stylized digital twin of ${opts.brand.title}'s real community pitch — THIS open field, not a pro arena.`
     : `Crowdsource Fans Song Garden season map for ${opts.brand.title}.`;
 
-  return `${vibe}. ${twinLead} ${zoneClause} ${notes} ${layoutClause} ${refParts.join(" ")} ${IMAGE_SUFFIX}`
+  // Locks + style suffix are required; geometry cues fill remaining budget.
+  const required = [
+    `${vibe}.`,
+    twinLead,
+    NO_TEXT_LOCK,
+    twin && hasVenue ? TWIN_LOCK : "",
+    IMAGE_SUFFIX,
+  ]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(" ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 1000);
+    .trim();
+
+  const optional = layoutClause
+    ? [layoutClause, notes, refParts.join(" ")]
+    : [zoneClause, notes, refParts.join(" ")];
+  let out = required;
+  for (const part of optional) {
+    const p = part.trim();
+    if (!p) continue;
+    const next = `${out} ${p}`;
+    if (next.length > 1000) continue;
+    out = next;
+  }
+  return out.slice(0, 1000);
 }
 
 /**
@@ -433,7 +457,7 @@ export async function generateMapPlateMotion(
   const vibe =
     garden.brandKit.mapPlate.vibePrompt.trim() ||
     `${garden.brandKit.title} matchday atmosphere`;
-  const promptText = `${condense(vibe)}. ${MOTION_SUFFIX}`.slice(0, 1000);
+  const promptText = `${condense(vibe)}. ${NO_TEXT_LOCK} ${MOTION_SUFFIX}`.slice(0, 1000);
 
   const runwayVideoUrl = await generateVideoFromImage({
     promptImage: await runwayImageUri(stillUrl),
@@ -500,7 +524,7 @@ export async function generateMapPlateVariant(
     });
   }
 
-  const promptText = `${condense(vibe || `${garden.brandKit.title} Song Garden`, 240)}. ${mood}. Same continuous digital-twin stadium map as @plate — keep identical venue geometry, pitch orientation, stand silhouettes, and zone positions; only change lighting, atmosphere, and energy. ${layoutClause} ${IMAGE_SUFFIX}`
+  const promptText = `${condense(vibe || `${garden.brandKit.title} Song Garden`, 200)}. ${mood}. ${NO_TEXT_LOCK} Same continuous digital-twin stadium map as @plate — keep identical venue geometry, pitch orientation, stand silhouettes, and zone positions; only change lighting, atmosphere, and energy. ${layoutClause} ${IMAGE_SUFFIX}`
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 1000);
@@ -516,7 +540,7 @@ export async function generateMapPlateVariant(
 
   let videoUrl: string | null = null;
   if (opts.withMotion) {
-    const motionPrompt = `${condense(vibe || garden.brandKit.title)}. ${mood}. ${MOTION_SUFFIX}`.slice(
+    const motionPrompt = `${condense(vibe || garden.brandKit.title)}. ${mood}. ${NO_TEXT_LOCK} ${MOTION_SUFFIX}`.slice(
       0,
       1000
     );
