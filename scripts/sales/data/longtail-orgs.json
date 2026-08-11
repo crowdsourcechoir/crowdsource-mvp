@@ -1,0 +1,212 @@
+[
+  {
+    "name": "Michigan Association of School Boards",
+    "websiteUrl": "https://www.masb.org/",
+    "eventName": "MASB Annual Conference",
+    "category": "Education",
+    "rationale": "State association with a recurring member conference — mid-size audience fit."
+  },
+  {
+    "name": "Oregon School Boards Association",
+    "websiteUrl": "https://www.osba.org/",
+    "eventName": "OSBA Annual Convention",
+    "category": "Education",
+    "rationale": "Regional education association convention with participatory plenary potential."
+  },
+  {
+    "name": "Texas Municipal League",
+    "websiteUrl": "https://www.tml.org/",
+    "eventName": "TML Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Large state municipal league conference beyond the national NLC/ICMA seed set."
+  },
+  {
+    "name": "Colorado Municipal League",
+    "websiteUrl": "https://www.cml.org/",
+    "eventName": "CML Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "State municipal league gathering — strong civic/community identity."
+  },
+  {
+    "name": "Washington State Association of Counties",
+    "websiteUrl": "https://www.wsac.org/",
+    "eventName": "WSAC Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Pacific Northwest county association conference, mid-size fit."
+  },
+  {
+    "name": "Florida Recreation and Park Association",
+    "websiteUrl": "https://www.frpa.org/",
+    "eventName": "FRPA Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "State parks/recreation association — experiential programming culture."
+  },
+  {
+    "name": "California Park & Recreation Society",
+    "websiteUrl": "https://www.cprs.org/",
+    "eventName": "CPRS Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Large state parks/recreation society conference outside national NRPA head."
+  },
+  {
+    "name": "Illinois Association of Park Districts",
+    "websiteUrl": "https://www.ilparks.org/",
+    "eventName": "IAPD/IPRA Soaring to New Heights Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Midwest parks association conference with strong community programming."
+  },
+  {
+    "name": "New England Museum Association",
+    "websiteUrl": "https://nemanet.org/",
+    "eventName": "NEMA Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Regional museum association — mission-driven audience, opening-session fit."
+  },
+  {
+    "name": "Southeastern Museums Conference",
+    "websiteUrl": "https://www.semcdirect.net/",
+    "eventName": "SEMC Annual Meeting",
+    "category": "Associations / Leadership",
+    "rationale": "Regional museum conference covering the Southeast."
+  },
+  {
+    "name": "Mid-Atlantic Association of Museums",
+    "websiteUrl": "https://www.midatlanticmuseums.org/",
+    "eventName": "MAAM Annual Meeting",
+    "category": "Associations / Leadership",
+    "rationale": "Regional museum association meeting — participatory culture fit."
+  },
+  {
+    "name": "Association of Midwest Museums",
+    "websiteUrl": "https://www.midwestmuseums.org/",
+    "eventName": "AMM Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Midwest museum network conference beyond AAM national."
+  },
+  {
+    "name": "Western Museums Association",
+    "websiteUrl": "https://westmuse.org/",
+    "eventName": "WMA Annual Meeting",
+    "category": "Associations / Leadership",
+    "rationale": "Western regional museum association annual meeting."
+  },
+  {
+    "name": "Visit Denver",
+    "websiteUrl": "https://www.denver.org/",
+    "eventName": "Destination partner events / client hosting",
+    "category": "Destination Marketing",
+    "rationale": "Major DMO that hosts partner and client experiences."
+  },
+  {
+    "name": "Choose Chicago",
+    "websiteUrl": "https://www.choosechicago.com/",
+    "eventName": "Partner and meeting planner events",
+    "category": "Destination Marketing",
+    "rationale": "Large Midwest DMO with planner-facing gatherings."
+  },
+  {
+    "name": "Brand USA",
+    "websiteUrl": "https://www.thebrandusa.com/",
+    "eventName": "IPW / partner summit programming",
+    "category": "Destination Marketing",
+    "rationale": "National destination marketing org with large partner convenings."
+  },
+  {
+    "name": "Tennessee Association of Museums",
+    "websiteUrl": "https://tnmuseums.org/",
+    "eventName": "TAM Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "State museum association — long-tail beyond national lists."
+  },
+  {
+    "name": "Georgia Association of Museums",
+    "websiteUrl": "https://www.georgiamuseums.org/",
+    "eventName": "GAM Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "State museum association conference in the Southeast."
+  },
+  {
+    "name": "Minnesota Library Association",
+    "websiteUrl": "https://www.mnlibraryassociation.org/",
+    "eventName": "MLA Annual Conference",
+    "category": "Education",
+    "rationale": "State library association conference — community/mission audience."
+  },
+  {
+    "name": "Ohio Library Council",
+    "websiteUrl": "https://olc.org/",
+    "eventName": "OLC Convention & Expo",
+    "category": "Education",
+    "rationale": "State library council convention with expo floor and plenaries."
+  },
+  {
+    "name": "Texas Library Association",
+    "websiteUrl": "https://txla.org/",
+    "eventName": "TLA Annual Conference",
+    "category": "Education",
+    "rationale": "Large state library association conference — mid/large attendance band."
+  },
+  {
+    "name": "California Library Association",
+    "websiteUrl": "https://www.cla-net.org/",
+    "eventName": "CLA Annual Conference",
+    "category": "Education",
+    "rationale": "State library association conference outside ALA national."
+  },
+  {
+    "name": "Northwest Association of Independent Schools",
+    "websiteUrl": "https://www.nwaais.org/",
+    "eventName": "NWAIS Annual Conference",
+    "category": "Education",
+    "rationale": "Regional independent schools association — peer to NYSAIS seed."
+  },
+  {
+    "name": "California Association of Independent Schools",
+    "websiteUrl": "https://www.caisca.org/",
+    "eventName": "CAIS Annual Conference",
+    "category": "Education",
+    "rationale": "Large state independent schools conference."
+  },
+  {
+    "name": "Association of Independent Schools of New England",
+    "websiteUrl": "https://www.aisne.org/",
+    "eventName": "AISNE Annual Conference",
+    "category": "Education",
+    "rationale": "New England independent schools association conference."
+  },
+  {
+    "name": "Pennsylvania School Boards Association",
+    "websiteUrl": "https://www.psba.org/",
+    "eventName": "PASA-PSBA School Leadership Conference",
+    "category": "Education",
+    "rationale": "State school boards conference with leadership plenaries."
+  },
+  {
+    "name": "New Jersey School Boards Association",
+    "websiteUrl": "https://www.njsba.org/",
+    "eventName": "Workshop Annual Conference",
+    "category": "Education",
+    "rationale": "State school boards workshop/conference — civic/education audience."
+  },
+  {
+    "name": "Utah League of Cities and Towns",
+    "websiteUrl": "https://www.ulct.org/",
+    "eventName": "ULCT Annual Convention",
+    "category": "Associations / Leadership",
+    "rationale": "Mountain West municipal league convention."
+  },
+  {
+    "name": "League of Minnesota Cities",
+    "websiteUrl": "https://www.lmc.org/",
+    "eventName": "LMC Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "State municipal league conference — community leadership audience."
+  },
+  {
+    "name": "Association of Washington Cities",
+    "websiteUrl": "https://wacities.org/",
+    "eventName": "AWC Annual Conference",
+    "category": "Associations / Leadership",
+    "rationale": "Pacific Northwest cities association conference."
+  }
+]

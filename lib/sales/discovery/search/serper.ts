@@ -1,8 +1,8 @@
+import { getDiscoveryMaxResultsPerQuery } from "../config";
 import type { SearchQueryResult, SearchResultItem } from "./types";
 
 const SERPER_SEARCH_URL = "https://google.serper.dev/search";
 const FETCH_TIMEOUT_MS = 15000;
-const MAX_RESULTS_PER_QUERY = 8;
 
 /**
  * Serper.dev — self-serve Google-results-as-JSON API, free-tier API key from the dashboard, no
@@ -14,6 +14,8 @@ export async function searchWithSerper(query: string): Promise<SearchQueryResult
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return { provider: "serper", query, results: [], error: "SERPER_API_KEY not configured" };
 
+  const maxResults = getDiscoveryMaxResultsPerQuery();
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -21,7 +23,7 @@ export async function searchWithSerper(query: string): Promise<SearchQueryResult
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
-      body: JSON.stringify({ q: query, num: MAX_RESULTS_PER_QUERY }),
+      body: JSON.stringify({ q: query, num: maxResults }),
     });
     clearTimeout(timeout);
 

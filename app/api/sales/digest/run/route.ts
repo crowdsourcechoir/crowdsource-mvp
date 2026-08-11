@@ -15,7 +15,9 @@ export const maxDuration = 290;
  */
 export async function POST(request: Request) {
   try {
-    const force = new URL(request.url).searchParams.get("force") === "1";
+    const url = new URL(request.url);
+    const force = url.searchParams.get("force") === "1";
+    const toParam = url.searchParams.get("to")?.trim() || undefined;
     if (force) {
       const minScore = getDigestMinScore();
       const loaded = await loadAllPendingDigestItems(minScore);
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
         sinceIso: loaded.sinceIso,
         backlogCount: loaded.backlogCount,
         minScore,
+        to: toParam,
       });
       return NextResponse.json({ result });
     }

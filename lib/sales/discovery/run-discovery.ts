@@ -1,21 +1,15 @@
 import { listOrganizationTypes } from "../db/lookups";
-import { createOrganization, findExistingOrganization } from "../db/organizations";
+import { createOrganization, findExistingOrganization, listKnownOrganizationDomains } from "../db/organizations";
 import { createDiscoveryRun, finishDiscoveryRun } from "../db/discoveryRuns";
-import { normalizeOrgName } from "../dedupe";
-import { activeSearchProvider, runSearch } from "./search";
+import { normalizeOrgName, extractDomain } from "../dedupe";
+import {
+  getDiscoveryExcludeDomainCount,
+  getDiscoveryMaxNewOrganizationsPerRun,
+} from "./config";
+import { activeSearchProvider, runSearch, withExcludedDomains } from "./search";
 import { buildDiscoveryQueries } from "./queryBuilder";
 import { extractCandidatesFromSearchResult } from "./extractCandidates";
 import type { DiscoveryRun } from "../types";
-
-/**
- * Hard cap on brand-new organization rows created per discovery run — a cost/volume control,
- * not a quality one (mirrors MAX_ENRICHMENT_PER_RUN in enrichContacts.ts). Chosen so nightly
- * discovery tops up the top of the funnel without ever threatening the 30-50/day human-review
- * budget on its own: these rows still have to go through the full 10-stage pipeline and land in
- * the approval queue before they cost a human any time, and most nights the existing
- * ~270-organization seeded pool is still the dominant source of queue volume anyway.
- */
-const MAX_NEW_ORGANIZATIONS_PER_RUN = 15;
 
 export type DiscoveryRunSummary = {
   discoveryRunId: string;
@@ -31,9 +25,7 @@ export type DiscoveryRunSummary = {
 
 /**
  * Stage 0: finds brand-new candidate organizations that aren't in `organizations` yet, so the
- * existing 10-stage pipeline always has fresh raw material to work through once the original
- * seeded set is exhausted. Runs BEFORE normalize/stage 1 — there's no organization row yet when
- * this runs, so it's a sibling of pipeline_runs, not a per-organization pipeline stage.
+ * existing 10-stage pipeline always has fresh raw material beyond the seeded CSV lists.
  *
  * No-op (zero cost, zero API calls) if neither TAVILY_API_KEY nor SERPER_API_KEY is configured
  * — identical graceful-degradation shape to lib/sales/enrichment.
@@ -44,6 +36,7 @@ export type DiscoveryRunSummary = {
 export async function runDiscoveryRun(trigger: DiscoveryRun["trigger"] = "manual"): Promise<DiscoveryRunSummary> {
   const provider = activeSearchProvider();
   const discoveryRun = await createDiscoveryRun(trigger);
+  const maxNew = getDiscoveryMaxNewOrganizationsPerRun();
 
   if (!provider) {
     await finishDiscoveryRun(discoveryRun.id, {
@@ -70,7 +63,8 @@ export async function runDiscoveryRun(trigger: DiscoveryRun["trigger"] = "manual
 
   const queryLog: DiscoveryRun["queries"] = [];
   const createdOrganizationIds: string[] = [];
-  const createdNormalizedNamesThisRun = new Set<string>(); // avoids a redundant DB round-trip when two queries surface the same org within one run
+  const createdNormalizedNamesThisRun = new Set<string>();
+  const createdDomainsThisRun = new Set<string>();
   let candidatesFound = 0;
   let candidatesNew = 0;
   let candidatesDuplicate = 0;
@@ -83,13 +77,18 @@ export async function runDiscoveryRun(trigger: DiscoveryRun["trigger"] = "manual
   try {
     const organizationTypes = await listOrganizationTypes();
     const queries = buildDiscoveryQueries(organizationTypes);
+    const knownDomains = await listKnownOrganizationDomains(getDiscoveryExcludeDomainCount());
+    const daySalt = Math.floor(Date.now() / 86_400_000);
 
-    for (const query of queries) {
-      if (createdOrganizationIds.length >= MAX_NEW_ORGANIZATIONS_PER_RUN) break;
+    for (let qi = 0; qi < queries.length; qi++) {
+      if (createdOrganizationIds.length >= maxNew) break;
 
+      const baseQuery = queries[qi];
+      // Rotate which known domains get `-site:` excludes so we don't always suppress the same set.
+      const query = withExcludedDomains(baseQuery, knownDomains, daySalt + qi);
       const searchResult = await runSearch(query);
       if (!searchResult || searchResult.error) {
-        queryLog.push({ query, resultsCount: 0, candidatesExtracted: 0 });
+        queryLog.push({ query: baseQuery, resultsCount: 0, candidatesExtracted: 0 });
         continue;
       }
 
@@ -99,10 +98,14 @@ export async function runDiscoveryRun(trigger: DiscoveryRun["trigger"] = "manual
       totalTokensOutput += extraction.tokensOutput;
       totalCostUsd += extraction.costUsd;
       candidatesFound += extraction.candidates.length;
-      queryLog.push({ query, resultsCount: searchResult.results.length, candidatesExtracted: extraction.candidates.length });
+      queryLog.push({
+        query: baseQuery,
+        resultsCount: searchResult.results.length,
+        candidatesExtracted: extraction.candidates.length,
+      });
 
       for (const candidate of extraction.candidates) {
-        if (createdOrganizationIds.length >= MAX_NEW_ORGANIZATIONS_PER_RUN) break;
+        if (createdOrganizationIds.length >= maxNew) break;
         const name = candidate.organizationName.trim();
         if (!name) continue;
 
@@ -111,28 +114,46 @@ export async function runDiscoveryRun(trigger: DiscoveryRun["trigger"] = "manual
           candidatesDuplicate += 1;
           continue;
         }
-
-        const existing = await findExistingOrganization(name, candidate.websiteUrl);
-        if (existing) {
+        const domain = extractDomain(candidate.websiteUrl);
+        if (domain && createdDomainsThisRun.has(domain)) {
           candidatesDuplicate += 1;
           createdNormalizedNamesThisRun.add(normalized);
           continue;
         }
 
-        const created = await createOrganization({
-          name,
-          websiteUrl: candidate.websiteUrl,
-          source: "ai_discovered",
-          importMetadata: {
-            discoveryQuery: candidate.query,
-            discoverySourceUrl: candidate.sourceUrl,
-            discoveryRationale: candidate.rationale,
-            discoveryRunId: discoveryRun.id,
-          },
-        });
-        createdNormalizedNamesThisRun.add(normalized);
-        createdOrganizationIds.push(created.id);
-        candidatesNew += 1;
+        try {
+          const existing = await findExistingOrganization(name, candidate.websiteUrl);
+          if (existing) {
+            candidatesDuplicate += 1;
+            createdNormalizedNamesThisRun.add(normalized);
+            if (domain) createdDomainsThisRun.add(domain);
+            continue;
+          }
+
+          const created = await createOrganization({
+            name,
+            websiteUrl: candidate.websiteUrl,
+            source: "ai_discovered",
+            importMetadata: {
+              discoveryQuery: candidate.query,
+              discoverySourceUrl: candidate.sourceUrl,
+              discoveryRationale: candidate.rationale,
+              discoveryRunId: discoveryRun.id,
+            },
+          });
+          createdNormalizedNamesThisRun.add(normalized);
+          if (domain) createdDomainsThisRun.add(domain);
+          createdOrganizationIds.push(created.id);
+          candidatesNew += 1;
+        } catch (candidateErr) {
+          // One bad candidate (e.g. insert race) must not abort the whole discovery run —
+          // otherwise the overnight top-up loop finds candidates but creates zero orgs and
+          // the morning digest stays under its 10×70 target.
+          console.error(
+            `[discovery] candidate "${name}" failed:`,
+            candidateErr instanceof Error ? candidateErr.message : candidateErr
+          );
+        }
       }
     }
   } catch (err) {

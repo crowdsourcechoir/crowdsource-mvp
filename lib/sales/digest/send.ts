@@ -1,9 +1,15 @@
 import { Resend } from "resend";
-import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems } from "../db/queue";
+import {
+  listQueueItems,
+  listQueueItemsCreatedSince,
+  listPendingNeverDigestedQueueItems,
+  markQueueItemsDigested,
+  countPendingQueueItems,
+} from "../db/queue";
 import { assembleQueueItemDetail } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
 import { renderDigestEmail } from "./render";
-import { getDigestMinScore, getDigestTargetCount } from "./config";
+import { getDigestAlreadySentWindowMs, getDigestMinScore, getDigestTargetCount } from "./config";
 import { filterDigestQualifyingItems, sortByScoreDesc } from "./qualify";
 import { siteUrl } from "@/lib/site-url";
 import type { ApprovalQueueItem, QueueItemDetail } from "../types";
@@ -27,10 +33,13 @@ async function assembleMany(queueItems: ApprovalQueueItem[]): Promise<QueueItemD
 /**
  * Loads pending queue items that clear the digest min-score bar.
  *
- * Cutoff uses the last digest that actually delivered leads (item_count > 0), so empty heartbeat
- * sends cannot strand the pending 70+ backlog. If the most recent succeeded digest was empty and
- * we still don't have enough "new" leads, backfill from older pending 70+ leads until the target
- * count — a one-shot recovery that stops once a real digest lands.
+ * Preference order:
+ * 1. Pending 70+ never included in a prior digest (`last_digested_at` null) — survives force-sends
+ * 2. Else brand-new since last delivered digest, with overdue backfill from older pending 70+
+ *
+ * Overdue backfill: if under target and the last delivered digest is older than the already-sent
+ * window (or the last succeeded send was empty), top up from older pending 70+ so a discovery
+ * stall cannot silence the inbox for days.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
@@ -42,12 +51,56 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   const sinceIso =
     lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
   const targetCount = getDigestTargetCount();
+  const alreadySentWindowMs = getDigestAlreadySentWindowMs();
+  const backlogCount = await countPendingQueueItems();
 
-  const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
-  let items = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(newQueueItems), minScore));
+  // Prefer never-digested pending when the tracking column exists.
+  const neverDigested = await listPendingNeverDigestedQueueItems();
+  if (neverDigested) {
+    const undigested = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(neverDigested), minScore));
+    if (undigested.length >= targetCount) {
+      return { items: undigested, sinceIso, backlogCount, backfilled: false };
+    }
+    // Under target: still return what we have (ensureDigestTarget will top up discovery/pipeline).
+    // Also allow overdue backfill from already-digested-but-still-pending only when due.
+    const lastDeliveredAgeMs = lastDelivered?.finishedAt
+      ? Date.now() - Date.parse(lastDelivered.finishedAt)
+      : Number.POSITIVE_INFINITY;
+    const dueForMorningSend = lastDeliveredAgeMs >= alreadySentWindowMs;
+    if (undigested.length < targetCount && dueForMorningSend) {
+      const allPending = await listQueueItems("pending");
+      const older = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
+      const seen = new Set(undigested.map((i) => i.queueItem.id));
+      const merged = [...undigested];
+      for (const item of older) {
+        if (seen.has(item.queueItem.id)) continue;
+        seen.add(item.queueItem.id);
+        merged.push(item);
+        if (merged.length >= targetCount) break;
+      }
+      return {
+        items: merged,
+        sinceIso,
+        backlogCount,
+        backfilled: merged.length > undigested.length,
+      };
+    }
+    return { items: undigested, sinceIso, backlogCount, backfilled: false };
+  }
+
+  // Fallback when last_digested_at isn't migrated yet.
+  const [newQueueItems] = await Promise.all([listQueueItemsCreatedSince(sinceIso)]);
+  const newItems = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(newQueueItems), minScore));
+  let items = newItems;
   let backfilled = false;
 
-  const shouldBackfill = items.length < targetCount && (!lastSucceeded || lastSucceeded.itemCount === 0);
+  const lastDeliveredAgeMs = lastDelivered?.finishedAt
+    ? Date.now() - Date.parse(lastDelivered.finishedAt)
+    : Number.POSITIVE_INFINITY;
+  const dueForMorningSend = lastDeliveredAgeMs >= alreadySentWindowMs;
+  const lastSendWasEmpty = !lastSucceeded || lastSucceeded.itemCount === 0;
+  const shouldBackfill = items.length < targetCount && (lastSendWasEmpty || dueForMorningSend);
+
   if (shouldBackfill) {
     const allPending = await listQueueItems("pending");
     const older = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
@@ -57,9 +110,11 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
       if (seen.has(item.queueItem.id)) continue;
       seen.add(item.queueItem.id);
       merged.push(item);
+      if (merged.length >= targetCount) break;
     }
     items = merged;
-    backfilled = items.length > 0;
+    const newIds = new Set(newItems.map((i) => i.queueItem.id));
+    backfilled = items.some((i) => !newIds.has(i.queueItem.id));
   }
 
   return { items, sinceIso, backlogCount, backfilled };
@@ -82,11 +137,28 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
   return { items, sinceIso, backlogCount };
 }
 
+/** Canonical morning-digest inbox. */
+export const DEFAULT_DIGEST_TO_EMAIL = "sing@crowdsourcechoir.com";
+
+/**
+ * Resolve digest recipient. Prefer an explicit per-send override, otherwise the
+ * Crowdsource ops inbox. `SALES_DIGEST_TO_EMAIL` overrides when set (for staging);
+ * the retired crowdsourcechoir@gmail.com value is ignored so stale Vercel env cannot
+ * keep routing mail away from sing@.
+ */
+function resolveDigestToEmail(override?: string): string {
+  const fromOverride = override?.trim();
+  if (fromOverride) return fromOverride;
+  const fromEnv = process.env.SALES_DIGEST_TO_EMAIL?.trim();
+  if (fromEnv && fromEnv.toLowerCase() !== "crowdsourcechoir@gmail.com") return fromEnv;
+  return DEFAULT_DIGEST_TO_EMAIL;
+}
+
 /**
  * Sends the "new leads since last digest" email — the actual "in my inbox every morning" piece.
- * A no-op (recorded as `skipped_no_provider`, never an error) if RESEND_API_KEY or
- * SALES_DIGEST_TO_EMAIL aren't set, same graceful-degradation contract as discovery/enrichment
- * (see docs/sales-platform/roadmap.md).
+ * A no-op (recorded as `skipped_no_provider`, never an error) if RESEND_API_KEY isn't set,
+ * same graceful-degradation contract as discovery/enrichment (see docs/sales-platform/roadmap.md).
+ * Recipient is sing@crowdsourcechoir.com (override via options.to or SALES_DIGEST_TO_EMAIL).
  *
  * Only includes leads scoring >= SALES_DIGEST_MIN_SCORE (default 70). Cron callers should use
  * `ensureDigestTarget` so the email waits until SALES_DIGEST_TARGET_COUNT (default 10) qualify;
@@ -94,12 +166,18 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
  */
 export async function sendDailyDigest(
   trigger: "manual" | "cron" = "cron",
-  options?: { items?: QueueItemDetail[]; sinceIso?: string; backlogCount?: number; minScore?: number }
+  options?: {
+    items?: QueueItemDetail[];
+    sinceIso?: string;
+    backlogCount?: number;
+    minScore?: number;
+    to?: string;
+  }
 ): Promise<DigestSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.SALES_DIGEST_TO_EMAIL;
+  const to = resolveDigestToEmail(options?.to);
   const minScore = options?.minScore ?? getDigestMinScore();
-  if (!apiKey || !to) {
+  if (!apiKey) {
     return { status: "skipped_no_provider", itemCount: 0, minScore };
   }
 
@@ -128,6 +206,7 @@ export async function sendDailyDigest(
       recipient: to,
       providerMessageId: data?.id ?? null,
     });
+    await markQueueItemsDigested(loaded.items.map((i) => i.queueItem.id));
     return { status: "succeeded", itemCount: loaded.items.length, minScore };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

@@ -78,19 +78,62 @@ export async function getOrganization(id: string): Promise<Organization | null> 
   return data ? rowToOrganization(data) : null;
 }
 
-/** Finds an existing org by domain first (strongest signal), then normalized name. */
+/**
+ * Domains already in the org table — used by discovery to append `-site:` excludes so SERPs
+ * dig past the seeded CSV head. Newest-first so the rotating exclude window still cycles.
+ */
+export async function listKnownOrganizationDomains(limit: number): Promise<string[]> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("organizations")
+    .select("domain")
+    .not("domain", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, limit * 3));
+  if (error) throw new Error(error.message);
+  const seen = new Set<string>();
+  const domains: string[] = [];
+  for (const row of data ?? []) {
+    const domain = String(row.domain ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/^www\./, "");
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    domains.push(domain);
+    if (domains.length >= limit) break;
+  }
+  return domains;
+}
+
+/** Finds an existing org by domain first (strongest signal), then normalized name.
+ * Uses limit(1) rather than maybeSingle: duplicate domain/normalized_name rows exist in
+ * production (no unique constraint), and maybeSingle throws
+ * "JSON object requested, multiple (or no) rows returned" — which was aborting every
+ * discovery cron run and starving the morning digest of new 70+ leads.
+ */
 export async function findExistingOrganization(name: string, websiteUrl?: string | null): Promise<Organization | null> {
   const db = requireSupabaseAdmin();
   const domain = extractDomain(websiteUrl);
   if (domain) {
-    const { data, error } = await db.from("organizations").select("*").eq("domain", domain).maybeSingle();
+    const { data, error } = await db
+      .from("organizations")
+      .select("*")
+      .eq("domain", domain)
+      .order("created_at", { ascending: true })
+      .limit(1);
     if (error) throw new Error(error.message);
-    if (data) return rowToOrganization(data);
+    if (data?.[0]) return rowToOrganization(data[0]);
   }
   const normalized = normalizeOrgName(name);
-  const { data, error } = await db.from("organizations").select("*").eq("normalized_name", normalized).maybeSingle();
+  const { data, error } = await db
+    .from("organizations")
+    .select("*")
+    .eq("normalized_name", normalized)
+    .order("created_at", { ascending: true })
+    .limit(1);
   if (error) throw new Error(error.message);
-  return data ? rowToOrganization(data) : null;
+  return data?.[0] ? rowToOrganization(data[0]) : null;
 }
 
 export async function createOrganization(input: CreateOrganizationInput): Promise<Organization> {

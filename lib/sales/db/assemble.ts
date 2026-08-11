@@ -23,6 +23,7 @@ function emptyQueueItem(opportunityId: string, createdAt: string): ApprovalQueue
     decidedBy: null,
     decidedAt: null,
     deferredUntil: null,
+    lastDigestedAt: null,
     createdAt,
   };
 }
