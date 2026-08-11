@@ -208,6 +208,8 @@ export default function ApprovalQueueClient() {
     function onKeyDown(e: KeyboardEvent) {
       // Enter must never approve/send — it was firing accidental Gmail sends while reviewing.
       if (e.key === "Enter") return;
+      // Cmd/Ctrl/Alt combos (e.g. Cmd+A select-all) must never hit approve shortcuts.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") {
         if (sendConfirmAction) {
           e.preventDefault();
