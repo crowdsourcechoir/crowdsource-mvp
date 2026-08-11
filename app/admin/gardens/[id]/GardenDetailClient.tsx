@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Event } from "@/data/mockEvents";
 import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
 import type {
@@ -128,6 +128,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [mapActiveVariant, setMapActiveVariant] = useState<MapPlateVariantKey | "default">(
     "default"
   );
+  const [uploadingRefs, setUploadingRefs] = useState(false);
   const [generatingPlate, setGeneratingPlate] = useState(false);
   const [pinningPlate, setPinningPlate] = useState(false);
   const [generatingMotion, setGeneratingMotion] = useState(false);
@@ -500,6 +501,71 @@ export default function GardenDetailClient({ gardenId }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleUploadMapRefs(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const filled = mapRefs.map((u) => u.trim()).filter(Boolean);
+    const room = Math.max(0, 8 - filled.length);
+    if (room === 0) {
+      setError("Already at 8 references. Remove one before uploading more.");
+      return;
+    }
+    const batch = files.slice(0, room);
+    for (const file of batch) {
+      if (file.size > 4.5 * 1024 * 1024) {
+        setError(`“${file.name}” is over ~4.5MB. Compress it and try again.`);
+        return;
+      }
+    }
+
+    setUploadingRefs(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      for (const file of batch) form.append("files", file);
+      form.append("append", "true");
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/refs`, {
+        method: "POST",
+        body: form,
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        referenceUrls?: string[];
+        urls?: string[];
+      };
+      if (!res.ok) throw new Error(body.error || "Upload failed");
+      const next = body.referenceUrls?.length
+        ? body.referenceUrls
+        : [...filled, ...(body.urls ?? [])];
+      setMapRefs(next.length ? next : [""]);
+      setNotice(
+        `Uploaded ${body.urls?.length ?? batch.length} reference photo${
+          (body.urls?.length ?? batch.length) === 1 ? "" : "s"
+        }. #1 is the venue lock — drag order with Move up.`
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingRefs(false);
+    }
+  }
+
+  function moveMapRef(index: number, dir: -1 | 1) {
+    setMapRefs((prev) => {
+      const next = [...prev];
+      const j = index + dir;
+      if (j < 0 || j >= next.length) return prev;
+      const tmp = next[index];
+      next[index] = next[j];
+      next[j] = tmp;
+      return next;
+    });
   }
 
   async function handleGenerateMapPlate() {
@@ -953,39 +1019,96 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <div className="space-y-2">
             <p className="text-xs text-gray-400">
               References — <span className="text-gray-300">#1 = venue lock</span> (real aerial /
-              map). Optional #2: clean Google Earth / satellite of the same pitch helps strip
-              graphic overlays.
+              map). Upload multiple photos or paste URLs. Optional clean Google Earth shot as #2.
             </p>
-            {mapRefs.map((url, i) => (
-              <div key={`ref-${i}`} className="flex gap-2">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-[#CFFF81]/40 bg-black/40 px-3 py-2 text-sm text-[#CFFF81] hover:bg-[#CFFF81]/10">
+                {uploadingRefs ? "Uploading…" : "Upload photos"}
                 <input
-                  className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-                  value={url}
-                  onChange={(e) =>
-                    setMapRefs((prev) => prev.map((row, j) => (j === i ? e.target.value : row)))
-                  }
-                  placeholder="/fans/ballard-fc/interbay-stadium-map.jpg"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  disabled={uploadingRefs || saving}
+                  onChange={(e) => void handleUploadMapRefs(e)}
                 />
+              </label>
+              {mapRefs.filter((u) => u.trim()).length < 8 ? (
                 <button
                   type="button"
-                  className="shrink-0 text-xs text-red-300 underline"
-                  onClick={() =>
-                    setMapRefs((prev) => (prev.length <= 1 ? [""] : prev.filter((_, j) => j !== i)))
-                  }
+                  className="text-xs text-gray-400 underline"
+                  onClick={() => setMapRefs((prev) => [...prev, ""])}
                 >
-                  Remove
+                  Add URL field
                 </button>
+              ) : null}
+            </div>
+
+            {mapRefs.map((url, i) => (
+              <div
+                key={`ref-${i}`}
+                className="flex flex-wrap items-start gap-2 rounded-lg border border-gray-800 bg-black/20 p-2"
+              >
+                <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-start">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                    #{i + 1}
+                    {i === 0 ? " · venue" : ""}
+                  </span>
+                  {url.trim() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={url.trim()}
+                      alt=""
+                      className="h-14 w-20 rounded border border-gray-700 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-20 items-center justify-center rounded border border-dashed border-gray-700 text-[10px] text-gray-600">
+                      empty
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <input
+                    className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    value={url}
+                    onChange={(e) =>
+                      setMapRefs((prev) => prev.map((row, j) => (j === i ? e.target.value : row)))
+                    }
+                    placeholder="/fans/ballard-fc/interbay-stadium-map.jpg"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="text-[11px] text-gray-400 underline disabled:opacity-40"
+                      disabled={i === 0}
+                      onClick={() => moveMapRef(i, -1)}
+                    >
+                      Move up
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[11px] text-gray-400 underline disabled:opacity-40"
+                      disabled={i >= mapRefs.length - 1}
+                      onClick={() => moveMapRef(i, 1)}
+                    >
+                      Move down
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[11px] text-red-300 underline"
+                      onClick={() =>
+                        setMapRefs((prev) =>
+                          prev.length <= 1 ? [""] : prev.filter((_, j) => j !== i)
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
-            {mapRefs.length < 8 ? (
-              <button
-                type="button"
-                className="text-xs text-[#CFFF81] underline"
-                onClick={() => setMapRefs((prev) => [...prev, ""])}
-              >
-                Add reference URL
-              </button>
-            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
