@@ -223,6 +223,16 @@ curl -X POST "$ORIGIN/api/gardens/$SLUG/pulse" \
 
 ---
 
+### Manual — Composition canvas (Fans garden)
+
+1. Attach at least one **show (chapter)** so event Song Garden clips can appear.
+2. Admin garden → **Composition canvas** (below Fan map).
+3. Filter **Zone** first (All / named zones / Unzoned), then **Sound** (Ambient, Foley, …).
+4. Drag clips into a DAW; zone marks from `/g` pulses list under **Zone marks**.
+5. `GET /api/gardens/[id]/composition` returns `{ clips, marks, zones, chapters }`.
+
+---
+
 ## 7. Suggested end-to-end demo script (one sitting)
 
 1. Create live garden `demo-fans` (kind `season` if available).

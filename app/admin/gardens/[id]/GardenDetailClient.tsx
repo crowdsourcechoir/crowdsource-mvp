@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Event } from "@/data/mockEvents";
 import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
+import GardenCompositionCanvas from "@/components/song-garden-v2/GardenCompositionCanvas";
 import type {
   Garden,
   GardenChapter,
@@ -1590,6 +1591,18 @@ export default function GardenDetailClient({ gardenId }: Props) {
             </ul>
           </div>
         ) : null}
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+        <GardenCompositionCanvas
+          gardenId={gardenId}
+          gardenTitle={garden?.title || "Garden"}
+          zones={zoneOptions.map((z) => ({
+            key: slugifyKey(z.key || z.label),
+            label: z.label.trim() || z.key,
+          }))}
+          publicHref={publicHref}
+        />
       </section>
 
       <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
