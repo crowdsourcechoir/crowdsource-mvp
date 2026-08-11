@@ -509,6 +509,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
     e.target.value = "";
     if (picked.length === 0) return;
 
+    const MAX_REF_BYTES = 20 * 1024 * 1024;
     const isImageFile = (f: File) =>
       f.type.startsWith("image/") ||
       (!f.type && /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name));
@@ -532,8 +533,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
     }
     const batch = files.slice(0, room);
     for (const file of batch) {
-      if (file.size > 4.5 * 1024 * 1024) {
-        setError(`“${file.name}” is over ~4.5MB. Compress it and try again.`);
+      if (file.size > MAX_REF_BYTES) {
+        setError(`“${file.name}” is over 20MB. Compress it and try again.`);
         return;
       }
     }
@@ -542,27 +543,101 @@ export default function GardenDetailClient({ gardenId }: Props) {
     setError(null);
     setNotice(null);
     try {
-      // Prefer JSON data-URLs — more reliable than multipart File/Blob quirks.
-      const images = await Promise.all(
-        batch.map(
-          (file) =>
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const result = reader.result;
-                if (typeof result === "string" && result.startsWith("data:")) resolve(result);
-                else reject(new Error(`Could not read “${file.name}”.`));
-              };
-              reader.onerror = () => reject(new Error(`Could not read “${file.name}”.`));
-              reader.readAsDataURL(file);
-            })
-        )
-      );
+      // Direct-to-storage signed upload (bypasses Vercel ~4.5MB body limit).
+      const prepareRes = await fetch(`/api/gardens/${gardenId}/map-plate/refs/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: batch.map((file) => ({
+            name: file.name,
+            contentType: file.type?.startsWith("image/") ? file.type : "image/jpeg",
+            size: file.size,
+          })),
+        }),
+      });
+      const prepareBody = (await prepareRes.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        uploads?: Array<{
+          signedUrl: string;
+          publicUrl: string;
+          contentType: string;
+        }>;
+      };
+
+      let urls: string[] = [];
+
+      if (prepareRes.ok && prepareBody.uploads?.length) {
+        for (let i = 0; i < prepareBody.uploads.length; i += 1) {
+          const upload = prepareBody.uploads[i];
+          const file = batch[i];
+          const put = await fetch(upload.signedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": upload.contentType },
+            body: file,
+          });
+          if (!put.ok) {
+            const detail = await put.text().catch(() => "");
+            throw new Error(
+              `Could not upload “${file.name}” to storage${detail ? `: ${detail.slice(0, 120)}` : "."}`
+            );
+          }
+          urls.push(upload.publicUrl);
+        }
+      } else if (prepareBody.code === "not_configured") {
+        // Local/dev fallback: data-URLs only work under ~4.5MB on Vercel.
+        const small = batch.filter((f) => f.size <= 4.5 * 1024 * 1024);
+        if (small.length === 0) {
+          throw new Error(
+            "Storage isn’t configured and files are over ~4.5MB. Configure Supabase storage for 20MB uploads."
+          );
+        }
+        urls = [];
+        const images = await Promise.all(
+          small.map(
+            (file) =>
+              new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = reader.result;
+                  if (typeof result === "string" && result.startsWith("data:")) resolve(result);
+                  else reject(new Error(`Could not read “${file.name}”.`));
+                };
+                reader.onerror = () => reject(new Error(`Could not read “${file.name}”.`));
+                reader.readAsDataURL(file);
+              })
+          )
+        );
+        const res = await fetch(`/api/gardens/${gardenId}/map-plate/refs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ images, append: true }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          referenceUrls?: string[];
+          urls?: string[];
+        };
+        if (!res.ok) throw new Error(body.error || "Upload failed");
+        const next = body.referenceUrls?.length
+          ? body.referenceUrls
+          : [...filled, ...(body.urls ?? [])];
+        setMapRefs(next.length ? next : [""]);
+        setNotice(
+          `Uploaded ${body.urls?.length ?? small.length} reference photo${
+            (body.urls?.length ?? small.length) === 1 ? "" : "s"
+          }. #1 is the venue lock — use Move up if needed.`
+        );
+        await load();
+        return;
+      } else {
+        throw new Error(prepareBody.error || "Could not prepare upload.");
+      }
 
       const res = await fetch(`/api/gardens/${gardenId}/map-plate/refs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images, append: true }),
+        body: JSON.stringify({ urls, append: true }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -572,11 +647,11 @@ export default function GardenDetailClient({ gardenId }: Props) {
       if (!res.ok) throw new Error(body.error || "Upload failed");
       const next = body.referenceUrls?.length
         ? body.referenceUrls
-        : [...filled, ...(body.urls ?? [])];
+        : [...filled, ...(body.urls ?? urls)];
       setMapRefs(next.length ? next : [""]);
       setNotice(
-        `Uploaded ${body.urls?.length ?? batch.length} reference photo${
-          (body.urls?.length ?? batch.length) === 1 ? "" : "s"
+        `Uploaded ${body.urls?.length ?? urls.length} reference photo${
+          (body.urls?.length ?? urls.length) === 1 ? "" : "s"
         }. #1 is the venue lock — use Move up if needed.`
       );
       await load();
@@ -1050,7 +1125,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <div className="space-y-2">
             <p className="text-xs text-gray-400">
               References — <span className="text-gray-300">#1 = venue lock</span> (real aerial /
-              map). Upload multiple photos or paste URLs. Optional clean Google Earth shot as #2.
+              map). Upload photos up to 20MB each, or paste URLs. Optional clean Google Earth shot as
+              #2.
             </p>
 
             <div className="flex flex-wrap items-center gap-2">

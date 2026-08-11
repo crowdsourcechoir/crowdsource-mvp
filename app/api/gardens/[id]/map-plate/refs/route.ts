@@ -7,12 +7,14 @@ export const maxDuration = 60;
 
 const NO_STORE = { headers: { "Cache-Control": "no-store" } };
 const MAX_FILES = 8;
-const MAX_BYTES = 4.5 * 1024 * 1024;
+/** Soft cap for legacy data-URL / multipart path (prefer signed upload via /refs/prepare). */
+const MAX_BYTES = 20 * 1024 * 1024;
 
 type Ctx = { params: { id: string } };
 
 const DATA_URL_RE = /^data:([^;]+);base64,([\s\S]+)$/;
 const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i;
+const HTTPS_URL_RE = /^https:\/\/.+/i;
 
 function extFor(contentType: string, fallbackName = ""): string {
   if (contentType.includes("jpeg") || contentType.includes("jpg")) return "jpg";
@@ -28,14 +30,23 @@ function extFor(contentType: string, fallbackName = ""): string {
 
 function isImageBlob(blob: Blob, name = ""): boolean {
   if (blob.type.startsWith("image/")) return true;
-  // Some browsers/OS leave type empty — fall back to extension.
   if (!blob.type && IMAGE_EXT_RE.test(name)) return true;
   return false;
 }
 
+function isAllowedPublicUrl(url: string): boolean {
+  if (!HTTPS_URL_RE.test(url)) return false;
+  try {
+    const u = new URL(url);
+    return IMAGE_EXT_RE.test(u.pathname) || u.pathname.includes("/object/public/");
+  } catch {
+    return false;
+  }
+}
+
 async function blobToDataUrl(blob: Blob, name = ""): Promise<string> {
   if (blob.size > MAX_BYTES) {
-    throw new Error(`“${name || "Image"}” is too large (max ~4.5MB). Try a smaller JPEG.`);
+    throw new Error(`“${name || "Image"}” is too large (max 20MB).`);
   }
   if (!isImageBlob(blob, name)) {
     throw new Error(`“${name || "File"}” is not an image.`);
@@ -49,8 +60,12 @@ async function blobToDataUrl(blob: Blob, name = ""): Promise<string> {
 }
 
 /**
- * Upload one or more map-plate reference photos.
- * Accepts multipart FormData (`files` / `file`) or JSON `{ images: dataUrl[] }`.
+ * Register map-plate reference photos.
+ *
+ * Preferred (large files up to 20MB): JSON `{ urls: string[], append? }` after
+ * uploading via `POST .../map-plate/refs/prepare` + PUT to the signed URL.
+ *
+ * Legacy (small files): multipart FormData or JSON `{ images: dataUrl[] }`.
  */
 export async function POST(request: Request, context: Ctx) {
   try {
@@ -60,23 +75,20 @@ export async function POST(request: Request, context: Ctx) {
     }
 
     const contentType = request.headers.get("content-type") || "";
-    const dataUrls: string[] = [];
     let append = true;
+    let urls: string[] = [];
 
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
       append = form.get("append") !== "false";
-      const entries = [
-        ...form.getAll("files"),
-        ...form.getAll("file"),
-      ];
+      const entries = [...form.getAll("files"), ...form.getAll("file")];
       const blobs: { blob: Blob; name: string }[] = [];
       for (const entry of entries) {
-        // Next/Node may give Blob instead of File — accept both.
         if (entry instanceof Blob && entry.size > 0) {
-          const name = "name" in entry && typeof (entry as File).name === "string"
-            ? (entry as File).name
-            : "upload.jpg";
+          const name =
+            "name" in entry && typeof (entry as File).name === "string"
+              ? (entry as File).name
+              : "upload.jpg";
           blobs.push({ blob: entry, name });
         }
       }
@@ -87,38 +99,72 @@ export async function POST(request: Request, context: Ctx) {
         );
       }
       for (const { blob, name } of blobs.slice(0, MAX_FILES)) {
-        dataUrls.push(await blobToDataUrl(blob, name));
+        const dataUrl = await blobToDataUrl(blob, name);
+        const match = DATA_URL_RE.exec(dataUrl);
+        const ct = match?.[1] || "image/jpeg";
+        urls.push(
+          await persistDataUrlMedia(
+            dataUrl,
+            `garden-${garden.id}-map-ref-${Date.now()}-${urls.length}.${extFor(ct)}`
+          )
+        );
       }
     } else {
-      let body: { images?: string[]; append?: boolean };
+      let body: { images?: string[]; urls?: string[]; append?: boolean };
       try {
         body = (await request.json()) as typeof body;
       } catch {
         return NextResponse.json(
-          { error: "Expected multipart files or JSON { images: dataUrl[] }." },
+          {
+            error:
+              "Expected JSON { urls } (after signed upload), { images: dataUrl[] }, or multipart files.",
+          },
           { status: 400, ...NO_STORE }
         );
       }
       append = body.append !== false;
-      const images = Array.isArray(body.images) ? body.images : [];
-      for (const raw of images.slice(0, MAX_FILES)) {
-        if (typeof raw !== "string" || !DATA_URL_RE.test(raw)) {
-          return NextResponse.json(
-            { error: "Each image must be a data:image/…;base64,… URI." },
-            { status: 400, ...NO_STORE }
+
+      if (Array.isArray(body.urls) && body.urls.length > 0) {
+        for (const raw of body.urls.slice(0, MAX_FILES)) {
+          if (typeof raw !== "string" || !isAllowedPublicUrl(raw)) {
+            return NextResponse.json(
+              { error: "Each url must be an https image URL (from prepare upload)." },
+              { status: 400, ...NO_STORE }
+            );
+          }
+          urls.push(raw);
+        }
+      } else {
+        const images = Array.isArray(body.images) ? body.images : [];
+        for (const raw of images.slice(0, MAX_FILES)) {
+          if (typeof raw !== "string" || !DATA_URL_RE.test(raw)) {
+            return NextResponse.json(
+              { error: "Each image must be a data:image/…;base64,… URI." },
+              { status: 400, ...NO_STORE }
+            );
+          }
+          const match = DATA_URL_RE.exec(raw)!;
+          const bytes = Buffer.from(match[2], "base64");
+          if (bytes.length > MAX_BYTES) {
+            return NextResponse.json(
+              {
+                error:
+                  "One image exceeds 20MB. Use the signed upload flow (prepare) for large files.",
+              },
+              { status: 400, ...NO_STORE }
+            );
+          }
+          const ct = match[1] || "image/jpeg";
+          urls.push(
+            await persistDataUrlMedia(
+              raw,
+              `garden-${garden.id}-map-ref-${Date.now()}-${urls.length}.${extFor(ct)}`
+            )
           );
         }
-        const match = DATA_URL_RE.exec(raw)!;
-        const bytes = Buffer.from(match[2], "base64");
-        if (bytes.length > MAX_BYTES) {
-          return NextResponse.json(
-            { error: "One image exceeds ~4.5MB. Compress and retry." },
-            { status: 400, ...NO_STORE }
-          );
-        }
-        dataUrls.push(raw);
       }
-      if (dataUrls.length === 0) {
+
+      if (urls.length === 0) {
         return NextResponse.json({ error: "No images provided." }, { status: 400, ...NO_STORE });
       }
     }
@@ -132,22 +178,10 @@ export async function POST(request: Request, context: Ctx) {
       );
     }
 
-    const toPersist = dataUrls.slice(0, append ? room : MAX_FILES);
-    const urls: string[] = [];
-    for (let i = 0; i < toPersist.length; i += 1) {
-      const dataUrl = toPersist[i];
-      const match = DATA_URL_RE.exec(dataUrl);
-      const ct = match?.[1] || "image/jpeg";
-      const url = await persistDataUrlMedia(
-        dataUrl,
-        `garden-${garden.id}-map-ref-${Date.now()}-${i}.${extFor(ct)}`
-      );
-      urls.push(url);
-    }
-
+    const toAdd = urls.slice(0, append ? room : MAX_FILES);
     const referenceUrls = append
-      ? [...existing, ...urls].slice(0, MAX_FILES)
-      : urls.slice(0, MAX_FILES);
+      ? [...existing, ...toAdd].slice(0, MAX_FILES)
+      : toAdd.slice(0, MAX_FILES);
 
     const updated = await updateGarden(garden.id, {
       brandKit: {
@@ -158,7 +192,7 @@ export async function POST(request: Request, context: Ctx) {
       },
     });
 
-    return NextResponse.json({ urls, referenceUrls, garden: updated }, NO_STORE);
+    return NextResponse.json({ urls: toAdd, referenceUrls, garden: updated }, NO_STORE);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json({ error: message }, { status: 500, ...NO_STORE });
