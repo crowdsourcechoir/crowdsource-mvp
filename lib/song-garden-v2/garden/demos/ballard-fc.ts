@@ -4,7 +4,10 @@ import type { BrandKit, ZoneDef } from "@/lib/song-garden-v2/garden/types";
 export const BALLARD_FC_GARDEN_SLUG = "ballard-fc";
 
 function zone(partial: ZoneDef): ZoneDef {
-  return partial;
+  return {
+    ...partial,
+    hit: partial.hit ?? { type: "circle", r: 0.08 },
+  };
 }
 
 /**
@@ -125,6 +128,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         prompt: "What's your chant idea for the next game?",
         ctaLabel: "Share your chant",
         inputPlaceholder: "Type a chant line…",
+        hit: { type: "circle", r: 0.12 },
       }),
       zone({
         key: "south-new",

@@ -14,6 +14,7 @@ import type {
   SponsorDef,
   WorldState,
   ZoneDef,
+  ZoneHitRegion,
 } from "@/lib/song-garden-v2/garden/types";
 
 type Props = { gardenId: string };
@@ -33,11 +34,15 @@ type ZoneDraft = {
   prompt: string;
   ctaLabel: string;
   inputPlaceholder: string;
+  logoUrl: string;
+  hit: ZoneHitRegion | null;
 };
 
 type SponsorDraft = {
   key: string;
   name: string;
+  logoUrl: string;
+  credit: string;
 };
 
 const POSITION_PRESETS: Array<{ id: string; label: string; x: number; y: number }> = [
@@ -67,6 +72,8 @@ function zonesFromGarden(garden: Garden | null): ZoneDraft[] {
     prompt: z.prompt ?? "",
     ctaLabel: z.ctaLabel ?? "",
     inputPlaceholder: z.inputPlaceholder ?? "",
+    logoUrl: z.logoUrl ?? "",
+    hit: z.hit ?? { type: "circle", r: 0.08 },
   }));
 }
 
@@ -74,6 +81,8 @@ function sponsorsFromGarden(garden: Garden | null): SponsorDraft[] {
   return (garden?.brandKit?.sponsors ?? []).map((s) => ({
     key: s.key,
     name: s.name,
+    logoUrl: s.logoUrl ?? "",
+    credit: s.credit ?? "",
   }));
 }
 
@@ -350,6 +359,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
         prompt: "",
         ctaLabel: "",
         inputPlaceholder: "",
+        logoUrl: "",
+        hit: { type: "circle", r: 0.08 },
       },
     ]);
     setSelectedZoneKey(key);
@@ -380,7 +391,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setError(`Sponsor “${name}” is already on the list.`);
       return;
     }
-    setSponsors((prev) => [...prev, { key, name }]);
+    setSponsors((prev) => [...prev, { key, name, logoUrl: "", credit: "" }]);
     setNewSponsorName("");
     setError(null);
     setNotice(`Added sponsor “${name}”. Tap Save map when you’re ready.`);
@@ -402,6 +413,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
           prompt: z.prompt.trim() || null,
           ctaLabel: z.ctaLabel.trim() || null,
           inputPlaceholder: z.inputPlaceholder.trim() || null,
+          logoUrl: z.logoUrl.trim() || null,
+          hit: z.hit,
         }))
         .filter((z) => z.key && z.label);
 
@@ -409,6 +422,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
         .map((s) => ({
           key: slugifyKey(s.key || s.name),
           name: s.name.trim(),
+          logoUrl: s.logoUrl.trim() || null,
+          credit: s.credit.trim() || null,
         }))
         .filter((s) => s.key && s.name);
 
@@ -673,12 +688,22 @@ export default function GardenDetailClient({ gardenId }: Props) {
         {mapImageUrl.trim() && zones.length > 0 ? (
           <ZoneMapEditor
             mapImageUrl={mapImageUrl.trim()}
-            zones={zones.map((z) => ({ key: z.key, label: z.label, x: z.x, y: z.y }))}
+            zones={zones.map((z) => ({
+              key: z.key,
+              label: z.label,
+              x: z.x,
+              y: z.y,
+              hit: z.hit,
+            }))}
             accentColor={garden?.brandKit?.accentColor || "#CFFF81"}
             selectedKey={selectedZoneKey}
             onSelect={setSelectedZoneKey}
             onMove={(key, x, y) => {
               setZones((prev) => prev.map((row) => (row.key === key ? { ...row, x, y } : row)));
+              setSelectedZoneKey(key);
+            }}
+            onHitChange={(key, hit) => {
+              setZones((prev) => prev.map((row) => (row.key === key ? { ...row, hit } : row)));
               setSelectedZoneKey(key);
             }}
           />
@@ -714,6 +739,29 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     Remove
                   </button>
                 </div>
+                <label className="mt-2 block text-xs text-gray-400">
+                  Zone logo URL (optional)
+                  <input
+                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    value={z.logoUrl}
+                    onChange={(e) =>
+                      setZones((prev) =>
+                        prev.map((row) =>
+                          row.key === z.key ? { ...row, logoUrl: e.target.value } : row
+                        )
+                      )
+                    }
+                    placeholder="/fans/ballard-fc/logo.png"
+                  />
+                </label>
+                {z.logoUrl.trim() ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={z.logoUrl.trim()}
+                    alt=""
+                    className="mt-2 h-10 w-auto rounded border border-gray-800 bg-black/40 object-contain p-1"
+                  />
+                ) : null}
                 <label className="mt-2 block text-xs text-gray-400">
                   Fan prompt
                   <input
@@ -869,25 +917,62 @@ export default function GardenDetailClient({ gardenId }: Props) {
         <div className="space-y-3 border-t border-gray-800 pt-4">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Sponsors (optional)</p>
           {sponsors.length ? (
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-3 text-sm">
               {sponsors.map((s) => (
-                <li
-                  key={s.key}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-gray-800 px-3 py-2"
-                >
-                  <span className="text-white">{s.name}</span>
-                  <button
-                    type="button"
-                    className="text-xs text-red-300 underline"
-                    onClick={() => {
-                      setSponsors((prev) => prev.filter((row) => row.key !== s.key));
-                      setZones((prev) =>
-                        prev.map((z) => (z.sponsorKey === s.key ? { ...z, sponsorKey: "" } : z))
-                      );
-                    }}
-                  >
-                    Remove
-                  </button>
+                <li key={s.key} className="rounded-lg border border-gray-800 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-white">{s.name}</span>
+                    <button
+                      type="button"
+                      className="text-xs text-red-300 underline"
+                      onClick={() => {
+                        setSponsors((prev) => prev.filter((row) => row.key !== s.key));
+                        setZones((prev) =>
+                          prev.map((z) => (z.sponsorKey === s.key ? { ...z, sponsorKey: "" } : z))
+                        );
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <label className="block text-xs text-gray-400">
+                    Logo URL
+                    <input
+                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      value={s.logoUrl}
+                      onChange={(e) =>
+                        setSponsors((prev) =>
+                          prev.map((row) =>
+                            row.key === s.key ? { ...row, logoUrl: e.target.value } : row
+                          )
+                        )
+                      }
+                      placeholder="https://…/logo.png"
+                    />
+                  </label>
+                  {s.logoUrl.trim() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={s.logoUrl.trim()}
+                      alt=""
+                      className="h-10 w-auto rounded border border-gray-800 bg-black/40 object-contain p-1"
+                    />
+                  ) : null}
+                  <label className="block text-xs text-gray-400">
+                    Credit line
+                    <input
+                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      value={s.credit}
+                      onChange={(e) =>
+                        setSponsors((prev) =>
+                          prev.map((row) =>
+                            row.key === s.key ? { ...row, credit: e.target.value } : row
+                          )
+                        )
+                      }
+                      placeholder="Enabled by…"
+                    />
+                  </label>
                 </li>
               ))}
             </ul>
