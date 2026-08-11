@@ -10,9 +10,9 @@ import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
+/** Decision buttons shown in the action row. Edits are folded into Approve & send automatically. */
 const ACTIONS: { key: ActionKey; label: string; shortcut: string; tone: string }[] = [
   { key: "approve", label: "Approve & send", shortcut: "A", tone: "bg-emerald-600 hover:bg-emerald-500" },
-  { key: "approve_with_edits", label: "Approve edits & send", shortcut: "E", tone: "bg-emerald-800 hover:bg-emerald-700" },
   { key: "reject", label: "Reject", shortcut: "R", tone: "bg-red-700 hover:bg-red-600" },
   { key: "defer", label: "Defer", shortcut: "D", tone: "bg-amber-700 hover:bg-amber-600" },
   { key: "request_more_research", label: "More research", shortcut: "M", tone: "bg-sky-700 hover:bg-sky-600" },
@@ -187,21 +187,19 @@ export default function ApprovalQueueClient() {
         void decide(action);
         return;
       }
-      if (action === "approve_with_edits" && !editing) {
+      // Always confirm via the single Approve & send path; decide() upgrades to
+      // approve_with_edits when the draft was edited.
+      const sendKey: ActionKey = "approve";
+      if (sendConfirmAction === sendKey) {
         clearSendConfirm();
-        setEditing(true);
+        void decide(sendKey);
         return;
       }
-      if (sendConfirmAction === action) {
-        clearSendConfirm();
-        void decide(action);
-        return;
-      }
-      setSendConfirmAction(action);
+      setSendConfirmAction(sendKey);
       if (sendConfirmTimer.current) clearTimeout(sendConfirmTimer.current);
       sendConfirmTimer.current = setTimeout(() => setSendConfirmAction(null), 4000);
     },
-    [clearSendConfirm, decide, editing, sendConfirmAction]
+    [clearSendConfirm, decide, sendConfirmAction]
   );
 
   useEffect(() => {
@@ -216,15 +214,26 @@ export default function ApprovalQueueClient() {
           clearSendConfirm();
           return;
         }
+        if (editing) {
+          e.preventDefault();
+          setEditing(false);
+          return;
+        }
         if (mobileDetailOpen) {
           e.preventDefault();
           setMobileDetailOpen(false);
         }
         return;
       }
-      if (editing) return;
       const target = e.target as HTMLElement;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        clearSendConfirm();
+        setEditing((v) => !v);
+        return;
+      }
+      if (editing) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
         clearSendConfirm();
@@ -237,12 +246,9 @@ export default function ApprovalQueueClient() {
         setMobileDetailOpen(true);
       } else {
         const action = ACTIONS.find((a) => a.shortcut.toLowerCase() === e.key.toLowerCase());
-        if (action && action.key !== "approve_with_edits") {
+        if (action) {
           e.preventDefault();
           requestOrConfirmSend(action.key);
-        } else if (action?.key === "approve_with_edits") {
-          e.preventDefault();
-          requestOrConfirmSend("approve_with_edits");
         }
       }
     }
@@ -441,15 +447,29 @@ export default function ApprovalQueueClient() {
           )}
 
           <div className="mt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
-              {current.draft && current.contact?.email && !editing && (
-                <EmailLaunchLink
-                  to={current.contact.email}
-                  subject={current.draft.editedSubject ?? current.draft.aiSubject}
-                  body={stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
-                />
-              )}
+              <div className="flex flex-wrap items-center gap-3">
+                {current.draft && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearSendConfirm();
+                      setEditing((v) => !v);
+                    }}
+                    className="text-xs text-sky-400 underline touch-manipulation"
+                  >
+                    {editing ? "Done editing" : "Edit draft"} <span className="opacity-70">(E)</span>
+                  </button>
+                )}
+                {current.draft && current.contact?.email && !editing && (
+                  <EmailLaunchLink
+                    to={current.contact.email}
+                    subject={current.draft.editedSubject ?? current.draft.aiSubject}
+                    body={stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
+                  />
+                )}
+              </div>
             </div>
             {current.draft ? (
               editing ? (
@@ -501,12 +521,6 @@ export default function ApprovalQueueClient() {
           <div className="mt-4 flex flex-wrap gap-2" data-queue-send-actions>
             {ACTIONS.map((action) => {
               const awaitingConfirm = sendConfirmAction === action.key;
-              const label =
-                action.key === "approve_with_edits" && !editing
-                  ? "Edit draft"
-                  : awaitingConfirm
-                    ? "Tap again to send"
-                    : action.label;
               return (
                 <button
                   key={action.key}
@@ -517,7 +531,7 @@ export default function ApprovalQueueClient() {
                     awaitingConfirm ? "bg-amber-500 hover:bg-amber-400 ring-2 ring-amber-200" : action.tone
                   }`}
                 >
-                  {label}{" "}
+                  {awaitingConfirm ? "Tap again to send" : action.label}{" "}
                   <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
                 </button>
               );
@@ -525,14 +539,15 @@ export default function ApprovalQueueClient() {
           </div>
           {sendConfirmAction && (
             <p className="mt-2 text-xs text-amber-300">
-              Confirm send? Press the button again (or <kbd>a</kbd> again). Esc cancels — Enter never sends.
+              Confirm send? Press Approve &amp; send again (or <kbd>a</kbd> again). Esc cancels — Enter never sends.
+              Any draft edits will be included.
             </p>
           )}
           {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> twice to approve &amp; send, <kbd>r</kbd> reject,{" "}
-            <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Enter never sends. With Gmail
-            connected, approve sends from your inbox and tracks the thread for replies.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>e</kbd> edit draft, <kbd>a</kbd> twice to approve &amp; send,{" "}
+            <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Enter never sends.
+            With Gmail connected, approve sends from your inbox and tracks the thread for replies.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>
