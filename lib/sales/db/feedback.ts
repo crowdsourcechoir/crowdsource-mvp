@@ -132,7 +132,7 @@ function levenshteinRatio(a: string, b: string): number {
 
 export function formatFeedbackFewShots(feedback: OutreachFeedback[]): string {
   if (feedback.length === 0) return "";
-  const blocks = feedback.slice(0, 3).map((f, i) => {
+  const blocks = feedback.slice(0, 5).map((f, i) => {
     return `--- ACCEPTED EDIT ${i + 1} ---
 ORIGINAL SUBJECT: ${f.originalSubject}
 EDITED SUBJECT: ${f.editedSubject ?? f.originalSubject}
@@ -142,5 +142,86 @@ ${f.originalBody}
 EDITED BODY:
 ${f.editedBody ?? f.originalBody}`;
   });
-  return `The operator has recently edited drafts like these — prefer the EDITED voice/structure when filling fields:\n\n${blocks.join("\n\n")}`;
+  return `The operator has recently customized drafts like these before sending. Prefer the EDITED voice, structure, specificity, and length when filling subject / openingReason / fitReason. Treat ORIGINAL→EDITED as ground truth for how Joel rewrites AI drafts — match the EDITED style, not the ORIGINAL.
+
+${blocks.join("\n\n")}`;
+}
+
+/** Create feedback rows for past approved-with-edits drafts that never got learning records. */
+export async function backfillAcceptedEditFeedback(limit = 100): Promise<{ created: number; skipped: number }> {
+  const db = requireSupabaseAdmin();
+  const { data: drafts, error } = await db
+    .from("outreach_drafts")
+    .select("id, opportunity_id, contact_id, ai_subject, ai_body, edited_subject, edited_body, status")
+    .eq("status", "approved_with_edits")
+    .not("edited_body", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  let created = 0;
+  let skipped = 0;
+  for (const row of drafts ?? []) {
+    const draftId = row.id as string;
+    const { data: existing, error: exErr } = await db
+      .from("outreach_feedback")
+      .select("id")
+      .eq("outreach_draft_id", draftId)
+      .limit(1)
+      .maybeSingle();
+    if (exErr) throw new Error(exErr.message);
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
+
+    const editedBody = (row.edited_body as string | null) ?? null;
+    const aiBody = row.ai_body as string;
+    if (!editedBody || editedBody.trim() === aiBody.trim()) {
+      skipped += 1;
+      continue;
+    }
+
+    const opportunityId = row.opportunity_id as string;
+    const { data: opp } = await db
+      .from("opportunities")
+      .select("opportunity_type_id, organization_id")
+      .eq("id", opportunityId)
+      .maybeSingle();
+
+    let segmentId: string | null = null;
+    let persona: string | null = null;
+    if (opp?.organization_id) {
+      const { data: org } = await db
+        .from("organizations")
+        .select("industry_segment_id")
+        .eq("id", opp.organization_id as string)
+        .maybeSingle();
+      segmentId = (org?.industry_segment_id as string | null) ?? null;
+    }
+    if (row.contact_id) {
+      const { data: contact } = await db
+        .from("contacts")
+        .select("outreach_persona")
+        .eq("id", row.contact_id as string)
+        .maybeSingle();
+      persona = (contact?.outreach_persona as string | null) ?? null;
+    }
+
+    await createOutreachFeedback({
+      opportunityId,
+      outreachDraftId: draftId,
+      contactId: (row.contact_id as string | null) ?? null,
+      opportunityTypeId: (opp?.opportunity_type_id as string | null) ?? null,
+      industrySegmentId: segmentId,
+      outreachPersona: persona,
+      decision: "approved_with_edits",
+      originalSubject: row.ai_subject as string,
+      originalBody: aiBody,
+      editedSubject: (row.edited_subject as string | null) ?? (row.ai_subject as string),
+      editedBody: editedBody,
+    });
+    created += 1;
+  }
+  return { created, skipped };
 }

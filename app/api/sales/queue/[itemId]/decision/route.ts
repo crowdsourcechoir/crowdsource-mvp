@@ -15,6 +15,7 @@ import { createOutreachFeedback } from "@/lib/sales/db/feedback";
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
+import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,10 @@ const QUEUE_STATUS_TO_OPPORTUNITY_STATUS: Record<ApprovalQueueItemStatus, Opport
   duplicate: "duplicate",
 };
 
+function normalizeEmailText(value: string): string {
+  return stripEmailSignature(value).replace(/\r\n/g, "\n").trim();
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
   try {
     const { itemId } = await params;
@@ -58,21 +63,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const opportunity = await getOpportunity(item.opportunityId);
     if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
 
-    // Prefer any edited subject/body the client sent, even if the action was plain "approve"
-    // (the queue UI upgrades to approve_with_edits when dirty; this is the server-side backstop).
     const providedEditedSubject =
       typeof body?.editedSubject === "string" ? (body.editedSubject as string) : undefined;
     const providedEditedBody = typeof body?.editedBody === "string" ? (body.editedBody as string) : undefined;
-    const hasProvidedEdits = providedEditedSubject !== undefined || providedEditedBody !== undefined;
-    const effectiveAction =
-      (action === "approve" || action === "approve_with_edits") && hasProvidedEdits
-        ? "approve_with_edits"
-        : action;
-    const effectiveQueueStatus = ACTION_TO_QUEUE_STATUS[effectiveAction] ?? queueStatus;
-    const isApprove = effectiveAction === "approve" || effectiveAction === "approve_with_edits";
+
+    const isApproveAction = action === "approve" || action === "approve_with_edits";
     const finalSubject =
       providedEditedSubject ?? draft?.editedSubject ?? draft?.aiSubject ?? null;
     const finalBody = providedEditedBody ?? draft?.editedBody ?? draft?.aiBody ?? null;
+
+    // Learn from whatever was actually sent vs the AI original — including Save draft then
+    // plain "Approve & send", which used to skip feedback because the client thought nothing changed.
+    const contentDiffersFromAi = Boolean(
+      draft &&
+        finalSubject !== null &&
+        finalBody !== null &&
+        (normalizeEmailText(finalSubject) !== normalizeEmailText(draft.aiSubject) ||
+          normalizeEmailText(finalBody) !== normalizeEmailText(draft.aiBody))
+    );
+
+    const effectiveAction =
+      isApproveAction && contentDiffersFromAi ? "approve_with_edits" : action;
+    const effectiveQueueStatus = ACTION_TO_QUEUE_STATUS[effectiveAction] ?? queueStatus;
+    const isApprove = effectiveAction === "approve" || effectiveAction === "approve_with_edits";
 
     let gmailSend: { messageId: string; threadId: string } | null = null;
     let gmailStatus = await getGmailConnectionStatus();
@@ -163,16 +176,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
     if (draft && isApprove) {
       await updateDraftDecision(draft.id, {
-        status: effectiveAction === "approve_with_edits" ? "approved_with_edits" : "approved",
-        editedSubject: effectiveAction === "approve_with_edits" ? providedEditedSubject ?? finalSubject : undefined,
-        editedBody: effectiveAction === "approve_with_edits" ? providedEditedBody ?? finalBody : undefined,
+        status: contentDiffersFromAi ? "approved_with_edits" : "approved",
+        editedSubject: contentDiffersFromAi ? finalSubject : undefined,
+        editedBody: contentDiffersFromAi ? finalBody : undefined,
       });
     } else if (draft && effectiveAction === "reject") {
       await updateDraftDecision(draft.id, { status: "rejected" });
     }
 
     // Learning loop: persist edits / rejections for future draft few-shots.
-    if (draft && (effectiveAction === "approve_with_edits" || effectiveAction === "reject")) {
+    let learned = false;
+    let learningError: string | null = null;
+    if (draft && (contentDiffersFromAi || effectiveAction === "reject")) {
       try {
         const organization = await getOrganization(opportunity.organizationId);
         const contact = draft.contactId ? await getContact(draft.contactId) : null;
@@ -187,18 +202,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           decision: effectiveAction === "reject" ? "rejected" : "approved_with_edits",
           originalSubject: draft.aiSubject,
           originalBody: draft.aiBody,
-          editedSubject: effectiveAction === "approve_with_edits" ? (providedEditedSubject ?? finalSubject ?? null) : null,
-          editedBody: effectiveAction === "approve_with_edits" ? (providedEditedBody ?? finalBody ?? null) : null,
+          editedSubject: contentDiffersFromAi ? finalSubject : null,
+          editedBody: contentDiffersFromAi ? finalBody : null,
           rejectionReason: effectiveAction === "reject" ? (body?.notes as string | null) ?? null : null,
         });
-      } catch {
-        // Feedback must never block the decision itself.
+        learned = contentDiffersFromAi || effectiveAction === "reject";
+      } catch (err) {
+        learningError = err instanceof Error ? err.message : "Failed to store learning feedback";
       }
     }
 
     gmailStatus = await getGmailConnectionStatus();
     return NextResponse.json({
       queueItem: updated,
+      learned: Boolean(contentDiffersFromAi && learned && !learningError),
+      learningError,
       gmail: {
         connected: gmailStatus.connected,
         email: gmailStatus.email,

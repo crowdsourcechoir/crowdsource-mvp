@@ -134,29 +134,22 @@ export default function ApprovalQueueClient() {
     async (action: ActionKey) => {
       if (!current || busy) return;
 
-      // If the reviewer edited the draft (edit mode, or fields differ from what's stored), treat
-      // plain "approve" as approve-with-edits so the edited subject/body are what get sent + saved.
-      const originalSubject = current.draft?.editedSubject ?? current.draft?.aiSubject ?? "";
-      const originalBody = stripEmailSignature(current.draft?.editedBody ?? current.draft?.aiBody ?? "");
+      const aiSubject = current.draft?.aiSubject ?? "";
+      const aiBody = stripEmailSignature(current.draft?.aiBody ?? "");
       const cleanedEditedBody = stripEmailSignature(editedBody);
-      const draftWasEdited =
+      // Always prefer the in-editor text as what will be sent/saved.
+      const finalSubject = current.draft ? editedSubject : "";
+      const finalBody = current.draft ? cleanedEditedBody : "";
+      const differedFromAi =
         Boolean(current.draft) &&
-        (editing || editedSubject !== originalSubject || cleanedEditedBody !== originalBody);
+        (finalSubject.trim() !== aiSubject.trim() || finalBody.trim() !== aiBody.trim());
+      const isApprove = action === "approve" || action === "approve_with_edits";
       const effectiveAction: ActionKey =
-        (action === "approve" || action === "approve_with_edits") && draftWasEdited
-          ? "approve_with_edits"
-          : action;
-      const finalSubject = draftWasEdited ? editedSubject : originalSubject;
-      const finalBody = draftWasEdited ? cleanedEditedBody : originalBody;
+        isApprove && differedFromAi ? "approve_with_edits" : action;
 
       // When Gmail isn't connected, keep the mailto + clipboard fallback (must run before any
       // await so the browser treats it as a user gesture).
-      if (
-        !gmailConnected &&
-        (effectiveAction === "approve" || effectiveAction === "approve_with_edits") &&
-        current.contact?.email &&
-        current.draft
-      ) {
+      if (!gmailConnected && isApprove && current.contact?.email && current.draft) {
         const to = current.contact.email;
         launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
         copyEmailToClipboard(to, finalSubject, finalBody)
@@ -174,15 +167,27 @@ export default function ApprovalQueueClient() {
           body: JSON.stringify({
             action: effectiveAction,
             notes: notes || null,
-            editedSubject: effectiveAction === "approve_with_edits" ? editedSubject : undefined,
-            editedBody: effectiveAction === "approve_with_edits" ? cleanedEditedBody : undefined,
+            // Always send the final text on approve so the server can learn vs the AI original,
+            // even after Save draft made the client-side "dirty" check look clean.
+            ...(isApprove && current.draft
+              ? { editedSubject: finalSubject, editedBody: finalBody }
+              : {}),
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Decision failed");
+        const parts: string[] = [];
         if (data.gmail?.sent) {
-          showCopyStatus(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}.`);
+          parts.push(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}`);
         }
+        if (data.learned) {
+          parts.push("learned from your edits for future drafts");
+        } else if (data.learningError) {
+          parts.push(`send ok, but learning failed: ${data.learningError}`);
+        } else if (isApprove && differedFromAi) {
+          parts.push("edits sent (learning may not have recorded)");
+        }
+        if (parts.length) showCopyStatus(`${parts.join(" — ")}.`);
         setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
         setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
         setMobileDetailOpen(false);
@@ -192,7 +197,7 @@ export default function ApprovalQueueClient() {
         setBusy(false);
       }
     },
-    [current, busy, notes, editedSubject, editedBody, editing, items.length, showCopyStatus, gmailConnected]
+    [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus, gmailConnected]
   );
 
   useEffect(() => {

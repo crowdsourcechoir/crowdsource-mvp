@@ -69,7 +69,7 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
       const feedback = await listRecentAcceptedEditFeedback({
         outreachPersona: contact.outreachPersona,
         industrySegmentId: segmentId,
-        limit: 3,
+        limit: 5,
       });
       const fewShots = formatFeedbackFewShots(feedback);
       const confidence = estimateDraftConfidence(feedback);

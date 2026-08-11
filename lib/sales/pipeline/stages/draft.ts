@@ -129,7 +129,7 @@ export async function runDraftStage(
     const feedback = await listRecentAcceptedEditFeedback({
       outreachPersona: contact.outreachPersona,
       industrySegmentId,
-      limit: 3,
+      limit: 5,
     });
     fewShots = formatFeedbackFewShots(feedback);
     confidenceScore = estimateDraftConfidence(feedback);
