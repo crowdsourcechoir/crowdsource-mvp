@@ -12,11 +12,31 @@ export type ContributionKind =
   | "vocal"
   | "other";
 
+/**
+ * Season map plate (M1): AI-generated still that fans see as the world map.
+ * Draft is preview-only until pinned; pin writes `heroArtworkUrl` and must not
+ * clear zone hit regions.
+ */
+export type MapPlateMeta = {
+  /** Place / atmosphere reference photos (Runway uses up to 3). */
+  referenceUrls: string[];
+  /** Season vibe brief for generation. */
+  vibePrompt: string;
+  /** Last generated still — not live until pinned. */
+  draftUrl: string | null;
+  draftGeneratedAt: string | null;
+  /** When current heroArtworkUrl was pinned as the season plate. */
+  pinnedAt: string | null;
+  /** Human label, e.g. "2026 season". */
+  seasonLabel: string;
+};
+
 export type BrandKit = {
   title: string;
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  /** Pinned season map plate (or manual map URL). Public `/g` reads this. */
   heroArtworkUrl: string | null;
   animationPreset: "particles" | "aurora" | "glow" | "none";
   ambientSoundtrackUrl: string | null;
@@ -28,6 +48,8 @@ export type BrandKit = {
   zones: ZoneDef[];
   /** Optional sponsor catalog referenced by zone.sponsorKey */
   sponsors: SponsorDef[];
+  /** Generate + pin workflow for the season map plate. */
+  mapPlate: MapPlateMeta;
 };
 
 export type ZoneHitPoint = { x: number; y: number };
@@ -308,6 +330,23 @@ export const CONTRIBUTION_KINDS: ContributionKind[] = [
 export const DEFAULT_BRAND_PRIMARY = "#1a0f2d";
 export const DEFAULT_BRAND_ACCENT = "#CFFF81";
 
+export function defaultMapPlate(partial?: Partial<MapPlateMeta> | null): MapPlateMeta {
+  const refs = Array.isArray(partial?.referenceUrls)
+    ? partial!.referenceUrls!
+        .map((u) => (typeof u === "string" ? u.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 8)
+    : [];
+  return {
+    referenceUrls: refs,
+    vibePrompt: typeof partial?.vibePrompt === "string" ? partial.vibePrompt.trim() : "",
+    draftUrl: partial?.draftUrl?.trim() || null,
+    draftGeneratedAt: partial?.draftGeneratedAt?.trim() || null,
+    pinnedAt: partial?.pinnedAt?.trim() || null,
+    seasonLabel: typeof partial?.seasonLabel === "string" ? partial.seasonLabel.trim() : "",
+  };
+}
+
 export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
   return {
     title: partial?.title?.trim() || "Song Garden",
@@ -320,7 +359,20 @@ export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
     bloomStoryboard: Array.isArray(partial?.bloomStoryboard) ? partial!.bloomStoryboard! : [],
     zones: normalizeZones(partial?.zones),
     sponsors: normalizeSponsors(partial?.sponsors),
+    mapPlate: defaultMapPlate(partial?.mapPlate),
   };
+}
+
+/** Shallow brand patch with deep-merge for `mapPlate` (keeps refs/draft when pinning). */
+export function mergeBrandKit(existing: BrandKit, patch: Partial<BrandKit>): BrandKit {
+  return defaultBrandKit({
+    ...existing,
+    ...patch,
+    mapPlate: {
+      ...existing.mapPlate,
+      ...(patch.mapPlate ?? {}),
+    },
+  });
 }
 
 function normalizeZones(zones: ZoneDef[] | null | undefined): ZoneDef[] {

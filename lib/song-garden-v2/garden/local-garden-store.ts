@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import {
   defaultBrandKit,
+  mergeBrandKit,
   defaultMutationPolicy,
   emptyWorldState,
   type BrandKit,
@@ -169,7 +170,7 @@ export function localUpdateGarden(
     kind: updates.kind ?? prev.kind,
     status: updates.status ?? prev.status,
     brandKit: updates.brandKit
-      ? defaultBrandKit({ ...prev.brandKit, ...updates.brandKit })
+      ? mergeBrandKit(prev.brandKit, updates.brandKit)
       : prev.brandKit,
     mutationPolicy: updates.mutationPolicy
       ? defaultMutationPolicy({ ...prev.mutationPolicy, ...updates.mutationPolicy })

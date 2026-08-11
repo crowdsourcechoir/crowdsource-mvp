@@ -125,6 +125,7 @@ type BrandKit = {
   logoUrl: string | null;
   primaryColor: string;      // default #1a0f2d
   accentColor: string;       // default #CFFF81
+  /** Pinned season map plate (or manual map). Public `/g` reads this. */
   heroArtworkUrl: string | null;
   animationPreset: "particles" | "aurora" | "glow" | "none";
   ambientSoundtrackUrl: string | null;
@@ -132,6 +133,12 @@ type BrandKit = {
   bloomStoryboard: WorldStoryboardFrame[]; // reuse existing frame type
   /** Fans extension — ignored by Choir until used */
   zones?: ZoneDef[];         // see §11
+  sponsors?: SponsorDef[];
+  /**
+   * M1 — Season map plate workflow. Generate drafts via Runway; pin writes
+   * `heroArtworkUrl` once for the season. Regenerating drafts must not clear zones/hits.
+   */
+  mapPlate?: MapPlateMeta;
 };
 ```
 

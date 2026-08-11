@@ -109,6 +109,13 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [zones, setZones] = useState<ZoneDraft[]>([]);
   const [sponsors, setSponsors] = useState<SponsorDraft[]>([]);
   const [mapImageUrl, setMapImageUrl] = useState("");
+  const [mapRefs, setMapRefs] = useState<string[]>([]);
+  const [mapVibe, setMapVibe] = useState("");
+  const [mapSeasonLabel, setMapSeasonLabel] = useState("");
+  const [mapDraftUrl, setMapDraftUrl] = useState<string | null>(null);
+  const [mapPinnedAt, setMapPinnedAt] = useState<string | null>(null);
+  const [generatingPlate, setGeneratingPlate] = useState(false);
+  const [pinningPlate, setPinningPlate] = useState(false);
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
   const [newZoneLabel, setNewZoneLabel] = useState("");
   const [newZoneBlurb, setNewZoneBlurb] = useState("");
@@ -151,6 +158,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setZones(zonesFromGarden(gBody.garden ?? null));
       setSponsors(sponsorsFromGarden(gBody.garden ?? null));
       setMapImageUrl(gBody.garden?.brandKit?.heroArtworkUrl ?? "");
+      const plate = gBody.garden?.brandKit?.mapPlate;
+      setMapRefs(plate?.referenceUrls?.length ? [...plate.referenceUrls] : [""]);
+      setMapVibe(plate?.vibePrompt ?? "");
+      setMapSeasonLabel(plate?.seasonLabel ?? "");
+      setMapDraftUrl(plate?.draftUrl ?? null);
+      setMapPinnedAt(plate?.pinnedAt ?? null);
 
       if (eRes.ok) {
         const list = (await eRes.json()) as Event[];
@@ -427,6 +440,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
         }))
         .filter((s) => s.key && s.name);
 
+      const referenceUrls = mapRefs.map((u) => u.trim()).filter(Boolean);
+
       const res = await fetch(`/api/gardens/${gardenId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -436,6 +451,15 @@ export default function GardenDetailClient({ gardenId }: Props) {
             heroArtworkUrl: mapImageUrl.trim() || null,
             zones: nextZones,
             sponsors: nextSponsors,
+            mapPlate: {
+              ...(garden?.brandKit?.mapPlate ?? {}),
+              referenceUrls,
+              vibePrompt: mapVibe.trim(),
+              seasonLabel: mapSeasonLabel.trim(),
+              draftUrl: mapDraftUrl,
+              draftGeneratedAt: garden?.brandKit?.mapPlate?.draftGeneratedAt ?? null,
+              pinnedAt: mapPinnedAt,
+            },
           },
         }),
       });
@@ -447,6 +471,81 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setError(err instanceof Error ? err.message : "Failed to save Fans map");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleGenerateMapPlate() {
+    setGeneratingPlate(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const referenceUrls = mapRefs.map((u) => u.trim()).filter(Boolean);
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vibePrompt: mapVibe.trim(),
+          referenceUrls,
+          seasonLabel: mapSeasonLabel.trim(),
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        draftUrl?: string;
+        garden?: Garden;
+      };
+      if (!res.ok) throw new Error(body.error || "Failed to generate map plate");
+      setMapDraftUrl(body.draftUrl ?? body.garden?.brandKit?.mapPlate?.draftUrl ?? null);
+      if (body.garden) setGarden(body.garden);
+      setNotice(
+        "Draft season map ready. Preview below, then Pin for season when it looks right. Zone hit regions stay put."
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate map plate");
+    } finally {
+      setGeneratingPlate(false);
+    }
+  }
+
+  async function handlePinMapPlate() {
+    if (!mapDraftUrl?.trim() && !mapImageUrl.trim()) {
+      setError("Generate a draft (or set a map URL) before pinning.");
+      return;
+    }
+    const replacing = Boolean(mapPinnedAt && garden?.brandKit?.heroArtworkUrl);
+    if (replacing) {
+      const ok = window.confirm(
+        "Replace the pinned season map plate? Zone hit regions will stay; you may need to nudge labels if the new art shifts landmarks."
+      );
+      if (!ok) return;
+    }
+    setPinningPlate(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/pin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: mapDraftUrl?.trim() || mapImageUrl.trim() || undefined,
+          seasonLabel: mapSeasonLabel.trim() || undefined,
+          confirmReplace: replacing,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        plateUrl?: string;
+        garden?: Garden;
+      };
+      if (!res.ok) throw new Error(body.error || "Failed to pin map plate");
+      if (body.plateUrl) setMapImageUrl(body.plateUrl);
+      setNotice("Season map plate pinned. Public /g uses this art until you pin again.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to pin map plate");
+    } finally {
+      setPinningPlate(false);
     }
   }
 
@@ -671,12 +770,134 @@ export default function GardenDetailClient({ gardenId }: Props) {
         <div>
           <h2 className="text-sm font-medium text-gray-200">Fan map</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Drop a team aerial or stadium map behind named sponsored zones fans can tap.
+            Generate a season map plate, pin it once, then place named sponsored zones fans can tap.
+            Regenerating a draft does not move hit regions.
           </p>
         </div>
 
+        <div className="space-y-3 rounded-lg border border-gray-800 bg-black/30 p-3">
+          <div>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-gray-400">
+              Season map plate
+            </h3>
+            <p className="mt-1 text-[11px] text-gray-500">
+              AI still for the whole season. Pin when it looks right — public{" "}
+              <code className="text-gray-400">/g</code> uses the pinned plate.
+            </p>
+          </div>
+
+          <label className="block text-xs text-gray-400">
+            Season label
+            <input
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              value={mapSeasonLabel}
+              onChange={(e) => setMapSeasonLabel(e.target.value)}
+              placeholder="2026 season"
+            />
+          </label>
+
+          <label className="block text-xs text-gray-400">
+            Vibe prompt
+            <textarea
+              className="mt-1 min-h-[72px] w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              value={mapVibe}
+              onChange={(e) => setMapVibe(e.target.value)}
+              placeholder="Interbay night matchday, deep navy pitch, chartreuse accents, Pacific Northwest mist…"
+            />
+          </label>
+
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400">Reference photos (up to 3 used)</p>
+            {mapRefs.map((url, i) => (
+              <div key={`ref-${i}`} className="flex gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                  value={url}
+                  onChange={(e) =>
+                    setMapRefs((prev) => prev.map((row, j) => (j === i ? e.target.value : row)))
+                  }
+                  placeholder="/fans/ballard-fc/interbay-stadium-map.jpg"
+                />
+                <button
+                  type="button"
+                  className="shrink-0 text-xs text-red-300 underline"
+                  onClick={() =>
+                    setMapRefs((prev) => (prev.length <= 1 ? [""] : prev.filter((_, j) => j !== i)))
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            {mapRefs.length < 8 ? (
+              <button
+                type="button"
+                className="text-xs text-[#CFFF81] underline"
+                onClick={() => setMapRefs((prev) => [...prev, ""])}
+              >
+                Add reference URL
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={generatingPlate || saving}
+              onClick={() => void handleGenerateMapPlate()}
+              className="rounded-lg bg-[#CFFF81] px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+            >
+              {generatingPlate ? "Generating…" : "Generate draft"}
+            </button>
+            <button
+              type="button"
+              disabled={pinningPlate || saving || (!mapDraftUrl && !mapImageUrl.trim())}
+              onClick={() => void handlePinMapPlate()}
+              className="rounded-lg border border-[#CFFF81]/40 px-3 py-2 text-sm text-[#CFFF81] disabled:opacity-50"
+            >
+              {pinningPlate ? "Pinning…" : "Pin for season"}
+            </button>
+          </div>
+
+          {mapPinnedAt ? (
+            <p className="text-[11px] text-gray-500">
+              Pinned {new Date(mapPinnedAt).toLocaleString()}
+              {mapSeasonLabel ? ` · ${mapSeasonLabel}` : ""}
+            </p>
+          ) : (
+            <p className="text-[11px] text-amber-200/80">No season plate pinned yet.</p>
+          )}
+
+          {(mapDraftUrl || mapImageUrl.trim()) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {mapDraftUrl ? (
+                <div>
+                  <p className="mb-1 text-[11px] text-gray-500">Draft</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mapDraftUrl}
+                    alt="Draft season map plate"
+                    className="max-h-48 w-full rounded-lg border border-gray-800 object-cover"
+                  />
+                </div>
+              ) : null}
+              {mapImageUrl.trim() ? (
+                <div>
+                  <p className="mb-1 text-[11px] text-gray-500">Live / pinned</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mapImageUrl.trim()}
+                    alt="Live map plate"
+                    className="max-h-48 w-full rounded-lg border border-gray-800 object-cover"
+                  />
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+
         <label className="block text-xs text-gray-400">
-          Map image URL
+          Map image URL (live plate — set by pin, or paste manually)
           <input
             className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
             value={mapImageUrl}

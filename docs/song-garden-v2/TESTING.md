@@ -20,6 +20,7 @@ npx tsx scripts/test-garden-phase-a.mjs
 npx tsx scripts/test-garden-phase-b.mjs
 npx tsx scripts/test-garden-phase-c.mjs
 npx tsx scripts/test-garden-phase-d.mjs
+npx tsx scripts/test-garden-map-plate-m1.mjs
 ```
 
 Typecheck:
@@ -161,6 +162,31 @@ Expect: zone key normalization, `zone_up` effect, snapshot zones + sponsor, read
 7. Invalid `zoneKey` on pulse → `409` (when zones are authored).
 8. Commerce + world debugger live under **Advanced** (collapsed by default).
 
+### Manual — Season map plate (M1)
+
+1. Admin garden → **Fan map** → **Season map plate**.
+2. Add 1–3 reference photo URLs (stadium / aerial / vibe stills) and a short vibe prompt.
+3. Tap **Generate draft** (needs `RUNWAYML_API_SECRET`; takes up to a few minutes).
+4. Preview the draft still. Confirm zone list is unchanged.
+5. Tap **Pin for season** — live map URL becomes the draft; `mapPlate.pinnedAt` is set.
+6. Open `/g/[slug]` — full-bleed world uses the pinned plate. Hit regions still work.
+7. Generate another draft without pinning — live plate and zone hits must not change.
+8. Pin again with confirm → replaces season art; zones persist (nudge labels if landmarks shifted).
+
+**APIs:**
+
+```bash
+# Generate draft (does not change live heroArtworkUrl)
+curl -X POST "$ORIGIN/api/gardens/$ID/map-plate/generate" \
+  -H 'Content-Type: application/json' \
+  -d '{"vibePrompt":"night matchday navy + chartreuse","referenceUrls":["/fans/ballard-fc/interbay-stadium-map.jpg"]}'
+
+# Pin draft for the season
+curl -X POST "$ORIGIN/api/gardens/$ID/map-plate/pin" \
+  -H 'Content-Type: application/json' \
+  -d '{"confirmReplace":true,"seasonLabel":"2026 season"}'
+```
+
 **Pulse API:**
 
 ```bash
@@ -196,9 +222,10 @@ curl -X POST "$ORIGIN/api/gardens/$SLUG/pulse" \
 ### Ballard FC demo (quick phone test)
 
 1. Admin → Gardens → **Create Ballard FC demo** (or `POST /api/gardens/demos/ballard-fc`).
-2. Open **`/g/ballard-fc`** — Interbay stadium map with sponsored zones.
-3. Tap a zone (Supporters, Beer Garden, Pagliacci Pitch, …) → **Leave a mark**.
-4. Confirm zone energy rises on the card.
+2. Open **`/g/ballard-fc`** — Interbay stadium map with sponsored zones (seed photo until you generate + pin a season plate).
+3. Optional: Admin Fan map → Generate draft → Pin for season (M1).
+4. Tap a zone (Supporters, Beer Garden, Pagliacci Pitch, …) → **Leave a mark**.
+5. Confirm zone energy rises on the card.
 
 ---
 
@@ -212,6 +239,7 @@ curl -X POST "$ORIGIN/api/gardens/$SLUG/pulse" \
 | Historical | `?at=` / `?version=` snapshot differs from live when expected |
 | Edition | PNG preview opens; stub order freezes snapshot version |
 | Zones | Map on `/g`; zone energy rises; invalid zone rejected |
+| Map plate (M1) | Draft generate does not change live map; pin updates `/g`; zone hits persist |
 | Ready shelf | Items list; promote payload has `worldVersion`; played status sticks |
 
 ---

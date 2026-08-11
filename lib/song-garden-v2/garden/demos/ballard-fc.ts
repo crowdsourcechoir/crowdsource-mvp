@@ -12,7 +12,7 @@ function zone(partial: ZoneDef): ZoneDef {
 
 /**
  * Mock Crowdsource Fans garden for Ballard FC @ Interbay Stadium.
- * Map art: team's published stadium map (sponsored / social zones, not seats).
+ * Seed art is the team's published stadium map until an AI season plate is generated + pinned.
  * Each zone carries its own prompt + CTA so engagement happens on the map.
  */
 export function ballardFcBrandKit(): Partial<BrandKit> {
@@ -23,6 +23,15 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
     accentColor: "#CFFF81",
     heroArtworkUrl: "/fans/ballard-fc/interbay-stadium-map.jpg",
     animationPreset: "particles",
+    mapPlate: {
+      referenceUrls: ["/fans/ballard-fc/interbay-stadium-map.jpg"],
+      vibePrompt:
+        "Ballard FC Interbay Stadium matchday night, deep navy Pacific Northwest pitch, chartreuse accents, stylized fan participation zones around the field, cinematic schematic map energy",
+      draftUrl: null,
+      draftGeneratedAt: null,
+      pinnedAt: null,
+      seasonLabel: "2026 season",
+    },
     sponsors: [
       {
         key: "pagliacci",

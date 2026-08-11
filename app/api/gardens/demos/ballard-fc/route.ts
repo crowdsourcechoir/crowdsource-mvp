@@ -22,11 +22,32 @@ export async function POST() {
     const brandKit = ballardFcBrandKit();
     const existing = await getGardenByIdOrSlug(BALLARD_FC_GARDEN_SLUG);
     if (existing) {
+      // Refresh zones/sponsors from seed, but keep a pinned season plate if present.
+      const keepPlate = Boolean(existing.brandKit.mapPlate?.pinnedAt);
       const garden = await updateGarden(existing.id, {
         title: "Ballard FC Song Garden",
         kind: "season",
         status: "live",
-        brandKit,
+        brandKit: {
+          ...brandKit,
+          heroArtworkUrl: keepPlate
+            ? existing.brandKit.heroArtworkUrl
+            : brandKit.heroArtworkUrl,
+          mapPlate: {
+            ...brandKit.mapPlate!,
+            referenceUrls:
+              existing.brandKit.mapPlate.referenceUrls.length > 0
+                ? existing.brandKit.mapPlate.referenceUrls
+                : brandKit.mapPlate!.referenceUrls,
+            vibePrompt:
+              existing.brandKit.mapPlate.vibePrompt || brandKit.mapPlate!.vibePrompt,
+            seasonLabel:
+              existing.brandKit.mapPlate.seasonLabel || brandKit.mapPlate!.seasonLabel,
+            draftUrl: existing.brandKit.mapPlate.draftUrl,
+            draftGeneratedAt: existing.brandKit.mapPlate.draftGeneratedAt,
+            pinnedAt: existing.brandKit.mapPlate.pinnedAt,
+          },
+        },
       });
       return NextResponse.json(
         { garden, created: false, publicPath: `/g/${BALLARD_FC_GARDEN_SLUG}` },

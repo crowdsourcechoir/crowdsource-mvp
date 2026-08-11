@@ -30,6 +30,7 @@ import {
 import { buildMerchRenderInput, buildPinnedMerchSnapshot, editionToMerchInput } from "./merch-render";
 import {
   defaultBrandKit,
+  mergeBrandKit,
   defaultMutationPolicy,
   emptyWorldState,
   isContributionKind,
@@ -222,7 +223,7 @@ export async function updateGarden(
   if (updates.title != null) patch.title = updates.title.trim();
   if (updates.kind != null) patch.kind = updates.kind;
   if (updates.status != null) patch.status = updates.status;
-  if (updates.brandKit) patch.brand_kit = defaultBrandKit({ ...existing.brandKit, ...updates.brandKit });
+  if (updates.brandKit) patch.brand_kit = mergeBrandKit(existing.brandKit, updates.brandKit);
   if (updates.mutationPolicy) {
     patch.mutation_policy = defaultMutationPolicy({
       ...existing.mutationPolicy,
