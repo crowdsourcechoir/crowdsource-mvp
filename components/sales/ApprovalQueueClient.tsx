@@ -36,10 +36,14 @@ export default function ApprovalQueueClient() {
   const [editedBody, setEditedBody] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Two-step gate for approve/send so Enter / first tap can't fire a real send. */
+  const [sendConfirmAction, setSendConfirmAction] = useState<ActionKey | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailPanelRef = useRef<HTMLDivElement | null>(null);
 
   const showCopyStatus = useCallback((message: string) => {
     if (copyStatusTimer.current) clearTimeout(copyStatusTimer.current);
@@ -50,7 +54,14 @@ export default function ApprovalQueueClient() {
   useEffect(() => {
     return () => {
       if (copyStatusTimer.current) clearTimeout(copyStatusTimer.current);
+      if (sendConfirmTimer.current) clearTimeout(sendConfirmTimer.current);
     };
+  }, []);
+
+  const clearSendConfirm = useCallback(() => {
+    if (sendConfirmTimer.current) clearTimeout(sendConfirmTimer.current);
+    sendConfirmTimer.current = null;
+    setSendConfirmAction(null);
   }, []);
 
   const load = useCallback(async () => {
@@ -81,16 +92,27 @@ export default function ApprovalQueueClient() {
   useEffect(() => {
     setEditing(false);
     setNotes("");
+    clearSendConfirm();
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
       setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
     }
-  }, [current?.queueItem.id]);
+    // Keep focus on the review panel — never leave Approve & send as the default Enter target.
+    const focusSafe = () => {
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.closest?.("[data-queue-send-actions]")) active.blur();
+      detailPanelRef.current?.focus({ preventScroll: true });
+    };
+    requestAnimationFrame(focusSafe);
+  }, [current?.queueItem.id, clearSendConfirm]);
 
   const selectItem = useCallback((index: number) => {
     setSelectedIndex(index);
     setMobileDetailOpen(true);
-  }, []);
+    clearSendConfirm();
+  }, [clearSendConfirm]);
+
+  const isSendAction = (action: ActionKey) => action === "approve" || action === "approve_with_edits";
 
   const decide = useCallback(
     async (action: ActionKey) => {
@@ -145,6 +167,7 @@ export default function ApprovalQueueClient() {
         if (data.gmail?.sent) {
           showCopyStatus(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}.`);
         }
+        clearSendConfirm();
         setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
         setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
         setMobileDetailOpen(false);
@@ -154,39 +177,76 @@ export default function ApprovalQueueClient() {
         setBusy(false);
       }
     },
-    [current, busy, notes, editedSubject, editedBody, editing, items.length, showCopyStatus, gmailConnected]
+    [current, busy, notes, editedSubject, editedBody, editing, items.length, showCopyStatus, gmailConnected, clearSendConfirm]
+  );
+
+  const requestOrConfirmSend = useCallback(
+    (action: ActionKey) => {
+      if (!isSendAction(action)) {
+        clearSendConfirm();
+        void decide(action);
+        return;
+      }
+      if (action === "approve_with_edits" && !editing) {
+        clearSendConfirm();
+        setEditing(true);
+        return;
+      }
+      if (sendConfirmAction === action) {
+        clearSendConfirm();
+        void decide(action);
+        return;
+      }
+      setSendConfirmAction(action);
+      if (sendConfirmTimer.current) clearTimeout(sendConfirmTimer.current);
+      sendConfirmTimer.current = setTimeout(() => setSendConfirmAction(null), 4000);
+    },
+    [clearSendConfirm, decide, editing, sendConfirmAction]
   );
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // Enter must never approve/send — it was firing accidental Gmail sends while reviewing.
+      if (e.key === "Enter") return;
+      if (e.key === "Escape") {
+        if (sendConfirmAction) {
+          e.preventDefault();
+          clearSendConfirm();
+          return;
+        }
+        if (mobileDetailOpen) {
+          e.preventDefault();
+          setMobileDetailOpen(false);
+        }
+        return;
+      }
       if (editing) return;
       const target = e.target as HTMLElement;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
+        clearSendConfirm();
         setSelectedIndex((i) => Math.min(items.length - 1, i + 1));
         setMobileDetailOpen(true);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
+        clearSendConfirm();
         setSelectedIndex((i) => Math.max(0, i - 1));
         setMobileDetailOpen(true);
-      } else if (e.key === "Escape" && mobileDetailOpen) {
-        e.preventDefault();
-        setMobileDetailOpen(false);
       } else {
         const action = ACTIONS.find((a) => a.shortcut.toLowerCase() === e.key.toLowerCase());
         if (action && action.key !== "approve_with_edits") {
           e.preventDefault();
-          decide(action.key);
+          requestOrConfirmSend(action.key);
         } else if (action?.key === "approve_with_edits") {
           e.preventDefault();
-          setEditing(true);
+          requestOrConfirmSend("approve_with_edits");
         }
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items.length, decide, editing, mobileDetailOpen]);
+  }, [items.length, editing, mobileDetailOpen, sendConfirmAction, clearSendConfirm, requestOrConfirmSend]);
 
   const pendingCount = items.length;
 
@@ -236,10 +296,17 @@ export default function ApprovalQueueClient() {
       </div>
 
       {current && (
-        <div className={`rounded-xl border border-gray-800 p-4 sm:p-6 ${mobileDetailOpen ? "block" : "hidden lg:block"}`}>
+        <div
+          ref={detailPanelRef}
+          tabIndex={-1}
+          className={`rounded-xl border border-gray-800 p-4 sm:p-6 outline-none ${mobileDetailOpen ? "block" : "hidden lg:block"}`}
+        >
           <button
             type="button"
-            onClick={() => setMobileDetailOpen(false)}
+            onClick={() => {
+              clearSendConfirm();
+              setMobileDetailOpen(false);
+            }}
             className="mb-4 inline-flex items-center gap-1 rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-200 touch-manipulation lg:hidden"
           >
             ← Back to queue
@@ -416,33 +483,54 @@ export default function ApprovalQueueClient() {
           </div>
 
           <div className="mt-4">
-            <input
+            <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              onKeyDown={(e) => {
+                // Single-line inputs treat Enter as submit and can activate a nearby default button.
+                if (e.key === "Enter" && !e.shiftKey) e.stopPropagation();
+              }}
+              rows={2}
               placeholder="Decision notes (optional)"
               className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {ACTIONS.map((action) => (
-              <button
-                key={action.key}
-                type="button"
-                disabled={busy}
-                onClick={() => (action.key === "approve_with_edits" && !editing ? setEditing(true) : decide(action.key))}
-                className={`rounded-lg px-3 py-2 text-sm font-medium text-white touch-manipulation disabled:opacity-50 ${action.tone}`}
-              >
-                {action.key === "approve_with_edits" && !editing ? "Edit draft" : action.label}{" "}
-                <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
-              </button>
-            ))}
+          <div className="mt-4 flex flex-wrap gap-2" data-queue-send-actions>
+            {ACTIONS.map((action) => {
+              const awaitingConfirm = sendConfirmAction === action.key;
+              const label =
+                action.key === "approve_with_edits" && !editing
+                  ? "Edit draft"
+                  : awaitingConfirm
+                    ? "Tap again to send"
+                    : action.label;
+              return (
+                <button
+                  key={action.key}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => requestOrConfirmSend(action.key)}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium text-white touch-manipulation disabled:opacity-50 ${
+                    awaitingConfirm ? "bg-amber-500 hover:bg-amber-400 ring-2 ring-amber-200" : action.tone
+                  }`}
+                >
+                  {label}{" "}
+                  <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
+                </button>
+              );
+            })}
           </div>
+          {sendConfirmAction && (
+            <p className="mt-2 text-xs text-amber-300">
+              Confirm send? Press the button again (or <kbd>a</kbd> again). Esc cancels — Enter never sends.
+            </p>
+          )}
           {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; send, <kbd>r</kbd> reject, <kbd>d</kbd> defer,{" "}
-            <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. With Gmail connected, approve sends from your inbox and tracks the
-            thread for replies.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> twice to approve &amp; send, <kbd>r</kbd> reject,{" "}
+            <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. Enter never sends. With Gmail
+            connected, approve sends from your inbox and tracks the thread for replies.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>
