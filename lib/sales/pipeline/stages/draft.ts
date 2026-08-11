@@ -8,6 +8,7 @@ import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
 import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "../../outreach/bookUrl";
+import { OUTREACH_GOLD_EDIT_EXAMPLES, OUTREACH_STYLE_LESSONS } from "../../outreach/styleLessons";
 import type { Contact, Organization, Opportunity } from "../../types";
 import type { BriefStageOutput } from "./brief";
 
@@ -18,11 +19,10 @@ export type DraftStageOutput = {
 
 const SALES_SENDER_NAME = process.env.SALES_SENDER_NAME || "Joel DeJong";
 
-// Real emails Joel has actually sent, used as few-shot voice reference below — abstract style
-// adjectives ("less salesy") steer an LLM far worse than concrete examples of the real voice. If
-// this voice drifts (new signature, new phrasing habits), update these two examples rather than
-// hand-tuning the prose rules further; the examples do most of the work.
-const VOICE_REFERENCE_EMAILS = `--- EXAMPLE 1 ---
+// Real emails Joel has actually sent / approved-with-edits, used as few-shot voice reference.
+// Abstract style adjectives steer an LLM worse than concrete examples. Prefer gold edited
+// examples (ACE / City Summit) plus earlier CAIS/INSPIRE sends.
+const VOICE_REFERENCE_EMAILS = `--- EXAMPLE 1 (earlier send) ---
 Hi Lorena,
 
 I hope you're doing well!
@@ -40,43 +40,27 @@ Thanks, and I hope we have a chance to connect.
 Best,
 Joel DeJong
 
---- EXAMPLE 2 ---
-Hi Samantha,
+${OUTREACH_GOLD_EDIT_EXAMPLES}`;
 
-I hope you're doing well!
-
-I'm Joel DeJong, founder of Crowdsource Choir—a participatory musical experience where the audience becomes the choir. I thought it might be a unique fit for the 2027 INSPIRE Annual Conference.
-
-Unlike a traditional keynote or performance, Crowdsource Choir transforms attendees from spectators into participants. Together, they create something that could only exist because of the unique combination of people in the room. Instead of simply hearing the conference message, they become the message.
-
-Each engagement is custom-designed for the event. Before the conference, attendees contribute stories, ideas, and voices that become the creative source material for a custom anthem and participatory musical experience, premiered together live during the event. The format is flexible and can serve as an opening session, closing experience, experiential keynote, featured performance, or interactive general session for audiences of 50 to 5,000+.
-
-I've included a bit more about the experience here:
-https://www.crowdsourcechoir.com/book
-If it resonates, I'd love to connect and explore whether Crowdsource Choir might fit your conference.
-
-Thanks for your time, and I hope we have a chance to connect.
-
-Best,
-Joel DeJong`;
-
-const SYSTEM_PROMPT = `You fill in three fields (subject, openingReason, fitReason) inside a fixed outreach email template — you do not write a full free-form email, and you do not write the greeting, sign-off, or closing ask, those are already fixed elsewhere. Match the voice of the two real emails below exactly: warm but plain-spoken, never salesy, no corporate throat-clearing.
+const SYSTEM_PROMPT = `You fill in three fields (subject, openingReason, fitReason) inside a fixed outreach email template — you do not write a full free-form email, and you do not write the greeting, sign-off, or closing ask, those are already fixed elsewhere. Match the voice of the real / operator-edited emails below exactly: warm but plain-spoken, never salesy, no corporate throat-clearing.
 
 ${VOICE_REFERENCE_EMAILS}
 
+${OUTREACH_STYLE_LESSONS}
+
 --- YOUR THREE FIELDS, MAPPED TO THAT VOICE ---
-- subject: plain and specific, naming the organization or opportunity (e.g. "Crowdsource Choir for the CAIS Trustee/School Head Conference"), never clickbait, never a question mark or exclamation point, never generic ("Exciting opportunity!" / "Quick question").
-- openingReason plays the role of the bridge sentence right after the fixed self-intro line — e.g. "I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life" or "I thought it might be a unique fit for the 2027 INSPIRE Annual Conference." Name the specific opportunity/event. 1 sentence.
-- fitReason plays the role of the paragraph that follows — describing what actually happens and why it fits THIS opportunity specifically, in the same grounded-but-vivid register as "Together, attendees co-create and sing an original anthem..." or the "Unlike a traditional keynote..." paragraph. 1-3 sentences.
+- subject: plain and specific, naming the organization or opportunity (e.g. "Crowdsource Choir for the ACE Annual Meeting"), never clickbait, never a question mark or exclamation point, never generic ("Exciting opportunity!" / "Quick question").
+- openingReason plays the role of the bridge sentence right after the fixed self-intro line. Name the specific opportunity/event. Prefer the strongest distinctive hook from the findings (place, theme, Music City, etc.) in this sentence when one exists — 1 sentence.
+- fitReason plays the role of the paragraph that follows — what happens (voices → anthem the room performs) and why it fits THIS audience's actual work. 1-3 sentences. Mirror Gold Edit A/B register, not corporate fluff.
 
 Rules:
-- Describing Crowdsource Choir's own format vividly (e.g. "transforms attendees from spectators into participants") is not a claim that needs evidence — that's our own pitch, not a statement about the prospect. Say it with the same confidence as the reference emails.
-- Any claim specifically ABOUT the prospect organization or their event (attendance size, dates, program details, budget signals) must be something the findings actually say — never invent or infer beyond what's given.
-- No fabricated familiarity beyond what's already in the fixed template (the greeting itself is handled separately) — never imply a prior relationship, conversation, or meeting that didn't happen.
+- Describing Crowdsource Choir's own format vividly is not a claim that needs evidence — that's our own pitch. Say it with the same confidence as the reference emails.
+- Any claim specifically ABOUT the prospect organization or their event (attendance size, dates, program details, venue/city, budget signals) must be something the findings actually say — never invent or infer beyond what's given.
+- No fabricated familiarity, prior relationship, conversation, meeting, or past partnership with "organizations like yours."
 - No flattery for its own sake ("your impressive organization"), no generic filler, no private/sensitive information.
-- Never use email-cliché phrasing: "reaching out to explore synergies," "excited to connect," "circle back," "leverage," "seamless," "game-changer," "revolutionize," or similar. The reference emails never use language like this — match that plainness.
-- fitReason should build toward the stated primary goal for this contact's role — the closing ask (supplied separately, not written by you) targets that same goal, so fitReason should set it up rather than argue for a different one.
-- CRITICAL: cite findings ONLY via the separate personalizationFindingIndexes field. NEVER write citation markers, finding numbers, or phrases like "(findings 7, 10)", "[8]", or "as noted in findings" inside openingReason or fitReason themselves — those fields are the literal visible email text a human will read, not a footnoted document.`;
+- Never use email-cliché phrasing: "reaching out to explore synergies," "excited to connect," "circle back," "leverage," "seamless," "game-changer," "revolutionize," "fostering deep community engagement," "amplifies the important discussions," or similar.
+- fitReason should build toward the stated primary goal for this contact's role — the closing ask (supplied separately) targets that same goal.
+- CRITICAL: cite findings ONLY via the separate personalizationFindingIndexes field. NEVER write citation markers, finding numbers, or phrases like "(findings 7, 10)", "[8]", or "as noted in findings" inside openingReason or fitReason themselves.`;
 
 function fillTemplate(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? `{{${key}}}`);
@@ -144,6 +128,7 @@ export async function runDraftStage(
     `Contact's role bucket: ${strategy.label}. Primary goal for this email: ${strategy.primaryGoal}.`,
     `Internal brief recommended angle: ${brief.recommendedAngle}`,
     `Findings:\n${indexed.promptText}`,
+    `Reminder: put the strongest distinctive finding (place, theme, Music City, audience job) into openingReason when one exists; use fitReason for voices→anthem→why it fits THIS audience's work.`,
   ].join("\n\n");
 
   const result = await callStructured({
