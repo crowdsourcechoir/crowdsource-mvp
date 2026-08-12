@@ -30,6 +30,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [togglingClient, setTogglingClient] = useState(false);
+  const [togglingDiscard, setTogglingDiscard] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +85,25 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
     }
   }
 
+  async function toggleDiscarded() {
+    if (!data) return;
+    setTogglingDiscard(true);
+    try {
+      const res = await fetch(`/api/sales/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discarded: !data.organization.discardedAt }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to update");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setTogglingDiscard(false);
+    }
+  }
+
   if (error) return <p className="text-red-400">{error}</p>;
   if (!data) return <p className="text-gray-400">Loading…</p>;
 
@@ -98,10 +118,20 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
             {organization.isExistingClient && (
               <span className="rounded-full border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-400">Existing client</span>
             )}
+            {organization.discardedAt && (
+              <span className="rounded-full border border-red-800 px-2 py-0.5 text-xs font-medium text-red-300">Discarded junk</span>
+            )}
           </div>
           <p className="text-sm text-gray-400">{organization.websiteUrl ?? "No website on file"}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={toggleDiscarded}
+            disabled={togglingDiscard}
+            className="rounded-lg border border-red-900 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+          >
+            {organization.discardedAt ? "Restore from junk" : "Discard as junk"}
+          </button>
           <button
             onClick={toggleExistingClient}
             disabled={togglingClient}
@@ -111,14 +141,25 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           </button>
           <button
             onClick={runPipeline}
-            disabled={running || organization.isExistingClient}
-            title={organization.isExistingClient ? "Existing clients are never prospected — unmark to run the pipeline." : undefined}
+            disabled={running || organization.isExistingClient || Boolean(organization.discardedAt)}
+            title={
+              organization.discardedAt
+                ? "Discarded junk is never prospected — restore to run the pipeline."
+                : organization.isExistingClient
+                  ? "Existing clients are never prospected — unmark to run the pipeline."
+                  : undefined
+            }
             className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 disabled:opacity-50"
           >
             {running ? "Running pipeline…" : "Run pipeline"}
           </button>
         </div>
       </div>
+      {organization.discardedAt && (
+        <p className="rounded-md border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">
+          Discarded as junk — hidden from the prospecting pool and never pipelined. Restore if that was a mistake.
+        </p>
+      )}
       {organization.isExistingClient && (
         <p className="rounded-md border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-300">
           Marked as an existing client — the pipeline will never run for this organization, and it won&apos;t be prospected.
@@ -141,9 +182,17 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
                   {o.status === "awaiting_contact" && (
                     <span
                       className="ml-2 rounded-full border border-amber-700 px-2 py-0.5 text-xs font-medium text-amber-400"
-                      title="Scored and briefed, but no contact with a verified email yet — not in the approval queue until one is found."
+                      title="Scored ≥70, but no contact with a verified email yet — not in the approval queue until one is found."
                     >
                       Blocked: no verified contact
+                    </span>
+                  )}
+                  {o.status === "needs_more_research" && (
+                    <span
+                      className="ml-2 rounded-full border border-gray-600 px-2 py-0.5 text-xs font-medium text-gray-400"
+                      title="Below the solid-lead bar (score 70) — not shown in the approval queue."
+                    >
+                      Below solid-lead bar
                     </span>
                   )}
                 </div>

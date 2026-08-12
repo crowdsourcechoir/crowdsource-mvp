@@ -15,6 +15,8 @@ export default function OrganizationsClient() {
   const [newName, setNewName] = useState("");
   const [newWebsite, setNewWebsite] = useState("");
   const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [discarding, setDiscarding] = useState(false);
 
   const load = useCallback(async (q?: string) => {
     setLoading(true);
@@ -24,6 +26,7 @@ export default function OrganizationsClient() {
       if (!res.ok) throw new Error(data.error ?? "Failed to load organizations");
       setOrganizations(data.organizations ?? []);
       setTypes(data.organizationTypes ?? []);
+      setSelected(new Set());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load organizations");
@@ -37,6 +40,42 @@ export default function OrganizationsClient() {
   }, [load]);
 
   const typeLabel = (id: string | null) => types.find((t) => t.id === id)?.label ?? "Unclassified";
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === organizations.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(organizations.map((o) => o.id)));
+    }
+  }
+
+  async function discardSelected() {
+    if (selected.size === 0) return;
+    setDiscarding(true);
+    try {
+      const res = await fetch("/api/sales/organizations/discard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationIds: Array.from(selected), discarded: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to discard");
+      await load(search);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to discard");
+    } finally {
+      setDiscarding(false);
+    }
+  }
 
   async function addOrganization(e: React.FormEvent) {
     e.preventDefault();
@@ -74,7 +113,9 @@ export default function OrganizationsClient() {
       const message =
         data.summary.status === "skipped_existing_client"
           ? "Skipped — marked as an existing client."
-          : `Status: ${data.summary.status} (${data.summary.opportunityIds.length} opportunities)`;
+          : data.summary.status === "skipped_discarded"
+            ? "Skipped — discarded as junk."
+            : `Status: ${data.summary.status} (${data.summary.opportunityIds.length} opportunities)`;
       setRunResult((prev) => ({ ...prev, [orgId]: message }));
     } catch (err) {
       setRunResult((prev) => ({ ...prev, [orgId]: err instanceof Error ? err.message : "Failed" }));
@@ -85,6 +126,11 @@ export default function OrganizationsClient() {
 
   return (
     <div>
+      <p className="mb-4 text-xs text-gray-500">
+        Only solid leads (score ≥70 + verified contact) reach the approval queue. Discard junk orgs here so they never
+        burn a pipeline run.
+      </p>
+
       <form onSubmit={addOrganization} className="mb-6 flex flex-wrap gap-2 rounded-xl border border-gray-800 p-4">
         <input
           value={newName}
@@ -103,7 +149,7 @@ export default function OrganizationsClient() {
         </button>
       </form>
 
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -113,6 +159,14 @@ export default function OrganizationsClient() {
         />
         <button onClick={() => load(search)} className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">
           Search
+        </button>
+        <button
+          type="button"
+          disabled={selected.size === 0 || discarding}
+          onClick={discardSelected}
+          className="rounded-md border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300 hover:bg-red-950/70 disabled:opacity-40"
+        >
+          {discarding ? "Discarding…" : `Discard junk (${selected.size})`}
         </button>
       </div>
 
@@ -126,6 +180,14 @@ export default function OrganizationsClient() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-gray-800 text-xs uppercase text-gray-500">
               <tr>
+                <th className="px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={organizations.length > 0 && selected.size === organizations.length}
+                    onChange={toggleAll}
+                    aria-label="Select all"
+                  />
+                </th>
                 <th className="px-4 py-3">Organization</th>
                 <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Source</th>
@@ -136,6 +198,14 @@ export default function OrganizationsClient() {
             <tbody>
               {organizations.map((org) => (
                 <tr key={org.id} className="border-b border-gray-800 text-gray-200">
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(org.id)}
+                      onChange={() => toggleSelected(org.id)}
+                      aria-label={`Select ${org.name}`}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/admin/sales/organizations/${org.id}`} className="font-medium hover:underline">
                       {org.name}

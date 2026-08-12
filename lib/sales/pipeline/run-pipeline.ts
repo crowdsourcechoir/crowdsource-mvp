@@ -4,6 +4,7 @@ import { listOpportunitiesForOrganization } from "../db/opportunities";
 import { createPipelineRun, finishAgentRun, startAgentRun, updatePipelineRun } from "../db/pipeline";
 import { listFindingsForOrganization } from "../db/research";
 import { getLatestScoreForOpportunity } from "../db/scores";
+import { getMinLeadScore } from "../digest/config";
 import { looksLikePersonName, hasVerifiedEmail } from "../dedupe";
 import { ensureBookLinks } from "../outreach/ensureBookLinks";
 import { claimLooksLikeCalendarDate } from "../research/extractEventDates";
@@ -44,7 +45,7 @@ function missingInfoSuggestsDateGap(missingInformation: string[]): boolean {
 
 export type PipelineRunSummary = {
   pipelineRunId: string | null;
-  status: "succeeded" | "failed" | "partially_failed" | "skipped_existing_client";
+  status: "succeeded" | "failed" | "partially_failed" | "skipped_existing_client" | "skipped_discarded";
   stagesRun: { stage: PipelineStage; status: string; error?: string }[];
   opportunityIds: string[];
 };
@@ -76,6 +77,10 @@ export async function runPipelineForOrganization(
 ): Promise<PipelineRunSummary> {
   const org = await getOrganization(organizationId);
   if (!org) throw new Error(`Organization ${organizationId} not found.`);
+
+  if (org.discardedAt) {
+    return { pipelineRunId: null, status: "skipped_discarded", stagesRun: [], opportunityIds: [] };
+  }
 
   // Never spend a single AI call or dollar prospecting an organization already marked as a
   // customer — checked before creating any pipeline_run row at all, not just before queueing.
@@ -222,6 +227,19 @@ export async function runPipelineForOrganization(
       }
     }
 
+    // Solid-lead bar: don't spend brief/draft/QA tokens on leads that won't clear the queue.
+    // Near-miss deepen (above) already tried to salvage 45–69; if we're still under the bar, stop.
+    const minLeadScore = getMinLeadScore();
+    if (scoreResult.totalScore < minLeadScore) {
+      await runStage("queue", { opportunityId: opportunity.id, belowThreshold: true }, () =>
+        runQueueStage(freshOrg, opportunity, scoreResult.prospectScoreId, null, {
+          contactIsQueueReady,
+          totalScore: scoreResult.totalScore,
+        })
+      );
+      continue;
+    }
+
     const briefResult = await runStage("brief", { opportunityId: opportunity.id }, async () => {
       const score = await getLatestScoreForOpportunity(opportunity.id);
       if (!score) throw new Error("Score not found for brief stage.");
@@ -239,12 +257,13 @@ export async function runPipelineForOrganization(
       await runStage("qa", { draftId: draftResult.draftId }, () => runQaStage(draftResult.draftId as string));
     }
 
-    // The queue stage itself decides, based on contactIsQueueReady, whether to create an
-    // approval_queue_items row or just mark the opportunity awaiting_contact — see queue.ts.
-    // Always running it through runStage (rather than branching around it here) keeps the same
-    // agent_runs tracking and failure isolation as every other stage.
+    // The queue stage itself decides, based on contact + score gates, whether to create an
+    // approval_queue_items row — see queue.ts.
     await runStage("queue", { opportunityId: opportunity.id }, () =>
-      runQueueStage(freshOrg, opportunity, scoreResult.prospectScoreId, draftResult?.draftId ?? null, contactIsQueueReady)
+      runQueueStage(freshOrg, opportunity, scoreResult.prospectScoreId, draftResult?.draftId ?? null, {
+        contactIsQueueReady,
+        totalScore: scoreResult.totalScore,
+      })
     );
   }
 

@@ -73,6 +73,8 @@ export type Organization = {
   source: "manual" | "csv_import" | "ai_discovered";
   duplicateOfOrganizationId: string | null;
   isExistingClient: boolean;
+  /** When set, org is junk/ignored — never enters the unprocessed pool or pipeline. */
+  discardedAt: string | null;
   importMetadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;

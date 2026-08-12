@@ -1,6 +1,6 @@
 /**
- * Digest volume/quality gates — "email me once I have N leads scoring at least M."
- * Tunable via env so the overnight top-up loop and the email filter stay in sync.
+ * Solid-lead bar — shared by the morning digest, the approval queue gate, and
+ * pipeline skip-below-threshold logic. Tunable via SALES_DIGEST_MIN_SCORE.
  */
 
 const DEFAULT_MIN_SCORE = 70;
@@ -24,8 +24,14 @@ function readEnvNumber(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-export function getDigestMinScore(): number {
+/** Minimum totalScore for a lead to be considered solid (default 70). */
+export function getMinLeadScore(): number {
   return readEnvNumber("SALES_DIGEST_MIN_SCORE", DEFAULT_MIN_SCORE);
+}
+
+/** @deprecated Prefer getMinLeadScore — kept so digest call sites stay readable. */
+export function getDigestMinScore(): number {
+  return getMinLeadScore();
 }
 
 export function getDigestTargetCount(): number {

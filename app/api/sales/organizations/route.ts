@@ -14,8 +14,9 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? undefined;
+    const includeDiscarded = searchParams.get("includeDiscarded") === "1";
     const [organizations, organizationTypes] = await Promise.all([
-      listOrganizations({ search, limit: 500 }),
+      listOrganizations({ search, limit: 500, includeDiscarded }),
       listOrganizationTypes(),
     ]);
     return NextResponse.json({ organizations, organizationTypes }, { headers: { "Cache-Control": "no-store" } });

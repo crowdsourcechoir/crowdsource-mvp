@@ -61,7 +61,7 @@ export async function runPipelineBatch(limit = DEFAULT_BATCH_SIZE): Promise<Pipe
   const stalledOrgIds = await markStalledPipelineRunsFailed(STALE_RUN_THRESHOLD_MINUTES);
   const stalledOrgs = (
     await Promise.all(stalledOrgIds.map((id) => getOrganization(id)))
-  ).filter((o): o is Organization => o !== null && !o.isExistingClient);
+  ).filter((o): o is Organization => o !== null && !o.isExistingClient && !o.discardedAt);
 
   const remainingCapacity = Math.max(0, cappedLimit - stalledOrgs.length);
   const freshOrgs = remainingCapacity > 0 ? await listUnprocessedOrganizations(remainingCapacity) : [];

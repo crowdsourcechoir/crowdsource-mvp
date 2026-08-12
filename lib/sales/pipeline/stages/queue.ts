@@ -1,3 +1,4 @@
+import { getMinLeadScore } from "../../digest/config";
 import { createOrUpdateQueueItem, retractPendingQueueItemForOpportunity } from "../../db/queue";
 import { updateOpportunityStatus } from "../../db/opportunities";
 import type { Organization, Opportunity } from "../../types";
@@ -9,31 +10,49 @@ export type QueueStageOutput = {
   retractedStalePendingItem?: boolean;
 };
 
+export type QueueStageGate = {
+  contactIsQueueReady: boolean;
+  /** Latest totalScore for this opportunity — required for the solid-lead (≥70) bar. */
+  totalScore: number | null;
+};
+
 /**
  * Deterministic — assembles what already exists into one reviewable row. No AI call.
  *
- * `contactIsQueueReady` gates the actual queue entry (see run-pipeline.ts and
- * docs/sales-platform/ai-workflow.md §4/§10): when false, this deliberately does NOT create an
- * approval_queue_items row — the opportunity is marked `awaiting_contact` instead of
- * `ready_for_review` so it stays visible/re-processable without asking a human to do the contact
- * research the pipeline exists to do. This still runs (and gets its own agent_runs row) even when
- * gated off, rather than being skipped outright in run-pipeline.ts, so a DB error either way is
- * caught and isolated the same way as every other stage.
+ * Gates (both required for queue entry):
+ * 1. Solid lead score ≥ getMinLeadScore() (default 70) — below that → `needs_more_research`,
+ *    no queue row (Joel only wants solid leads in the human queue).
+ * 2. Verified contact email — otherwise → `awaiting_contact`.
  *
- * Also retracts a stale, never-decided (`pending`) queue row left over from before this org's
- * contact was re-evaluated as not-ready (e.g. queued before this gate existed at all) — otherwise
- * it would linger in the human's queue forever, showing "no contact identified" with no way to
- * tell it's actually been superseded. A human's actual decision (approved/rejected/deferred/etc.)
- * is never touched by this — see `retractPendingQueueItemForOpportunity`.
+ * Also retracts a stale pending queue row when gated off, so pre-gate junk doesn't linger.
  */
 export async function runQueueStage(
   org: Organization,
   opportunity: Opportunity,
   prospectScoreId: string | null,
   outreachDraftId: string | null,
-  contactIsQueueReady: boolean
+  gate: QueueStageGate
 ): Promise<{ output: QueueStageOutput }> {
-  if (!contactIsQueueReady) {
+  const minScore = getMinLeadScore();
+  const score = gate.totalScore;
+
+  if (score == null || score < minScore) {
+    await updateOpportunityStatus(opportunity.id, "needs_more_research");
+    const retracted = await retractPendingQueueItemForOpportunity(opportunity.id);
+    return {
+      output: {
+        queueItemId: null,
+        duplicateWarning: false,
+        skippedReason:
+          score == null
+            ? `No score — not surfaced (solid-lead bar is ${minScore}).`
+            : `Score ${score.toFixed(0)} is below the solid-lead bar (${minScore}) — not surfaced in the approval queue.`,
+        retractedStalePendingItem: retracted,
+      },
+    };
+  }
+
+  if (!gate.contactIsQueueReady) {
     await updateOpportunityStatus(opportunity.id, "awaiting_contact");
     const retracted = await retractPendingQueueItemForOpportunity(opportunity.id);
     return {

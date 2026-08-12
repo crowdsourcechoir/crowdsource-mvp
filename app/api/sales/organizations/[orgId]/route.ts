@@ -4,6 +4,7 @@ import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { listOpportunitiesForOrganization } from "@/lib/sales/db/opportunities";
 import { listPipelineRunsForOrganization, listAgentRuns } from "@/lib/sales/db/pipeline";
 import { listFindingsForOrganization, getSource } from "@/lib/sales/db/research";
+import { retractPendingQueueItemForOpportunity } from "@/lib/sales/db/queue";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +42,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
   try {
     const { orgId } = await params;
     const body = await request.json();
-    if (typeof body?.isExistingClient !== "boolean") {
-      return NextResponse.json({ error: "isExistingClient (boolean) is required" }, { status: 400 });
+
+    const patch: { isExistingClient?: boolean; discardedAt?: string | null } = {};
+    if (typeof body?.isExistingClient === "boolean") {
+      patch.isExistingClient = body.isExistingClient;
     }
-    const organization = await updateOrganization(orgId, { isExistingClient: body.isExistingClient });
+    if (typeof body?.discarded === "boolean") {
+      patch.discardedAt = body.discarded ? new Date().toISOString() : null;
+    }
+    if (patch.isExistingClient === undefined && patch.discardedAt === undefined) {
+      return NextResponse.json(
+        { error: "Provide isExistingClient and/or discarded (boolean)" },
+        { status: 400 }
+      );
+    }
+
+    const organization = await updateOrganization(orgId, patch);
+
+    // Discarding junk — pull any pending queue rows so they vanish from the human queue.
+    if (organization.discardedAt) {
+      const opps = await listOpportunitiesForOrganization(orgId);
+      await Promise.all(opps.map((o) => retractPendingQueueItemForOpportunity(o.id).catch(() => false)));
+    }
+
     return NextResponse.json({ organization });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });

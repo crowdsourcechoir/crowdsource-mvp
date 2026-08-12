@@ -4,7 +4,14 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import type { Organization } from "@/lib/sales/types";
 
-type RunState = "pending" | "running" | "succeeded" | "failed" | "skipped_existing_client";
+type RunState =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "partially_failed"
+  | "skipped_existing_client"
+  | "skipped_discarded";
 
 type RunRow = { organization: Organization; state: RunState; detail?: string };
 
@@ -111,12 +118,16 @@ export default function BatchRunClient() {
                       ? "text-red-400"
                       : r.state === "running"
                         ? "text-sky-400"
-                        : r.state === "skipped_existing_client"
+                        : r.state === "skipped_existing_client" || r.state === "skipped_discarded"
                           ? "text-gray-500"
                           : "text-gray-600"
                 }
               >
-                {r.state === "skipped_existing_client" ? "existing client" : r.state}
+                {r.state === "skipped_existing_client"
+                  ? "existing client"
+                  : r.state === "skipped_discarded"
+                    ? "discarded junk"
+                    : r.state}
                 {r.detail ? ` · ${r.detail}` : ""}
               </span>
             </li>

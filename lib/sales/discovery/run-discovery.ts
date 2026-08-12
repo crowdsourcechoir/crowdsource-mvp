@@ -6,6 +6,7 @@ import { activeSearchProvider, runSearch } from "./search";
 import { buildDiscoveryQueries } from "./queryBuilder";
 import { extractCandidatesFromSearchResult } from "./extractCandidates";
 import { normalizeDiscoveryOptions, type DiscoveryRunOptions } from "./presets";
+import { junkDiscoveryReason } from "./junkFilter";
 import type { DiscoveryRun } from "../types";
 
 /**
@@ -70,6 +71,7 @@ export async function runDiscoveryRun(
   let candidatesFound = 0;
   let candidatesNew = 0;
   let candidatesDuplicate = 0;
+  let candidatesJunk = 0;
   let totalTokensInput = 0;
   let totalTokensOutput = 0;
   let totalCostUsd = 0;
@@ -113,6 +115,13 @@ export async function runDiscoveryRun(
         }
 
         try {
+          const junkReason = junkDiscoveryReason(name, candidate.websiteUrl);
+          if (junkReason) {
+            candidatesJunk += 1;
+            createdNormalizedNamesThisRun.add(normalized);
+            continue;
+          }
+
           const existing = await findExistingOrganization(name, candidate.websiteUrl);
           if (existing) {
             candidatesDuplicate += 1;
@@ -148,6 +157,16 @@ export async function runDiscoveryRun(
     }
   } catch (err) {
     runError = err instanceof Error ? err.message : "Discovery run failed";
+  }
+
+  // Persist junk rejects in the query log so Recent runs can show why "found" ≠ "new"
+  // without a schema migration on discovery_runs.
+  if (candidatesJunk > 0) {
+    queryLog.push({
+      query: `(junk filter rejected ${candidatesJunk})`,
+      resultsCount: 0,
+      candidatesExtracted: 0,
+    });
   }
 
   const status: DiscoveryRun["status"] = runError ? "failed" : "succeeded";
