@@ -136,5 +136,10 @@ Use one persistent thread or agent per major living-system domain:
 - Canvas Agent: creative workspace and composition prep
 - Sales Agent: offers, partnerships, sponsors, pitches
 
+Copy-paste starter prompts for each domain live in
+[`docs/agents/`](./agents/README.md). Start with
+[`OCTO Core`](./agents/octo-core.md) and [`Garden`](./agents/garden.md);
+add Roots, Bloom, Live, Canvas, and Sales prompts as those threads are stood up.
+
 Implementation agents can be short-lived and task-specific, but this document
 should remain the source of truth for workspace language.
