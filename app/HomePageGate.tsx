@@ -97,7 +97,7 @@ export default function HomePageGate() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/logo.png" alt="Crowdsource Choir" className="h-16 w-auto" />
       <Link
-        href="/admin/live"
+        href="/admin/gardens"
         className="mt-6 min-h-[48px] min-w-[48px] rounded-xl bg-white px-6 py-3 text-base font-medium text-gray-900 hover:bg-gray-200 active:bg-gray-300"
       >
         {"Let's Go!"}
