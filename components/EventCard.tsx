@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Event } from "@/data/mockEvents";
+import { publicEventPath, publicEventUrl } from "@/lib/event-slug-aliases";
 import { googleMapsSearchUrl } from "./AddressMap";
 import QRCodeDisplay from "./QRCodeDisplay";
 
@@ -9,7 +10,8 @@ type EventCardProps = {
 };
 
 export default function EventCard({ event, baseUrl = "http://localhost:3000" }: EventCardProps) {
-  const eventUrl = `${baseUrl}/e/${event.slug}`;
+  const eventUrl = publicEventUrl(baseUrl, event.slug);
+  const eventPath = publicEventPath(event.slug);
 
   return (
     <article className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -36,7 +38,7 @@ export default function EventCard({ event, baseUrl = "http://localhost:3000" }: 
         </a>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Link
-            href={`/e/${event.slug}`}
+            href={eventPath}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             View

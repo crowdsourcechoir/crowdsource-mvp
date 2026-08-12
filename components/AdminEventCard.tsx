@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Event } from "@/data/mockEvents";
+import { canonicalEventSlug, publicEventUrl } from "@/lib/event-slug-aliases";
 import { formatDateLong, formatTime } from "@/lib/formatDate";
 import { googleMapsSearchUrl } from "./AddressMap";
 import QRCodeDisplay from "./QRCodeDisplay";
@@ -17,9 +18,9 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
   const [showQr, setShowQr] = useState(false);
 
   const eventUrl = useMemo(() => {
-    const base = (baseUrl ?? "").replace(/\/$/, "") || "http://localhost:3000";
-    return `${base}/e/${event.slug}`;
+    return publicEventUrl(baseUrl, event.slug);
   }, [baseUrl, event.slug]);
+  const publicSlug = canonicalEventSlug(event.slug);
 
   const timeFormatted = formatTime(event.time);
   const dateFormatted = formatDateLong(event.date);
@@ -87,7 +88,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
               url={eventUrl}
               size={112}
               className="rounded border border-gray-600"
-              downloadFilename={`${event.slug}-qr.png`}
+              downloadFilename={`${publicSlug}-qr.png`}
             />
           </div>
         )}

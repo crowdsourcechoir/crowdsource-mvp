@@ -1,5 +1,6 @@
 import type { Event } from "@/data/mockEvents";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
+import { canonicalEventSlug } from "@/lib/event-slug-aliases";
 import { localEventsGetBySlug } from "@/lib/local-events-store";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
@@ -35,10 +36,11 @@ function rowToEvent(row: Record<string, unknown>): Event {
 
 /** Server-side event lookup for metadata and OG image routes. */
 export async function getEventBySlugServer(slug: string): Promise<Event | null> {
-  if (!slug.trim()) return null;
+  const canonicalSlug = canonicalEventSlug(slug);
+  if (!canonicalSlug.trim()) return null;
 
   if (USE_LOCAL_EVENTS) {
-    const row = localEventsGetBySlug(slug);
+    const row = localEventsGetBySlug(canonicalSlug);
     return row ? rowToEvent(row as unknown as Record<string, unknown>) : null;
   }
 
@@ -47,7 +49,7 @@ export async function getEventBySlugServer(slug: string): Promise<Event | null> 
   const { data, error } = await supabaseAdmin
     .from("events")
     .select("*")
-    .eq("slug", slug)
+    .eq("slug", canonicalSlug)
     .maybeSingle();
 
   if (error || !data) return null;

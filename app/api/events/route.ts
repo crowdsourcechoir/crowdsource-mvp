@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { canonicalEventSlug } from "@/lib/event-slug-aliases";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
 import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
 import {
@@ -17,7 +18,8 @@ const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 export async function GET(request: Request) {
   if (USE_LOCAL_EVENTS) {
     const { searchParams } = new URL(request.url);
-    const slug = searchParams.get("slug");
+    const rawSlug = searchParams.get("slug");
+    const slug = rawSlug ? canonicalEventSlug(rawSlug) : null;
     if (slug) {
       const event = localEventsGetBySlug(slug);
       if (!event) return NextResponse.json(null, { status: 404 });
@@ -34,7 +36,8 @@ export async function GET(request: Request) {
     );
   }
   const { searchParams } = new URL(request.url);
-  const slug = searchParams.get("slug");
+  const rawSlug = searchParams.get("slug");
+  const slug = rawSlug ? canonicalEventSlug(rawSlug) : null;
 
   try {
     if (slug) {

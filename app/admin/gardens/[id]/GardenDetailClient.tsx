@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import type { Event } from "@/data/mockEvents";
 import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
 import GardenCompositionCanvas from "@/components/song-garden-v2/GardenCompositionCanvas";
+import { publicEventPath } from "@/lib/event-slug-aliases";
 import type {
   Garden,
   GardenChapter,
@@ -968,7 +969,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   </span>
                   <span className="flex items-center gap-3">
                     {ev?.slug ? (
-                      <Link href={`/e/${ev.slug}`} className="text-xs text-[#CFFF81] underline">
+                      <Link href={publicEventPath(ev.slug)} className="text-xs text-[#CFFF81] underline">
                         Open event
                       </Link>
                     ) : null}

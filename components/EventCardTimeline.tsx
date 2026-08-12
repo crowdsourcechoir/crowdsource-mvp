@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Event } from "@/data/mockEvents";
+import { canonicalEventSlug, publicEventPath, publicEventUrl } from "@/lib/event-slug-aliases";
 import { formatTimelineDate, formatTime } from "@/lib/formatDate";
 import { googleMapsSearchUrl } from "./AddressMap";
 import QRCodeDisplay from "./QRCodeDisplay";
@@ -15,8 +16,9 @@ type EventCardTimelineProps = {
 export default function EventCardTimeline({ event, baseUrl = "http://localhost:3000" }: EventCardTimelineProps) {
   const { short: dateShort, dayOfWeek } = formatTimelineDate(event.date);
   const timeFormatted = formatTime(event.time);
-  const base = (baseUrl ?? "").replace(/\/$/, "");
-  const eventUrl = `${base || "http://localhost:3000"}/e/${event.slug}`;
+  const eventUrl = publicEventUrl(baseUrl, event.slug);
+  const eventPath = publicEventPath(event.slug);
+  const publicSlug = canonicalEventSlug(event.slug);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -66,7 +68,7 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
             <span aria-hidden>→</span>
           </Link>
           <Link
-            href={`/e/${event.slug}`}
+            href={eventPath}
             className="inline-flex min-h-[44px] items-center text-sm font-medium text-gray-500 hover:text-gray-300 sm:min-h-0"
           >
             View public page
@@ -79,7 +81,7 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
           url={eventUrl}
           size={80}
           className="rounded border border-gray-600"
-          downloadFilename={`${event.slug}-qr.png`}
+          downloadFilename={`${publicSlug}-qr.png`}
         />
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-800 sm:h-28 sm:w-28">
           {/* eslint-disable-next-line @next/next/no-img-element */}
