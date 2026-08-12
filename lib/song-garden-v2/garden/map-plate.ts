@@ -77,8 +77,17 @@ const NO_TEXT_LOCK =
 const IMAGE_SUFFIX =
   "Flat top-down @venue-angle map, community pitch, open sidelines, tack-sharp stylized game-world art, no soft focus, no fog, no photoreal, no people, no seat numbers, no lettering.";
 
+/**
+ * Fans pan the map themselves — ambient video must stay a locked frame.
+ * Light / glow / shimmer only; any camera move breaks zone hit alignment.
+ */
 const MOTION_SUFFIX =
-  "Subtle ambient motion only, slow drifting light and soft zone glow pulses, camera locked, seamless loop, sharp and clear, no soft focus, no haze, no people walking into frame, no text logos or UI.";
+  "LOCKED CAMERA: static tripod, zero pan tilt zoom dolly or reframing — the map geometry must not move. Subtle ambient only: drifting light, soft unlabeled zone glow pulses, shimmer. Seamless loop, sharp and clear, no soft focus, no haze, no people walking into frame, no text logos or UI.";
+
+/** Exported for smoke tests — ambient loops must not move the camera. */
+export function mapPlateMotionSuffix(): string {
+  return MOTION_SUFFIX;
+}
 
 /** Hard anti-bias: models love inventing MLS bowls when they hear “stadium”. */
 const TWIN_LOCK =
@@ -432,6 +441,39 @@ export async function pinMapPlate(
   return { garden: updated, plateUrl };
 }
 
+export type UnpinMapPlateResult = {
+  garden: Garden;
+};
+
+/**
+ * Clear the live season plate. Keeps draft + zone hit regions so you can re-pin.
+ * Drops ambient motion and active matchday variant (they were tied to the live plate).
+ */
+export async function unpinMapPlate(garden: Garden): Promise<UnpinMapPlateResult> {
+  const hasLive =
+    Boolean(garden.brandKit.mapPlate.pinnedAt) ||
+    Boolean(garden.brandKit.heroArtworkUrl?.trim()) ||
+    Boolean(garden.brandKit.mapPlate.ambientVideoUrl?.trim());
+  if (!hasLive) {
+    throw new Error("No season plate is pinned.");
+  }
+
+  const updated = await updateGarden(garden.id, {
+    brandKit: {
+      heroArtworkUrl: null,
+      mapPlate: {
+        ...garden.brandKit.mapPlate,
+        pinnedAt: null,
+        ambientVideoUrl: null,
+        ambientVideoGeneratedAt: null,
+        activeVariantKey: null,
+      },
+    },
+  });
+  if (!updated) throw new Error("Garden not found after unpin.");
+  return { garden: updated };
+}
+
 export type GenerateMotionResult = {
   garden: Garden;
   ambientVideoUrl: string;
@@ -457,7 +499,10 @@ export async function generateMapPlateMotion(
   const vibe =
     garden.brandKit.mapPlate.vibePrompt.trim() ||
     `${garden.brandKit.title} matchday atmosphere`;
-  const promptText = `${condense(vibe)}. ${NO_TEXT_LOCK} ${MOTION_SUFFIX}`.slice(0, 1000);
+  // Camera lock must survive the 1000-char Runway budget — put it first.
+  const lockPrefix = `${NO_TEXT_LOCK} ${MOTION_SUFFIX}`;
+  const vibeBudget = Math.max(40, 1000 - lockPrefix.length - 2);
+  const promptText = `${lockPrefix} ${condense(vibe, vibeBudget)}`.slice(0, 1000);
 
   const runwayVideoUrl = await generateVideoFromImage({
     promptImage: await runwayImageUri(stillUrl),
@@ -540,7 +585,10 @@ export async function generateMapPlateVariant(
 
   let videoUrl: string | null = null;
   if (opts.withMotion) {
-    const motionPrompt = `${condense(vibe || garden.brandKit.title)}. ${mood}. ${NO_TEXT_LOCK} ${MOTION_SUFFIX}`.slice(
+    const lockPrefix = `${NO_TEXT_LOCK} ${MOTION_SUFFIX}`;
+    const moodBit = `${mood}.`;
+    const vibeBudget = Math.max(40, 1000 - lockPrefix.length - moodBit.length - 3);
+    const motionPrompt = `${lockPrefix} ${moodBit} ${condense(vibe || garden.brandKit.title, vibeBudget)}`.slice(
       0,
       1000
     );

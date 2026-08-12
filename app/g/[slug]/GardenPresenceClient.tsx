@@ -426,12 +426,21 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
               }}
             >
               <div className="relative h-full w-full">
+                {/*
+                  Media + zones share this plane. Fans pan/zoom the plane —
+                  ambient video must fill the same frame (object-fill) so hits
+                  stay locked. Prefer video intrinsic aspect when the loop is on.
+                */}
                 {mapVideoUrl ? (
                   <div className="pointer-events-none absolute inset-0 overflow-hidden">
                     <LoopingVideo
                       src={mapVideoUrl}
                       poster={mapArtworkUrl ?? undefined}
                       veilColor={world.primaryColor}
+                      objectFit="fill"
+                      onMediaSize={(w, h) => {
+                        if (w > 0 && h > 0) setMapAspect(w / h);
+                      }}
                     />
                   </div>
                 ) : (
@@ -440,7 +449,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                     src={mapArtworkUrl}
                     alt=""
                     draggable={false}
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-fill select-none"
                     onLoad={(e) => {
                       const img = e.currentTarget;
                       if (img.naturalWidth > 0 && img.naturalHeight > 0) {
@@ -449,7 +458,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                     }}
                   />
                 )}
-                {/* Hidden img keeps aspect ratio when video is active */}
+                {/* Still provides aspect before video metadata arrives */}
                 {mapVideoUrl && mapArtworkUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

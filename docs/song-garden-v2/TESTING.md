@@ -169,7 +169,8 @@ Expect: zone key normalization, `zone_up` effect, snapshot zones + sponsor, read
 3. Leave **Digital twin** + **Layout-guided** on → **Generate draft** (needs `RUNWAYML_API_SECRET`).
 4. Draft should read as *this* stadium restyled as a game world — not a generic invented venue. Confirm zones unchanged.
 5. **Pin for season** — live map URL becomes the draft.
-6. **Generate ambient loop (M3)** — `/g` plays the loop over the plate; zone glows scale with energy.
+6. **Generate ambient loop (M3)** — `/g` plays the loop over the plate; zone glows scale with energy. Loop is camera-locked; fans pan the map. Zones share the video plane.
+6b. **Unpin** — clears live plate + ambient; keeps draft and zone hits.
 7. **Matchday variants (M4)** — Generate Kickoff / Goal / … then set **Active on /g**.
 8. Open `/g/[slug]` — still or loop uses the active variant; hit regions still work.
 9. Generate another draft without pinning — live plate, ambient, and hits must not change.
@@ -186,6 +187,9 @@ curl -X POST "$ORIGIN/api/gardens/$ID/map-plate/generate" \
 curl -X POST "$ORIGIN/api/gardens/$ID/map-plate/pin" \
   -H 'Content-Type: application/json' \
   -d '{"confirmReplace":true,"seasonLabel":"2026 season"}'
+
+# Unpin season plate (keeps draft + zones)
+curl -X DELETE "$ORIGIN/api/gardens/$ID/map-plate/pin"
 
 # Ambient motion loop (M3)
 curl -X POST "$ORIGIN/api/gardens/$ID/map-plate/motion" \
