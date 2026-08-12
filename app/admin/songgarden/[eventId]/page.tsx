@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getEventById } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
+import { publicEventPath } from "@/lib/event-slug-aliases";
 import SonggardenCanvas from "@/components/songgarden/SonggardenCanvas";
 
 export default function SonggardenAdminPage() {
@@ -43,7 +44,7 @@ export default function SonggardenAdminPage() {
         </Link>
         <span className="text-gray-600">·</span>
         <Link
-          href={`/e/${event.slug}`}
+          href={publicEventPath(event.slug)}
           target="_blank"
           rel="noopener noreferrer"
           className="text-[#CFFF81] hover:underline"

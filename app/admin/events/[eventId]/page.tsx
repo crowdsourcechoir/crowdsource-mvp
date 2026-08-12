@@ -28,6 +28,7 @@ import type { Event } from "@/data/mockEvents";
 import JSZip from "jszip";
 import { dataUrlToWavBlob } from "@/lib/audioToWav";
 import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
+import { publicEventPath } from "@/lib/event-slug-aliases";
 
 type InterviewSubmissionItem = {
   participantName: string;
@@ -377,7 +378,7 @@ export default function EventDetailPage() {
               Edit event
             </Link>
             <Link
-              href={`/e/${event.slug}`}
+              href={publicEventPath(event.slug)}
               target="_blank"
               rel="noopener noreferrer"
               className="min-h-[44px] rounded-xl border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"

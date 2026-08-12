@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { canonicalEventSlug } from "@/lib/event-slug-aliases";
 
 type WorldPageProps = {
   params: Promise<{ slug: string }>;
@@ -7,5 +8,5 @@ type WorldPageProps = {
 /** Legacy /world URLs redirect to the public event page (now World). */
 export default async function WorldPage({ params }: WorldPageProps) {
   const { slug } = await params;
-  redirect(`/e/${slug}`);
+  redirect(`/e/${canonicalEventSlug(slug)}`);
 }

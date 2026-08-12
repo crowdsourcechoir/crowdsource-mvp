@@ -1,6 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
+import { canonicalEventSlug } from "@/lib/event-slug-aliases";
 import { getEventBySlugServer } from "@/lib/events-server";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ async function fallbackLogo(): Promise<NextResponse> {
 }
 
 export async function GET(_request: Request, { params }: { params: { slug: string } }) {
-  const event = await getEventBySlugServer(params.slug);
+  const event = await getEventBySlugServer(canonicalEventSlug(params.slug));
   const hero = event?.heroImage?.trim() ?? "";
 
   if (hero.startsWith("http://") || hero.startsWith("https://")) {

@@ -27,6 +27,7 @@ import {
 } from "@/lib/songgarden/journey-steps";
 import { COMPLETION_MOMENT_LABEL } from "@/lib/song-garden-v2/moment-labels";
 import { JOURNEY_GARDEN_SLOT_IDS, type GardenSlotId } from "@/lib/songgarden/garden-slots";
+import { canonicalEventSlug, publicEventPath } from "@/lib/event-slug-aliases";
 import {
   normalizeWorldConfigInput,
   WORLD_ANIMATION_PRESETS,
@@ -948,12 +949,12 @@ export default function EventForm({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className={sectionTitleClass}>World</h3>
           <a
-            href={`/e/${values.slug || "your-slug"}`}
+            href={publicEventPath(values.slug || "your-slug")}
             target="_blank"
             rel="noreferrer"
             className="text-[11px] text-gray-500 hover:text-gray-300"
           >
-            Public link /e/{values.slug || "…"}
+            Public link /e/{canonicalEventSlug(values.slug || "…")}
           </a>
         </div>
         <div className="grid gap-2.5 sm:grid-cols-2">
