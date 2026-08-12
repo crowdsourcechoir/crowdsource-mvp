@@ -15,7 +15,8 @@ R&D work organized as one living system.
 | Sales | Commercial pipeline for teams, sponsors, events, partners, and proposals. | `/admin/sales` |
 
 Together these form the living system: Gardens persist, Blooms activate, Roots
-nourish, Live performs, Canvas shapes, and Sales distributes.
+nourish, Live performs, Canvas holds the creative workspace (Composer Agent
+forms material there), and Sales distributes.
 
 ## Garden
 
@@ -85,11 +86,11 @@ Live tools may include:
 - projection/display controls
 - signal experiments
 
-## Canvas
+## Canvas (creative workspace)
 
 Canvas is the creative workspace where collected material becomes usable. It is
-not the engine by itself; it is the place to inspect, arrange, curate, and shape
-the material that Roots and Blooms need.
+the place to inspect, arrange, curate, and prepare material that Roots and
+Blooms need. Admin home today: `/admin/canvas`.
 
 Canvas should support:
 
@@ -99,6 +100,21 @@ Canvas should support:
 - anthem, chant, and warm-up preparation
 - sponsor and gameday media moments
 - Garden/Bloom composition prep
+
+### Composer Agent (not the Canvas)
+
+The **Composer Agent** works *inside* Canvas but is not Canvas. Canvas is the
+workspace; Composer is the arranger, curator, and translator of human
+contribution — listening for emotional center, hooks, motifs, and material
+people can recognize themselves inside.
+
+Keep the distinction clear:
+
+- **Canvas** — creative workspace surface (tools, review, arrangement)
+- **Composer Agent** — musical/visual/experiential formation intelligence
+- **Composition** — process and artifacts (`lib/composition`, briefs, chant candidates, song seeds)
+
+Starter prompt: [`docs/agents/composer.md`](./agents/composer.md).
 
 ## Media contributions
 
@@ -132,9 +148,12 @@ Use one persistent thread or agent per major living-system domain:
 - Garden Agent: public Song Garden product, worlds, contributions, persistence
 - Roots Agent: participation methodology and musical intelligence
 - Bloom Agent: event/gameday activation design
-- Live Tools Agent: runtime/operator software
-- Canvas Agent: creative workspace and composition prep
+- Live Agent: runtime/operator software
+- Composer Agent: turns participation into music, visuals, and Bloom material (works inside Canvas; is not Canvas)
 - Sales Agent: offers, partnerships, sponsors, pitches
+
+Copy-paste starter prompts live in [`docs/agents/`](./agents/README.md).
+Composer Agent prompt: [`docs/agents/composer.md`](./agents/composer.md).
 
 Implementation agents can be short-lived and task-specific, but this document
 should remain the source of truth for workspace language.
