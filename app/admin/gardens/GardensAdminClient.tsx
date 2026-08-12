@@ -89,7 +89,7 @@ export default function GardensAdminClient() {
       <div>
         <h1 className="text-xl font-semibold text-white">Song Gardens</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Persistent worlds for series and team seasons. Fans leave marks on a shared map.
+          Persistent worlds where voices, words, sounds, photos, selfies, videos, and memories keep growing.
         </p>
       </div>
 

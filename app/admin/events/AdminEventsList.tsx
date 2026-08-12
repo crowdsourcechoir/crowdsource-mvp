@@ -113,7 +113,7 @@ export default function AdminEventsList() {
 
       {eventsLoadError && (
         <div className="mb-6 rounded-xl border border-red-700/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
-          <p className="font-medium">Events could not be loaded</p>
+          <p className="font-medium">Blooms could not be loaded</p>
           <p className="mt-1 text-red-200/90">{eventsLoadError}</p>
           <p className="mt-2 text-xs text-red-300/80">
             In Supabase → SQL Editor, run <code className="rounded bg-black/30 px-1">supabase/prod-patch-events-columns.sql</code> (or the{" "}
@@ -125,7 +125,7 @@ export default function AdminEventsList() {
 
       {showCreatedBanner && (
         <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-green-700/60 bg-green-900/20 px-4 py-3 text-sm text-green-200">
-          <span>Event created. Click it below to open.</span>
+          <span>Bloom created. Click it below to open.</span>
           <button type="button" onClick={clearCreatedParam} className="shrink-0 font-medium hover:underline">
             Dismiss
           </button>
@@ -133,8 +133,10 @@ export default function AdminEventsList() {
       )}
 
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold text-white sm:text-3xl">Events</h1>
-        <p className="mt-2 text-sm text-gray-400">Manage public events for crowd-driven choir participation</p>
+        <h1 className="text-2xl font-bold text-white sm:text-3xl">Blooms</h1>
+        <p className="mt-2 text-sm text-gray-400">
+          Manage live events, gameday moments, and activations where Gardens come alive.
+        </p>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex rounded-xl border border-gray-700 bg-black/40 p-0.5">
             <button
@@ -169,7 +171,7 @@ export default function AdminEventsList() {
             href="/admin/events/new"
             className="inline-flex min-h-[48px] items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200"
           >
-            + Create Event
+            + Create Bloom
           </Link>
         </div>
       </div>
@@ -202,19 +204,19 @@ export default function AdminEventsList() {
           <p>
             {events.length === 0
               ? filter === "upcoming"
-                ? "No upcoming events."
+                ? "No upcoming blooms."
                 : filter === "past"
-                  ? "No past events."
-                  : "No events yet."
+                  ? "No past blooms."
+                  : "No blooms yet."
               : filter === "upcoming"
-                ? "No upcoming events — check the Past or All tab, or set the event date to today or later."
+                ? "No upcoming blooms — check the Past or All tab, or set the date to today or later."
                 : filter === "past"
-                  ? "No past events — try Upcoming or All."
-                  : "No events found."}
+                  ? "No past blooms — try Upcoming or All."
+                  : "No blooms found."}
           </p>
           {events.length > 0 && filter === "upcoming" && (
             <p className="text-sm text-gray-400">
-              You have {events.length} event{events.length === 1 ? "" : "s"} total.{" "}
+              You have {events.length} bloom{events.length === 1 ? "" : "s"} total.{" "}
               <button type="button" className="font-medium text-blue-400 hover:underline" onClick={() => setFilter("past")}>
                 Show Past
               </button>
