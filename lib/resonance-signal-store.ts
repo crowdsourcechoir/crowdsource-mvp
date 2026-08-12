@@ -4,6 +4,7 @@ import {
   RESONANCE_SESSION_SLUG,
   type ResonanceSignalState,
 } from "@/data/resonanceSignal";
+import type { ResonanceHoldSignal } from "@/data/octoSignalLayer";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 type MemoryResonanceStore = {
@@ -14,6 +15,13 @@ type MemoryResonanceStore = {
 type ResonancePayload = {
   fieldId: string;
   startedAt: string;
+};
+
+type HoldPayload = {
+  durationMs: number;
+  fieldId: string;
+  kind: "resonance-hold";
+  signalId: string;
 };
 
 const globalForResonance = globalThis as typeof globalThis & {
@@ -57,6 +65,29 @@ function decodePrompt(promptText: unknown): ResonancePayload | null {
       typeof parsed.startedAt === "string"
     ) {
       return { fieldId: parsed.fieldId, startedAt: parsed.startedAt };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function decodeHold(rawText: unknown): HoldPayload | null {
+  if (typeof rawText !== "string") return null;
+  try {
+    const parsed = JSON.parse(rawText) as Partial<HoldPayload>;
+    if (
+      parsed.kind === "resonance-hold" &&
+      typeof parsed.fieldId === "string" &&
+      typeof parsed.signalId === "string" &&
+      typeof parsed.durationMs === "number"
+    ) {
+      return {
+        durationMs: Math.max(0, parsed.durationMs),
+        fieldId: parsed.fieldId,
+        kind: "resonance-hold",
+        signalId: parsed.signalId,
+      };
     }
   } catch {
     return null;
@@ -214,4 +245,45 @@ export async function recordResonanceHoldSignal(data: {
     });
 
   if (error) throw new Error(error.message);
+}
+
+export async function listRecentResonanceHolds(signalId: string): Promise<ResonanceHoldSignal[]> {
+  if (!supabaseAdmin || signalId.startsWith("memory-")) {
+    return memoryStore().holds
+      .map((hold) => {
+        const payload = decodeHold(JSON.stringify(hold));
+        if (!payload) return null;
+        return {
+          createdAt: String(hold.createdAt ?? nowIso()),
+          deviceId: String(hold.deviceId ?? ""),
+          durationMs: payload.durationMs,
+          fieldId: payload.fieldId,
+          signalId: payload.signalId,
+        };
+      })
+      .filter((hold): hold is ResonanceHoldSignal => Boolean(hold));
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("prompt_game_submissions")
+    .select("device_id, raw_text, created_at")
+    .eq("round_id", signalId)
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .map((row) => {
+      const payload = decodeHold(row.raw_text);
+      if (!payload) return null;
+      return {
+        createdAt: row.created_at as string,
+        deviceId: row.device_id as string,
+        durationMs: payload.durationMs,
+        fieldId: payload.fieldId,
+        signalId: payload.signalId,
+      };
+    })
+    .filter((hold): hold is ResonanceHoldSignal => Boolean(hold));
 }
