@@ -39,9 +39,10 @@ const navItems: AdminNavItem[] = [
       pathname.startsWith("/admin/live") || pathname.startsWith("/admin/live-prompt-game"),
   },
   {
-    label: "Canvas",
-    href: "/admin/canvas",
+    label: "Composer",
+    href: "/admin/composer",
     isActive: (pathname) =>
+      pathname.startsWith("/admin/composer") ||
       pathname.startsWith("/admin/canvas") ||
       pathname.startsWith("/admin/composition") ||
       pathname.startsWith("/admin/songgarden/"),

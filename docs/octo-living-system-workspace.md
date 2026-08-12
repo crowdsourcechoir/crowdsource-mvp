@@ -11,11 +11,11 @@ R&D work organized as one living system.
 | Bloom | Time-bound live event, gameday moment, or activation where a Garden comes alive. Existing code routes still use `events`. | `/admin/events` |
 | Roots | Hidden participation methodology, musical intelligence, facilitation logic, and signal/response rules. | `/admin/roots` |
 | Live | Runtime tools used during a Bloom: prompts, signal play, cueing, and live participation moments. | `/admin/live` |
-| Canvas | Creative/admin workspace for arranging, curating, composing, and preparing Garden/Bloom material. | `/admin/canvas` |
+| Composer | Where living inputs become musical compositions — songs, chants, anthems, and show material shaped from Garden/Bloom contributions. | `/admin/composer` |
 | Sales | Commercial pipeline for teams, sponsors, events, partners, and proposals. | `/admin/sales` |
 
 Together these form the living system: Gardens persist, Blooms activate, Roots
-nourish, Live performs, Canvas shapes, and Sales distributes.
+nourish, Live performs, Composer forms, and Sales distributes.
 
 ## Garden
 
@@ -85,18 +85,25 @@ Live tools may include:
 - projection/display controls
 - signal experiments
 
-## Canvas
+## Composer
 
-Canvas is the creative workspace where collected material becomes usable. It is
-not the engine by itself; it is the place to inspect, arrange, curate, and shape
-the material that Roots and Blooms need.
+Composer is where inputs turn into musical compositions. It is not the engine by
+itself; it is the workspace where collected human presence is inspected,
+arranged, curated, and formed into songs, chants, anthems, and show material
+that Roots and Blooms need.
 
-Canvas should support:
+Keep the triad clear:
+
+- **Composer** — the living-system domain / admin home / agent
+- **Composition** — the process and artifacts (briefs, chant candidates, song seeds)
+- **canvas** (lowercase) — spatial arrangement UI inside Composer, not a pillar name
+
+Composer should support:
 
 - audio and voice curation
 - text/lyric/theme review
 - photo, selfie, and video review
-- anthem, chant, and warm-up preparation
+- anthem, chant, warm-up, and song preparation
 - sponsor and gameday media moments
 - Garden/Bloom composition prep
 
@@ -133,7 +140,7 @@ Use one persistent thread or agent per major living-system domain:
 - Roots Agent: participation methodology and musical intelligence
 - Bloom Agent: event/gameday activation design
 - Live Tools Agent: runtime/operator software
-- Canvas Agent: creative workspace and composition prep
+- Composer Agent: musical formation — inputs into compositions, songs, and show material
 - Sales Agent: offers, partnerships, sponsors, pitches
 
 Implementation agents can be short-lived and task-specific, but this document
