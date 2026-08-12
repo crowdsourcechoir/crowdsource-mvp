@@ -5,7 +5,11 @@ import { getContact } from "../db/contacts";
 import { estimateDraftConfidence, formatFeedbackFewShots, listRecentAcceptedEditFeedback } from "../db/feedback";
 import { resolveIndustrySegmentIdForOrganization } from "../db/lookups";
 import { getOrganization } from "../db/organizations";
-import { listOpportunitiesDueForNudge, updateOpportunityTouchTimestamps } from "../db/opportunities";
+import {
+  isScheduledReconnect,
+  listOpportunitiesDueForNudge,
+  updateOpportunityTouchTimestamps,
+} from "../db/opportunities";
 import { createOutreachDraft, listDraftsForOpportunity } from "../db/outreach";
 import { createNudgeQueueItem, hasPendingNudgeQueueItem } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
@@ -39,8 +43,10 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
         skipped.push({ opportunityId: opportunity.id, reason: "pending nudge already in queue" });
         continue;
       }
+      const scheduledReconnect = isScheduledReconnect(opportunity);
       const sentNudges = await countSentNudgesForOpportunity(opportunity.id);
-      if (sentNudges >= MAX_NUDGES_PER_OPPORTUNITY) {
+      // Cap only applies to classic no-reply bumps — scheduled reconnects (manual or reply-parsed) always draft.
+      if (!scheduledReconnect && sentNudges >= MAX_NUDGES_PER_OPPORTUNITY) {
         skipped.push({ opportunityId: opportunity.id, reason: `already sent ${sentNudges} nudges` });
         await updateOpportunityTouchTimestamps(opportunity.id, { nextFollowUpAt: null });
         continue;
@@ -78,10 +84,14 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
       const priorBody = prior.editedBody ?? prior.aiBody;
       const firstName = (contact.fullName ?? "").trim().split(/\s+/)[0] || "there";
 
+      const systemPrompt = scheduledReconnect
+        ? `You write a short, warm 1:1 reconnect email for Crowdsource Choir sales. The prospect previously replied and asked (or you scheduled) to follow up later — that time has arrived. Match Joel's plain-spoken voice — no corporate filler, no guilt, no "just checking in." Reference that you're following up as discussed. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`
+        : `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`;
+
       const result = await callStructured({
         schema: NudgeDraftSchema,
         schemaName: "nudge_draft",
-        systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`,
+        systemPrompt,
         userContent: JSON.stringify({
           contactFirstName: firstName,
           organizationName: organization.name,
@@ -91,6 +101,8 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
           originalSubject: priorSubject,
           originalBody: priorBody,
           nudgeNumber: sentNudges + 1,
+          kind: scheduledReconnect ? "scheduled_reconnect" : "no_reply_nudge",
+          scheduledFollowUpAt: opportunity.nextFollowUpAt,
         }),
       });
 
@@ -118,7 +130,11 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
         opportunityId: opportunity.id,
         contactId: contact.id,
         activityType: "follow_up_due",
-        metadata: { draftId: draft.id, nudgeNumber: sentNudges + 1 },
+        metadata: {
+          draftId: draft.id,
+          nudgeNumber: sentNudges + 1,
+          kind: scheduledReconnect ? "scheduled_reconnect" : "no_reply_nudge",
+        },
         gmailThreadId: opportunity.gmailThreadId,
       });
 

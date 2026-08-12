@@ -3,8 +3,10 @@ import { getContact } from "../db/contacts";
 import { requireSupabaseAdmin } from "../db/client";
 import { getGmailConnection } from "../db/gmail";
 import { getOpportunity, updateOpportunityRelationshipStage, updateOpportunityTouchTimestamps } from "../db/opportunities";
+import { extractFollowUpFromText } from "../outreach/extractFollowUp";
 import { getGmailClient, persistHistoryId } from "./client";
 import { GMAIL_OWNER_KEY } from "./constants";
+import { extractPlainTextFromGmailPayload } from "./messageText";
 
 export type GmailSyncResult = {
   skippedReason: string | null;
@@ -59,6 +61,7 @@ async function recordReply(input: {
   gmailThreadId: string;
   fromEmail: string | null;
   snippet: string | null;
+  bodyText: string | null;
   internalDate: string | null;
 }): Promise<boolean> {
   const existing = await findActivityByGmailMessageId(input.gmailMessageId);
@@ -87,6 +90,9 @@ async function recordReply(input: {
     ? new Date(Number(input.internalDate)).toISOString()
     : new Date().toISOString();
 
+  // Prefer body text, fall back to Gmail snippet — e.g. "follow up in a few months".
+  const extracted = extractFollowUpFromText(input.bodyText || input.snippet, occurredAt);
+
   await createOutreachActivity({
     opportunityId: input.opportunityId,
     contactId,
@@ -94,12 +100,20 @@ async function recordReply(input: {
     occurredAt,
     gmailMessageId: input.gmailMessageId,
     gmailThreadId: input.gmailThreadId,
-    metadata: { fromEmail: input.fromEmail, snippet: input.snippet },
+    metadata: {
+      fromEmail: input.fromEmail,
+      snippet: input.snippet,
+      followUpAt: extracted?.followUpAt ?? null,
+      followUpMatchedText: extracted?.matchedText ?? null,
+      followUpConfidence: extracted?.confidence ?? null,
+      followUpSource: extracted ? "reply_parse" : null,
+    },
   });
 
   await updateOpportunityTouchTimestamps(input.opportunityId, {
     lastInboundAt: occurredAt,
-    nextFollowUpAt: null,
+    // Schedule reconnect when the reply asks us to; otherwise clear the short no-reply nudge timer.
+    nextFollowUpAt: extracted?.followUpAt ?? null,
     gmailThreadId: input.gmailThreadId,
   });
 
@@ -116,11 +130,11 @@ async function processMessageAsPossibleReply(
   ourEmail: string
 ): Promise<boolean> {
   if (!gmail) return false;
+  // Full format so we can parse "follow up in a few months" from the body, not only the snippet.
   const res = await gmail.gmail.users.messages.get({
     userId: "me",
     id: messageId,
-    format: "metadata",
-    metadataHeaders: ["From", "To", "Delivered-To", "Subject"],
+    format: "full",
   });
   const headers = res.data.payload?.headers;
   const from = headerValue(headers, "From");
@@ -145,12 +159,15 @@ async function processMessageAsPossibleReply(
   }
   if (!opportunityId) return false;
 
+  const bodyText = extractPlainTextFromGmailPayload(res.data.payload, res.data.snippet);
+
   return recordReply({
     opportunityId,
     gmailMessageId: res.data.id,
     gmailThreadId: threadId,
     fromEmail: fromEmails[0] ?? null,
     snippet: res.data.snippet ?? null,
+    bodyText,
     internalDate: res.data.internalDate ?? null,
   });
 }

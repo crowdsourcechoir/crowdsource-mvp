@@ -424,6 +424,6 @@ export type FunnelItemDetail = {
   /** approval_queue_items.decided_at — "when this was approved/launched," used as the "days
    * since" anchor if stageUpdatedAt is ever unexpectedly null. */
   approvedAt: string | null;
-  /** True when nextFollowUpAt is due and there's been no inbound since last outbound. */
+  /** True when nextFollowUpAt is due (no-reply nudge or scheduled reconnect). */
   needsNudge: boolean;
 };

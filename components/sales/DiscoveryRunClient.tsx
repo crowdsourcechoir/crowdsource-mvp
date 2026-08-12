@@ -254,12 +254,14 @@ export default function DiscoveryRunClient() {
       </div>
 
       <p className="mt-3 text-xs text-gray-600">
-        Tip: convention-center mode extracts the <span className="text-gray-400">hosting association</span>, not the venue.
-        New orgs still need a pipeline run before they hit the{" "}
+        Tip: “found” ≠ approval queue. Discovery only adds organizations (see{" "}
+        <span className="text-emerald-500">new</span> count). Convention-center mode extracts the{" "}
+        <span className="text-gray-400">hosting association</span>, not the venue. Then run the pipeline on those orgs —
+        they only reach the{" "}
         <Link href="/admin/sales/queue" className="underline">
           queue
-        </Link>
-        .
+        </Link>{" "}
+        after research + a verified contact email.
       </p>
     </div>
   );
