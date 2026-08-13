@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import RecordAudio from "@/components/RecordAudio";
 import { blobToWavBlob } from "@/lib/audioToWav";
 import { SONGGARDEN_CATEGORIES, sanitizeSoundFilename } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId } from "@/lib/songgarden/types";
 import UploadConsentCheckbox from "@/components/songgarden/UploadConsentCheckbox";
+import FileDropZone from "@/components/ui/FileDropZone";
 import {
   getSonggardenContributorName,
   setSonggardenContributorName,
@@ -31,7 +32,6 @@ export default function SonggardenDropPanel({ eventId, onSubmitted }: Songgarden
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploadConsentAgreed, setUploadConsentAgreed] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedCategory = SONGGARDEN_CATEGORIES.find((c) => c.id === category);
 
@@ -95,7 +95,7 @@ export default function SonggardenDropPanel({ eventId, onSubmitted }: Songgarden
   }
 
   async function ingestFile(file: File) {
-    if (!file.type.startsWith("audio/")) {
+    if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|webm|flac)$/i.test(file.name)) {
       setError("Please choose an audio file.");
       return;
     }
@@ -104,20 +104,7 @@ export default function SonggardenDropPanel({ eventId, onSubmitted }: Songgarden
   }
 
   function selectMode(next: InputMode) {
-    if (next === "upload") {
-      if (!uploadConsentAgreed) {
-        setMode("upload");
-        setError(null);
-        return;
-      }
-      if (mode !== "upload") {
-        setMode("upload");
-        setAudioBlob(null);
-        setError(null);
-      }
-      fileInputRef.current?.click();
-      return;
-    }
+    if (next === mode) return;
     setMode(next);
     setAudioBlob(null);
     setError(null);
@@ -143,26 +130,37 @@ export default function SonggardenDropPanel({ eventId, onSubmitted }: Songgarden
       </div>
 
       {mode === "upload" && (
-        <UploadConsentCheckbox
-          checked={uploadConsentAgreed}
-          onChange={(checked) => {
-            setUploadConsentAgreed(checked);
-            if (checked) setError(null);
-          }}
-        />
+        <div className="space-y-4">
+          <UploadConsentCheckbox
+            checked={uploadConsentAgreed}
+            onChange={(checked) => {
+              setUploadConsentAgreed(checked);
+              if (checked) setError(null);
+            }}
+          />
+          <FileDropZone
+            accept="audio/*"
+            disabled={!uploadConsentAgreed || submitting}
+            onFiles={(files) => {
+              const file = files[0];
+              if (file) void ingestFile(file);
+            }}
+            label={
+              uploadConsentAgreed
+                ? "Drop an audio file here, or click to browse"
+                : "Confirm permission above to upload"
+            }
+            hint="MP3, WAV, M4A, and other audio formats"
+            variant="panel"
+            className="!border-white/20 !bg-white/5 hover:!border-white/35 hover:!bg-white/10"
+          />
+          {audioBlob ? (
+            <p className="text-center text-xs text-[var(--crowdsource-accent)]">
+              File ready — add a label below and drop it in.
+            </p>
+          ) : null}
+        </div>
       )}
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void ingestFile(file);
-          e.target.value = "";
-        }}
-      />
 
       {mode === "record" && (
         <RecordAudio
