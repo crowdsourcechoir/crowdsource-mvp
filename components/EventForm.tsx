@@ -744,7 +744,7 @@ export default function EventForm({
     setAiGenError(null);
     setAiGenNotice(null);
     if (!aiVibePrompt.trim()) {
-      setAiGenError("Describe the vibe first, then regenerate this frame.");
+      setAiGenError("Describe the vibe first, then create another variation of this frame.");
       return;
     }
     const existing = values.worldConfig?.worldStoryboard ?? [];
@@ -760,6 +760,7 @@ export default function EventForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vibePrompt: aiVibePrompt,
+          // Intensity / sibling continuity keyed to the source frame; result is appended, not replaced.
           frameIndex,
           frameCount: Math.max(existing.length, frameIndex + 1, aiFrameCount),
           siblingSceneUrls,
@@ -768,15 +769,11 @@ export default function EventForm({
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiGenError(data.error || `Frame ${frameIndex + 1} regeneration failed.`);
+        setAiGenError(data.error || `Could not create a variation of frame ${frameIndex + 1}.`);
         return;
       }
-      if (data.frame && typeof data.frameIndex === "number") {
-        const next = [...existing];
-        while (next.length <= data.frameIndex) {
-          next.push({ sceneUrl: null, videoUrl: null });
-        }
-        next[data.frameIndex] = data.frame;
+      if (data.frame) {
+        const next = [...existing, data.frame];
         setValues((v) => ({
           ...v,
           worldConfig: {
@@ -787,8 +784,8 @@ export default function EventForm({
         }));
         setAiGenNotice(
           siblingCount > 0
-            ? `Replaced frame ${data.frameIndex + 1} using ${Math.min(siblingCount, 3)} sibling stills for theme match. Save to keep it.`
-            : `Replaced frame ${data.frameIndex + 1} only — other frames unchanged. Save to keep it.`
+            ? `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Use × to dump ones you don’t want, then Save.`
+            : `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Use × to dump ones you don’t want, then Save.`
         );
       }
     } catch {
@@ -1320,8 +1317,10 @@ export default function EventForm({
             </button>
           </div>
           <p className="text-[11px] text-gray-500">
-            Prefer one frame? Use <span className="text-gray-400">Regen</span> on that row — it keeps the others
-            and references their stills so the replacement stays on-theme.
+            <span className="text-gray-400">Regen</span> adds another variation and keeps the original —
+            dump with × when you don’t want a frame.{" "}
+            <span className="text-gray-400">Generate with AI</span> rebuilds a new set (replaces the list
+            in this form until you Save).
           </p>
           {aiReferencePhotos.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -1398,7 +1397,7 @@ export default function EventForm({
                   onClick={() => handleRegenerateFrame(i)}
                   disabled={aiGenerating || aiRegeneratingFrame != null}
                   className={chipClass}
-                  title="Regenerate only this frame with AI"
+                  title="Create another AI variation — keeps this frame; dump with × if you don’t want one"
                 >
                   {aiRegeneratingFrame === i ? "…" : "Regen"}
                 </button>
@@ -1410,6 +1409,7 @@ export default function EventForm({
                   }}
                   disabled={aiGenerating || aiRegeneratingFrame != null}
                   className={chipClass}
+                  title="Dump this frame from the board"
                 >
                   ×
                 </button>
