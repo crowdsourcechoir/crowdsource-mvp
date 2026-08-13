@@ -17,9 +17,15 @@ import {
 import {
   createJourneyNameStep,
   createJourneyPromptStep,
+  DEFAULT_FREE_SOUND_SECONDS,
+  DEFAULT_VIDEO_SECONDS,
+  DEFAULT_VOICE_SECONDS,
   defaultJourneySteps,
   normalizeJourneySteps,
   normalizePromptChannels,
+  RECORD_SECONDS_MAX,
+  RECORD_SECONDS_MIN,
+  clampRecordSeconds,
   resolveJourneySteps,
   syncLegacyFromJourneySteps,
   type JourneyPromptStep,
@@ -433,8 +439,12 @@ export default function EventForm({
         requireEmailCaptcha: Boolean(cur.requireEmailCaptcha) && nextChannels.allowText,
         ...(turningSoundOn
           ? {
-              slotId: cur.slotId ?? "stomp",
-              buttonLabel: cur.buttonLabel || "Add sound",
+              // Free sound by default — pad type is optional; set a usable length.
+              slotId: undefined,
+              alternateSlotIds: undefined,
+              buttonLabel: cur.buttonLabel || "Record",
+              recordSeconds:
+                clampRecordSeconds(cur.recordSeconds) ?? DEFAULT_FREE_SOUND_SECONDS,
             }
           : {}),
         ...(!nextChannels.allowSound
@@ -1482,7 +1492,7 @@ export default function EventForm({
                       {(
                         [
                           { key: "allowText" as const, label: "Text" },
-                          { key: "allowAudio" as const, label: "Audio" },
+                          { key: "allowAudio" as const, label: "Voice" },
                           { key: "allowVideo" as const, label: "Video" },
                           { key: "allowSound" as const, label: "Sound" },
                         ] as const
@@ -1521,19 +1531,78 @@ export default function EventForm({
                         </button>
                       )}
                     </div>
+                    {(channels.allowSound || channels.allowAudio || channels.allowVideo) && (
+                      <p className="text-[11px] text-gray-500">
+                        {channels.allowSound && !channels.allowAudio && !channels.allowVideo
+                          ? "Sound = clip planted in the garden. Set length below — pad type is optional."
+                          : channels.allowAudio && !channels.allowSound
+                            ? "Voice = spoken/sung answer in the interview. Sound = garden clip (optional pad)."
+                            : "Voice = interview answer · Sound = garden clip · set length below."}
+                      </p>
+                    )}
+                    {(channels.allowSound || channels.allowAudio || channels.allowVideo) && (
+                      <label className="block max-w-[12rem]">
+                        <span className={labelClass}>Record length (seconds)</span>
+                        <input
+                          type="number"
+                          min={RECORD_SECONDS_MIN}
+                          max={RECORD_SECONDS_MAX}
+                          step={1}
+                          value={
+                            step.recordSeconds ??
+                            (channels.allowSound && !step.slotId
+                              ? DEFAULT_FREE_SOUND_SECONDS
+                              : channels.allowVideo && !channels.allowSound && !channels.allowAudio
+                                ? DEFAULT_VIDEO_SECONDS
+                                : channels.allowAudio
+                                  ? DEFAULT_VOICE_SECONDS
+                                  : step.slotId
+                                    ? ""
+                                    : DEFAULT_FREE_SOUND_SECONDS)
+                          }
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw.trim() === "") {
+                              updateJourneyStep(idx, { recordSeconds: undefined });
+                              return;
+                            }
+                            const n = Number(raw);
+                            updateJourneyStep(idx, {
+                              recordSeconds: clampRecordSeconds(n) ?? undefined,
+                            });
+                          }}
+                          placeholder={
+                            channels.allowSound && step.slotId ? "Pad default" : String(DEFAULT_FREE_SOUND_SECONDS)
+                          }
+                          className={inputClass}
+                        />
+                      </label>
+                    )}
                     {channels.allowSound && (
                       <div className="grid gap-1.5 sm:grid-cols-2">
                         <label className="block">
-                          <span className={labelClass}>Sound type</span>
+                          <span className={labelClass}>Pad type (optional)</span>
                           <select
-                            value={step.slotId ?? "stomp"}
+                            value={step.slotId ?? ""}
                             onChange={(e) => {
+                              const next = e.target.value;
+                              if (!next) {
+                                updateJourneyStep(idx, {
+                                  slotId: undefined,
+                                  alternateSlotIds: undefined,
+                                  recordSeconds:
+                                    clampRecordSeconds(step.recordSeconds) ??
+                                    DEFAULT_FREE_SOUND_SECONDS,
+                                });
+                                return;
+                              }
                               updateJourneyStep(idx, {
-                                slotId: e.target.value as GardenSlotId,
+                                slotId: next as GardenSlotId,
                               });
                             }}
                             className={inputClass}
                           >
+                            <option value="">Free sound — no pad</option>
                             {JOURNEY_GARDEN_SLOT_IDS.map((id) => (
                               <option
                                 key={id}
@@ -1554,38 +1623,44 @@ export default function EventForm({
                               updateJourneyStep(idx, { buttonLabel: e.target.value })
                             }
                             className={inputClass}
-                            placeholder="Add sound"
+                            placeholder="Record"
                           />
                         </label>
-                        <div className="flex flex-wrap gap-1 sm:col-span-2">
-                          <span className="mr-1 self-center text-[11px] text-gray-500">Also allow:</span>
-                          {JOURNEY_GARDEN_SLOT_IDS.filter((id) => id !== (step.slotId ?? "stomp")).map(
-                            (id) => {
-                              const on = step.alternateSlotIds?.includes(id);
-                              return (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  onClick={() => {
-                                    const cur = new Set(step.alternateSlotIds ?? []);
-                                    if (cur.has(id)) cur.delete(id);
-                                    else cur.add(id);
-                                    updateJourneyStep(idx, {
-                                      alternateSlotIds: Array.from(cur) as GardenSlotId[],
-                                    });
-                                  }}
-                                  className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                                    on
-                                      ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
-                                      : chipClass
-                                  }`}
-                                >
-                                  {GARDEN_SLOT_ADMIN_LABELS[id].name}
-                                </button>
-                              );
-                            }
-                          )}
-                        </div>
+                        {step.slotId ? (
+                          <div className="flex flex-wrap gap-1 sm:col-span-2">
+                            <span className="mr-1 self-center text-[11px] text-gray-500">Also allow:</span>
+                            {JOURNEY_GARDEN_SLOT_IDS.filter((id) => id !== step.slotId).map(
+                              (id) => {
+                                const on = step.alternateSlotIds?.includes(id);
+                                return (
+                                  <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = new Set(step.alternateSlotIds ?? []);
+                                      if (cur.has(id)) cur.delete(id);
+                                      else cur.add(id);
+                                      updateJourneyStep(idx, {
+                                        alternateSlotIds: Array.from(cur) as GardenSlotId[],
+                                      });
+                                    }}
+                                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                                      on
+                                        ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
+                                        : chipClass
+                                    }`}
+                                  >
+                                    {GARDEN_SLOT_ADMIN_LABELS[id].name}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-gray-500 sm:col-span-2">
+                            Phrase ≈ 10s · ambient ≈ 30s. Participants can tap to stop early.
+                          </p>
+                        )}
                       </div>
                     )}
                   </>

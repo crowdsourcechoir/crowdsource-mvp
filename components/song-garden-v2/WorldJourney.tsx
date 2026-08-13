@@ -15,12 +15,13 @@ import {
   getSonggardenContributorName,
   setSonggardenContributorName,
 } from "@/data/songgardenClient";
-import { loadDoneSlots, clearDoneSlots } from "@/lib/songgarden/garden-storage";
+import { loadDoneSlots, loadDoneSoundStepIds, clearDoneSlots, saveDoneSoundStepId } from "@/lib/songgarden/garden-storage";
 import {
   isAgentContributionStep,
   normalizePromptChannels,
   resolveCategoryLabel,
   resolveJourneySteps,
+  resolvePromptRecordMs,
   resolveSoundStep,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
@@ -413,12 +414,17 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     void ensureConversation();
   }, [position.phase, activeStep, conversationReady, ensureConversation]);
 
-  // Skip already-completed sound pad steps when resuming.
+  // Skip already-completed sound steps when resuming.
   useEffect(() => {
     if (position.phase !== "step" || !activeStep || activeStep.kind !== "prompt") return;
-    if (!activeStep.allowSound || !activeStep.slotId) return;
-    const done = loadDoneSlots(event.id);
-    if (done.has(activeStep.slotId)) {
+    if (!activeStep.allowSound) return;
+    if (activeStep.slotId) {
+      const done = loadDoneSlots(event.id);
+      if (done.has(activeStep.slotId)) goToStep(stepIndex + 1);
+      return;
+    }
+    // Free sounds (no pad type) track by journey step id.
+    if (loadDoneSoundStepIds(event.id).has(activeStep.id)) {
       goToStep(stepIndex + 1);
     }
   }, [position.phase, activeStep, event.id, goToStep, stepIndex]);
@@ -522,6 +528,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     (meta?: { gardenCelebrationLine?: string | null }) => {
       if (!activeSound) return;
 
+      if (activeSound.isFree) {
+        saveDoneSoundStepId(event.id, activeSound.id);
+      }
+
       const category = activeSound.slot.category;
       growNode(category === "percussion" ? "percussion" : category === "vocal" ? "vocal" : "other");
       pulseHaptic();
@@ -532,7 +542,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         goToStep(stepIndex + 1);
       });
     },
-    [activeSound, celebration, gardenSnap, goToStep, growNode, stepIndex]
+    [activeSound, celebration, event.id, gardenSnap, goToStep, growNode, stepIndex]
   );
 
   const handleVoiceSubmitted = useCallback(
@@ -807,6 +817,11 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   promptText={displayPrompt(promptText)}
                   buttonLabel={voicePadLabel}
                   accentColor={world.accentColor}
+                  recordMs={
+                    activeStep?.kind === "prompt"
+                      ? resolvePromptRecordMs(activeStep, "audio")
+                      : undefined
+                  }
                   disabled={sending}
                   onSubmitted={handleVoiceSubmitted}
                 />
@@ -816,6 +831,11 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   promptText={displayPrompt(promptText)}
                   buttonLabel="Record"
                   accentColor={world.accentColor}
+                  recordMs={
+                    activeStep?.kind === "prompt"
+                      ? resolvePromptRecordMs(activeStep, "video")
+                      : undefined
+                  }
                   disabled={sending}
                   onSubmitted={handleVideoSubmitted}
                 />
@@ -851,13 +871,15 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
           {position.phase === "step" && activeSound && !needsNameGate && (
             <SoundMomentPad
-              key={activeSound.slot.id}
+              key={activeSound.isFree ? `free-${activeSound.id}` : activeSound.slot.id}
               eventId={event.id}
               slot={activeSound.slot}
               promptText={activeSound.prompt}
               buttonLabel={activeSound.buttonLabel}
               contributorName={contributorName.trim() || null}
               accentColor={world.accentColor}
+              recordMs={activeSound.recordMs}
+              progressSlotId={activeSound.isFree ? null : activeSound.slotId}
               alternateSlots={activeSound.alternateSlots}
               onSubmitted={handleSlotSubmitted}
             />

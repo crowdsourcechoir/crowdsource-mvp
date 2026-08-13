@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { submitSonggardenClip, getSonggardenContributorName } from "@/data/songgardenClient";
-import type { GardenSlotDef } from "@/lib/songgarden/garden-slots";
+import type { GardenSlotDef, GardenSlotId } from "@/lib/songgarden/garden-slots";
 import { prepareWavFromBlob } from "@/lib/songgarden/prepare-audio";
 import {
   playAudioBlob,
@@ -25,6 +25,13 @@ type SoundMomentPadProps = {
   buttonLabel?: string;
   contributorName: string | null;
   accentColor: string;
+  /** Override pad default duration (ms). */
+  recordMs?: number;
+  /**
+   * When null, skip composition-pad done tracking (free sound — parent tracks by step id).
+   * Defaults to `slot.id`.
+   */
+  progressSlotId?: GardenSlotId | null;
   /** When set, the participant picks exactly one of [slot, ...alternateSlots] to perform — "add a stomp, clap, or snap" as one moment instead of three. */
   alternateSlots?: GardenSlotDef[];
   /** Called once the clip is durably submitted — parent runs the celebration + advances. */
@@ -43,6 +50,8 @@ export default function SoundMomentPad({
   buttonLabel,
   contributorName,
   accentColor,
+  recordMs: recordMsOverride,
+  progressSlotId,
   alternateSlots,
   onSubmitted,
 }: SoundMomentPadProps) {
@@ -62,6 +71,7 @@ export default function SoundMomentPad({
 
   const isChoir = !!activeSlot.harmonyDegree;
   const label = hasChoices ? activeSlot.label : buttonLabel ?? activeSlot.label;
+  const captureMs = recordMsOverride ?? activeSlot.recordMs;
 
   const handleChoose = useCallback((chosen: GardenSlotDef) => {
     setActiveSlot(chosen);
@@ -91,7 +101,7 @@ export default function SoundMomentPad({
       const micStream = await micReady;
       let peak = 0;
       const handle = startQuickRecord(
-        activeSlot.recordMs,
+        captureMs,
         ({ remainingMs, totalMs, level: lvl }) => {
           peak = Math.max(peak, lvl);
           setSecondsLeft(Math.max(0, Math.ceil(remainingMs / 1000)));
@@ -118,7 +128,7 @@ export default function SoundMomentPad({
       setError(err instanceof Error ? err.message : "Could not capture that. Try again.");
       window.setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 1800);
     }
-  }, [isChoir, activeSlot]);
+  }, [isChoir, activeSlot, captureMs]);
 
   const handleTap = useCallback(() => {
     unlockReferenceTones();
@@ -165,10 +175,9 @@ export default function SoundMomentPad({
         label: activeSlot.label,
         durationMs,
       });
-      // Always mark the *configured* step slot done (not whichever alternate was actually
-      // performed) — progress tracking (firstIncompleteGardenIndex) keys off this step's
-      // nominal slotId regardless of which choice the participant picked.
-      saveDoneSlot(eventId, slot.id);
+      // Composition pads track by slot id; free sounds leave this null (parent uses step id).
+      const trackId = progressSlotId === undefined ? slot.id : progressSlotId;
+      if (trackId) saveDoneSlot(eventId, trackId);
       setPendingClip(null);
       setPhase("done");
       onSubmitted({ gardenCelebrationLine: submitted.gardenCelebrationLine });
@@ -176,7 +185,16 @@ export default function SoundMomentPad({
       setPhase("review");
       setError(err instanceof Error ? err.message : "Couldn't add that sound. Try again.");
     }
-  }, [activeSlot, contributorName, eventId, onSubmitted, pendingClip, slot, stopPlayback]);
+  }, [
+    activeSlot,
+    contributorName,
+    eventId,
+    onSubmitted,
+    pendingClip,
+    progressSlotId,
+    slot,
+    stopPlayback,
+  ]);
 
   const ringPct =
     phase === "recording" ? progress : phase === "countdown" && countdown ? 1 - countdown / 3 : 0;

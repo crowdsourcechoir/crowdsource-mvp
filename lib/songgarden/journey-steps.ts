@@ -36,9 +36,16 @@ export type JourneyNameStep = {
   responseHint?: string;
 };
 
+/** Per-prompt capture length (sound / voice / video). */
+export const RECORD_SECONDS_MIN = 1;
+export const RECORD_SECONDS_MAX = 60;
+export const DEFAULT_FREE_SOUND_SECONDS = 10;
+export const DEFAULT_VOICE_SECONDS = 20;
+export const DEFAULT_VIDEO_SECONDS = 20;
+
 /**
  * One customizable contribution prompt. Response channels are independent toggles —
- * text, audio, video, and/or sound pad (at least one required).
+ * text, voice (audio), video, and/or sound clip (at least one required).
  */
 export type JourneyPromptStep = {
   id: string;
@@ -46,16 +53,57 @@ export type JourneyPromptStep = {
   prompt: string;
   categoryLabel?: string;
   allowText?: boolean;
+  /** Spoken / sung voice answer (agent interview path). */
   allowAudio?: boolean;
   allowVideo?: boolean;
-  /** Garden sound-pad response (stomp/clap/etc). */
+  /**
+   * Sound clip planted in the garden. Pad type (stomp/clap/…) is optional —
+   * without one, participants just record for `recordSeconds`.
+   */
   allowSound?: boolean;
+  /** Optional composition pad. Omit / empty = free sound with custom length. */
   slotId?: GardenSlotId;
   phaseLabel?: string;
   buttonLabel?: string;
   alternateSlotIds?: GardenSlotId[];
+  /**
+   * Max recording length in seconds for sound / voice / video on this prompt.
+   * Sound pads use their short defaults only when this is unset.
+   */
+  recordSeconds?: number;
   requireEmailCaptcha?: boolean;
 };
+
+export function clampRecordSeconds(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  const n = Math.round(raw);
+  if (n < RECORD_SECONDS_MIN || n > RECORD_SECONDS_MAX) return undefined;
+  return n;
+}
+
+export function readRecordSeconds(item: object): number | undefined {
+  return clampRecordSeconds((item as { recordSeconds?: unknown }).recordSeconds);
+}
+
+/** Resolve capture duration for a prompt channel. */
+export function resolvePromptRecordMs(
+  step: Pick<JourneyPromptStep, "recordSeconds" | "slotId" | "allowSound" | "allowAudio" | "allowVideo">,
+  channel: "sound" | "audio" | "video"
+): number {
+  const custom = clampRecordSeconds(step.recordSeconds);
+  if (custom != null) return custom * 1000;
+
+  if (channel === "sound") {
+    const slotId = isGardenSlotId(step.slotId) ? step.slotId : null;
+    if (slotId) {
+      const slot = gardenSlotById(slotId);
+      if (slot) return slot.recordMs;
+    }
+    return DEFAULT_FREE_SOUND_SECONDS * 1000;
+  }
+  if (channel === "video") return DEFAULT_VIDEO_SECONDS * 1000;
+  return DEFAULT_VOICE_SECONDS * 1000;
+}
 
 /** @deprecated Legacy shape — migrated to JourneyPromptStep with allowSound. */
 export type JourneySoundStep = {
@@ -73,7 +121,10 @@ export type JourneyStep = JourneyNameStep | JourneyPromptStep;
 
 export type ResolvedJourneySoundStep = {
   id: string;
-  slotId: GardenSlotId;
+  /** Null when this is a free sound (no composition pad). */
+  slotId: GardenSlotId | null;
+  /** True when there is no stomp/clap/… pad — just a timed recording. */
+  isFree: boolean;
   prompt: string;
   categoryLabel?: string;
   phaseLabel?: string;
@@ -81,6 +132,7 @@ export type ResolvedJourneySoundStep = {
   alternateSlotIds?: GardenSlotId[];
   slot: GardenSlotDef;
   alternateSlots?: GardenSlotDef[];
+  recordMs: number;
 };
 
 function newStepId(): string {
@@ -208,10 +260,11 @@ export function defaultJourneySteps(): JourneyStep[] {
       allowVideo: false,
       allowSound: false,
     },
-    createJourneySoundPromptStep("stomp", {
-      prompt: "Add a stomp, clap, or snap.",
+    createJourneySoundPromptStep(undefined, {
+      prompt: "Record a sound from the world around you.",
       categoryLabel: "Your Sounds",
-      alternateSlotIds: ["clap", "snap"],
+      buttonLabel: "Add Your World",
+      recordSeconds: DEFAULT_FREE_SOUND_SECONDS,
     }),
   ];
 }
@@ -226,15 +279,17 @@ function buildPromptStep(
     allowVideo?: boolean;
     allowSound?: boolean;
     requireEmailCaptcha?: boolean;
-    slotId?: GardenSlotId;
+    slotId?: GardenSlotId | null;
     phaseLabel?: string;
     buttonLabel?: string;
     alternateSlotIds?: GardenSlotId[];
+    recordSeconds?: number;
   }
 ): JourneyPromptStep {
   const channels = normalizePromptChannels(opts);
-  const slotId =
-    channels.allowSound && isGardenSlotId(opts.slotId) ? opts.slotId : channels.allowSound ? "stomp" : undefined;
+  const recordSeconds = clampRecordSeconds(opts.recordSeconds);
+  const hasPad = channels.allowSound && isGardenSlotId(opts.slotId);
+  const slotId = hasPad ? (opts.slotId as GardenSlotId) : undefined;
   return {
     id,
     kind: "prompt",
@@ -242,18 +297,25 @@ function buildPromptStep(
     categoryLabel: typeof categoryLabel === "string" ? categoryLabel : "",
     ...channels,
     requireEmailCaptcha: Boolean(opts.requireEmailCaptcha) && channels.allowText,
-    ...(channels.allowSound && slotId
+    ...(recordSeconds != null ? { recordSeconds } : {}),
+    ...(channels.allowSound
       ? {
-          slotId,
+          ...(slotId ? { slotId } : {}),
           phaseLabel:
             typeof opts.phaseLabel === "string" && opts.phaseLabel.length > 0
               ? opts.phaseLabel
-              : defaultPhaseLabelForSlot(slotId),
+              : slotId
+                ? defaultPhaseLabelForSlot(slotId)
+                : "YOUR SOUND",
           buttonLabel:
             typeof opts.buttonLabel === "string"
               ? opts.buttonLabel
-              : defaultButtonLabelForSlot(slotId) || "Add sound",
-          ...(opts.alternateSlotIds?.length ? { alternateSlotIds: opts.alternateSlotIds } : {}),
+              : slotId
+                ? defaultButtonLabelForSlot(slotId) || "Add sound"
+                : "Record",
+          ...(slotId && opts.alternateSlotIds?.length
+            ? { alternateSlotIds: opts.alternateSlotIds }
+            : {}),
         }
       : {}),
   };
@@ -339,12 +401,12 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
       )
         ? ((item as { slotId: GardenSlotId }).slotId)
         : undefined;
+      const recordSeconds = readRecordSeconds(item as object);
       if (allowSound) {
-        if (!slotId) slotId = "stomp";
-        if (seenSlots.has(slotId)) {
-          allowSound = false;
+        // Pad type is optional. Only enforce uniqueness when a composition pad is chosen.
+        if (slotId && seenSlots.has(slotId)) {
           slotId = undefined;
-        } else {
+        } else if (slotId) {
           seenSlots.add(slotId);
         }
       } else {
@@ -358,10 +420,12 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
           allowVideo,
           allowSound,
           requireEmailCaptcha: Boolean((item as { requireEmailCaptcha?: unknown }).requireEmailCaptcha),
-          slotId,
+          slotId: slotId ?? null,
           phaseLabel: readPhaseLabel(item as object),
           buttonLabel: readButtonLabel(item as object),
           alternateSlotIds: slotId ? readAlternateSlotIds(item as object, slotId) : undefined,
+          recordSeconds:
+            recordSeconds ?? (allowSound && !slotId ? DEFAULT_FREE_SOUND_SECONDS : undefined),
         })
       );
       continue;
@@ -532,22 +596,51 @@ export function syncLegacyFromJourneySteps(
 export function resolveSoundStep(step: JourneyPromptStep): ResolvedJourneySoundStep | null {
   const channels = normalizePromptChannels(step);
   if (!channels.allowSound) return null;
-  const slotId = isGardenSlotId(step.slotId) ? step.slotId : "stomp";
-  const slot = gardenSlotById(slotId);
-  if (!slot) return null;
-  const alternateSlots = step.alternateSlotIds
-    ?.map((id) => gardenSlotById(id))
-    .filter((s): s is GardenSlotDef => s != null);
+
+  const padId = isGardenSlotId(step.slotId) ? step.slotId : null;
+  const isFree = !padId;
+  const recordMs = resolvePromptRecordMs(step, "sound");
+
+  let slot: GardenSlotDef;
+  if (padId) {
+    const base = gardenSlotById(padId);
+    if (!base) return null;
+    slot = { ...base, recordMs };
+  } else {
+    slot = {
+      id: "anything_else",
+      label: (step.buttonLabel?.trim() || "RECORD").toUpperCase().slice(0, 14),
+      category: "other",
+      recordMs,
+    };
+  }
+
+  const alternateSlots =
+    padId && step.alternateSlotIds
+      ? step.alternateSlotIds
+          .map((id) => {
+            const base = gardenSlotById(id);
+            return base ? { ...base, recordMs } : null;
+          })
+          .filter((s): s is GardenSlotDef => s != null)
+      : undefined;
+
   return {
     id: step.id,
-    slotId,
+    slotId: padId,
+    isFree,
     prompt: step.prompt,
     categoryLabel: step.categoryLabel,
-    phaseLabel: step.phaseLabel || defaultPhaseLabelForSlot(slotId),
-    buttonLabel: step.buttonLabel || defaultButtonLabelForSlot(slotId) || "Add sound",
-    ...(step.alternateSlotIds?.length ? { alternateSlotIds: step.alternateSlotIds } : {}),
+    phaseLabel:
+      step.phaseLabel ||
+      (padId ? defaultPhaseLabelForSlot(padId) : "YOUR SOUND"),
+    buttonLabel:
+      step.buttonLabel ||
+      (padId ? defaultButtonLabelForSlot(padId) || "Add sound" : "Record"),
+    ...(padId && step.alternateSlotIds?.length ? { alternateSlotIds: step.alternateSlotIds } : {}),
     slot,
     ...(alternateSlots?.length ? { alternateSlots } : {}),
+    recordMs,
   };
 }
 
@@ -579,28 +672,33 @@ export function createJourneyNameStep(prompt = DEFAULT_NAME_QUESTION_PROMPT): Jo
 }
 
 export function createJourneySoundPromptStep(
-  slotId: GardenSlotId = "stomp",
+  slotId?: GardenSlotId,
   overrides?: {
     prompt?: string;
     categoryLabel?: string;
     phaseLabel?: string;
     buttonLabel?: string;
     alternateSlotIds?: GardenSlotId[];
+    recordSeconds?: number;
   }
 ): JourneyPromptStep {
+  const pad = slotId && isGardenSlotId(slotId) ? slotId : undefined;
   return buildPromptStep(
     newStepId(),
-    overrides?.prompt ?? defaultPromptForSlot(slotId),
-    overrides?.categoryLabel ?? gardenSlotMomentLabel(slotId),
+    overrides?.prompt ?? (pad ? defaultPromptForSlot(pad) : "Record a sound for this garden."),
+    overrides?.categoryLabel ?? (pad ? gardenSlotMomentLabel(pad) : "Your Sounds"),
     {
       allowText: false,
       allowAudio: false,
       allowVideo: false,
       allowSound: true,
-      slotId,
+      slotId: pad ?? null,
       phaseLabel: overrides?.phaseLabel,
-      buttonLabel: overrides?.buttonLabel ?? defaultButtonLabelForSlot(slotId) ?? "Add sound",
-      alternateSlotIds: overrides?.alternateSlotIds,
+      buttonLabel:
+        overrides?.buttonLabel ?? (pad ? defaultButtonLabelForSlot(pad) ?? "Add sound" : "Record"),
+      alternateSlotIds: pad ? overrides?.alternateSlotIds : undefined,
+      recordSeconds:
+        overrides?.recordSeconds ?? (pad ? undefined : DEFAULT_FREE_SOUND_SECONDS),
     }
   );
 }
