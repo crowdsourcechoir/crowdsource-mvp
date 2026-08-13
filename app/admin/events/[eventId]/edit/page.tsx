@@ -96,6 +96,7 @@ export default function EditEventPage() {
       <h2 className="mb-4 text-xl font-semibold text-white">Edit Event</h2>
       <EventForm
         key={event.id}
+        eventId={event.id}
         initialValues={initialValues}
         submitLabel="Save"
         submitSuccessMessage="Saved. Redirecting…"

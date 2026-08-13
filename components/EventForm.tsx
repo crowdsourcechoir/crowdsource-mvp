@@ -83,6 +83,8 @@ type EventFormProps = {
   submitLabel?: string;
   /** Shown after a successful submit (e.g. before redirect). */
   submitSuccessMessage?: string;
+  /** Existing event id — used for hero signed-upload path naming. */
+  eventId?: string;
 };
 
 const initialValues: EventFormValues = {
@@ -191,6 +193,7 @@ export default function EventForm({
   initialValues: initialProp,
   submitLabel = "Create Event",
   submitSuccessMessage = "Event created.",
+  eventId,
 }: EventFormProps) {
   const [values, setValues] = useState<EventFormValues>(() => {
     const merged = {
@@ -224,6 +227,7 @@ export default function EventForm({
   const [success, setSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingHero, setUploadingHero] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const [themeError, setThemeError] = useState<string | null>(null);
@@ -693,13 +697,86 @@ export default function EventForm({
     setValues((v) => ({ ...v, slug: next }));
   }
 
-  function handleHeroFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleHeroFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => setValues((v) => ({ ...v, heroImage: reader.result as string }));
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file) return;
+
+    const isImage =
+      file.type.startsWith("image/") ||
+      (!file.type && /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(file.name));
+    if (!isImage) {
+      setSubmitError("That file didn’t look like an image. Use JPEG, PNG, or WebP.");
+      return;
+    }
+
+    const MAX_HERO_BYTES = 20 * 1024 * 1024;
+    /** Keep data-URL fallback under Vercel’s ~4.5MB body limit (base64 expands ~33%). */
+    const DATA_URL_SAFE_BYTES = 3 * 1024 * 1024;
+
+    if (file.size > MAX_HERO_BYTES) {
+      setSubmitError(
+        `“${file.name}” is over 20MB. Compress it or use a smaller photo.`
+      );
+      return;
+    }
+
+    setUploadingHero(true);
+    setSubmitError(null);
+    try {
+      // Direct-to-storage signed upload (bypasses Vercel FUNCTION_PAYLOAD_TOO_LARGE).
+      const prepareRes = await fetch("/api/events/hero-upload/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: file.name,
+          contentType: file.type?.startsWith("image/") ? file.type : "image/jpeg",
+          size: file.size,
+          eventId: eventId || values.slug?.trim() || undefined,
+        }),
+      });
+      const prepareBody = (await prepareRes.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        upload?: { signedUrl: string; publicUrl: string; contentType: string };
+      };
+
+      if (prepareRes.ok && prepareBody.upload) {
+        const put = await fetch(prepareBody.upload.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": prepareBody.upload.contentType },
+          body: file,
+        });
+        if (!put.ok) {
+          throw new Error(`Upload failed (${put.status}). Try again.`);
+        }
+        setValues((v) => ({ ...v, heroImage: prepareBody.upload!.publicUrl }));
+        return;
+      }
+
+      if (prepareBody.code === "not_configured") {
+        if (file.size > DATA_URL_SAFE_BYTES) {
+          setSubmitError(
+            "Storage isn’t configured for large heroes. Keep images under ~3MB, or set up Supabase storage."
+          );
+          return;
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Could not read that image."));
+          reader.readAsDataURL(file);
+        });
+        setValues((v) => ({ ...v, heroImage: dataUrl }));
+        return;
+      }
+
+      throw new Error(prepareBody.error || "Could not prepare hero upload.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Hero upload failed.");
+    } finally {
+      setUploadingHero(false);
+    }
   }
 
   const inputClass =
@@ -829,9 +906,19 @@ export default function EventForm({
               onChange={(e) => setValues((v) => ({ ...v, heroImage: e.target.value }))}
               className={`${inputClass} mt-0 flex-1`}
             />
-            <label className="cursor-pointer shrink-0 rounded-lg border border-gray-700 bg-[#222] px-3 py-2 text-xs font-medium text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-300">
-              Upload
-              <input type="file" accept="image/*" onChange={handleHeroFile} className="hidden" />
+            <label
+              className={`cursor-pointer shrink-0 rounded-lg border border-gray-700 bg-[#222] px-3 py-2 text-xs font-medium text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-300 ${
+                uploadingHero ? "pointer-events-none opacity-50" : ""
+              }`}
+            >
+              {uploadingHero ? "Uploading…" : "Upload"}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => void handleHeroFile(e)}
+                className="hidden"
+                disabled={uploadingHero}
+              />
             </label>
             {values.heroImage && (
               <div className="h-9 w-14 shrink-0 overflow-hidden rounded border border-gray-700 bg-[#1f1f1f]">
@@ -840,6 +927,9 @@ export default function EventForm({
               </div>
             )}
           </div>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Up to 20MB. Large photos upload directly to storage (avoids save size limits).
+          </p>
         </div>
       </div>
       <section className={sectionClass}>
