@@ -9,8 +9,10 @@ type WorldPresenceTickerProps = {
   accentColor: string;
 };
 
-const LINE_VISIBLE_MS = 5200;
-const LINE_INTERVAL_MS = 9000;
+const LINE_VISIBLE_MS = 7500;
+/** Quiet gap between lines — long enough that it feels ambient, not a carousel. */
+const LINE_INTERVAL_MS = 18_000;
+const FIRST_SHOW_DELAY_MS = 3200;
 
 /**
  * Quiet ambient presence line under the title. Height is reserved so show/hide
@@ -27,7 +29,7 @@ export default function WorldPresenceTicker({ eventId, accentColor }: WorldPrese
       setLineIndex((n) => n + 1);
       window.setTimeout(() => setVisible(false), LINE_VISIBLE_MS);
     }, LINE_INTERVAL_MS);
-    const firstShow = window.setTimeout(() => setVisible(true), 1800);
+    const firstShow = window.setTimeout(() => setVisible(true), FIRST_SHOW_DELAY_MS);
     return () => {
       window.clearInterval(showTimer);
       window.clearTimeout(firstShow);
@@ -38,7 +40,7 @@ export default function WorldPresenceTicker({ eventId, accentColor }: WorldPrese
   const line = lines.length ? lines[lineIndex % lines.length] : null;
 
   return (
-    <div className="pointer-events-none relative z-20 mx-auto h-9 w-full max-w-lg shrink-0 px-4">
+    <div className="pointer-events-none relative z-20 mx-auto mt-4 h-10 w-full max-w-lg shrink-0 px-4">
       <div className="absolute inset-x-0 top-0 flex justify-center">
         <AnimatePresence>
           {visible && line && (
@@ -47,7 +49,7 @@ export default function WorldPresenceTicker({ eventId, accentColor }: WorldPrese
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
+              transition={{ duration: 0.65, ease: "easeOut" }}
               className="rounded-full border px-3 py-1 font-mono text-[11px] tracking-wide backdrop-blur-md"
               style={{
                 borderColor: `${accentColor}44`,
