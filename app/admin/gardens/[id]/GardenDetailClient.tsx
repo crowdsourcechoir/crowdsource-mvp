@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Event } from "@/data/mockEvents";
 import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
 import GardenCompositionCanvas from "@/components/song-garden-v2/GardenCompositionCanvas";
