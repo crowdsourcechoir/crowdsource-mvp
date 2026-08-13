@@ -75,7 +75,6 @@ import WorldProgressTrail from "./WorldProgressTrail";
 import WorldPresenceTicker from "./WorldPresenceTicker";
 import TextMomentPad from "./TextMomentPad";
 import SoundMomentPad from "./SoundMomentPad";
-import VoiceMomentPad from "./VoiceMomentPad";
 import VideoMomentPad from "./VideoMomentPad";
 import CelebrationBurst from "./CelebrationBurst";
 import { useCelebration } from "./engine/useCelebration";
@@ -136,7 +135,7 @@ function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["sug
     const channels = normalizePromptChannels(step);
     const types: AgentNextMessageResponse["suggestedAnswerTypes"] = [];
     if (channels.allowText) types.push("text");
-    if (channels.allowAudio) types.push("voice");
+    // Audio plants in the garden — not an agent-interview voice turn.
     if (channels.allowVideo) types.push("video");
     if (channels.allowText && step.requireEmailCaptcha) {
       types.push("email");
@@ -297,7 +296,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     activeStep?.kind === "prompt" ? normalizePromptChannels(activeStep) : null;
 
   const availableChannels = useMemo((): AnswerChannel[] => {
-    if (activeSound) return [];
     if (isNameStep) return ["text"];
     if (!promptChannels) return [];
     const channels: AnswerChannel[] = [];
@@ -305,16 +303,16 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     if (promptChannels.allowAudio) channels.push("audio");
     if (promptChannels.allowVideo) channels.push("video");
     return channels;
-  }, [activeSound, isNameStep, promptChannels]);
+  }, [isNameStep, promptChannels]);
 
   const activeChannel =
     availableChannels.length === 1 ? availableChannels[0] : selectedChannel;
   const showChannelChooser =
     position.phase === "step" && availableChannels.length > 1 && !selectedChannel;
   const useTextPad = activeChannel === "text";
-  const useVoicePad = activeChannel === "audio";
+  const useAudioPad = activeChannel === "audio" && Boolean(activeSound);
   const useVideoPad = activeChannel === "video";
-  const showMomentPad = useTextPad || useVoicePad || useVideoPad;
+  const showMomentPad = useTextPad || useVideoPad;
 
   const promptText = useMemo(() => {
     if (!activeStep) return "";
@@ -326,11 +324,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     }
     return "";
   }, [activeStep]);
-
-  const voicePadLabel = useMemo(() => {
-    if (!useVoicePad) return "Record";
-    return /sing/i.test(promptText) ? "Sing" : "Record";
-  }, [useVoicePad, promptText]);
 
   const responseHint = useMemo(() => {
     if (!useTextPad) return null;
@@ -351,7 +344,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         return;
       }
       const step = journeySteps[index];
-      if (step?.kind === "prompt" && step.allowSound) unlockReferenceTones();
+      if (step?.kind === "prompt" && normalizePromptChannels(step).allowAudio) {
+        unlockReferenceTones();
+      }
       setPositionPersisted({ phase: "step", gardenSlotIndex: 0, stepIndex: index });
       setInputValue("");
       setSelectedChannel(null);
@@ -414,16 +409,16 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     void ensureConversation();
   }, [position.phase, activeStep, conversationReady, ensureConversation]);
 
-  // Skip already-completed sound steps when resuming.
+  // Skip already-completed audio steps when resuming.
   useEffect(() => {
     if (position.phase !== "step" || !activeStep || activeStep.kind !== "prompt") return;
-    if (!activeStep.allowSound) return;
+    if (!normalizePromptChannels(activeStep).allowAudio) return;
     if (activeStep.slotId) {
       const done = loadDoneSlots(event.id);
       if (done.has(activeStep.slotId)) goToStep(stepIndex + 1);
       return;
     }
-    // Free sounds (no pad type) track by journey step id.
+    // Open (uncategorized) audio tracks by journey step id.
     if (loadDoneSoundStepIds(event.id).has(activeStep.id)) {
       goToStep(stepIndex + 1);
     }
@@ -545,38 +540,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     [activeSound, celebration, event.id, gardenSnap, goToStep, growNode, stepIndex]
   );
 
-  const handleVoiceSubmitted = useCallback(
-    async (blob: Blob) => {
-      unlockReferenceTones();
-      setChatError(null);
-      setSending(true);
-      try {
-        const convId = await ensureConversation();
-        if (!convId) {
-          setSending(false);
-          throw new Error("Could not start the conversation. Try again.");
-        }
-        const audioDataUrl = await blobToDataUrl(blob);
-        const sent = await sendMessage(convId, "(recording)", {
-          audioDataUrl,
-          deviceId: getOrCreateSonggardenDeviceId(),
-        });
-        setSending(false);
-        growNode("voice");
-        pulseHaptic();
-        setBurstMessage(sent.gardenCelebrationLine?.trim() || "Got it");
-        if (gardenSnap.linked) void gardenSnap.refresh();
-        celebration.celebrate(() => {
-          goToStep(stepIndex + 1);
-        });
-      } catch (err) {
-        setSending(false);
-        throw err instanceof Error ? err : new Error("Submit failed");
-      }
-    },
-    [celebration, ensureConversation, gardenSnap, goToStep, growNode, stepIndex]
-  );
-
   const handleVideoSubmitted = useCallback(
     async (blob: Blob) => {
       unlockReferenceTones();
@@ -627,9 +590,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     setSending(false);
   }
 
-  // Sound pad without contributor name — brief name gate
+  // Audio recording without contributor name — brief name gate
   const needsNameGate =
-    position.phase === "step" && Boolean(activeSound) && !contributorName.trim();
+    position.phase === "step" && useAudioPad && !contributorName.trim();
 
   const [nameGateValue, setNameGateValue] = useState("");
   function handleNameGateContinue() {
@@ -811,20 +774,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     </div>
                   )}
                 </TextMomentPad>
-              ) : useVoicePad ? (
-                <VoiceMomentPad
-                  key={`voice-${stepIndex}-${activeStep?.id ?? ""}`}
-                  promptText={displayPrompt(promptText)}
-                  buttonLabel={voicePadLabel}
-                  accentColor={world.accentColor}
-                  recordMs={
-                    activeStep?.kind === "prompt"
-                      ? resolvePromptRecordMs(activeStep, "audio")
-                      : undefined
-                  }
-                  disabled={sending}
-                  onSubmitted={handleVoiceSubmitted}
-                />
               ) : (
                 <VideoMomentPad
                   key={`video-${stepIndex}-${activeStep?.id ?? ""}`}
@@ -852,7 +801,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && activeSound && needsNameGate && (
+          {position.phase === "step" && useAudioPad && needsNameGate && (
             <div className="space-y-4">
               <TextMomentPad
                 promptText="What name should we credit on your sounds?"
@@ -869,20 +818,31 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && activeSound && !needsNameGate && (
-            <SoundMomentPad
-              key={activeSound.isFree ? `free-${activeSound.id}` : activeSound.slot.id}
-              eventId={event.id}
-              slot={activeSound.slot}
-              promptText={activeSound.prompt}
-              buttonLabel={activeSound.buttonLabel}
-              contributorName={contributorName.trim() || null}
-              accentColor={world.accentColor}
-              recordMs={activeSound.recordMs}
-              progressSlotId={activeSound.isFree ? null : activeSound.slotId}
-              alternateSlots={activeSound.alternateSlots}
-              onSubmitted={handleSlotSubmitted}
-            />
+          {position.phase === "step" && useAudioPad && activeSound && !needsNameGate && (
+            <div className="space-y-4">
+              <SoundMomentPad
+                key={activeSound.isFree ? `free-${activeSound.id}` : activeSound.slot.id}
+                eventId={event.id}
+                slot={activeSound.slot}
+                promptText={activeSound.prompt}
+                buttonLabel={activeSound.buttonLabel}
+                contributorName={contributorName.trim() || null}
+                accentColor={world.accentColor}
+                recordMs={activeSound.recordMs}
+                progressSlotId={activeSound.isFree ? null : activeSound.slotId}
+                alternateSlots={activeSound.alternateSlots}
+                onSubmitted={handleSlotSubmitted}
+              />
+              {availableChannels.length > 1 && selectedChannel && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedChannel(null)}
+                  className="mx-auto block font-mono text-xs text-gray-400 underline decoration-white/20 underline-offset-4 hover:text-gray-200"
+                >
+                  ← Choose again
+                </button>
+              )}
+            </div>
           )}
 
           {position.phase === "final" && (

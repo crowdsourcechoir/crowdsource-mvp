@@ -53,13 +53,14 @@ export type JourneyPromptStep = {
   prompt: string;
   categoryLabel?: string;
   allowText?: boolean;
-  /** Spoken / sung voice answer (agent interview path). */
+  /**
+   * Audio recording (mic). Optional `slotId` tags it for canvas/composition
+   * (tap, clap, choir…). Omit slotId for an open recording — same capture either way.
+   * `allowSound` is a legacy alias kept in sync with allowAudio.
+   */
   allowAudio?: boolean;
   allowVideo?: boolean;
-  /**
-   * Sound clip planted in the garden. Pad type (stomp/clap/…) is optional —
-   * without one, participants just record for `recordSeconds`.
-   */
+  /** @deprecated Alias of allowAudio — normalized to match allowAudio. */
   allowSound?: boolean;
   /** Optional composition pad. Omit / empty = free sound with custom length. */
   slotId?: GardenSlotId;
@@ -187,18 +188,28 @@ export function normalizePromptChannels(step: {
   allowVideo: boolean;
   allowSound: boolean;
 } {
-  const allowAudio = Boolean(step.allowAudio);
+  // Sound is legacy alias for Audio — one recording channel, optional composition pad.
+  const wantsAudio = Boolean(step.allowAudio) || Boolean(step.allowSound);
+  const allowAudio = wantsAudio;
+  const allowSound = wantsAudio;
   const allowVideo = Boolean(step.allowVideo);
-  const allowSound = Boolean(step.allowSound);
   let allowText: boolean;
   if (step.allowText === false) allowText = false;
   else if (step.allowText === true) allowText = true;
-  else allowText = !allowAudio && !allowVideo && !allowSound;
+  else allowText = !allowAudio && !allowVideo;
 
-  if (!allowText && !allowAudio && !allowVideo && !allowSound) {
+  if (!allowText && !allowAudio && !allowVideo) {
     return { allowText: true, allowAudio: false, allowVideo: false, allowSound: false };
   }
   return { allowText, allowAudio, allowVideo, allowSound };
+}
+
+/** True when this prompt records audio (garden clip; optional composition category). */
+export function promptAllowsAudioRecording(step: {
+  allowAudio?: boolean;
+  allowSound?: boolean;
+}): boolean {
+  return normalizePromptChannels(step).allowAudio;
 }
 
 export function defaultCategoryLabelForStep(
@@ -216,15 +227,12 @@ export function resolveCategoryLabel(step: JourneyStep): string {
   if (custom) return custom;
   if (step.kind === "prompt") {
     const channels = normalizePromptChannels(step);
-    if (channels.allowSound && !channels.allowText && !channels.allowAudio && !channels.allowVideo) {
+    if (channels.allowAudio && !channels.allowText && !channels.allowVideo) {
       return step.slotId
         ? defaultCategoryLabelForStep("sound", step.slotId)
         : "Your Sounds";
     }
-    if (channels.allowAudio && !channels.allowText && !channels.allowVideo && !channels.allowSound) {
-      return "Your Voice";
-    }
-    if (channels.allowVideo && !channels.allowText && !channels.allowAudio && !channels.allowSound) {
+    if (channels.allowVideo && !channels.allowText && !channels.allowAudio) {
       return "Your Face";
     }
     return "Your Words";
@@ -239,7 +247,8 @@ export function isAgentContributionStep(
   if (step.kind === "name") return true;
   if (step.kind !== "prompt") return false;
   const channels = normalizePromptChannels(step);
-  return channels.allowText || channels.allowAudio || channels.allowVideo;
+  // Audio recordings plant in the garden (SoundMomentPad) — not the agent interview.
+  return channels.allowText || channels.allowVideo;
 }
 
 export function defaultJourneySteps(): JourneyStep[] {
@@ -288,7 +297,7 @@ function buildPromptStep(
 ): JourneyPromptStep {
   const channels = normalizePromptChannels(opts);
   const recordSeconds = clampRecordSeconds(opts.recordSeconds);
-  const hasPad = channels.allowSound && isGardenSlotId(opts.slotId);
+  const hasPad = channels.allowAudio && isGardenSlotId(opts.slotId);
   const slotId = hasPad ? (opts.slotId as GardenSlotId) : undefined;
   return {
     id,
@@ -297,8 +306,12 @@ function buildPromptStep(
     categoryLabel: typeof categoryLabel === "string" ? categoryLabel : "",
     ...channels,
     requireEmailCaptcha: Boolean(opts.requireEmailCaptcha) && channels.allowText,
-    ...(recordSeconds != null ? { recordSeconds } : {}),
-    ...(channels.allowSound
+    ...(recordSeconds != null
+      ? { recordSeconds }
+      : channels.allowAudio && !slotId
+        ? { recordSeconds: DEFAULT_FREE_SOUND_SECONDS }
+        : {}),
+    ...(channels.allowAudio
       ? {
           ...(slotId ? { slotId } : {}),
           phaseLabel:
@@ -311,7 +324,7 @@ function buildPromptStep(
             typeof opts.buttonLabel === "string"
               ? opts.buttonLabel
               : slotId
-                ? defaultButtonLabelForSlot(slotId) || "Add sound"
+                ? defaultButtonLabelForSlot(slotId) || "Record"
                 : "Record",
           ...(slotId && opts.alternateSlotIds?.length
             ? { alternateSlotIds: opts.alternateSlotIds }
@@ -402,8 +415,8 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
         ? ((item as { slotId: GardenSlotId }).slotId)
         : undefined;
       const recordSeconds = readRecordSeconds(item as object);
-      if (allowSound) {
-        // Pad type is optional. Only enforce uniqueness when a composition pad is chosen.
+      // Composition category is optional on any audio recording.
+      if (allowAudio || allowSound) {
         if (slotId && seenSlots.has(slotId)) {
           slotId = undefined;
         } else if (slotId) {
@@ -416,16 +429,17 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
       steps.push(
         buildPromptStep(id, prompt, categoryLabel, {
           allowText,
-          allowAudio,
+          allowAudio: allowAudio || allowSound,
           allowVideo,
-          allowSound,
+          allowSound: allowAudio || allowSound,
           requireEmailCaptcha: Boolean((item as { requireEmailCaptcha?: unknown }).requireEmailCaptcha),
           slotId: slotId ?? null,
           phaseLabel: readPhaseLabel(item as object),
           buttonLabel: readButtonLabel(item as object),
           alternateSlotIds: slotId ? readAlternateSlotIds(item as object, slotId) : undefined,
           recordSeconds:
-            recordSeconds ?? (allowSound && !slotId ? DEFAULT_FREE_SOUND_SECONDS : undefined),
+            recordSeconds ??
+            ((allowAudio || allowSound) && !slotId ? DEFAULT_FREE_SOUND_SECONDS : undefined),
         })
       );
       continue;
@@ -435,6 +449,7 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
       const slotId = (item as { slotId?: unknown }).slotId;
       if (!isGardenSlotId(slotId) || seenSlots.has(slotId)) continue;
       seenSlots.add(slotId);
+      const recordSeconds = readRecordSeconds(item as object);
       steps.push(
         buildPromptStep(
           id,
@@ -442,13 +457,14 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
           typeof categoryLabel === "string" ? categoryLabel : gardenSlotMomentLabel(slotId),
           {
             allowText: false,
-            allowAudio: false,
+            allowAudio: true,
             allowVideo: false,
             allowSound: true,
             slotId,
             phaseLabel: readPhaseLabel(item as object),
             buttonLabel: readButtonLabel(item as object),
             alternateSlotIds: readAlternateSlotIds(item as object, slotId),
+            recordSeconds,
           }
         )
       );
@@ -540,16 +556,16 @@ export function syncLegacyFromJourneySteps(
       const channels = normalizePromptChannels(s);
       return (
         s.prompt.trim().length > 0 &&
-        (channels.allowText || channels.allowAudio || channels.allowVideo)
+        (channels.allowText || channels.allowVideo)
       );
     })
     .map((s) => {
       const channels = normalizePromptChannels(s);
       return {
         prompt: s.prompt.trim(),
-        allowAudio: channels.allowAudio,
+        allowAudio: false,
         allowVideo: channels.allowVideo,
-        allowMedia: channels.allowAudio || channels.allowVideo,
+        allowMedia: channels.allowVideo,
         requireEmailCaptcha: Boolean(s.requireEmailCaptcha) && channels.allowText,
       };
     });
@@ -564,7 +580,9 @@ export function syncLegacyFromJourneySteps(
 
   const soundPrompts = normalized.filter(
     (s): s is JourneyPromptStep =>
-      s.kind === "prompt" && Boolean(normalizePromptChannels(s).allowSound) && isGardenSlotId(s.slotId)
+      s.kind === "prompt" &&
+      promptAllowsAudioRecording(s) &&
+      isGardenSlotId(s.slotId)
   );
 
   const steps: SongGardenStepConfig[] = soundPrompts.map((s) => {
@@ -595,7 +613,7 @@ export function syncLegacyFromJourneySteps(
 
 export function resolveSoundStep(step: JourneyPromptStep): ResolvedJourneySoundStep | null {
   const channels = normalizePromptChannels(step);
-  if (!channels.allowSound) return null;
+  if (!channels.allowAudio) return null;
 
   const padId = isGardenSlotId(step.slotId) ? step.slotId : null;
   const isFree = !padId;
@@ -636,7 +654,7 @@ export function resolveSoundStep(step: JourneyPromptStep): ResolvedJourneySoundS
       (padId ? defaultPhaseLabelForSlot(padId) : "YOUR SOUND"),
     buttonLabel:
       step.buttonLabel ||
-      (padId ? defaultButtonLabelForSlot(padId) || "Add sound" : "Record"),
+      (padId ? defaultButtonLabelForSlot(padId) || "Record" : "Record"),
     ...(padId && step.alternateSlotIds?.length ? { alternateSlotIds: step.alternateSlotIds } : {}),
     slot,
     ...(alternateSlots?.length ? { alternateSlots } : {}),
@@ -689,13 +707,13 @@ export function createJourneySoundPromptStep(
     overrides?.categoryLabel ?? (pad ? gardenSlotMomentLabel(pad) : "Your Sounds"),
     {
       allowText: false,
-      allowAudio: false,
+      allowAudio: true,
       allowVideo: false,
       allowSound: true,
       slotId: pad ?? null,
       phaseLabel: overrides?.phaseLabel,
       buttonLabel:
-        overrides?.buttonLabel ?? (pad ? defaultButtonLabelForSlot(pad) ?? "Add sound" : "Record"),
+        overrides?.buttonLabel ?? (pad ? defaultButtonLabelForSlot(pad) ?? "Record" : "Record"),
       alternateSlotIds: pad ? overrides?.alternateSlotIds : undefined,
       recordSeconds:
         overrides?.recordSeconds ?? (pad ? undefined : DEFAULT_FREE_SOUND_SECONDS),
@@ -717,16 +735,12 @@ export function createJourneyTextStep(prompt = ""): JourneyPromptStep {
 export function createJourneyAudioStep(
   prompt = "Would you be willing to sing your phrase?"
 ): JourneyPromptStep {
-  return {
-    id: newStepId(),
-    kind: "prompt",
+  return createJourneySoundPromptStep(undefined, {
     prompt,
-    categoryLabel: "Your Voice",
-    allowText: false,
-    allowAudio: true,
-    allowVideo: false,
-    allowSound: false,
-  };
+    categoryLabel: "Your Sounds",
+    buttonLabel: "Record",
+    recordSeconds: DEFAULT_VOICE_SECONDS,
+  });
 }
 
 /** @deprecated Use createJourneyPromptStep with allowVideo */
