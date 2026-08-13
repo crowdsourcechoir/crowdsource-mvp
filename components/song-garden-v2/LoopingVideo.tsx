@@ -1,29 +1,59 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type LoopingVideoProps = {
   src: string;
   poster?: string;
   /** Soft seam veil color — world primary, not a scene still (avoids double-image ghosts). */
   veilColor?: string;
+  /** Fires once the poster is painted or the first video frame can play. */
+  onReady?: () => void;
 };
 
 const SEAM_LEAD_SEC = 0.7;
-const VEIL_IN_MS = 320;
+const VEIL_IN_MS = 280;
 const FILTER = "saturate(1.12) brightness(1.12) contrast(1.04)";
 
 /**
- * Dual-buffer loop with a short primary-color veil at the seam. Swap happens
- * under the veil so end-frame and start-frame never composite into a ghost.
+ * Dual-buffer loop. Poster stays visible until the active buffer has a decoded
+ * frame, so swaps never flash the solid world wash underneath.
  */
-export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: LoopingVideoProps) {
+export default function LoopingVideo({
+  src,
+  poster,
+  veilColor = "#0E1F24",
+  onReady,
+}: LoopingVideoProps) {
   const aRef = useRef<HTMLVideoElement | null>(null);
   const bRef = useRef<HTMLVideoElement | null>(null);
   const activeRef = useRef<"a" | "b">("a");
   const swappingRef = useRef(false);
+  const readySentRef = useRef(false);
   const [active, setActive] = useState<"a" | "b">("a");
   const [veil, setVeil] = useState(0);
+  const [showPoster, setShowPoster] = useState(Boolean(poster));
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  const markReady = useCallback(() => {
+    if (readySentRef.current) return;
+    readySentRef.current = true;
+    onReadyRef.current?.();
+  }, []);
+
+  useEffect(() => {
+    readySentRef.current = false;
+    setShowPoster(Boolean(poster));
+    // Poster alone is enough to crossfade without flashing the wash.
+    if (poster) {
+      const img = new Image();
+      img.onload = () => markReady();
+      img.onerror = () => markReady();
+      img.src = poster;
+      if (img.complete) markReady();
+    }
+  }, [src, poster, markReady]);
 
   useEffect(() => {
     const a = aRef.current;
@@ -58,6 +88,15 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
       return activeRef.current === "a" ? b! : a!;
     }
 
+    function onPlaying() {
+      setShowPoster(false);
+      markReady();
+    }
+
+    function onCanPlay() {
+      markReady();
+    }
+
     async function swapAtSeam() {
       if (swappingRef.current) return;
       swappingRef.current = true;
@@ -74,6 +113,7 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
         // ignore autoplay races
       }
 
+      // Soft darken only — avoid solid primary wash that reads as a blank screen.
       setVeil(1);
 
       window.setTimeout(() => {
@@ -87,7 +127,6 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
         const nextKey = activeRef.current === "a" ? "b" : "a";
         activeRef.current = nextKey;
         setActive(nextKey);
-        // Reveal the new buffer after the veil is fully covering.
         requestAnimationFrame(() => setVeil(0));
         swappingRef.current = false;
       }, VEIL_IN_MS);
@@ -110,12 +149,22 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
       void swapAtSeam();
     }
 
+    a.addEventListener("playing", onPlaying);
+    a.addEventListener("canplay", onCanPlay);
     a.addEventListener("timeupdate", onTimeUpdate);
     b.addEventListener("timeupdate", onTimeUpdate);
     a.addEventListener("ended", onEnded);
     b.addEventListener("ended", onEnded);
 
+    // Fallback if autoplay is blocked but poster/still is up.
+    const readyFallback = window.setTimeout(() => {
+      if (!poster) markReady();
+    }, 1200);
+
     return () => {
+      window.clearTimeout(readyFallback);
+      a.removeEventListener("playing", onPlaying);
+      a.removeEventListener("canplay", onCanPlay);
       a.removeEventListener("timeupdate", onTimeUpdate);
       b.removeEventListener("timeupdate", onTimeUpdate);
       a.removeEventListener("ended", onEnded);
@@ -123,16 +172,28 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
       a.pause();
       b.pause();
     };
-  }, [src]);
+  }, [src, poster, markReady]);
 
   return (
     <div className="absolute inset-0" aria-hidden>
+      {poster ? (
+        <div
+          className="absolute inset-0 transition-opacity duration-300"
+          style={{
+            backgroundImage: `url('${poster}')`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: FILTER,
+            opacity: showPoster ? 1 : 0,
+          }}
+        />
+      ) : null}
       <video
         ref={aRef}
         className="absolute inset-0 h-full w-full object-cover"
         style={{
           filter: FILTER,
-          opacity: active === "a" ? 1 : 0,
+          opacity: !showPoster && active === "a" ? 1 : 0,
         }}
         src={src}
         poster={poster}
@@ -145,7 +206,7 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
         className="absolute inset-0 h-full w-full object-cover"
         style={{
           filter: FILTER,
-          opacity: active === "b" ? 1 : 0,
+          opacity: !showPoster && active === "b" ? 1 : 0,
         }}
         src={src}
         muted
@@ -155,8 +216,9 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
       <div
         className="absolute inset-0 transition-opacity ease-in-out"
         style={{
-          background: `radial-gradient(120% 90% at 50% 40%, ${veilColor}b8, ${veilColor})`,
-          opacity: veil,
+          // Soft black veil at the loop seam — not a solid brand wash.
+          background: `radial-gradient(120% 90% at 50% 40%, ${veilColor}66, #000000aa)`,
+          opacity: veil * 0.45,
           transitionDuration: `${VEIL_IN_MS}ms`,
         }}
       />

@@ -9,6 +9,7 @@ import {
   resolveWorldConfig,
 } from "@/lib/song-garden-v2/world-config";
 import {
+  firstWorldSceneUrl,
   readWorldThemeCache,
   writeWorldThemeCache,
   type CachedWorldTheme,
@@ -21,27 +22,19 @@ const FALLBACK_ACCENT = "#e8e8e8";
 type WorldLoadingShellProps = {
   primaryColor?: string;
   accentColor?: string;
+  firstSceneUrl?: string | null;
   /** When set, used for cache lookup / fetch instead of the route slug. */
   slug?: string;
 };
 
-function lightenHex(hex: string, amount = 0.18): string {
-  const raw = hex.replace("#", "").trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return hex;
-  const n = parseInt(raw, 16);
-  const r = Math.min(255, Math.round(((n >> 16) & 255) + (255 - ((n >> 16) & 255)) * amount));
-  const g = Math.min(255, Math.round(((n >> 8) & 255) + (255 - ((n >> 8) & 255)) * amount));
-  const b = Math.min(255, Math.round((n & 255) + (255 - (n & 255)) * amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-}
-
 /**
- * Song Garden loading shell — uses the event's world primary/accent when known
- * (props, session cache, or a quick fetch). Avoids the hardcoded purple/lime flash.
+ * Song Garden loading shell — paints the first storyboard still when known
+ * so entry matches the journey world instead of a blank brand wash.
  */
 export default function WorldLoadingShell({
   primaryColor: primaryProp,
   accentColor: accentProp,
+  firstSceneUrl: sceneProp,
   slug: slugProp,
 }: WorldLoadingShellProps) {
   const params = useParams();
@@ -50,14 +43,28 @@ export default function WorldLoadingShell({
 
   const [theme, setTheme] = useState<CachedWorldTheme>(() => {
     if (primaryProp?.trim() && accentProp?.trim()) {
-      return { primaryColor: primaryProp.trim(), accentColor: accentProp.trim() };
+      return {
+        primaryColor: primaryProp.trim(),
+        accentColor: accentProp.trim(),
+        firstSceneUrl: sceneProp?.trim() || null,
+      };
     }
-    return readWorldThemeCache(slug) ?? { primaryColor: FALLBACK_PRIMARY, accentColor: FALLBACK_ACCENT };
+    return (
+      readWorldThemeCache(slug) ?? {
+        primaryColor: FALLBACK_PRIMARY,
+        accentColor: FALLBACK_ACCENT,
+        firstSceneUrl: null,
+      }
+    );
   });
 
   useEffect(() => {
     if (primaryProp?.trim() && accentProp?.trim()) {
-      const next = { primaryColor: primaryProp.trim(), accentColor: accentProp.trim() };
+      const next = {
+        primaryColor: primaryProp.trim(),
+        accentColor: accentProp.trim(),
+        firstSceneUrl: sceneProp?.trim() || null,
+      };
       setTheme(next);
       if (slug) writeWorldThemeCache(slug, next);
       return;
@@ -67,7 +74,7 @@ export default function WorldLoadingShell({
     const cached = readWorldThemeCache(slug);
     if (cached) {
       setTheme(cached);
-      return;
+      // Still refresh from network so first-time scene URLs get cached after generate.
     }
 
     let cancelled = false;
@@ -78,52 +85,83 @@ export default function WorldLoadingShell({
         const next = {
           primaryColor: world.primaryColor || DEFAULT_PRIMARY_COLOR,
           accentColor: world.accentColor || DEFAULT_ACCENT_COLOR,
+          firstSceneUrl: firstWorldSceneUrl(world),
         };
         setTheme(next);
         writeWorldThemeCache(slug, next);
       })
       .catch(() => {
-        // keep fallback
+        // keep fallback / cache
       });
     return () => {
       cancelled = true;
     };
-  }, [slug, primaryProp, accentProp]);
+  }, [slug, primaryProp, accentProp, sceneProp]);
 
   const primary = theme.primaryColor;
   const accent = theme.accentColor;
-  const mid = lightenHex(primary, 0.12);
+  const sceneUrl = theme.firstSceneUrl?.trim() || null;
 
   return (
     <div
       className="relative flex h-[100dvh] flex-col items-center justify-center overflow-hidden"
       style={{
-        background: `radial-gradient(120% 90% at 50% -10%, ${mid} 0%, ${primary} 55%, #050508 100%)`,
+        background: primary,
       }}
       role="status"
       aria-live="polite"
       aria-busy="true"
       aria-label="Entering the Song Garden"
     >
+      {sceneUrl ? (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url('${sceneUrl}')`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "saturate(1.12) brightness(1.12) contrast(1.04)",
+          }}
+          aria-hidden
+        />
+      ) : (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(120% 90% at 50% -10%, ${accent}1f, ${primary} 55%)`,
+          }}
+          aria-hidden
+        />
+      )}
       <div
-        className="pointer-events-none absolute inset-0 opacity-50"
+        className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse 60% 40% at 50% 70%, ${accent}1f, transparent 70%)`,
+          background: `linear-gradient(180deg, ${primary}22 0%, transparent 28%, transparent 72%, ${primary}33 100%)`,
         }}
         aria-hidden
       />
-      <div className="relative z-10 flex flex-col items-center gap-5 px-6 text-center">
-        <p
-          className="font-mono text-[11px] font-semibold uppercase tracking-[0.35em]"
-          style={{ color: accent, opacity: 0.9 }}
-        >
-          Song Garden
-        </p>
-        <div
-          className="h-8 w-8 animate-spin rounded-full border-2 border-white/15"
-          style={{ borderTopColor: accent }}
-          aria-hidden
-        />
+      <div className="relative z-10 flex flex-col items-center gap-4 px-6 text-center">
+        {!sceneUrl ? (
+          <>
+            <p
+              className="font-mono text-[11px] font-semibold uppercase tracking-[0.35em]"
+              style={{ color: accent, opacity: 0.9 }}
+            >
+              Song Garden
+            </p>
+            <div
+              className="h-8 w-8 animate-spin rounded-full border-2 border-white/15"
+              style={{ borderTopColor: accent }}
+              aria-hidden
+            />
+          </>
+        ) : (
+          <div
+            className="h-7 w-7 animate-spin rounded-full border-2 border-white/20"
+            style={{ borderTopColor: accent }}
+            aria-hidden
+          />
+        )}
       </div>
     </div>
   );

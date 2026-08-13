@@ -58,7 +58,7 @@ import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
 import { worldConfigFromBrand } from "@/lib/song-garden-v2/garden/snapshot";
 import { useGardenSnapshot } from "@/lib/song-garden-v2/garden/use-garden-snapshot";
-import { writeWorldThemeCache } from "@/lib/song-garden-v2/world-theme-cache";
+import { writeWorldThemeCache, firstWorldSceneUrl } from "@/lib/song-garden-v2/world-theme-cache";
 import {
   appendGrowthNode,
   clearGrowthNodes,
@@ -169,8 +169,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     writeWorldThemeCache(event.slug, {
       primaryColor: world.primaryColor,
       accentColor: world.accentColor,
+      firstSceneUrl: firstWorldSceneUrl(world),
     });
-  }, [event.slug, world.primaryColor, world.accentColor]);
+  }, [event.slug, world]);
 
   const [position, setPosition] = useState<JourneyPosition>(() => {
     const saved = loadJourneyPosition(event.id, interviewVersion);
