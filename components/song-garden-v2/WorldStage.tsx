@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import {
   resolveStoryboardFrame,
   resolveStoryboardFrameAtIndex,
@@ -16,7 +16,7 @@ import ParticleField from "./ParticleField";
 import WorldEnergyField from "./WorldEnergyField";
 import WorldGrowthLayer from "./WorldGrowthLayer";
 
-const STORYBOARD_CROSSFADE_SEC = 1.85;
+const STORYBOARD_CROSSFADE_SEC = 1.1;
 
 /** Full opacity from step one — energy used to dim early frames and look muddy. */
 const WORLD_MEDIA_OPACITY = 1;
@@ -69,6 +69,29 @@ export default function WorldStage({
   // Strong enough to feel on phone tilt / mouse move — 16px was too subtle under the UI card.
   const tilt = useAmbientTilt(32);
 
+  // Warm the browser cache so step changes don't flash empty media.
+  useEffect(() => {
+    const frames = world.worldStoryboard ?? [];
+    const links: HTMLLinkElement[] = [];
+    for (const frame of frames) {
+      if (frame.sceneUrl) {
+        const img = new Image();
+        img.src = frame.sceneUrl;
+      }
+      if (frame.videoUrl && typeof document !== "undefined") {
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.as = "video";
+        link.href = frame.videoUrl;
+        document.head.appendChild(link);
+        links.push(link);
+      }
+    }
+    return () => {
+      for (const link of links) link.remove();
+    };
+  }, [world.worldStoryboard]);
+
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !world.ambientSoundtrackUrl) return;
@@ -105,7 +128,7 @@ export default function WorldStage({
               <motion.div
                 key={`lower-${blend.lower.sceneUrl}`}
                 className="absolute inset-0"
-                initial={{ opacity: 0 }}
+                initial={false}
                 animate={{ opacity: WORLD_MEDIA_OPACITY * (1 - blend.t) }}
                 transition={{ duration: 1.2, ease: "easeInOut" }}
                 style={{
@@ -119,7 +142,7 @@ export default function WorldStage({
                 <motion.div
                   key={`upper-${blend.upper.sceneUrl}`}
                   className="absolute inset-0"
-                  initial={{ opacity: 0 }}
+                  initial={false}
                   animate={{ opacity: WORLD_MEDIA_OPACITY * blend.t }}
                   transition={{ duration: 1.2, ease: "easeInOut" }}
                   style={{
@@ -133,16 +156,14 @@ export default function WorldStage({
             </>
           ) : (
             world.heroArtworkUrl && (
-              <motion.div
+              <div
                 className="absolute inset-0"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: WORLD_MEDIA_OPACITY }}
-                transition={{ duration: 1.2, ease: "easeInOut" }}
                 style={{
                   backgroundImage: `url('${world.heroArtworkUrl}')`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                   filter: WORLD_MEDIA_FILTER,
+                  opacity: WORLD_MEDIA_OPACITY,
                 }}
               />
             )
@@ -174,12 +195,13 @@ export default function WorldStage({
 }
 
 function storyboardMediaKey(frame: WorldStoryboardFrame): string {
-  return frame.videoUrl || frame.sceneUrl || "empty";
+  const key = `${frame.videoUrl || ""}|${frame.sceneUrl || ""}`;
+  return key === "|" ? "empty" : key;
 }
 
 /**
- * Crossfade between storyboard frames (one media layer each). No still stacked
- * under the playing video — that double-exposed trees/objects over themselves.
+ * Hold the current plate fully opaque until the next plate's still/video is
+ * ready, then crossfade. Never reveals the solid brand wash between frames.
  */
 function StoryboardBackground({
   frame,
@@ -188,38 +210,131 @@ function StoryboardBackground({
   frame: WorldStoryboardFrame;
   veilColor: string;
 }) {
-  const mediaKey = storyboardMediaKey(frame);
+  const [displayed, setDisplayed] = useState(frame);
+  const [incoming, setIncoming] = useState<WorldStoryboardFrame | null>(null);
+  const [incomingVisible, setIncomingVisible] = useState(false);
+  const swapTimerRef = useRef<number | null>(null);
+  const incomingRef = useRef<WorldStoryboardFrame | null>(null);
+  const targetKeyRef = useRef(storyboardMediaKey(frame));
+
+  const displayedKey = storyboardMediaKey(displayed);
+  const targetKey = storyboardMediaKey(frame);
+  targetKeyRef.current = targetKey;
+  incomingRef.current = incoming;
+
+  useEffect(() => {
+    if (targetKey === displayedKey) {
+      if (incoming) {
+        setIncoming(null);
+        setIncomingVisible(false);
+      }
+      return;
+    }
+    if (incoming && storyboardMediaKey(incoming) === targetKey) return;
+    setIncoming(frame);
+    setIncomingVisible(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to target/displayed identity
+  }, [targetKey, displayedKey, frame]);
+
+  useEffect(() => {
+    return () => {
+      if (swapTimerRef.current != null) window.clearTimeout(swapTimerRef.current);
+    };
+  }, []);
+
+  const promoteIncoming = () => {
+    const pending = incomingRef.current;
+    if (!pending) return;
+    if (storyboardMediaKey(pending) !== targetKeyRef.current) return;
+    setIncomingVisible(true);
+    if (swapTimerRef.current != null) window.clearTimeout(swapTimerRef.current);
+    swapTimerRef.current = window.setTimeout(() => {
+      setDisplayed(pending);
+      setIncoming(null);
+      setIncomingVisible(false);
+      swapTimerRef.current = null;
+    }, STORYBOARD_CROSSFADE_SEC * 1000);
+  };
 
   return (
     <div className="absolute inset-0" aria-hidden>
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={mediaKey}
-          className="absolute inset-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: STORYBOARD_CROSSFADE_SEC, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {frame.videoUrl ? (
-            <LoopingVideo
-              src={frame.videoUrl}
-              poster={frame.sceneUrl ?? undefined}
-              veilColor={veilColor}
-            />
-          ) : frame.sceneUrl ? (
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url('${frame.sceneUrl}')`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                filter: WORLD_MEDIA_FILTER,
-              }}
-            />
-          ) : null}
-        </motion.div>
-      </AnimatePresence>
+      <StoryboardPlate frame={displayed} veilColor={veilColor} visible />
+      {incoming ? (
+        <StoryboardPlate
+          key={storyboardMediaKey(incoming)}
+          frame={incoming}
+          veilColor={veilColor}
+          visible={incomingVisible}
+          onReady={promoteIncoming}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function StoryboardPlate({
+  frame,
+  veilColor,
+  visible,
+  onReady,
+}: {
+  frame: WorldStoryboardFrame;
+  veilColor: string;
+  visible: boolean;
+  onReady?: () => void;
+}) {
+  const readySent = useRef(false);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  useEffect(() => {
+    readySent.current = false;
+  }, [frame.videoUrl, frame.sceneUrl]);
+
+  useEffect(() => {
+    if (!onReadyRef.current) return;
+    if (frame.videoUrl) return; // LoopingVideo reports ready
+    if (!frame.sceneUrl) {
+      onReadyRef.current();
+      return;
+    }
+    const img = new Image();
+    const done = () => {
+      if (readySent.current) return;
+      readySent.current = true;
+      onReadyRef.current?.();
+    };
+    img.onload = done;
+    img.onerror = done;
+    img.src = frame.sceneUrl;
+    if (img.complete) done();
+  }, [frame.sceneUrl, frame.videoUrl]);
+
+  return (
+    <motion.div
+      className="absolute inset-0"
+      initial={false}
+      animate={{ opacity: visible ? 1 : 0 }}
+      transition={{ duration: STORYBOARD_CROSSFADE_SEC, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {frame.videoUrl ? (
+        <LoopingVideo
+          src={frame.videoUrl}
+          poster={frame.sceneUrl ?? undefined}
+          veilColor={veilColor}
+          onReady={onReady}
+        />
+      ) : frame.sceneUrl ? (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url('${frame.sceneUrl}')`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: WORLD_MEDIA_FILTER,
+          }}
+        />
+      ) : null}
+    </motion.div>
   );
 }
