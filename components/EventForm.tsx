@@ -38,6 +38,7 @@ import {
   WORLD_ANIMATION_PRESETS,
   type WorldConfig,
 } from "@/lib/song-garden-v2/world-config";
+import FileDropZone from "@/components/ui/FileDropZone";
 
 export type EventFormValues = {
   title: string;
@@ -573,13 +574,14 @@ export default function EventForm({
     }
   }
 
-  function handleAiReferencePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function handleAiReferencePhotoFiles(files: File[]) {
+    const file = files[0];
     if (!file) return;
     if (file.size > 4.5 * 1024 * 1024) {
       setAiGenError("Reference photo must be under ~4.5MB (Runway data-URI limit). Try a smaller JPEG.");
       return;
     }
+    setAiGenError(null);
     const reader = new FileReader();
     reader.onload = () => setAiReferencePhoto(reader.result as string);
     reader.readAsDataURL(file);
@@ -697,9 +699,8 @@ export default function EventForm({
     setValues((v) => ({ ...v, slug: next }));
   }
 
-  async function handleHeroFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  async function handleHeroFiles(files: File[]) {
+    const file = files[0];
     if (!file) return;
 
     const isImage =
@@ -897,29 +898,22 @@ export default function EventForm({
           <label htmlFor="heroImage" className={labelClass}>
             Hero image
           </label>
-          <div className="mt-0.5 flex gap-2">
+          <div className="mt-0.5 flex flex-wrap items-stretch gap-2">
             <input
               id="heroImage"
               type="text"
-              placeholder="https://… or upload"
+              placeholder="https://… or drop / upload"
               value={values.heroImage}
               onChange={(e) => setValues((v) => ({ ...v, heroImage: e.target.value }))}
-              className={`${inputClass} mt-0 flex-1`}
+              className={`${inputClass} mt-0 min-w-0 flex-1`}
             />
-            <label
-              className={`cursor-pointer shrink-0 rounded-lg border border-gray-700 bg-[#222] px-3 py-2 text-xs font-medium text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-300 ${
-                uploadingHero ? "pointer-events-none opacity-50" : ""
-              }`}
-            >
-              {uploadingHero ? "Uploading…" : "Upload"}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => void handleHeroFile(e)}
-                className="hidden"
-                disabled={uploadingHero}
-              />
-            </label>
+            <FileDropZone
+              variant="compact"
+              accept="image/*"
+              disabled={uploadingHero}
+              label={uploadingHero ? "Uploading…" : "Upload"}
+              onFiles={(files) => void handleHeroFiles(files)}
+            />
             {values.heroImage && (
               <div className="h-9 w-14 shrink-0 overflow-hidden rounded border border-gray-700 bg-[#1f1f1f]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -927,9 +921,16 @@ export default function EventForm({
               </div>
             )}
           </div>
-          <p className="mt-1 text-[11px] text-gray-500">
-            Up to 20MB. Large photos upload directly to storage (avoids save size limits).
-          </p>
+          <div className="mt-2">
+            <FileDropZone
+              variant="panel"
+              accept="image/*"
+              disabled={uploadingHero}
+              label={uploadingHero ? "Uploading…" : "Drop hero image here"}
+              hint="Or click to browse · up to 20MB · large photos go straight to storage"
+              onFiles={(files) => void handleHeroFiles(files)}
+            />
+          </div>
         </div>
       </div>
       <section className={sectionClass}>
@@ -1174,15 +1175,20 @@ export default function EventForm({
             />
           </label>
           <div className="flex flex-wrap items-end gap-3">
-            <label className="block min-w-0 flex-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <span className={labelClass}>Reference photo (optional)</span>
-              <input
-                type="file"
+              <FileDropZone
+                variant="inline"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={handleAiReferencePhotoUpload}
-                className="mt-0.5 block w-full text-xs text-gray-400"
+                label={
+                  aiReferencePhoto
+                    ? "Reference photo ready — drop to replace"
+                    : "Drop reference photo or click"
+                }
+                hint="JPEG / PNG / WebP · under ~4.5MB"
+                onFiles={handleAiReferencePhotoFiles}
               />
-            </label>
+            </div>
             <label className="block w-20">
               <span className={labelClass}>Frames</span>
               <input

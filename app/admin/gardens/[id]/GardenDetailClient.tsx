@@ -24,6 +24,7 @@ import {
   MAP_PLATE_VARIANT_KEYS,
   MAP_PLATE_VARIANT_LABELS,
 } from "@/lib/song-garden-v2/garden/types";
+import FileDropZone from "@/components/ui/FileDropZone";
 
 type Props = { gardenId: string };
 
@@ -505,9 +506,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
     }
   }
 
-  async function handleUploadMapRefs(e: ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(e.target.files ?? []);
-    e.target.value = "";
+  async function handleUploadMapRefFiles(picked: File[]) {
     if (picked.length === 0) return;
 
     const MAX_REF_BYTES = 20 * 1024 * 1024;
@@ -1130,18 +1129,16 @@ export default function GardenDetailClient({ gardenId }: Props) {
               #2.
             </p>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex cursor-pointer items-center rounded-lg border border-[#CFFF81]/40 bg-black/40 px-3 py-2 text-sm text-[#CFFF81] hover:bg-[#CFFF81]/10">
-                {uploadingRefs ? "Uploading…" : "Upload photos"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  disabled={uploadingRefs || saving}
-                  onChange={(e) => void handleUploadMapRefs(e)}
-                />
-              </label>
+            <div className="space-y-2">
+              <FileDropZone
+                accept="image/*,.heic,.heif,.avif"
+                multiple
+                disabled={uploadingRefs || saving}
+                onFiles={(files) => void handleUploadMapRefFiles(files)}
+                label={uploadingRefs ? "Uploading…" : "Drop venue photos here, or click to browse"}
+                hint="JPEG, PNG, WebP · up to 20MB each · max 8 total"
+                variant="panel"
+              />
               {mapRefs.filter((u) => u.trim()).length < 8 ? (
                 <button
                   type="button"
