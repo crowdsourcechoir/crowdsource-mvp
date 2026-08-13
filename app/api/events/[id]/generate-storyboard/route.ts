@@ -7,6 +7,10 @@ import {
 } from "@/lib/song-garden-v2/runway";
 import { persistGeneratedMedia } from "@/lib/song-garden-v2/persist-generated-media";
 import type { WorldStoryboardFrame } from "@/lib/song-garden-v2/world-config";
+import {
+  mergeStoryboardReferences,
+  normalizePlaceReferenceUris,
+} from "@/lib/song-garden-v2/storyboard-refs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -56,9 +60,9 @@ function buildImagePrompt(
   vibePrompt: string,
   frameIndex: number,
   frameCount: number,
-  opts: { placeRef?: boolean; siblingTags?: string[] } = {}
+  opts: { placeTags?: string[]; siblingTags?: string[] } = {}
 ): string {
-  const { placeRef = false, siblingTags = [] } = opts;
+  const { placeTags = [], siblingTags = [] } = opts;
   const continuityParts: string[] = [];
   if (siblingTags.length > 0) {
     continuityParts.push(
@@ -69,11 +73,16 @@ function buildImagePrompt(
         )} — match their color palette, materials, architecture, lighting language, and visual identity. Invent a new growth-stage still in that world (do not copy any reference literally).`
     );
   }
-  if (placeRef) {
+  if (placeTags.length > 0) {
+    const placeList = placeTags.map((t) => `@${t}`).join(", ");
     continuityParts.push(
       siblingTags.length > 0
-        ? "Also take place/atmosphere cues from @place without copying it literally."
-        : "Inspired by @place — use it as place/atmosphere reference, invent a new Song Garden world rather than copying the photo literally."
+        ? `Also take place/atmosphere cues from ${placeList} without copying them literally.`
+        : `Inspired by ${placeList} — use ${
+            placeTags.length === 1 ? "it" : "them"
+          } as place/atmosphere reference${placeTags.length === 1 ? "" : "s"}, invent a new Song Garden world rather than copying the photo${
+            placeTags.length === 1 ? "" : "s"
+          } literally.`
     );
   }
   const continuity = continuityParts.join(" ");
@@ -81,36 +90,6 @@ function buildImagePrompt(
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 1000);
-}
-
-/** Runway gen4_image allows max 3 references; prefer neighbors so the regen matches the board. */
-function pickSiblingReferences(
-  siblingSceneUrls: string[],
-  frameIndex: number,
-  frameCount: number
-): { uri: string; tag: string }[] {
-  const slots: { index: number; uri: string }[] = [];
-  const seen = new Set<string>();
-
-  function consider(i: number) {
-    if (i < 0 || i >= frameCount || i === frameIndex) return;
-    const uri = siblingSceneUrls[i]?.trim();
-    if (!uri || seen.has(uri)) return;
-    seen.add(uri);
-    slots.push({ index: i, uri });
-  }
-
-  consider(frameIndex - 1);
-  consider(frameIndex + 1);
-  consider(0);
-  consider(frameCount - 1);
-  for (let i = 0; i < frameCount && slots.length < 3; i += 1) consider(i);
-
-  return slots.slice(0, 3).map((s, n) => ({
-    uri: s.uri,
-    // Tags: 3–15 alphanumeric, start with a letter (Runway requirement).
-    tag: `world${n + 1}`,
-  }));
 }
 
 function buildMotionPrompt(vibePrompt: string, frameIndex: number, frameCount: number): string {
@@ -125,30 +104,23 @@ async function generateOneFrame(opts: {
   vibePrompt: string;
   frameIndex: number;
   frameCount: number;
-  referenceImage: string | null;
+  placeUris: string[];
   /** Other frames' still URLs (index-aligned; holes/nulls allowed). Used for theme continuity. */
   siblingSceneUrls?: Array<string | null | undefined>;
 }): Promise<WorldStoryboardFrame> {
-  const { eventId, vibePrompt, frameIndex, frameCount, referenceImage, siblingSceneUrls } = opts;
+  const { eventId, vibePrompt, frameIndex, frameCount, placeUris, siblingSceneUrls } = opts;
 
-  const siblingRefs = siblingSceneUrls?.length
-    ? pickSiblingReferences(
-        siblingSceneUrls.map((u) => u ?? ""),
-        frameIndex,
-        Math.max(frameCount, siblingSceneUrls.length)
-      )
-    : [];
-
-  // Max 3 refs total — siblings win for board continuity; optional place photo fills a spare slot.
-  const referenceImages = [...siblingRefs];
-  if (referenceImage && referenceImages.length < 3) {
-    referenceImages.push({ uri: referenceImage, tag: "place" });
-  }
+  const { referenceImages, placeTags, siblingTags } = mergeStoryboardReferences({
+    placeUris,
+    siblingSceneUrls,
+    frameIndex,
+    frameCount,
+  });
 
   const runwayImageUrl = await generateImageFromText({
     promptText: buildImagePrompt(vibePrompt, frameIndex, frameCount, {
-      placeRef: referenceImages.some((r) => r.tag === "place"),
-      siblingTags: siblingRefs.map((r) => r.tag),
+      placeTags,
+      siblingTags,
     }),
     model: "gen4_image",
     ratio: "1920:1080",
@@ -190,7 +162,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   let body: {
     vibePrompt?: string;
     frameCount?: number;
+    /** @deprecated Prefer referenceUrls / imageDataUrls */
     imageDataUrl?: string;
+    imageDataUrls?: string[];
+    /** Preferred: public storage URLs (or data URIs) for place/atmosphere refs. */
+    referenceUrls?: string[];
     /** When set, regenerate only this 0-based frame and leave the rest alone. */
     frameIndex?: number;
     /** Index-aligned still URLs for the current board — other frames guide theme continuity. */
@@ -203,7 +179,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const vibePrompt = body.vibePrompt?.trim();
-  const referenceImage = body.imageDataUrl?.trim() || null;
+  const placeUris = normalizePlaceReferenceUris(body);
 
   if (!vibePrompt) {
     return NextResponse.json(
@@ -238,7 +214,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         vibePrompt,
         frameIndex: singleFrameIndex,
         frameCount,
-        referenceImage,
+        placeUris,
         siblingSceneUrls,
       });
       return NextResponse.json({ frame, frameIndex: singleFrameIndex, frames: [frame] });
@@ -263,7 +239,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           vibePrompt,
           frameIndex: i,
           frameCount,
-          referenceImage,
+          placeUris,
         })
       );
     } catch (err) {

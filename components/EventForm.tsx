@@ -246,7 +246,9 @@ export default function EventForm({
   const [aiVibePrompt, setAiVibePrompt] = useState<string>(
     () => initialProp?.worldConfig?.aiArtworkPrompt?.trim() || ""
   );
-  const [aiReferencePhoto, setAiReferencePhoto] = useState<string>("");
+  /** Place/atmosphere refs for storyboard AI (Runway uses up to 3). */
+  const [aiReferencePhotos, setAiReferencePhotos] = useState<string[]>([]);
+  const [uploadingAiRefs, setUploadingAiRefs] = useState(false);
   const [aiFrameCount, setAiFrameCount] = useState<number>(4);
   const [aiGenerating, setAiGenerating] = useState(false);
   /** When set, only that storyboard frame index is regenerating. */
@@ -574,17 +576,113 @@ export default function EventForm({
     }
   }
 
-  function handleAiReferencePhotoFiles(files: File[]) {
-    const file = files[0];
-    if (!file) return;
-    if (file.size > 4.5 * 1024 * 1024) {
-      setAiGenError("Reference photo must be under ~4.5MB (Runway data-URI limit). Try a smaller JPEG.");
+  async function handleAiReferencePhotoFiles(files: File[]) {
+    if (files.length === 0) return;
+
+    const MAX_REFS = 3;
+    const MAX_REF_BYTES = 20 * 1024 * 1024;
+    const DATA_URL_SAFE_BYTES = 3 * 1024 * 1024;
+
+    const isImageFile = (f: File) =>
+      f.type.startsWith("image/") ||
+      (!f.type && /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name));
+
+    const images = files.filter(isImageFile);
+    if (images.length === 0) {
+      setAiGenError("That file didn’t look like an image. Use JPEG, PNG, or WebP.");
       return;
     }
+
+    const room = Math.max(0, MAX_REFS - aiReferencePhotos.length);
+    if (room === 0) {
+      setAiGenError("Already at 3 reference photos (Runway’s max). Remove one first.");
+      return;
+    }
+    const batch = images.slice(0, room);
+    for (const file of batch) {
+      if (file.size > MAX_REF_BYTES) {
+        setAiGenError(`“${file.name}” is over 20MB. Compress it and try again.`);
+        return;
+      }
+    }
+
+    setUploadingAiRefs(true);
     setAiGenError(null);
-    const reader = new FileReader();
-    reader.onload = () => setAiReferencePhoto(reader.result as string);
-    reader.readAsDataURL(file);
+    try {
+      const eventIdForPath = values.slug?.trim() || eventId || "draft";
+      const prepareRes = await fetch("/api/events/storyboard-refs/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: eventIdForPath,
+          existingCount: aiReferencePhotos.length,
+          files: batch.map((file) => ({
+            name: file.name,
+            contentType: file.type?.startsWith("image/") ? file.type : "image/jpeg",
+            size: file.size,
+          })),
+        }),
+      });
+      const prepareBody = (await prepareRes.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        uploads?: Array<{ signedUrl: string; publicUrl: string; contentType: string }>;
+      };
+
+      if (prepareRes.ok && prepareBody.uploads?.length) {
+        const urls: string[] = [];
+        for (let i = 0; i < prepareBody.uploads.length; i += 1) {
+          const upload = prepareBody.uploads[i];
+          const file = batch[i];
+          const put = await fetch(upload.signedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": upload.contentType },
+            body: file,
+          });
+          if (!put.ok) {
+            throw new Error(`Could not upload “${file.name}”. Try again.`);
+          }
+          urls.push(upload.publicUrl);
+        }
+        setAiReferencePhotos((prev) => [...prev, ...urls].slice(0, MAX_REFS));
+        return;
+      }
+
+      if (prepareBody.code === "not_configured") {
+        const small = batch.filter((f) => f.size <= DATA_URL_SAFE_BYTES);
+        if (small.length === 0) {
+          throw new Error(
+            "Storage isn’t configured and files are over ~3MB. Configure Supabase storage for larger refs."
+          );
+        }
+        const dataUrls = await Promise.all(
+          small.map(
+            (file) =>
+              new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = reader.result;
+                  if (typeof result === "string" && result.startsWith("data:")) resolve(result);
+                  else reject(new Error(`Could not read “${file.name}”.`));
+                };
+                reader.onerror = () => reject(new Error(`Could not read “${file.name}”.`));
+                reader.readAsDataURL(file);
+              })
+          )
+        );
+        setAiReferencePhotos((prev) => [...prev, ...dataUrls].slice(0, MAX_REFS));
+        if (small.length < batch.length) {
+          setAiGenNotice("Storage isn’t configured — only smaller photos were added as local data URLs.");
+        }
+        return;
+      }
+
+      throw new Error(prepareBody.error || "Could not prepare reference upload.");
+    } catch (err) {
+      setAiGenError(err instanceof Error ? err.message : "Reference upload failed.");
+    } finally {
+      setUploadingAiRefs(false);
+    }
   }
 
   async function handleGenerateStoryboard() {
@@ -603,7 +701,7 @@ export default function EventForm({
         body: JSON.stringify({
           vibePrompt: aiVibePrompt,
           frameCount: aiFrameCount,
-          ...(aiReferencePhoto ? { imageDataUrl: aiReferencePhoto } : {}),
+          ...(aiReferencePhotos.length ? { referenceUrls: aiReferencePhotos } : {}),
         }),
       });
       const data = await res.json();
@@ -625,8 +723,14 @@ export default function EventForm({
             : data.error || "Generation failed."
         );
       } else {
+        const refNote =
+          aiReferencePhotos.length > 1
+            ? ` (guided by ${aiReferencePhotos.length} reference photos)`
+            : aiReferencePhotos.length === 1
+              ? " (guided by your reference photo)"
+              : "";
         setAiGenNotice(
-          `Generated ${data.frames.length} new world frames${aiReferencePhoto ? " (guided by your reference photo)" : ""} (still + 10s loop each). Review below, then Save to keep them.`
+          `Generated ${data.frames.length} new world frames${refNote} (still + 10s loop each). Review below, then Save to keep them.`
         );
       }
     } catch {
@@ -659,7 +763,7 @@ export default function EventForm({
           frameIndex,
           frameCount: Math.max(existing.length, frameIndex + 1, aiFrameCount),
           siblingSceneUrls,
-          ...(aiReferencePhoto ? { imageDataUrl: aiReferencePhoto } : {}),
+          ...(aiReferencePhotos.length ? { referenceUrls: aiReferencePhotos } : {}),
         }),
       });
       const data = await res.json();
@@ -1176,17 +1280,23 @@ export default function EventForm({
           </label>
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 flex-1 space-y-1">
-              <span className={labelClass}>Reference photo (optional)</span>
+              <span className={labelClass}>Reference photos (optional · up to 3)</span>
               <FileDropZone
                 variant="inline"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
+                disabled={uploadingAiRefs || aiGenerating || aiReferencePhotos.length >= 3}
                 label={
-                  aiReferencePhoto
-                    ? "Reference photo ready — drop to replace"
-                    : "Drop reference photo or click"
+                  uploadingAiRefs
+                    ? "Uploading…"
+                    : aiReferencePhotos.length >= 3
+                      ? "At 3 photos — remove one to add more"
+                      : aiReferencePhotos.length > 0
+                        ? "Drop more photos, or click to browse"
+                        : "Drop reference photos or click"
                 }
-                hint="JPEG / PNG / WebP · under ~4.5MB"
-                onFiles={handleAiReferencePhotoFiles}
+                hint="JPEG / PNG / WebP · up to 20MB each · Runway uses up to 3"
+                onFiles={(files) => void handleAiReferencePhotoFiles(files)}
               />
             </div>
             <label className="block w-20">
@@ -1203,7 +1313,7 @@ export default function EventForm({
             <button
               type="button"
               onClick={handleGenerateStoryboard}
-              disabled={aiGenerating || aiRegeneratingFrame != null}
+              disabled={aiGenerating || aiRegeneratingFrame != null || uploadingAiRefs}
               className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-[#1a0f2d] hover:bg-[#bdf25e] disabled:opacity-50"
             >
               {aiGenerating ? "Generating…" : "Generate with AI"}
@@ -1213,11 +1323,34 @@ export default function EventForm({
             Prefer one frame? Use <span className="text-gray-400">Regen</span> on that row — it keeps the others
             and references their stills so the replacement stays on-theme.
           </p>
-          {aiReferencePhoto && (
-            <div className="flex items-center gap-2">
-              <img src={aiReferencePhoto} alt="Reference" className="h-12 w-20 rounded object-cover" />
-              <button type="button" onClick={() => setAiReferencePhoto("")} className={chipClass}>
-                Remove photo
+          {aiReferencePhotos.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {aiReferencePhotos.map((src, i) => (
+                <div key={`${src.slice(0, 48)}-${i}`} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={`Reference ${i + 1}`}
+                    className="h-12 w-20 rounded object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAiReferencePhotos((prev) => prev.filter((_, idx) => idx !== i))
+                    }
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/80 text-[10px] text-white hover:bg-rose-600"
+                    aria-label={`Remove reference ${i + 1}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setAiReferencePhotos([])}
+                className={chipClass}
+              >
+                Clear all
               </button>
             </div>
           )}
