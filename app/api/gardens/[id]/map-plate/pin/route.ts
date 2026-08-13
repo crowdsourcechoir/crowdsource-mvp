@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGardenByIdOrSlug } from "@/lib/song-garden-v2/garden/store";
-import { pinMapPlate } from "@/lib/song-garden-v2/garden/map-plate";
+import { pinMapPlate, unpinMapPlate } from "@/lib/song-garden-v2/garden/map-plate";
 
 export const dynamic = "force-dynamic";
 
@@ -44,5 +44,23 @@ export async function POST(request: Request, context: Ctx) {
     const message = err instanceof Error ? err.message : "Server error";
     const status = message.includes("confirmReplace") ? 409 : 400;
     return NextResponse.json({ error: message }, { status, ...NO_STORE });
+  }
+}
+
+/**
+ * Unpin the live season plate. Keeps draft + zones; clears ambient loop + active variant.
+ */
+export async function DELETE(_request: Request, context: Ctx) {
+  try {
+    const garden = await getGardenByIdOrSlug(context.params.id);
+    if (!garden) {
+      return NextResponse.json({ error: "Not found" }, { status: 404, ...NO_STORE });
+    }
+
+    const result = await unpinMapPlate(garden);
+    return NextResponse.json({ garden: result.garden }, NO_STORE);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 400, ...NO_STORE });
   }
 }

@@ -133,6 +133,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [uploadingRefs, setUploadingRefs] = useState(false);
   const [generatingPlate, setGeneratingPlate] = useState(false);
   const [pinningPlate, setPinningPlate] = useState(false);
+  const [unpinningPlate, setUnpinningPlate] = useState(false);
   const [generatingMotion, setGeneratingMotion] = useState(false);
   const [generatingVariantKey, setGeneratingVariantKey] = useState<string | null>(null);
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
@@ -759,6 +760,36 @@ export default function GardenDetailClient({ gardenId }: Props) {
     }
   }
 
+  async function handleUnpinMapPlate() {
+    const ok = window.confirm(
+      "Unpin the season map plate? Draft and zone hits stay. Ambient loop and live /g art clear until you pin again."
+    );
+    if (!ok) return;
+    setUnpinningPlate(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/map-plate/pin`, {
+        method: "DELETE",
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        garden?: Garden;
+      };
+      if (!res.ok) throw new Error(body.error || "Failed to unpin map plate");
+      setMapImageUrl("");
+      setMapPinnedAt(null);
+      setMapAmbientVideoUrl(null);
+      setMapActiveVariant("default");
+      setNotice("Season plate unpinned. Draft and zones kept — pin when ready.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unpin map plate");
+    } finally {
+      setUnpinningPlate(false);
+    }
+  }
+
   async function handleGenerateMotion() {
     setGeneratingMotion(true);
     setError(null);
@@ -775,7 +806,9 @@ export default function GardenDetailClient({ gardenId }: Props) {
       };
       if (!res.ok) throw new Error(body.error || "Failed to generate ambient motion");
       setMapAmbientVideoUrl(body.ambientVideoUrl ?? null);
-      setNotice("Ambient loop ready — /g will play it over the pinned plate.");
+      setNotice(
+        "Ambient loop ready — locked camera; fans pan /g. Zones sit on the same map plane as the video."
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate ambient motion");
@@ -1058,7 +1091,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <h2 className="text-sm font-medium text-gray-200">Fan map</h2>
           <p className="mt-1 text-xs text-gray-500">
             Generate a season map plate, pin it once, then place named sponsored zones fans can tap.
-            Regenerating a draft does not move hit regions.
+            Regenerating a draft does not move hit regions. Unpin anytime to clear the live plate
+            without losing draft or zones.
           </p>
         </div>
 
@@ -1238,6 +1272,18 @@ export default function GardenDetailClient({ gardenId }: Props) {
             </button>
             <button
               type="button"
+              disabled={
+                unpinningPlate ||
+                saving ||
+                (!mapPinnedAt && !mapImageUrl.trim() && !mapAmbientVideoUrl)
+              }
+              onClick={() => void handleUnpinMapPlate()}
+              className="rounded-lg border border-red-400/40 px-3 py-2 text-sm text-red-200 disabled:opacity-50"
+            >
+              {unpinningPlate ? "Unpinning…" : "Unpin"}
+            </button>
+            <button
+              type="button"
               disabled={generatingMotion || saving || !mapImageUrl.trim()}
               onClick={() => void handleGenerateMotion()}
               className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-200 disabled:opacity-50"
@@ -1245,6 +1291,11 @@ export default function GardenDetailClient({ gardenId }: Props) {
               {generatingMotion ? "Motion…" : "Generate ambient loop (M3)"}
             </button>
           </div>
+
+          <p className="text-[11px] text-gray-500">
+            Ambient loop keeps a locked camera — fans pan the map. Regen the loop if an older
+            clip pans or zooms under the zones.
+          </p>
 
           {mapPinnedAt ? (
             <p className="text-[11px] text-gray-500">
@@ -1365,9 +1416,10 @@ export default function GardenDetailClient({ gardenId }: Props) {
           />
         </label>
 
-        {mapImageUrl.trim() && zones.length > 0 ? (
+        {(mapImageUrl.trim() || mapDraftUrl) && zones.length > 0 ? (
           <ZoneMapEditor
-            mapImageUrl={mapImageUrl.trim()}
+            mapImageUrl={(mapImageUrl.trim() || mapDraftUrl || "").trim()}
+            mapVideoUrl={mapAmbientVideoUrl}
             zones={zones.map((z) => ({
               key: z.key,
               label: z.label,

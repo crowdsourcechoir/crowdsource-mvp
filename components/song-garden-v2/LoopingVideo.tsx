@@ -7,6 +7,16 @@ type LoopingVideoProps = {
   poster?: string;
   /** Soft seam veil color — world primary, not a scene still (avoids double-image ghosts). */
   veilColor?: string;
+  /**
+   * Report intrinsic video size so the map plane can match the loop frame.
+   * Zones share that plane — cover-cropping a mismatched aspect drifts hits.
+   */
+  onMediaSize?: (width: number, height: number) => void;
+  /**
+   * `fill` — stretch to the map plane (plane aspect should match the video).
+   * `cover` — legacy crop (avoid when zones are authored in full-frame space).
+   */
+  objectFit?: "fill" | "cover" | "contain";
 };
 
 const SEAM_LEAD_SEC = 0.7;
@@ -17,13 +27,24 @@ const FILTER = "saturate(1.12) brightness(1.12) contrast(1.04)";
  * Dual-buffer loop with a short primary-color veil at the seam. Swap happens
  * under the veil so end-frame and start-frame never composite into a ghost.
  */
-export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: LoopingVideoProps) {
+export default function LoopingVideo({
+  src,
+  poster,
+  veilColor = "#0E1F24",
+  onMediaSize,
+  objectFit = "fill",
+}: LoopingVideoProps) {
   const aRef = useRef<HTMLVideoElement | null>(null);
   const bRef = useRef<HTMLVideoElement | null>(null);
   const activeRef = useRef<"a" | "b">("a");
   const swappingRef = useRef(false);
+  const onMediaSizeRef = useRef(onMediaSize);
   const [active, setActive] = useState<"a" | "b">("a");
   const [veil, setVeil] = useState(0);
+
+  useEffect(() => {
+    onMediaSizeRef.current = onMediaSize;
+  }, [onMediaSize]);
 
   useEffect(() => {
     const a = aRef.current;
@@ -49,6 +70,16 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
 
     void a.play().catch(() => undefined);
     b.pause();
+
+    function reportSize(el: HTMLVideoElement) {
+      if (el.videoWidth > 0 && el.videoHeight > 0) {
+        onMediaSizeRef.current?.(el.videoWidth, el.videoHeight);
+      }
+    }
+
+    function onMeta(e: Event) {
+      reportSize(e.currentTarget as HTMLVideoElement);
+    }
 
     function current(): HTMLVideoElement {
       return activeRef.current === "a" ? a! : b!;
@@ -110,12 +141,17 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
       void swapAtSeam();
     }
 
+    a.addEventListener("loadedmetadata", onMeta);
+    b.addEventListener("loadedmetadata", onMeta);
     a.addEventListener("timeupdate", onTimeUpdate);
     b.addEventListener("timeupdate", onTimeUpdate);
     a.addEventListener("ended", onEnded);
     b.addEventListener("ended", onEnded);
+    reportSize(a);
 
     return () => {
+      a.removeEventListener("loadedmetadata", onMeta);
+      b.removeEventListener("loadedmetadata", onMeta);
       a.removeEventListener("timeupdate", onTimeUpdate);
       b.removeEventListener("timeupdate", onTimeUpdate);
       a.removeEventListener("ended", onEnded);
@@ -125,11 +161,18 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
     };
   }, [src]);
 
+  const fitClass =
+    objectFit === "contain"
+      ? "object-contain"
+      : objectFit === "cover"
+        ? "object-cover"
+        : "object-fill";
+
   return (
     <div className="absolute inset-0" aria-hidden>
       <video
         ref={aRef}
-        className="absolute inset-0 h-full w-full object-cover"
+        className={`absolute inset-0 h-full w-full ${fitClass}`}
         style={{
           filter: FILTER,
           opacity: active === "a" ? 1 : 0,
@@ -142,7 +185,7 @@ export default function LoopingVideo({ src, poster, veilColor = "#0E1F24" }: Loo
       />
       <video
         ref={bRef}
-        className="absolute inset-0 h-full w-full object-cover"
+        className={`absolute inset-0 h-full w-full ${fitClass}`}
         style={{
           filter: FILTER,
           opacity: active === "b" ? 1 : 0,

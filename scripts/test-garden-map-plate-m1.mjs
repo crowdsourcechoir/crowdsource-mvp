@@ -16,6 +16,7 @@ async function main() {
     buildLayoutGuideClause,
     buildMapPlateReferences,
     absoluteMediaUrl,
+    mapPlateMotionSuffix,
   } = await load("lib/song-garden-v2/garden/map-plate.ts");
   const { buildLayoutSchematicPng } = await load(
     "lib/song-garden-v2/garden/layout-schematic.ts"
@@ -143,6 +144,13 @@ async function main() {
   assert.equal(plate.vibePrompt, "hi");
   assert.equal(plate.twinMode, true, "twin defaults on");
   assert.deepEqual(plate.variants, []);
+
+  const motion = mapPlateMotionSuffix();
+  assert.ok(motion.includes("LOCKED CAMERA"), "motion forbids camera move");
+  assert.ok(
+    motion.toLowerCase().includes("pan") || motion.toLowerCase().includes("dolly"),
+    "motion explicitly bans pan/dolly"
+  );
 
   console.log("ok — map plate twin likeness + layout refs");
 }
