@@ -173,6 +173,17 @@ export function resolveStoryboardFrame(
   if (!frames.length) return null;
   const clamped = Math.max(0, Math.min(1, energyLevel));
   const index = Math.min(frames.length - 1, Math.floor(clamped * frames.length));
+  return resolveStoryboardFrameAtIndex(world, index);
+}
+
+/** Pick a specific storyboard plate by index (prompt-tied background). */
+export function resolveStoryboardFrameAtIndex(
+  world: WorldConfig,
+  frameIndex: number
+): ResolvedStoryboardFrame | null {
+  const frames = world.worldStoryboard;
+  if (!frames.length) return null;
+  const index = Math.max(0, Math.min(frames.length - 1, Math.floor(frameIndex)));
   const frame = frames[index];
   const energy = frame.energy ?? (frames.length > 1 ? index / (frames.length - 1) : 1);
   return { frame, index, total: frames.length, energy };

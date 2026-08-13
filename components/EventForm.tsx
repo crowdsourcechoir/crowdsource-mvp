@@ -314,7 +314,14 @@ export default function EventForm({
       const next = [...v.journeySteps];
       const cur = next[index];
       if (!cur) return v;
-      next[index] = { ...cur, ...patch } as JourneyStep;
+      const merged = { ...cur, ...patch } as JourneyStep;
+      // Explicit undefined clears optional fields (e.g. storyboardFrameIndex → Auto).
+      for (const key of Object.keys(patch) as Array<keyof JourneyStep>) {
+        if (patch[key] === undefined) {
+          delete (merged as Record<string, unknown>)[key as string];
+        }
+      }
+      next[index] = merged;
       return { ...v, journeySteps: next };
     });
   }
@@ -1286,7 +1293,8 @@ export default function EventForm({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className={sectionTitleClass}>Journey</h3>
           <p className="text-[11px] text-gray-500">
-            Ordered prompts — set an eyebrow, then toggle Text / Audio / Video / Sound
+            Ordered prompts — set eyebrow, Accept channels, and optionally tie a World storyboard
+            frame so the background changes on that step
           </p>
         </div>
 
@@ -1449,6 +1457,45 @@ export default function EventForm({
                     className={inputClass}
                     placeholder={step.kind === "name" ? "Your Name" : "e.g. Your Words"}
                   />
+                </label>
+
+                <label className="block max-w-xs">
+                  <span className={labelClass}>Background frame</span>
+                  <select
+                    className={inputClass}
+                    value={
+                      typeof step.storyboardFrameIndex === "number"
+                        ? String(step.storyboardFrameIndex)
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (!raw) {
+                        updateJourneyStep(idx, { storyboardFrameIndex: undefined });
+                        return;
+                      }
+                      updateJourneyStep(idx, {
+                        storyboardFrameIndex: Number(raw),
+                      });
+                    }}
+                    disabled={(values.worldConfig?.worldStoryboard?.length ?? 0) === 0}
+                  >
+                    <option value="">
+                      {(values.worldConfig?.worldStoryboard?.length ?? 0) === 0
+                        ? "Auto (add storyboard frames in World)"
+                        : "Auto / hold previous"}
+                    </option>
+                    {(values.worldConfig?.worldStoryboard ?? []).map((frame, fi) => (
+                      <option key={`frame-${fi}`} value={fi}>
+                        Frame {fi + 1}
+                        {frame.videoUrl ? " (video)" : frame.sceneUrl ? " (still)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-0.5 block text-[11px] text-gray-500">
+                    When this step starts, switch the world background to that plate. Leave Auto to
+                    keep the previous tied frame (or progress-based if none yet).
+                  </span>
                 </label>
 
                 {step.kind === "name" && (

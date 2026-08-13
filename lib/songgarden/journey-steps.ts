@@ -34,6 +34,11 @@ export type JourneyNameStep = {
   categoryLabel?: string;
   /** Helper line under the prompt (defaults to "Your first name is fine."). */
   responseHint?: string;
+  /**
+   * When set, arriving at this step switches the world background to this
+   * storyboard frame (0-based). Holds until a later step sets another frame.
+   */
+  storyboardFrameIndex?: number;
 };
 
 /** Per-prompt capture length (sound / voice / video). */
@@ -72,8 +77,42 @@ export type JourneyPromptStep = {
    * Sound pads use their short defaults only when this is unset.
    */
   recordSeconds?: number;
+  /**
+   * When set, arriving at this step switches the world background to this
+   * storyboard frame (0-based). Holds until a later step sets another frame.
+   * Omit = keep previous tied frame, or auto progress bucketing if none yet.
+   */
+  storyboardFrameIndex?: number;
   requireEmailCaptcha?: boolean;
 };
+
+export function clampStoryboardFrameIndex(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  const n = Math.floor(raw);
+  if (n < 0 || n > 64) return undefined;
+  return n;
+}
+
+export function readStoryboardFrameIndex(item: object): number | undefined {
+  return clampStoryboardFrameIndex((item as { storyboardFrameIndex?: unknown }).storyboardFrameIndex);
+}
+
+/**
+ * Last explicit frame binding from steps[0..endIndex] inclusive.
+ * Null = no prompt has claimed a frame yet (use auto energy bucketing).
+ */
+export function resolveTiedStoryboardFrameIndex(
+  steps: JourneyStep[],
+  endIndex: number
+): number | null {
+  let last: number | null = null;
+  const end = Math.min(endIndex, steps.length - 1);
+  for (let i = 0; i <= end; i += 1) {
+    const idx = clampStoryboardFrameIndex(steps[i]?.storyboardFrameIndex);
+    if (idx != null) last = idx;
+  }
+  return last;
+}
 
 export function clampRecordSeconds(raw: unknown): number | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
@@ -293,10 +332,12 @@ function buildPromptStep(
     buttonLabel?: string;
     alternateSlotIds?: GardenSlotId[];
     recordSeconds?: number;
+    storyboardFrameIndex?: number;
   }
 ): JourneyPromptStep {
   const channels = normalizePromptChannels(opts);
   const recordSeconds = clampRecordSeconds(opts.recordSeconds);
+  const storyboardFrameIndex = clampStoryboardFrameIndex(opts.storyboardFrameIndex);
   const hasPad = channels.allowAudio && isGardenSlotId(opts.slotId);
   const slotId = hasPad ? (opts.slotId as GardenSlotId) : undefined;
   return {
@@ -306,6 +347,7 @@ function buildPromptStep(
     categoryLabel: typeof categoryLabel === "string" ? categoryLabel : "",
     ...channels,
     requireEmailCaptcha: Boolean(opts.requireEmailCaptcha) && channels.allowText,
+    ...(storyboardFrameIndex != null ? { storyboardFrameIndex } : {}),
     ...(recordSeconds != null
       ? { recordSeconds }
       : channels.allowAudio && !slotId
@@ -358,12 +400,14 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
         typeof (item as { responseHint?: unknown }).responseHint === "string"
           ? (item as { responseHint: string }).responseHint
           : undefined;
+      const storyboardFrameIndex = readStoryboardFrameIndex(item as object);
       steps.push({
         id,
         kind: "name",
         ...(typeof (item as { prompt?: unknown }).prompt === "string" ? { prompt } : {}),
         categoryLabel: typeof categoryLabel === "string" ? categoryLabel : "Your Name",
         ...(responseHint !== undefined ? { responseHint } : {}),
+        ...(storyboardFrameIndex != null ? { storyboardFrameIndex } : {}),
       });
       continue;
     }
@@ -440,6 +484,7 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
           recordSeconds:
             recordSeconds ??
             ((allowAudio || allowSound) && !slotId ? DEFAULT_FREE_SOUND_SECONDS : undefined),
+          storyboardFrameIndex: readStoryboardFrameIndex(item as object),
         })
       );
       continue;
@@ -465,6 +510,7 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
             buttonLabel: readButtonLabel(item as object),
             alternateSlotIds: readAlternateSlotIds(item as object, slotId),
             recordSeconds,
+            storyboardFrameIndex: readStoryboardFrameIndex(item as object),
           }
         )
       );

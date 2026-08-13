@@ -23,6 +23,7 @@ import {
   resolveJourneySteps,
   resolvePromptRecordMs,
   resolveSoundStep,
+  resolveTiedStoryboardFrameIndex,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
 import {
@@ -284,6 +285,20 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     gardenSnap.linked && gardenSnap.snapshot
       ? gardenSnap.snapshot.state.energy
       : personalEnergy;
+
+  /**
+   * Prompt-tied background: last explicit frame binding through the current step.
+   * Null = auto bucket by energy. Skipped when garden-linked shared bloom drives energy.
+   */
+  const tiedStoryboardFrameIndex = useMemo(() => {
+    if (gardenSnap.linked) return null;
+    if (position.phase === "landing") return null;
+    if (position.phase === "final") {
+      return resolveTiedStoryboardFrameIndex(journeySteps, journeySteps.length - 1);
+    }
+    return resolveTiedStoryboardFrameIndex(journeySteps, stepIndex);
+  }, [gardenSnap.linked, position.phase, journeySteps, stepIndex]);
+
   const showProgress = journeyStarted && position.phase !== "final";
 
   const currentSuggestedAnswerTypes = activeStep ? suggestedTypesForStep(activeStep) : ["text"];
@@ -624,6 +639,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     <WorldStage
       world={world}
       energyLevel={energyLevel}
+      storyboardFrameIndex={tiedStoryboardFrameIndex}
       celebrationTrigger={celebration.trigger}
       soundtrackUnlocked={worldUnlocked}
       growthNodes={growthNodes}

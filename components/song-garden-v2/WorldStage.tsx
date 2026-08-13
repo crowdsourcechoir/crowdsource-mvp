@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   resolveStoryboardFrame,
+  resolveStoryboardFrameAtIndex,
   resolveWorldSceneBlend,
   type WorldConfig,
   type WorldStoryboardFrame,
@@ -25,6 +26,11 @@ type WorldStageProps = {
   world: WorldConfig;
   /** 0..1 — increases as the participant contributes; makes the world visibly livelier. */
   energyLevel: number;
+  /**
+   * When set, force this storyboard plate (prompt-tied background).
+   * Null/undefined = bucket by energyLevel as usual.
+   */
+  storyboardFrameIndex?: number | null;
   /** Bump this (e.g. Date.now()) to fire a one-off "world reacts" pulse. */
   celebrationTrigger: number;
   /** True once a user gesture has happened, so the ambient soundtrack is allowed to play. */
@@ -42,13 +48,19 @@ type WorldStageProps = {
 export default function WorldStage({
   world,
   energyLevel,
+  storyboardFrameIndex = null,
   celebrationTrigger,
   soundtrackUnlocked,
   growthNodes,
   children,
 }: WorldStageProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const storyboardFrame = useMemo(() => resolveStoryboardFrame(world, energyLevel), [world, energyLevel]);
+  const storyboardFrame = useMemo(() => {
+    if (storyboardFrameIndex != null && Number.isFinite(storyboardFrameIndex)) {
+      return resolveStoryboardFrameAtIndex(world, storyboardFrameIndex);
+    }
+    return resolveStoryboardFrame(world, energyLevel);
+  }, [world, energyLevel, storyboardFrameIndex]);
   const blend = useMemo(
     () => (storyboardFrame ? null : resolveWorldSceneBlend(world, energyLevel)),
     [world, energyLevel, storyboardFrame]
