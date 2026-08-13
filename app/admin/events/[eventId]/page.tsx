@@ -29,16 +29,38 @@ import JSZip from "jszip";
 import { dataUrlToWavBlob } from "@/lib/audioToWav";
 import { videoDataUrlToMp4Blob } from "@/lib/videoToMp4";
 import { publicEventPath } from "@/lib/event-slug-aliases";
+import {
+  isAnonymousPersonName,
+  normalizePersonKey,
+} from "@/lib/agent-interview-qa";
+import {
+  listSonggardenClips,
+  songgardenAudioUrl,
+  type SonggardenClip,
+} from "@/data/songgardenClient";
+import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
+
+type InterviewAnswer = {
+  createdAt: string;
+  content: string;
+  questionText?: string | null;
+  audioUrl?: string | null;
+  videoUrl?: string | null;
+  audioTranscript?: string | null;
+  videoTranscript?: string | null;
+};
 
 type InterviewSubmissionItem = {
   participantName: string;
   conversationId: string;
-  answers: Array<{
-    createdAt: string;
-    content: string;
-    audioUrl?: string | null;
-    videoUrl?: string | null;
-  }>;
+  answers: InterviewAnswer[];
+};
+
+type PersonSubmissionCard = {
+  key: string;
+  displayName: string;
+  conversations: InterviewSubmissionItem[];
+  clips: SonggardenClip[];
 };
 
 function formatDate(iso: string): string {
@@ -162,6 +184,7 @@ export default function EventDetailPage() {
   const [songSeedError, setSongSeedError] = useState<string | null>(null);
   const [songSeedErrorIssues, setSongSeedErrorIssues] = useState<SongSeedTranscriptIssue[] | null>(null);
   const [agentInterviewSubmissions, setAgentInterviewSubmissions] = useState<InterviewSubmissionItem[]>([]);
+  const [songgardenClips, setSonggardenClips] = useState<SonggardenClip[]>([]);
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
   const [deletingInterviewId, setDeletingInterviewId] = useState<string | null>(null);
   const [wipingAllSubmissions, setWipingAllSubmissions] = useState(false);
@@ -178,50 +201,99 @@ export default function EventDetailPage() {
           if (e.agentThemeId) getSongSeedForEvent(e.id).then(setSongSeed).catch(() => setSongSeed(null));
           getEventMemory(e.id).then(setMemoryRecord).catch(() => setMemoryRecord(null));
 
-          if (e.agentThemeId) {
-            setLoadingAgentInterviewSubmissions(true);
+          // Always load interviews + Song Garden clips so person cards can show both.
+          setLoadingAgentInterviewSubmissions(true);
+          Promise.all([
             fetch(`/api/agent/interview-submissions?eventId=${encodeURIComponent(e.id)}`)
               .then(async (r) => {
                 const data = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error((data as any)?.error || "Failed to load");
+                if (!r.ok) throw new Error((data as { error?: string }).error || "Failed to load");
                 return data;
               })
               .then((data) => {
-                const items = (data as any)?.items;
+                const items = (data as { items?: InterviewSubmissionItem[] })?.items;
                 setAgentInterviewSubmissions(Array.isArray(items) ? items : []);
               })
-              .catch(() => setAgentInterviewSubmissions([]))
-              .finally(() => setLoadingAgentInterviewSubmissions(false));
-          } else {
-            setAgentInterviewSubmissions([]);
-          }
+              .catch(() => setAgentInterviewSubmissions([])),
+            listSonggardenClips(e.id)
+              .then(setSonggardenClips)
+              .catch(() => setSonggardenClips([])),
+          ]).finally(() => setLoadingAgentInterviewSubmissions(false));
         }
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, [eventId]);
 
+  const personSubmissionCards = useMemo((): PersonSubmissionCard[] => {
+    const cards = new Map<string, PersonSubmissionCard>();
+
+    function ensureCard(displayName: string, key: string): PersonSubmissionCard {
+      let card = cards.get(key);
+      if (!card) {
+        card = { key, displayName, conversations: [], clips: [] };
+        cards.set(key, card);
+      }
+      return card;
+    }
+
+    for (const item of agentInterviewSubmissions) {
+      const anon = isAnonymousPersonName(item.participantName);
+      const key = anon
+        ? `conversation:${item.conversationId}`
+        : `name:${normalizePersonKey(item.participantName)}`;
+      const card = ensureCard(item.participantName?.trim() || "Anonymous", key);
+      card.conversations.push(item);
+    }
+
+    for (const clip of songgardenClips) {
+      const anon = isAnonymousPersonName(clip.contributorName);
+      const key = anon
+        ? `clip:${clip.id}`
+        : `name:${normalizePersonKey(clip.contributorName)}`;
+      const card = ensureCard(clip.contributorName?.trim() || "Anonymous", key);
+      card.clips.push(clip);
+    }
+
+    return Array.from(cards.values()).sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" })
+    );
+  }, [agentInterviewSubmissions, songgardenClips]);
+
   const agentInterviewCopyText = useMemo(() => {
-    if (!agentInterviewSubmissions.length) return "";
+    if (!personSubmissionCards.length) return "";
     const parts: string[] = [];
-    agentInterviewSubmissions.forEach((item) => {
-      parts.push(`Participant: ${item.participantName}`);
-      item.answers.forEach((a, idx) => {
-        parts.push(`- (${idx + 1}) ${a.content}`);
+    personSubmissionCards.forEach((card) => {
+      parts.push(`Participant: ${card.displayName}`);
+      card.conversations.forEach((item) => {
+        item.answers.forEach((a, idx) => {
+          const q = a.questionText?.trim();
+          if (q) parts.push(`Q: ${q}`);
+          parts.push(`A${idx + 1}: ${a.content || "(media only)"}`);
+          if (a.audioTranscript?.trim()) parts.push(`  Audio transcript: ${a.audioTranscript.trim()}`);
+          if (a.videoTranscript?.trim()) parts.push(`  Video transcript: ${a.videoTranscript.trim()}`);
+        });
+      });
+      card.clips.forEach((clip, idx) => {
+        const label = clip.label?.trim() || songgardenCategoryLabel(clip.category);
+        parts.push(`Sound ${idx + 1}: ${label} (${songgardenCategoryLabel(clip.category)})`);
       });
       parts.push("");
     });
     return parts.join("\n").trim();
-  }, [agentInterviewSubmissions]);
+  }, [personSubmissionCards]);
 
-  async function handleDeleteInterviewSubmission(conversationId: string, participantName: string) {
+  async function handleDeleteInterviewSubmission(
+    conversationId: string,
+    participantName: string,
+    opts?: { skipConfirm?: boolean }
+  ) {
     const label = participantName?.trim() || "this submission";
     if (
-      !window.confirm(
-        `Delete ${label}'s interview answers? This cannot be undone.`
-      )
+      !opts?.skipConfirm &&
+      !window.confirm(`Delete ${label}'s interview answers? This cannot be undone.`)
     ) {
-      return;
+      return false;
     }
     setDeletingInterviewId(conversationId);
     try {
@@ -235,10 +307,30 @@ export default function EventDetailPage() {
       setAgentInterviewSubmissions((prev) =>
         prev.filter((item) => item.conversationId !== conversationId)
       );
+      return true;
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Could not delete submission.");
+      return false;
     } finally {
       setDeletingInterviewId(null);
+    }
+  }
+
+  async function handleDeletePersonInterviews(card: PersonSubmissionCard) {
+    if (card.conversations.length === 0) return;
+    const label = card.displayName?.trim() || "this person";
+    if (
+      !window.confirm(
+        `Delete ${label}'s interview answer${card.conversations.length > 1 ? "s" : ""}? Song Garden sounds on this card are kept. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    for (const conv of card.conversations) {
+      const ok = await handleDeleteInterviewSubmission(conv.conversationId, card.displayName, {
+        skipConfirm: true,
+      });
+      if (!ok) break;
     }
   }
 
@@ -263,6 +355,7 @@ export default function EventDetailPage() {
       await clearSubmissionsForEvent(event.slug);
       setSubmissions([]);
       setAgentInterviewSubmissions([]);
+      setSonggardenClips([]);
       setSongSeed(null);
       setMemoryRecord(null);
       setTranscriptOutput(null);
@@ -1020,9 +1113,11 @@ export default function EventDetailPage() {
             </>
           )}
         </div>
-        {event.agentThemeId && (
-          <div className="mb-8 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-300">Agent interviews (server)</h3>
+        <div className="mb-8 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-300">Participant submissions</h3>
+            <p className="text-xs text-gray-500">
+              One card per person — interview answers (with the question) and Song Garden sounds together.
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -1030,81 +1125,151 @@ export default function EventDetailPage() {
                 onClick={() => navigator.clipboard.writeText(agentInterviewCopyText)}
                 className="rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-50"
               >
-                {loadingAgentInterviewSubmissions ? "Preparing…" : "Copy all interview answers"}
+                {loadingAgentInterviewSubmissions ? "Preparing…" : "Copy all submissions"}
               </button>
             </div>
-            {loadingAgentInterviewSubmissions && <p className="text-gray-500">Loading interview answers…</p>}
-            {!loadingAgentInterviewSubmissions && agentInterviewSubmissions.length === 0 && (
-              <p className="text-gray-500">No agent interview answers yet.</p>
+            {loadingAgentInterviewSubmissions && <p className="text-gray-500">Loading submissions…</p>}
+            {!loadingAgentInterviewSubmissions && personSubmissionCards.length === 0 && (
+              <p className="text-gray-500">No interview answers or Song Garden sounds yet.</p>
             )}
-            {agentInterviewSubmissions.length > 0 && (
+            {personSubmissionCards.length > 0 && (
               <ul className="space-y-6">
-                {agentInterviewSubmissions.map((item) => (
-                  <li key={item.conversationId} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm text-gray-400">{item.participantName}</span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-gray-500">
-                          Conversation {item.conversationId.slice(0, 6)}…
-                        </span>
-                        <button
-                          type="button"
-                          disabled={deletingInterviewId === item.conversationId}
-                          onClick={() =>
-                            void handleDeleteInterviewSubmission(
-                              item.conversationId,
-                              item.participantName
-                            )
-                          }
-                          className="rounded-lg border border-red-800/60 bg-red-950/30 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
-                        >
-                          {deletingInterviewId === item.conversationId ? "Deleting…" : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                    {item.answers.length === 0 ? (
-                      <p className="text-sm text-gray-500">No answers recorded.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {item.answers.map((a, idx) => (
-                          <li
-                            key={`${item.conversationId}_${a.createdAt}_${idx}`}
-                            className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
+                {personSubmissionCards.map((card) => {
+                  const answerCount = card.conversations.reduce((n, c) => n + c.answers.length, 0);
+                  const deletingThis = card.conversations.some(
+                    (c) => deletingInterviewId === c.conversationId
+                  );
+                  return (
+                    <li key={card.key} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-sm font-medium text-gray-200">{card.displayName}</span>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {answerCount} answer{answerCount === 1 ? "" : "s"}
+                            {card.clips.length
+                              ? ` · ${card.clips.length} sound${card.clips.length === 1 ? "" : "s"}`
+                              : ""}
+                            {card.conversations.length > 1
+                              ? ` · ${card.conversations.length} sessions`
+                              : ""}
+                          </p>
+                        </div>
+                        {card.conversations.length > 0 ? (
+                          <button
+                            type="button"
+                            disabled={deletingThis}
+                            onClick={() => void handleDeletePersonInterviews(card)}
+                            className="rounded-lg border border-red-800/60 bg-red-950/30 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
                           >
-                            <p className="text-xs text-gray-500">Answer {idx + 1}</p>
-                            {a.content?.trim() ? (
-                              <p className="mt-1 whitespace-pre-wrap text-sm text-gray-200">{a.content}</p>
-                            ) : null}
-                            {a.audioUrl ? (
-                              <div className="mt-2 max-w-md">
-                                <p className="mb-1 text-xs text-gray-500">Audio</p>
-                                <audio src={a.audioUrl} controls className="h-9 w-full" preload="metadata" />
-                              </div>
-                            ) : null}
-                            {a.videoUrl ? (
-                              <div className="mt-2 max-w-md">
-                                <p className="mb-1 text-xs text-gray-500">Video</p>
-                                <div className="max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
-                                  <video
-                                    src={a.videoUrl}
+                            {deletingThis ? "Deleting…" : "Delete interview"}
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {card.conversations.map((item) => (
+                        <div key={item.conversationId} className="mb-4 last:mb-0">
+                          {card.conversations.length > 1 ? (
+                            <p className="mb-2 text-[11px] text-gray-500">
+                              Session {item.conversationId.slice(0, 8)}…
+                            </p>
+                          ) : null}
+                          {item.answers.length === 0 ? (
+                            <p className="text-sm text-gray-500">No interview answers recorded.</p>
+                          ) : (
+                            <ul className="space-y-2">
+                              {item.answers.map((a, idx) => (
+                                <li
+                                  key={`${item.conversationId}_${a.createdAt}_${idx}`}
+                                  className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
+                                >
+                                  <p className="text-xs font-medium text-gray-400">
+                                    {a.questionText?.trim() || `Answer ${idx + 1}`}
+                                  </p>
+                                  {a.content?.trim() ? (
+                                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-200">
+                                      {a.content}
+                                    </p>
+                                  ) : (
+                                    <p className="mt-1 text-sm italic text-gray-500">
+                                      (no text — media below)
+                                    </p>
+                                  )}
+                                  {a.audioTranscript?.trim() ? (
+                                    <p className="mt-1 text-xs text-gray-500">
+                                      Transcript: {a.audioTranscript}
+                                    </p>
+                                  ) : null}
+                                  {a.audioUrl ? (
+                                    <div className="mt-2 max-w-md">
+                                      <p className="mb-1 text-xs text-gray-500">Audio answer</p>
+                                      <audio
+                                        src={a.audioUrl}
+                                        controls
+                                        className="h-9 w-full"
+                                        preload="metadata"
+                                      />
+                                    </div>
+                                  ) : null}
+                                  {a.videoUrl ? (
+                                    <div className="mt-2 max-w-md">
+                                      <p className="mb-1 text-xs text-gray-500">Video answer</p>
+                                      <div className="max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
+                                        <video
+                                          src={a.videoUrl}
+                                          controls
+                                          playsInline
+                                          muted
+                                          className="min-h-[120px] w-full object-contain"
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+
+                      {card.clips.length > 0 ? (
+                        <div className="mt-3 border-t border-gray-700/60 pt-3">
+                          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                            Sounds
+                          </p>
+                          <ul className="space-y-2">
+                            {card.clips.map((clip) => (
+                              <li
+                                key={clip.id}
+                                className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
+                              >
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                  <p className="text-sm text-gray-200">
+                                    {clip.label?.trim() || "Untitled sound"}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {songgardenCategoryLabel(clip.category)}
+                                    {clip.submittedAt ? ` · ${formatDate(clip.submittedAt)}` : ""}
+                                  </p>
+                                </div>
+                                <div className="mt-2 max-w-md">
+                                  <audio
+                                    src={songgardenAudioUrl(clip.eventId, clip.id, clip.submittedAt)}
                                     controls
-                                    playsInline
-                                    muted
-                                    className="min-h-[120px] w-full object-contain"
+                                    className="h-9 w-full"
+                                    preload="metadata"
                                   />
                                 </div>
-                              </div>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
-        )}
 
         {submissions.length > 0 && (
           <>

@@ -5,23 +5,15 @@ import {
   AGENT_PARTICIPANT_IDENTITY_SELECT,
   participantDisplayName,
 } from "@/lib/agent-participant-db";
+import { pairInterviewAnswers, type PairedInterviewAnswer } from "@/lib/agent-interview-qa";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
-
-type InterviewAnswer = {
-  createdAt: string;
-  content: string;
-  audioUrl?: string | null;
-  videoUrl?: string | null;
-  audioTranscript?: string | null;
-  videoTranscript?: string | null;
-};
 
 type InterviewSubmissionItem = {
   participantName: string;
   email?: string | null;
   conversationId: string;
-  answers: InterviewAnswer[];
+  answers: PairedInterviewAnswer[];
 };
 
 export async function GET(request: Request) {
@@ -35,16 +27,7 @@ export async function GET(request: Request) {
       participantName: t.participantName,
       email: t.email ?? null,
       conversationId: t.conversationId,
-      answers: t.turns
-        .filter((turn) => turn.role === "user")
-        .map((turn) => ({
-          createdAt: turn.createdAt,
-          content: turn.content,
-          audioUrl: turn.audioUrl ?? null,
-          videoUrl: turn.videoUrl ?? null,
-          audioTranscript: turn.audioTranscript ?? null,
-          videoTranscript: turn.videoTranscript ?? null,
-        })),
+      answers: pairInterviewAnswers(t.turns),
     }));
 
     return NextResponse.json({ items });
@@ -55,7 +38,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Load conversations for the event.
     const { data: convs, error: eConvs } = await supabaseAdmin
       .from("agent_conversations")
       .select("id, participant_id")
@@ -66,8 +48,8 @@ export async function GET(request: Request) {
     }
     if (convs.length === 0) return NextResponse.json({ items: [] });
 
-    const participantIds = convs.map((c: any) => c.participant_id);
-    const { data: participants, error: eParticipants } = await supabaseAdmin
+    const participantIds = convs.map((c: { participant_id: string }) => c.participant_id);
+    const { data: participants } = await supabaseAdmin
       .from("agent_participants")
       .select(AGENT_PARTICIPANT_IDENTITY_SELECT)
       .in("id", participantIds);
@@ -82,40 +64,32 @@ export async function GET(request: Request) {
       ])
     );
 
-    const conversationIds = convs.map((c: any) => c.id);
+    const conversationIds = convs.map((c: { id: string }) => c.id);
     const { data: turns, error: eTurns } = await supabaseAdmin
       .from("agent_conversation_turns")
-      .select("conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript")
+      .select(
+        "conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
+      )
       .in("conversation_id", conversationIds);
     if (eTurns || !Array.isArray(turns)) {
       console.error("[interview-submissions] agent_conversation_turns query failed:", eTurns?.message);
       return NextResponse.json({ items: [] });
     }
 
-    const turnsByConv = new Map<string, any[]>();
+    const turnsByConv = new Map<string, typeof turns>();
     for (const t of turns) {
       const list = turnsByConv.get(t.conversation_id) ?? [];
       list.push(t);
       turnsByConv.set(t.conversation_id, list);
     }
 
-    const items: InterviewSubmissionItem[] = convs.map((conv: any) => {
-      const convTurns = (turnsByConv.get(conv.id) ?? []).sort((a: any, b: any) => a.turn_index - b.turn_index);
-      const answers = convTurns
-        .filter((t: any) => t.role === "user")
-        .map((t: any) => ({
-          createdAt: t.created_at,
-          content: t.content,
-          audioUrl: t.audio_url ?? null,
-          videoUrl: t.video_url ?? null,
-          audioTranscript: t.audio_transcript ?? null,
-          videoTranscript: t.video_transcript ?? null,
-        }));
+    const items: InterviewSubmissionItem[] = convs.map((conv: { id: string; participant_id: string }) => {
+      const convTurns = turnsByConv.get(conv.id) ?? [];
       return {
         participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
         conversationId: conv.id,
         email: identityById.get(conv.participant_id)?.email ?? null,
-        answers,
+        answers: pairInterviewAnswers(convTurns),
       };
     });
 
@@ -124,4 +98,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [] });
   }
 }
-
