@@ -37,8 +37,7 @@ export default function NewEventPage() {
       });
       if (created) {
         sessionStorage.setItem(LAST_CREATED_EVENT_KEY, JSON.stringify(created));
-        /* Redirect to list first so the list refetches from the same server that created the event; user can click the new event to open it. Avoids "Event not found" when multiple dev servers or caching is involved. */
-        router.push("/admin/events?created=1");
+        router.push(`/admin/events/${created.id}?created=1`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Create failed";

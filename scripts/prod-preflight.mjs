@@ -167,6 +167,7 @@ console.log("\n--- Supabase SQL (run in SQL Editor if not done) ---");
 const sqlFiles = [
   "supabase/events-table.sql",
   "supabase/prod-patch-events-columns.sql",
+  "supabase/prod-patch-events-list-timeout.sql",
   "supabase/prod-patch-agent-participants.sql",
   "supabase/agent-interview-tables.sql",
   "supabase/agent-turn-transcripts.sql",
