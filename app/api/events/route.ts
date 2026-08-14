@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { canonicalEventSlug } from "@/lib/event-slug-aliases";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
-import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
 import {
   localEventsGetAll,
   localEventsGetBySlug,
   localEventsCreate,
 } from "@/lib/local-events-store";
+import {
+  EVENT_DETAIL_SELECT,
+  EVENT_LIST_SELECT,
+  recoverStoryboardForEvent,
+  rowToEvent,
+  storyboardNeedsRecovery,
+} from "@/lib/events-db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +29,10 @@ export async function GET(request: Request) {
     if (slug) {
       const event = localEventsGetBySlug(slug);
       if (!event) return NextResponse.json(null, { status: 404 });
-      return NextResponse.json(rowToEvent(event));
+      return NextResponse.json(rowToEvent(event as unknown as Record<string, unknown>));
     }
     const data = localEventsGetAll();
-    return NextResponse.json(data.map(rowToEvent));
+    return NextResponse.json(data.map((row) => rowToEvent(row as unknown as Record<string, unknown>)));
   }
 
   if (!supabaseAdmin) {
@@ -43,26 +49,44 @@ export async function GET(request: Request) {
     if (slug) {
       const { data, error } = await supabaseAdmin
         .from("events")
-        .select("*")
+        .select(EVENT_DETAIL_SELECT)
         .eq("slug", slug)
         .single();
       if (error) {
         if (error.code === "PGRST116") return NextResponse.json(null, { status: 404 });
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
-      return NextResponse.json(rowToEvent(data));
+      const event = rowToEvent(data as unknown as Record<string, unknown>);
+      if (storyboardNeedsRecovery(event.worldConfig)) {
+        const recovered = await recoverStoryboardForEvent({
+          eventId: String(event.id),
+          slug: String(event.slug),
+          worldConfig: event.worldConfig,
+        });
+        if (recovered.recovered && recovered.worldConfig) {
+          await supabaseAdmin
+            .from("events")
+            .update({ world_config: recovered.worldConfig })
+            .eq("id", event.id);
+          event.worldConfig = recovered.worldConfig;
+        }
+      }
+      return NextResponse.json(event);
     }
 
-    /* List: use * so older production DBs (missing newer columns) still return rows. Strip agent_brief here — it can be large. */
-    const { data, error } = await supabaseAdmin.from("events").select("*").order("date", { ascending: true });
+    const { data, error } = await supabaseAdmin
+      .from("events")
+      .select(EVENT_LIST_SELECT)
+      .order("date", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const list = (data ?? []).map((row) => {
-      const e = rowToEvent(row);
-      return { ...e, agentBrief: null };
+      const e = rowToEvent(row as Record<string, unknown>);
+      return { ...e, agentBrief: null, worldConfig: null };
     });
     return NextResponse.json(list, NO_STORE);
   } catch (err) {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -96,7 +120,7 @@ export async function POST(request: Request) {
         song_garden_config: row.song_garden_config ?? null,
         world_config: row.world_config ?? null,
       });
-      return NextResponse.json(rowToEvent(created));
+      return NextResponse.json(rowToEvent(created as unknown as Record<string, unknown>));
     } catch (err) {
       return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
@@ -122,9 +146,9 @@ export async function POST(request: Request) {
       const hosted = await resolveHeroImageForStorage(row.hero_image, tempId);
       row.hero_image = hosted ?? "";
     }
-    const { data, error } = await supabaseAdmin.from("events").insert(row).select().single();
+    const { data, error } = await supabaseAdmin.from("events").insert(row).select(EVENT_LIST_SELECT).single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json(rowToEvent(data));
+    return NextResponse.json(rowToEvent(data as Record<string, unknown>));
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
@@ -163,37 +187,5 @@ function eventToRow(e: Record<string, unknown>) {
       };
     })(),
     world_config: (e as { worldConfig?: unknown }).worldConfig ?? null,
-  };
-}
-
-function rowToEvent(row: Record<string, unknown>) {
-  return {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    description: row.description,
-    date: row.date,
-    time: row.time,
-    venue: row.venue,
-    address: row.address,
-    prompt: row.prompt,
-    heroImage: row.hero_image ?? "",
-    heroImageMode: row.hero_image_mode === "color" ? "color" : "bw",
-    landingHeadline:
-      (row.landing_headline as string) ??
-      "We're crowdsourcing a song for this event. Want to help create it?",
-    landingCopy: (row.landing_copy as string) ?? "",
-    ctaText: (row.cta_text as string) ?? "Let's make an anthem",
-    anthemCompletionMessage:
-      (row.anthem_completion_message as string) ??
-      "Thanks! Your answers will help shape the song we're making.",
-    allowAudioVideoPrompt: (row.allow_audio_video_prompt as boolean) ?? true,
-    agentThemeId: row.agent_theme_id ?? null,
-    agentBrief: row.agent_brief ?? null,
-    songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
-    journeySteps:
-      ((row.song_garden_config as SongGardenConfig | null)?.journeySteps as unknown[] | undefined) ??
-      null,
-    worldConfig: (row.world_config as WorldConfig | null) ?? null,
   };
 }

@@ -3,6 +3,7 @@ import type { SongGardenConfig } from "@/lib/songgarden/config";
 import { canonicalEventSlug } from "@/lib/event-slug-aliases";
 import { localEventsGetBySlug } from "@/lib/local-events-store";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { EVENT_DETAIL_SELECT } from "@/lib/events-db";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -48,7 +49,7 @@ export async function getEventBySlugServer(slug: string): Promise<Event | null> 
 
   const { data, error } = await supabaseAdmin
     .from("events")
-    .select("*")
+    .select(EVENT_DETAIL_SELECT)
     .eq("slug", canonicalSlug)
     .maybeSingle();
 

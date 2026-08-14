@@ -9,47 +9,16 @@ import {
   persistDataUrlMedia,
   resolveHeroImageForStorage,
 } from "@/lib/song-garden-v2/persist-generated-media";
+import {
+  EVENT_DETAIL_SELECT,
+  recoverStoryboardForEvent,
+  rowToEvent,
+  storyboardNeedsRecovery,
+} from "@/lib/events-db";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
 import type { SongGardenConfig } from "@/lib/songgarden/config";
-import type { WorldConfig } from "@/lib/song-garden-v2/world-config";
-
-/** Omit hero_image so PATCH responses stay small after bloated data-URI heroes. */
-const EVENT_SELECT_LEAN =
-  "id,slug,title,description,date,time,venue,address,prompt,hero_image_mode,landing_headline,landing_copy,cta_text,anthem_completion_message,allow_audio_video_prompt,agent_theme_id,agent_brief,song_garden_config,world_config";
-
-function rowToEvent(row: Record<string, unknown>) {
-  return {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    description: row.description,
-    date: row.date,
-    time: row.time,
-    venue: row.venue,
-    address: row.address,
-    prompt: row.prompt,
-    heroImage: row.hero_image ?? "",
-    heroImageMode: row.hero_image_mode === "color" ? "color" : "bw",
-    landingHeadline:
-      (row.landing_headline as string) ??
-      "We're crowdsourcing a song for this event. Want to help create it?",
-    landingCopy: (row.landing_copy as string) ?? "",
-    ctaText: (row.cta_text as string) ?? "Let's make an anthem",
-    anthemCompletionMessage:
-      (row.anthem_completion_message as string) ??
-      "Thanks! Your answers will help shape the song we're making.",
-    allowAudioVideoPrompt: (row.allow_audio_video_prompt as boolean) ?? true,
-    agentThemeId: row.agent_theme_id ?? null,
-    agentBrief: row.agent_brief ?? null,
-    songGardenConfig: (row.song_garden_config as SongGardenConfig | null) ?? null,
-    journeySteps:
-      ((row.song_garden_config as SongGardenConfig | null)?.journeySteps as unknown[] | undefined) ??
-      null,
-    worldConfig: (row.world_config as WorldConfig | null) ?? null,
-  };
-}
 
 function scheduleHeroMigration(id: string, knownHero?: string): void {
   const run = async () => {
@@ -84,7 +53,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const event = localEventsGetById(id);
     if (!event) return NextResponse.json(null, { status: 404 });
-    return NextResponse.json(rowToEvent(event));
+    return NextResponse.json(rowToEvent(event as unknown as Record<string, unknown>));
   }
 
   if (!supabaseAdmin) {
@@ -95,12 +64,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
   const { id } = await params;
   try {
-    const { data, error } = await supabaseAdmin.from("events").select("*").eq("id", id).single();
+    const { data, error } = await supabaseAdmin.from("events").select(EVENT_DETAIL_SELECT).eq("id", id).single();
     if (error) {
       if (error.code === "PGRST116") return NextResponse.json(null, { status: 404 });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json(rowToEvent(data));
+      const event = rowToEvent(data as unknown as Record<string, unknown>);
+    if (storyboardNeedsRecovery(event.worldConfig)) {
+      const recovered = await recoverStoryboardForEvent({
+        eventId: String(event.id),
+        slug: String(event.slug),
+        worldConfig: event.worldConfig,
+      });
+      if (recovered.recovered && recovered.worldConfig) {
+        await supabaseAdmin
+          .from("events")
+          .update({ world_config: recovered.worldConfig })
+          .eq("id", id);
+        event.worldConfig = recovered.worldConfig;
+      }
+    }
+    return NextResponse.json(event);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
@@ -151,7 +135,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         const existing = typeof updated.hero_image === "string" ? updated.hero_image : undefined;
         scheduleHeroMigration(id, existing);
       }
-      return NextResponse.json(rowToEvent(updated));
+      return NextResponse.json(rowToEvent(updated as unknown as Record<string, unknown>));
     } catch (err) {
       return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
@@ -206,7 +190,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .from("events")
       .update(row)
       .eq("id", id)
-      .select(EVENT_SELECT_LEAN)
+      .select(EVENT_DETAIL_SELECT)
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
