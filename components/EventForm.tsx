@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, FormEvent, useEffect } from "react";
+import { createPortal } from "react-dom";
 import AddressMap from "./AddressMap";
 import { getAgentThemes } from "@/data/agentInterview";
 import type { AgentTheme } from "@/data/agentInterview";
@@ -2191,60 +2192,63 @@ export default function EventForm({
         {isSubmitting ? "Saving…" : submitLabel}
       </button>
 
-      {mediaPreview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
-          role="presentation"
-          onClick={() => setMediaPreview(null)}
-        >
+      {mediaPreview &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={mediaPreview.title}
-            className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl border border-gray-700 bg-[#121214] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+            role="presentation"
+            onClick={() => setMediaPreview(null)}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-gray-800 px-4 py-3">
-              <h3 className="truncate text-sm font-semibold text-white">{mediaPreview.title}</h3>
-              <button
-                type="button"
-                onClick={() => setMediaPreview(null)}
-                className="rounded-lg border border-gray-600 px-2.5 py-1 text-sm text-gray-300 hover:bg-gray-800"
-              >
-                Close
-              </button>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={mediaPreview.title}
+              className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl border border-gray-700 bg-[#121214] shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-gray-800 px-4 py-3">
+                <h3 className="truncate text-sm font-semibold text-white">{mediaPreview.title}</h3>
+                <button
+                  type="button"
+                  onClick={() => setMediaPreview(null)}
+                  className="rounded-lg border border-gray-600 px-2.5 py-1 text-sm text-gray-300 hover:bg-gray-800"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="bg-black">
+                {mediaPreview.videoUrl ? (
+                  <video
+                    key={mediaPreview.videoUrl}
+                    src={mediaPreview.videoUrl}
+                    poster={mediaPreview.stillUrl || undefined}
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
+                    className="max-h-[80vh] w-full object-contain"
+                  />
+                ) : mediaPreview.stillUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mediaPreview.stillUrl}
+                    alt={mediaPreview.title}
+                    className="max-h-[80vh] w-full object-contain"
+                  />
+                ) : (
+                  <p className="p-8 text-center text-sm text-gray-400">Nothing to preview.</p>
+                )}
+              </div>
+              {mediaPreview.videoUrl && mediaPreview.stillUrl ? (
+                <p className="border-t border-gray-800 px-4 py-2 text-[11px] text-gray-500">
+                  Playing the loop · still used as poster
+                </p>
+              ) : null}
             </div>
-            <div className="bg-black">
-              {mediaPreview.videoUrl ? (
-                <video
-                  key={mediaPreview.videoUrl}
-                  src={mediaPreview.videoUrl}
-                  poster={mediaPreview.stillUrl || undefined}
-                  controls
-                  autoPlay
-                  loop
-                  playsInline
-                  className="max-h-[80vh] w-full object-contain"
-                />
-              ) : mediaPreview.stillUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={mediaPreview.stillUrl}
-                  alt={mediaPreview.title}
-                  className="max-h-[80vh] w-full object-contain"
-                />
-              ) : (
-                <p className="p-8 text-center text-sm text-gray-400">Nothing to preview.</p>
-              )}
-            </div>
-            {mediaPreview.videoUrl && mediaPreview.stillUrl ? (
-              <p className="border-t border-gray-800 px-4 py-2 text-[11px] text-gray-500">
-                Playing the 10s loop · still used as poster
-              </p>
-            ) : null}
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </form>
   );
 }
