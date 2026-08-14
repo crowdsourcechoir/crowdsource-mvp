@@ -35,10 +35,10 @@ import {
 } from "@/lib/agent-interview-qa";
 import {
   listSonggardenClips,
-  songgardenAudioUrl,
   type SonggardenClip,
 } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
+import SoundPadTile from "@/components/songgarden/SoundPadTile";
 
 type InterviewAnswer = {
   createdAt: string;
@@ -188,6 +188,8 @@ export default function EventDetailPage() {
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
   const [deletingInterviewId, setDeletingInterviewId] = useState<string | null>(null);
   const [wipingAllSubmissions, setWipingAllSubmissions] = useState(false);
+  /** Only one MIDI pad plays at a time across the submissions list. */
+  const [activeSoundPadId, setActiveSoundPadId] = useState<string | null>(null);
   const [memoryRecord, setMemoryRecord] = useState<EventMemoryRecord | null>(null);
   const [loadingMemory, setLoadingMemory] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
@@ -1116,7 +1118,8 @@ export default function EventDetailPage() {
         <div className="mb-8 space-y-4">
             <h3 className="text-sm font-semibold text-gray-300">Participant submissions</h3>
             <p className="text-xs text-gray-500">
-              One card per person — interview answers (with the question) and Song Garden sounds together.
+              One card per person — questions on the left, MIDI-pad sounds on the right (click to
+              play, drag into Ableton / Finder).
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1133,17 +1136,32 @@ export default function EventDetailPage() {
               <p className="text-gray-500">No interview answers or Song Garden sounds yet.</p>
             )}
             {personSubmissionCards.length > 0 && (
-              <ul className="space-y-6">
+              <ul className="space-y-4">
                 {personSubmissionCards.map((card) => {
                   const answerCount = card.conversations.reduce((n, c) => n + c.answers.length, 0);
                   const deletingThis = card.conversations.some(
                     (c) => deletingInterviewId === c.conversationId
                   );
+                  const answers = card.conversations.flatMap((item) =>
+                    item.answers.map((a, idx) => ({
+                      ...a,
+                      key: `${item.conversationId}_${a.createdAt}_${idx}`,
+                      fallbackLabel: `Answer ${idx + 1}`,
+                      sessionHint:
+                        card.conversations.length > 1
+                          ? item.conversationId.slice(0, 6)
+                          : null,
+                    }))
+                  );
+
                   return (
-                    <li key={card.key} className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4">
+                    <li
+                      key={card.key}
+                      className="rounded-lg border border-gray-700/60 bg-[#1a1a1e] p-3 sm:p-4"
+                    >
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <span className="text-sm font-medium text-gray-200">{card.displayName}</span>
+                          <span className="text-sm font-medium text-gray-100">{card.displayName}</span>
                           <p className="mt-0.5 text-xs text-gray-500">
                             {answerCount} answer{answerCount === 1 ? "" : "s"}
                             {card.clips.length
@@ -1166,104 +1184,87 @@ export default function EventDetailPage() {
                         ) : null}
                       </div>
 
-                      {card.conversations.map((item) => (
-                        <div key={item.conversationId} className="mb-4 last:mb-0">
-                          {card.conversations.length > 1 ? (
-                            <p className="mb-2 text-[11px] text-gray-500">
-                              Session {item.conversationId.slice(0, 8)}…
+                      <div
+                        className={`grid gap-4 ${
+                          card.clips.length > 0 && answers.length > 0
+                            ? "lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+                            : "grid-cols-1"
+                        }`}
+                      >
+                        {answers.length > 0 || card.conversations.length > 0 ? (
+                          <div className="min-w-0">
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                              Answers
                             </p>
-                          ) : null}
-                          {item.answers.length === 0 ? (
-                            <p className="text-sm text-gray-500">No interview answers recorded.</p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {item.answers.map((a, idx) => (
-                                <li
-                                  key={`${item.conversationId}_${a.createdAt}_${idx}`}
-                                  className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
-                                >
-                                  <p className="text-xs font-medium text-gray-400">
-                                    {a.questionText?.trim() || `Answer ${idx + 1}`}
-                                  </p>
-                                  {a.content?.trim() ? (
-                                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-200">
-                                      {a.content}
+                            {answers.length === 0 ? (
+                              <p className="text-sm text-gray-500">No interview answers recorded.</p>
+                            ) : (
+                              <ul className="divide-y divide-gray-800/80 rounded-md border border-gray-800 bg-[#121214]">
+                                {answers.map((a) => (
+                                  <li key={a.key} className="px-3 py-2">
+                                    <p className="text-[11px] leading-snug text-gray-500">
+                                      {a.questionText?.trim() || a.fallbackLabel}
+                                      {a.sessionHint ? (
+                                        <span className="text-gray-600"> · {a.sessionHint}…</span>
+                                      ) : null}
                                     </p>
-                                  ) : (
-                                    <p className="mt-1 text-sm italic text-gray-500">
-                                      (no text — media below)
-                                    </p>
-                                  )}
-                                  {a.audioTranscript?.trim() ? (
-                                    <p className="mt-1 text-xs text-gray-500">
-                                      Transcript: {a.audioTranscript}
-                                    </p>
-                                  ) : null}
-                                  {a.audioUrl ? (
-                                    <div className="mt-2 max-w-md">
-                                      <p className="mb-1 text-xs text-gray-500">Audio answer</p>
+                                    {a.content?.trim() ? (
+                                      <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-gray-200">
+                                        {a.content}
+                                      </p>
+                                    ) : (
+                                      <p className="mt-0.5 text-sm italic text-gray-600">
+                                        (media only)
+                                      </p>
+                                    )}
+                                    {a.audioUrl ? (
                                       <audio
                                         src={a.audioUrl}
                                         controls
-                                        className="h-9 w-full"
+                                        className="mt-1.5 h-8 max-w-full"
                                         preload="metadata"
                                       />
-                                    </div>
-                                  ) : null}
-                                  {a.videoUrl ? (
-                                    <div className="mt-2 max-w-md">
-                                      <p className="mb-1 text-xs text-gray-500">Video answer</p>
-                                      <div className="max-h-48 w-full overflow-hidden rounded border border-gray-700 bg-black">
+                                    ) : null}
+                                    {a.videoUrl ? (
+                                      <div className="mt-1.5 max-h-36 max-w-xs overflow-hidden rounded border border-gray-800 bg-black">
                                         <video
                                           src={a.videoUrl}
                                           controls
                                           playsInline
                                           muted
-                                          className="min-h-[120px] w-full object-contain"
+                                          className="max-h-36 w-full object-contain"
                                         />
                                       </div>
-                                    </div>
-                                  ) : null}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ))}
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ) : null}
 
-                      {card.clips.length > 0 ? (
-                        <div className="mt-3 border-t border-gray-700/60 pt-3">
-                          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Sounds
-                          </p>
-                          <ul className="space-y-2">
-                            {card.clips.map((clip) => (
-                              <li
-                                key={clip.id}
-                                className="rounded border border-gray-700/60 bg-[#18181b] px-3 py-2"
-                              >
-                                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                  <p className="text-sm text-gray-200">
-                                    {clip.label?.trim() || "Untitled sound"}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {songgardenCategoryLabel(clip.category)}
-                                    {clip.submittedAt ? ` · ${formatDate(clip.submittedAt)}` : ""}
-                                  </p>
-                                </div>
-                                <div className="mt-2 max-w-md">
-                                  <audio
-                                    src={songgardenAudioUrl(clip.eventId, clip.id, clip.submittedAt)}
-                                    controls
-                                    className="h-9 w-full"
-                                    preload="metadata"
-                                  />
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
+                        {card.clips.length > 0 ? (
+                          <div className="min-w-0">
+                            <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                                Sounds
+                              </p>
+                              <p className="text-[10px] text-gray-600">Click play · drag to DAW</p>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
+                              {card.clips.map((clip) => (
+                                <SoundPadTile
+                                  key={clip.id}
+                                  eventId={clip.eventId || event.id}
+                                  clip={clip}
+                                  activePadId={activeSoundPadId}
+                                  onActivate={setActiveSoundPadId}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     </li>
                   );
                 })}
