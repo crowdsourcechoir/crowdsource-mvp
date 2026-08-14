@@ -72,7 +72,7 @@ export default function BatchRunClient() {
           disabled={running}
           className="w-20 rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white disabled:opacity-50"
         />
-        <span className="text-sm text-gray-400">unprocessed organizations (priority A first)</span>
+        <span className="text-sm text-gray-400">unprocessed organizations (Priority A interleaved with AI-discovered)</span>
         {!running ? (
           <button onClick={startBatch} className="rounded-lg bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-900">
             Start batch
