@@ -22,6 +22,26 @@ function buildInitialValues(
   draft: EventFormDraft | null,
   useDraft: boolean
 ): Partial<EventFormValues> {
+  const serverVibe = event.worldConfig?.aiArtworkPrompt?.trim() || "";
+  const draftVibe = draft?.aiArtworkPrompt?.trim() || "";
+  const vibe = serverVibe || draftVibe || null;
+  const worldConfig = {
+    ...(event.worldConfig ?? {
+      title: "",
+      heroArtworkUrl: null,
+      logoUrl: null,
+      primaryColor: "#1a0f2d",
+      accentColor: "#CFFF81",
+      animationPreset: "particles" as const,
+      ambientSoundtrackUrl: null,
+      aiArtworkPrompt: null,
+      worldSceneStages: [],
+      worldStoryboard: [],
+      presenceSimulationEnabled: true,
+    }),
+    aiArtworkPrompt: vibe,
+  };
+
   return {
     title: useDraft && draft?.title ? draft.title : event.title,
     slug: event.slug,
@@ -45,14 +65,17 @@ function buildInitialValues(
       "Thanks! Your answers will help shape the song we're making.",
     agentThemeId: (useDraft ? draft?.agentThemeId : null) ?? event.agentThemeId ?? null,
     agentBrief: (useDraft ? draft?.agentBrief : null) ?? event.agentBrief ?? null,
-    songGardenConfig: useDraft && draft
+    songGardenConfig: useDraft && draft && journeyStepsHaveContent(draft.journeySteps)
       ? normalizeSongGardenConfig({
           ...(draft.songGardenConfig ?? { soundTransitionMessage: "", steps: [] }),
           journeySteps: draft.journeySteps,
         })
       : event.songGardenConfig ?? undefined,
-    journeySteps: useDraft && draft ? draft.journeySteps : event.journeySteps ?? undefined,
-    worldConfig: event.worldConfig ?? null,
+    journeySteps:
+      useDraft && draft && journeyStepsHaveContent(draft.journeySteps)
+        ? draft.journeySteps
+        : event.journeySteps ?? undefined,
+    worldConfig,
   };
 }
 
@@ -84,10 +107,22 @@ export default function EditEventPage() {
         const useDraft =
           !serverHasPrompts &&
           Boolean(draft) &&
-          draftMatchesBloom(draft, { slug: e.slug, eventId: e.id });
-        if (useDraft) {
+          draftMatchesBloom(draft, { slug: e.slug, eventId: e.id }) &&
+          journeyStepsHaveContent(draft?.journeySteps);
+        const serverVibe = e.worldConfig?.aiArtworkPrompt?.trim() || "";
+        const draftVibe = draft?.aiArtworkPrompt?.trim() || "";
+        const restoredVibe = !serverVibe && Boolean(draftVibe);
+        if (useDraft && restoredVibe) {
+          setDraftNotice(
+            "Restored your unsaved journey prompts and Runway vibe from this browser — hit Save to keep them on the bloom."
+          );
+        } else if (useDraft) {
           setDraftNotice(
             "Restored your unsaved journey prompts from this browser — hit Save to keep them on the bloom."
+          );
+        } else if (restoredVibe) {
+          setDraftNotice(
+            "Restored your unsaved Runway vibe prompt from this browser — click the vibe field then Save (or blur) to keep it."
           );
         } else if (restoredPrompts && serverHasPrompts) {
           setDraftNotice(

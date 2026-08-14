@@ -32,6 +32,7 @@ type RestoreBody = {
   agentBrief?: unknown;
   songGardenConfig?: SongGardenConfig | null;
   journeySteps?: unknown;
+  aiArtworkPrompt?: string;
 };
 
 function songGardenFromBody(body: RestoreBody): SongGardenConfig | null {
@@ -101,7 +102,11 @@ export async function POST(request: Request) {
       slug: prefix,
       worldConfig: null,
     });
-    const world = recovered.worldConfig ?? normalizeWorldConfigInput({ worldStoryboard: [] });
+    const draftVibe = body.aiArtworkPrompt?.trim() || "";
+    const world = normalizeWorldConfigInput({
+      ...(recovered.worldConfig ?? { worldStoryboard: [] }),
+      ...(draftVibe ? { aiArtworkPrompt: draftVibe } : {}),
+    });
     const insertSlug = (body.slug?.trim() || prefix).slice(0, 80);
     const { data, error } = await supabaseAdmin
       .from("events")
@@ -130,7 +135,7 @@ export async function POST(request: Request) {
       created: true,
       event: rowToEvent(data as Record<string, unknown>),
       recovered: recovered.recovered,
-      promptsRestored: Boolean(draftGarden),
+      promptsRestored: Boolean(draftGarden || draftVibe),
     });
   }
 
@@ -148,8 +153,23 @@ export async function POST(request: Request) {
   });
 
   const updates: Record<string, unknown> = {};
-  if (recovered.recovered && recovered.worldConfig) {
-    updates.world_config = recovered.worldConfig;
+  let nextWorld = recovered.recovered && recovered.worldConfig
+    ? recovered.worldConfig
+    : (row.world_config as ReturnType<typeof normalizeWorldConfigInput>);
+
+  const existingVibe =
+    nextWorld && typeof nextWorld === "object"
+      ? String((nextWorld as { aiArtworkPrompt?: string | null }).aiArtworkPrompt ?? "").trim()
+      : "";
+  const draftVibe = body.aiArtworkPrompt?.trim() || "";
+  if (draftVibe && !existingVibe) {
+    nextWorld = normalizeWorldConfigInput({
+      ...(nextWorld && typeof nextWorld === "object" ? nextWorld : {}),
+      aiArtworkPrompt: draftVibe,
+    });
+  }
+  if (nextWorld && (recovered.recovered || (draftVibe && !existingVibe))) {
+    updates.world_config = nextWorld;
   }
 
   // Fill empty prompt fields from the browser draft when the bloom is a shell.
@@ -185,7 +205,10 @@ export async function POST(request: Request) {
     created: false,
     eventId: row.id,
     recovered: recovered.recovered,
-    frameCount: recovered.worldConfig?.worldStoryboard?.length ?? 0,
-    promptsRestored: Boolean(draftGarden && !hasExistingPrompts),
+    frameCount:
+      (nextWorld && typeof nextWorld === "object"
+        ? (nextWorld as { worldStoryboard?: unknown[] }).worldStoryboard?.length
+        : 0) ?? 0,
+    promptsRestored: Boolean((draftGarden && !hasExistingPrompts) || (draftVibe && !existingVibe)),
   });
 }

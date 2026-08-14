@@ -238,3 +238,17 @@ export function normalizeWorldConfigInput(
     cleaned.animationPreset === "particles";
   return isEmpty ? null : cleaned;
 }
+
+/**
+ * World row without heavy storyboard frames — keeps vibe prompt, colors, and
+ * ambient fields so create phase-1 / draft recovery never drop the Runway text.
+ */
+export function leanWorldConfigKeepingVibe(
+  input: Partial<WorldConfig> | null | undefined
+): WorldConfig | null {
+  if (!input) return null;
+  return normalizeWorldConfigInput({
+    ...input,
+    worldStoryboard: [],
+  });
+}
