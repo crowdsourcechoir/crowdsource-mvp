@@ -34,11 +34,16 @@ import {
   normalizePersonKey,
 } from "@/lib/agent-interview-qa";
 import {
+  fetchClipFile,
   listSonggardenClips,
   type SonggardenClip,
 } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 import SoundPadTile from "@/components/songgarden/SoundPadTile";
+import {
+  buildSoundPackLayout,
+  soundPackReadme,
+} from "@/lib/songgarden/sound-pack";
 
 type InterviewAnswer = {
   createdAt: string;
@@ -170,6 +175,8 @@ export default function EventDetailPage() {
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [loadingExportAll, setLoadingExportAll] = useState(false);
+  const [loadingSoundPack, setLoadingSoundPack] = useState(false);
+  const [soundPackError, setSoundPackError] = useState<string | null>(null);
   const [loadingTranscribeId, setLoadingTranscribeId] = useState<string | null>(null);
   const [transcriptOutput, setTranscriptOutput] = useState<{
     section1: { prompts: Array<{ detailedStylePrompt: string; alternativeStylePrompt: string; genreBlueprint: string; lyricIdeas?: string }> };
@@ -284,6 +291,45 @@ export default function EventDetailPage() {
     });
     return parts.join("\n").trim();
   }, [personSubmissionCards]);
+
+  async function handleExportSoundPack() {
+    if (!event || songgardenClips.length === 0) return;
+    setLoadingSoundPack(true);
+    setSoundPackError(null);
+    try {
+      const { entries, manifest } = buildSoundPackLayout({
+        eventId: event.id,
+        eventSlug: event.slug,
+        clips: songgardenClips,
+      });
+
+      // Fetch each unique clip once, then write into both folder trees.
+      const fileByClipId = new Map<string, File>();
+      const uniqueClips = Array.from(new Map(songgardenClips.map((c) => [c.id, c])).values());
+      for (const clip of uniqueClips) {
+        const file = await fetchClipFile(event.id, clip);
+        fileByClipId.set(clip.id, file);
+      }
+
+      const zip = new JSZip();
+      const root = `${event.slug}_sound-pack`;
+      zip.file(`${root}/README.txt`, soundPackReadme(event.slug, songgardenClips.length));
+      zip.file(`${root}/manifest.json`, JSON.stringify(manifest, null, 2));
+
+      for (const entry of entries) {
+        const file = fileByClipId.get(entry.clip.id);
+        if (!file) continue;
+        zip.file(`${root}/${entry.path}`, file);
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      downloadBlob(blob, `${event.slug}_sound-pack.zip`);
+    } catch (err) {
+      setSoundPackError(err instanceof Error ? err.message : "Could not build sound pack.");
+    } finally {
+      setLoadingSoundPack(false);
+    }
+  }
 
   async function handleDeleteInterviewSubmission(
     conversationId: string,
@@ -1130,7 +1176,18 @@ export default function EventDetailPage() {
               >
                 {loadingAgentInterviewSubmissions ? "Preparing…" : "Copy all submissions"}
               </button>
+              <button
+                type="button"
+                disabled={loadingSoundPack || songgardenClips.length === 0}
+                onClick={() => void handleExportSoundPack()}
+                className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-3 py-2 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/15 disabled:opacity-50"
+              >
+                {loadingSoundPack
+                  ? "Building pack…"
+                  : `Download sound pack${songgardenClips.length ? ` (${songgardenClips.length})` : ""}`}
+              </button>
             </div>
+            {soundPackError ? <p className="text-xs text-rose-400">{soundPackError}</p> : null}
             {loadingAgentInterviewSubmissions && <p className="text-gray-500">Loading submissions…</p>}
             {!loadingAgentInterviewSubmissions && personSubmissionCards.length === 0 && (
               <p className="text-gray-500">No interview answers or Song Garden sounds yet.</p>
