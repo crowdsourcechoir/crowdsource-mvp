@@ -263,6 +263,21 @@ export default function EventForm({
   const [aiRegeneratingFrame, setAiRegeneratingFrame] = useState<number | null>(null);
   const [aiGenError, setAiGenError] = useState<string | null>(null);
   const [aiGenNotice, setAiGenNotice] = useState<string | null>(null);
+  /** Lightbox preview for a storyboard still/loop or a place reference. */
+  const [mediaPreview, setMediaPreview] = useState<{
+    title: string;
+    stillUrl?: string | null;
+    videoUrl?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!mediaPreview) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMediaPreview(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mediaPreview]);
 
   useEffect(() => {
     getAgentThemes().then(setThemes).catch(() => setThemes([]));
@@ -1505,12 +1520,22 @@ export default function EventForm({
             <div className="flex flex-wrap items-center gap-2">
               {aiReferencePhotos.map((src, i) => (
                 <div key={`${src.slice(0, 48)}-${i}`} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={src}
-                    alt={`Reference ${i + 1}`}
-                    className="h-12 w-20 rounded object-cover"
-                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMediaPreview({ title: `Reference ${i + 1}`, stillUrl: src })
+                    }
+                    className="block overflow-hidden rounded ring-offset-2 ring-offset-[#18181b] hover:ring-2 hover:ring-[#CFFF81]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#CFFF81]"
+                    title="Preview reference"
+                    aria-label={`Preview reference ${i + 1}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`Reference ${i + 1}`}
+                      className="h-12 w-20 object-cover"
+                    />
+                  </button>
                   <button
                     type="button"
                     onClick={() =>
@@ -1539,13 +1564,38 @@ export default function EventForm({
             {(values.worldConfig?.worldStoryboard ?? []).map((frame, i) => (
               <div key={i} className="flex flex-col gap-1.5 py-2 sm:flex-row sm:items-center">
                 <span className="w-14 shrink-0 text-[11px] font-medium text-gray-500">Frame {i + 1}</span>
-                {frame.sceneUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={frame.sceneUrl}
-                    alt=""
-                    className="h-10 w-16 shrink-0 rounded object-cover"
-                  />
+                {frame.sceneUrl || frame.videoUrl ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMediaPreview({
+                        title: `Frame ${i + 1}`,
+                        stillUrl: frame.sceneUrl,
+                        videoUrl: frame.videoUrl,
+                      })
+                    }
+                    className="relative h-10 w-16 shrink-0 overflow-hidden rounded ring-offset-2 ring-offset-[#18181b] hover:ring-2 hover:ring-[#CFFF81]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#CFFF81]"
+                    title="Preview frame"
+                    aria-label={`Preview frame ${i + 1}`}
+                  >
+                    {frame.sceneUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={frame.sceneUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gray-800/80 text-[10px] text-gray-400">
+                        ▶
+                      </div>
+                    )}
+                    {frame.videoUrl ? (
+                      <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[9px] font-medium text-white">
+                        Preview
+                      </span>
+                    ) : null}
+                  </button>
                 ) : (
                   <div className="h-10 w-16 shrink-0 rounded bg-gray-800/80" />
                 )}
@@ -2140,6 +2190,61 @@ export default function EventForm({
       >
         {isSubmitting ? "Saving…" : submitLabel}
       </button>
+
+      {mediaPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+          role="presentation"
+          onClick={() => setMediaPreview(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={mediaPreview.title}
+            className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl border border-gray-700 bg-[#121214] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-gray-800 px-4 py-3">
+              <h3 className="truncate text-sm font-semibold text-white">{mediaPreview.title}</h3>
+              <button
+                type="button"
+                onClick={() => setMediaPreview(null)}
+                className="rounded-lg border border-gray-600 px-2.5 py-1 text-sm text-gray-300 hover:bg-gray-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="bg-black">
+              {mediaPreview.videoUrl ? (
+                <video
+                  key={mediaPreview.videoUrl}
+                  src={mediaPreview.videoUrl}
+                  poster={mediaPreview.stillUrl || undefined}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  className="max-h-[80vh] w-full object-contain"
+                />
+              ) : mediaPreview.stillUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={mediaPreview.stillUrl}
+                  alt={mediaPreview.title}
+                  className="max-h-[80vh] w-full object-contain"
+                />
+              ) : (
+                <p className="p-8 text-center text-sm text-gray-400">Nothing to preview.</p>
+              )}
+            </div>
+            {mediaPreview.videoUrl && mediaPreview.stillUrl ? (
+              <p className="border-t border-gray-800 px-4 py-2 text-[11px] text-gray-500">
+                Playing the 10s loop · still used as poster
+              </p>
+            ) : null}
+          </div>
+        </div>
+      )}
     </form>
   );
 }
