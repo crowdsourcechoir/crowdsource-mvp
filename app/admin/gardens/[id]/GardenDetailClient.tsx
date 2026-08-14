@@ -132,6 +132,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
     "default"
   );
   const [uploadingRefs, setUploadingRefs] = useState(false);
+  /** `zone:key` or `sponsor:key` while a logo file is uploading. */
+  const [uploadingLogoKey, setUploadingLogoKey] = useState<string | null>(null);
   const [generatingPlate, setGeneratingPlate] = useState(false);
   const [pinningPlate, setPinningPlate] = useState(false);
   const [generatingMotion, setGeneratingMotion] = useState(false);
@@ -503,6 +505,109 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setError(err instanceof Error ? err.message : "Failed to save Fans map");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleUploadLogoFiles(
+    kind: "zone" | "sponsor",
+    key: string,
+    picked: File[]
+  ) {
+    if (picked.length === 0 || !key.trim()) return;
+
+    const MAX_LOGO_BYTES = 8 * 1024 * 1024;
+    const isImageFile = (f: File) =>
+      f.type.startsWith("image/") ||
+      f.type === "image/svg+xml" ||
+      (!f.type && /\.(jpe?g|png|webp|gif|svg)$/i.test(f.name));
+
+    const file = picked.find(isImageFile);
+    if (!file) {
+      setError("That file didn’t look like an image. Use PNG, JPEG, WebP, or SVG.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setError(`“${file.name}” is over 8MB. Compress it and try again.`);
+      return;
+    }
+
+    const uploadToken = `${kind}:${key}`;
+    setUploadingLogoKey(uploadToken);
+    setError(null);
+    setNotice(null);
+    try {
+      const prepareRes = await fetch(`/api/gardens/${gardenId}/logos/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          key,
+          files: [
+            {
+              name: file.name,
+              contentType: file.type?.startsWith("image/") ? file.type : "image/png",
+              size: file.size,
+            },
+          ],
+        }),
+      });
+      const prepareBody = (await prepareRes.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        uploads?: Array<{ signedUrl: string; publicUrl: string; contentType: string }>;
+      };
+
+      if (!prepareRes.ok || !prepareBody.uploads?.[0]) {
+        // Local / no-storage fallback: small data URL so Joel can still preview.
+        if (prepareBody.code === "not_configured" && file.size <= 1.5 * 1024 * 1024) {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("Could not read file."));
+            reader.readAsDataURL(file);
+          });
+          if (kind === "zone") {
+            setZones((prev) =>
+              prev.map((row) => (row.key === key ? { ...row, logoUrl: dataUrl } : row))
+            );
+          } else {
+            setSponsors((prev) =>
+              prev.map((row) => (row.key === key ? { ...row, logoUrl: dataUrl } : row))
+            );
+          }
+          setNotice("Logo attached locally (storage not configured). Save map to keep it.");
+          return;
+        }
+        throw new Error(prepareBody.error || "Could not prepare logo upload.");
+      }
+
+      const upload = prepareBody.uploads[0];
+      const put = await fetch(upload.signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": upload.contentType },
+        body: file,
+      });
+      if (!put.ok) {
+        const detail = await put.text().catch(() => "");
+        throw new Error(
+          `Could not upload “${file.name}”${detail ? `: ${detail.slice(0, 120)}` : "."}`
+        );
+      }
+
+      if (kind === "zone") {
+        setZones((prev) =>
+          prev.map((row) => (row.key === key ? { ...row, logoUrl: upload.publicUrl } : row))
+        );
+      } else {
+        setSponsors((prev) =>
+          prev.map((row) => (row.key === key ? { ...row, logoUrl: upload.publicUrl } : row))
+        );
+      }
+      setNotice("Logo uploaded. Save map to publish it on /g.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Logo upload failed.");
+    } finally {
+      setUploadingLogoKey(null);
     }
   }
 
@@ -1416,29 +1521,61 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     Remove
                   </button>
                 </div>
-                <label className="mt-2 block text-xs text-gray-400">
-                  Zone logo URL (optional — shows on the public map marker; falls back to sponsor logo)
-                  <input
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-                    value={z.logoUrl}
-                    onChange={(e) =>
-                      setZones((prev) =>
-                        prev.map((row) =>
-                          row.key === z.key ? { ...row, logoUrl: e.target.value } : row
-                        )
-                      )
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-gray-400">
+                    Zone logo (optional — shows on the public map marker; falls back to sponsor logo)
+                  </p>
+                  <FileDropZone
+                    variant="inline"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
+                    disabled={uploadingLogoKey === `zone:${z.key}` || saving}
+                    label={
+                      uploadingLogoKey === `zone:${z.key}`
+                        ? "Uploading…"
+                        : z.logoUrl.trim()
+                          ? "Drop a new logo, or click to replace"
+                          : "Drop logo here, or click to browse"
                     }
-                    placeholder="/fans/…/pagliacci-logo.png"
+                    hint="PNG / JPEG / WebP / SVG · under 8MB"
+                    onFiles={(files) => void handleUploadLogoFiles("zone", z.key, files)}
                   />
-                </label>
-                {z.logoUrl.trim() ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={z.logoUrl.trim()}
-                    alt=""
-                    className="mt-2 h-10 w-auto rounded border border-gray-800 bg-black/40 object-contain p-1"
-                  />
-                ) : null}
+                  <label className="block text-xs text-gray-500">
+                    Or paste URL
+                    <input
+                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      value={z.logoUrl}
+                      onChange={(e) =>
+                        setZones((prev) =>
+                          prev.map((row) =>
+                            row.key === z.key ? { ...row, logoUrl: e.target.value } : row
+                          )
+                        )
+                      }
+                      placeholder="/fans/…/pagliacci-logo.png"
+                    />
+                  </label>
+                  {z.logoUrl.trim() ? (
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={z.logoUrl.trim()}
+                        alt=""
+                        className="h-12 w-12 rounded-lg border border-gray-800 bg-white/5 object-contain p-1"
+                      />
+                      <button
+                        type="button"
+                        className="text-xs text-red-300 underline"
+                        onClick={() =>
+                          setZones((prev) =>
+                            prev.map((row) => (row.key === z.key ? { ...row, logoUrl: "" } : row))
+                          )
+                        }
+                      >
+                        Clear logo
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 <label className="mt-2 block text-xs text-gray-400">
                   Fan prompt
                   <input
@@ -1612,29 +1749,59 @@ export default function GardenDetailClient({ gardenId }: Props) {
                       Remove
                     </button>
                   </div>
-                  <label className="block text-xs text-gray-400">
-                    Logo URL
-                    <input
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-                      value={s.logoUrl}
-                      onChange={(e) =>
-                        setSponsors((prev) =>
-                          prev.map((row) =>
-                            row.key === s.key ? { ...row, logoUrl: e.target.value } : row
-                          )
-                        )
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-400">Sponsor logo</p>
+                    <FileDropZone
+                      variant="inline"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
+                      disabled={uploadingLogoKey === `sponsor:${s.key}` || saving}
+                      label={
+                        uploadingLogoKey === `sponsor:${s.key}`
+                          ? "Uploading…"
+                          : s.logoUrl.trim()
+                            ? "Drop a new logo, or click to replace"
+                            : "Drop logo here, or click to browse"
                       }
-                      placeholder="https://…/logo.png"
+                      hint="PNG / JPEG / WebP / SVG · under 8MB"
+                      onFiles={(files) => void handleUploadLogoFiles("sponsor", s.key, files)}
                     />
-                  </label>
-                  {s.logoUrl.trim() ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={s.logoUrl.trim()}
-                      alt=""
-                      className="h-10 w-auto rounded border border-gray-800 bg-black/40 object-contain p-1"
-                    />
-                  ) : null}
+                    <label className="block text-xs text-gray-500">
+                      Or paste URL
+                      <input
+                        className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                        value={s.logoUrl}
+                        onChange={(e) =>
+                          setSponsors((prev) =>
+                            prev.map((row) =>
+                              row.key === s.key ? { ...row, logoUrl: e.target.value } : row
+                            )
+                          )
+                        }
+                        placeholder="https://…/logo.png"
+                      />
+                    </label>
+                    {s.logoUrl.trim() ? (
+                      <div className="flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={s.logoUrl.trim()}
+                          alt=""
+                          className="h-12 w-12 rounded-lg border border-gray-800 bg-white/5 object-contain p-1"
+                        />
+                        <button
+                          type="button"
+                          className="text-xs text-red-300 underline"
+                          onClick={() =>
+                            setSponsors((prev) =>
+                              prev.map((row) => (row.key === s.key ? { ...row, logoUrl: "" } : row))
+                            )
+                          }
+                        >
+                          Clear logo
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <label className="block text-xs text-gray-400">
                     Credit line
                     <input
