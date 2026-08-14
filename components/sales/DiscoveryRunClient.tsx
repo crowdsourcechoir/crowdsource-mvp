@@ -254,12 +254,11 @@ export default function DiscoveryRunClient() {
       </div>
 
       <p className="mt-3 text-xs text-gray-600">
-        Tip: convention-center mode extracts the <span className="text-gray-400">hosting association</span>, not the venue.
-        New orgs still need a pipeline run before they hit the{" "}
+        Tip: discovery only adds orgs. Venue/CVB/directory junk is filtered out automatically. The{" "}
         <Link href="/admin/sales/queue" className="underline">
           queue
-        </Link>
-        .
+        </Link>{" "}
+        only shows solid leads (score ≥70 + verified contact) after a pipeline run — not every new org.
       </p>
     </div>
   );

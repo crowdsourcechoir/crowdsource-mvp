@@ -18,6 +18,7 @@ function rowToOrganization(row: Record<string, unknown>): Organization {
     source: (row.source as Organization["source"]) ?? "manual",
     duplicateOfOrganizationId: (row.duplicate_of_organization_id as string | null) ?? null,
     isExistingClient: (row.is_existing_client as boolean) ?? false,
+    discardedAt: (row.discarded_at as string | null) ?? null,
     importMetadata: (row.import_metadata as Record<string, unknown> | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -38,17 +39,23 @@ export type CreateOrganizationInput = {
   importMetadata?: Record<string, unknown> | null;
 };
 
-export async function listOrganizations(params?: { limit?: number; search?: string }): Promise<Organization[]> {
+export async function listOrganizations(params?: {
+  limit?: number;
+  search?: string;
+  /** When true, include discarded junk orgs (hidden by default). */
+  includeDiscarded?: boolean;
+}): Promise<Organization[]> {
   const db = requireSupabaseAdmin();
   let query = db.from("organizations").select("*").order("created_at", { ascending: false });
   if (params?.search) query = query.ilike("name", `%${params.search}%`);
+  if (!params?.includeDiscarded) query = query.is("discarded_at", null);
   if (params?.limit) query = query.limit(params.limit);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToOrganization);
 }
 
-/** Organizations that have never been through a real pipeline run (excludes the `csv_import` bookkeeping runs created at import time) and aren't marked as existing clients — the pool the "run next N" batch control draws from. Priority "A" rows (from the source CSVs) go first. */
+/** Organizations that have never been through a real pipeline run (excludes the `csv_import` bookkeeping runs created at import time) and aren't marked as existing clients or discarded junk — the pool the "run next N" batch control draws from. Priority "A" rows (from the source CSVs) go first. */
 export async function listUnprocessedOrganizations(limit: number): Promise<Organization[]> {
   const db = requireSupabaseAdmin();
   const { data: runs, error: runsError } = await db.from("pipeline_runs").select("organization_id").neq("trigger", "csv_import");
@@ -59,6 +66,7 @@ export async function listUnprocessedOrganizations(limit: number): Promise<Organ
     .from("organizations")
     .select("*")
     .eq("is_existing_client", false)
+    .is("discarded_at", null)
     .order("created_at", { ascending: true })
     .limit(2000);
   if (orgsError) throw new Error(orgsError.message);
@@ -127,7 +135,12 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
   return rowToOrganization(data);
 }
 
-export async function updateOrganization(id: string, patch: Partial<CreateOrganizationInput>): Promise<Organization> {
+export type UpdateOrganizationPatch = Partial<CreateOrganizationInput> & {
+  /** Pass an ISO timestamp to discard, or null to restore. */
+  discardedAt?: string | null;
+};
+
+export async function updateOrganization(id: string, patch: UpdateOrganizationPatch): Promise<Organization> {
   const db = requireSupabaseAdmin();
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.name !== undefined) {
@@ -145,7 +158,24 @@ export async function updateOrganization(id: string, patch: Partial<CreateOrgani
   if (patch.locationCountry !== undefined) row.location_country = patch.locationCountry;
   if (patch.estimatedSize !== undefined) row.estimated_size = patch.estimatedSize;
   if (patch.isExistingClient !== undefined) row.is_existing_client = patch.isExistingClient;
+  if (patch.discardedAt !== undefined) row.discarded_at = patch.discardedAt;
   const { data, error } = await db.from("organizations").update(row).eq("id", id).select().single();
   if (error) throw new Error(error.message);
   return rowToOrganization(data);
+}
+
+/** Discard (or restore) many junk orgs in one shot — used from the organizations list. */
+export async function setOrganizationsDiscarded(ids: string[], discarded: boolean): Promise<number> {
+  if (ids.length === 0) return 0;
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("organizations")
+    .update({
+      discarded_at: discarded ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", ids)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
 }
