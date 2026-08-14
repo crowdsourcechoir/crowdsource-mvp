@@ -1417,7 +1417,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   </button>
                 </div>
                 <label className="mt-2 block text-xs text-gray-400">
-                  Zone logo URL (optional)
+                  Zone logo URL (optional — shows on the public map marker; falls back to sponsor logo)
                   <input
                     className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
                     value={z.logoUrl}
@@ -1428,7 +1428,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                         )
                       )
                     }
-                    placeholder="/fans/ballard-fc/logo.png"
+                    placeholder="/fans/…/pagliacci-logo.png"
                   />
                 </label>
                 {z.logoUrl.trim() ? (
@@ -1455,7 +1455,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   />
                 </label>
                 <label className="mt-2 block text-xs text-gray-400">
-                  CTA label
+                  CTA label (on the map marker + button after tap)
                   <input
                     className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
                     value={z.ctaLabel}

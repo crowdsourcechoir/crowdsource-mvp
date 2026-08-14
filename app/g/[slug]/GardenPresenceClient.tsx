@@ -37,7 +37,6 @@ const OVERVIEW_SCALE = 1;
 const ZONE_SCALE = 2.35;
 /** Focus sits a bit above center so the prompt sheet doesn't cover the zone. */
 const FOCUS_Y_OFFSET = 0.12;
-const SWIPE_PX = 56;
 const DRAG_CLICK_SLOP = 10;
 
 type Camera = { focusX: number; focusY: number; scale: number };
@@ -345,19 +344,8 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       /* ignore */
     }
 
-    const dx = d.lastX - d.startX;
-    const dy = d.lastY - d.startY;
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-
-    // Horizontal swipe while exploring / zoomed → next/prev zone.
-    if (d.moved && absX > SWIPE_PX && absX > absY * 1.15) {
-      stepZone(dx < 0 ? 1 : -1);
-      dragRef.current = null;
-      return;
-    }
-
     // Tap the painted zone (not the bubble) to enter it.
+    // Horizontal swipe no longer jumps zones — that fought pan-to-explore on phones.
     if (!d.moved) {
       const p = clientToMapPoint(d.lastX, d.lastY);
       if (p) {
@@ -402,7 +390,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
           ref={surfaceRef}
           className="relative z-10 h-[100dvh] max-h-[100dvh] w-full touch-none overflow-hidden overscroll-none"
         >
-          {/* Grabbable / swipeable map world */}
+          {/* Grabbable map world — drag to pan, tap a painted zone to engage */}
           <div
             className="absolute inset-0 cursor-grab active:cursor-grabbing touch-none"
             onPointerDown={onPointerDown}
@@ -537,23 +525,70 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   })}
                 </svg>
 
-                {/* Labels only — not the hit target */}
+                {/* Labels — sponsor mark + name + CTA teaser (not the hit target) */}
                 {zones.map((z) => {
                   const active = selectedZone === z.key;
+                  const logo = z.logoUrl || z.sponsor?.logoUrl || null;
+                  const teaser =
+                    z.ctaLabel?.trim() ||
+                    z.blurb?.trim() ||
+                    (z.prompt?.trim()
+                      ? z.prompt.trim().length > 42
+                        ? `${z.prompt.trim().slice(0, 40)}…`
+                        : z.prompt.trim()
+                      : null);
+                  const initial = (z.sponsor?.name || z.label || "?").trim().charAt(0).toUpperCase();
                   return (
                     <div
                       key={z.key}
-                      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1 text-[10px] font-medium shadow-lg backdrop-blur-sm sm:text-[11px]"
+                      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2"
                       style={{
                         left: `${z.x * 100}%`,
                         top: `${z.y * 100}%`,
-                        borderColor: active ? world.accentColor : "rgba(255,255,255,0.35)",
-                        background: active ? `${world.accentColor}cc` : "rgba(0,0,0,0.65)",
-                        color: active ? "#0a0a0a" : "#fff",
-                        opacity: zoomed && !active ? 0.35 : 1,
+                        opacity: zoomed && !active ? 0.28 : 1,
                       }}
                     >
-                      <span className="block whitespace-nowrap">{z.label}</span>
+                      <div
+                        className="flex max-w-[11.5rem] items-center gap-1.5 rounded-2xl border px-1.5 py-1 shadow-lg backdrop-blur-md sm:max-w-[13rem]"
+                        style={{
+                          borderColor: active ? world.accentColor : "rgba(255,255,255,0.35)",
+                          background: active ? `${world.accentColor}e6` : "rgba(0,0,0,0.78)",
+                          color: active ? "#0a0a0a" : "#fff",
+                        }}
+                      >
+                        <div
+                          className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border"
+                          style={{
+                            borderColor: active ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)",
+                            background: active ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          {logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={logo} alt="" className="h-full w-full object-contain p-0.5" />
+                          ) : (
+                            <span
+                              className="font-mono text-[11px] font-bold"
+                              style={{ color: active ? "#0a0a0a" : world.accentColor }}
+                            >
+                              {initial}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0 pr-1">
+                          <p className="truncate text-[11px] font-semibold leading-tight sm:text-xs">
+                            {z.label}
+                          </p>
+                          {teaser ? (
+                            <p
+                              className="mt-0.5 truncate text-[9px] font-medium leading-tight sm:text-[10px]"
+                              style={{ opacity: active ? 0.75 : 0.7 }}
+                            >
+                              {teaser}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -561,25 +596,39 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
             </motion.div>
           </div>
 
-          {/* Top chrome */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
-            <div className="pointer-events-auto min-w-0">
+          {/* Top chrome: logo left · eyebrow center · energy right */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
+            <div className="pointer-events-auto min-w-0 justify-self-start">
               {world.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={world.logoUrl}
                   alt=""
-                  className="mb-1 h-7 w-auto opacity-95 drop-shadow"
+                  className="h-8 w-auto opacity-95 drop-shadow sm:h-9"
                 />
-              ) : null}
+              ) : (
+                <p
+                  className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.28em] drop-shadow"
+                  style={{ color: world.accentColor }}
+                >
+                  {snapshot?.brand.title || gardenTitle}
+                </p>
+              )}
+            </div>
+            <div className="pointer-events-none max-w-[11rem] justify-self-center px-1 text-center sm:max-w-[14rem]">
               <p
-                className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.28em] drop-shadow"
+                className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] drop-shadow sm:text-[11px]"
                 style={{ color: world.accentColor }}
               >
                 {snapshot?.brand.title || gardenTitle}
               </p>
+              <p className="mt-0.5 truncate text-[10px] font-medium text-white/80 drop-shadow">
+                {zoomed && selectedMeta
+                  ? selectedMeta.label
+                  : snapshot?.brand.mapPlate?.seasonLabel?.trim() || "Tap a zone to engage"}
+              </p>
             </div>
-            <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+            <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 justify-self-end">
               {zoomed ? (
                 <div className="flex overflow-hidden rounded-full border border-white/15 bg-black/50 backdrop-blur-md">
                   <button
@@ -615,7 +664,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 exit={{ opacity: 0 }}
                 className="pointer-events-none absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-20 px-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-white/75 sm:text-[11px]"
               >
-                Drag to explore · tap a zone area · swipe for next
+                Drag to explore · tap a zone to engage
               </motion.p>
             ) : null}
           </AnimatePresence>
@@ -693,7 +742,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   )}
 
                   <p className="mt-2 text-center font-mono text-[10px] text-white/40">
-                    Swipe map ← → for other zones
+                    Tap Map to explore other zones
                   </p>
 
                   {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
