@@ -23,7 +23,16 @@ const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 const MAX_BYTES = 12 * 1024 * 1024;
 const VALID_CATEGORIES = new Set(SONGGARDEN_CATEGORIES.map((c) => c.id));
 
+function parseTrimStatus(value: FormDataEntryValue | null): SonggardenClip["trimStatus"] {
+  if (value === "trimmed" || value === "skipped" || value === "none") return value;
+  return "none";
+}
+
 function rowToClip(row: Record<string, unknown>): SonggardenClip {
+  const trimStatus =
+    row.trim_status === "trimmed" || row.trim_status === "skipped" || row.trim_status === "none"
+      ? row.trim_status
+      : "none";
   return {
     id: String(row.id),
     eventId: String(row.event_id),
@@ -36,8 +45,15 @@ function rowToClip(row: Record<string, unknown>): SonggardenClip {
     deviceId: row.device_id != null ? String(row.device_id) : "",
     sessionToken: row.session_token != null ? String(row.session_token) : null,
     submittedAt: String(row.submitted_at),
+    trimLeadMs: row.trim_lead_ms != null ? Number(row.trim_lead_ms) : null,
+    trimTrailMs: row.trim_trail_ms != null ? Number(row.trim_trail_ms) : null,
+    trimStatus,
+    hasOriginal: Boolean(row.has_original),
   };
 }
+
+const CLIP_SELECT =
+  "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, trim_lead_ms, trim_trail_ms, trim_status, has_original";
 
 function parseDeviceId(value: FormDataEntryValue | null): string | null {
   if (typeof value !== "string") return null;
@@ -74,13 +90,29 @@ export async function GET(request: Request) {
   try {
     let q = supabaseAdmin
       .from("songgarden_clips")
-      .select(
-        "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
-      )
+      .select(CLIP_SELECT)
       .eq("event_id", eventId)
       .order("submitted_at", { ascending: false });
     if (since) q = q.gt("submitted_at", since);
-    const { data, error } = await q;
+    let { data, error } = await q;
+    if (error && /trim_|has_original/i.test(error.message)) {
+      // Migration not applied yet — fall back to legacy columns.
+      let legacy = supabaseAdmin
+        .from("songgarden_clips")
+        .select(
+          "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
+        )
+        .eq("event_id", eventId)
+        .order("submitted_at", { ascending: false });
+      if (since) legacy = legacy.gt("submitted_at", since);
+      const fallback = await legacy;
+      if (fallback.error) return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+      return NextResponse.json({
+        clips: (fallback.data ?? []).map((row) =>
+          rowToClip({ ...row, trim_lead_ms: null, trim_trail_ms: null, trim_status: "none", has_original: false })
+        ),
+      });
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ clips: (data ?? []).map(rowToClip) });
   } catch {
@@ -200,6 +232,24 @@ export async function POST(request: Request) {
       ? Number(durationMsRaw)
       : null;
 
+  const originalFile = form.get("audioOriginal");
+  let originalBuffer: Buffer | null = null;
+  if (originalFile instanceof File && originalFile.size > 0) {
+    if (originalFile.size > MAX_BYTES) {
+      return NextResponse.json({ error: "Original audio file too large (max 12 MB)." }, { status: 400 });
+    }
+    originalBuffer = Buffer.from(await originalFile.arrayBuffer());
+  }
+
+  const trimStatus = parseTrimStatus(form.get("trimStatus"));
+  const trimLeadRaw = form.get("trimLeadMs");
+  const trimTrailRaw = form.get("trimTrailMs");
+  const trimLeadMs =
+    typeof trimLeadRaw === "string" && trimLeadRaw.trim() ? Number(trimLeadRaw) : null;
+  const trimTrailMs =
+    typeof trimTrailRaw === "string" && trimTrailRaw.trim() ? Number(trimTrailRaw) : null;
+  const hasOriginal = Boolean(originalBuffer && originalBuffer.length > 0);
+
   if (USE_LOCAL_EVENTS) {
     const clip = await localSonggardenAddClip({
       eventId: trimmedEventId,
@@ -212,6 +262,10 @@ export async function POST(request: Request) {
       deviceId,
       sessionToken,
       audioBuffer: buffer,
+      originalAudioBuffer: originalBuffer,
+      trimLeadMs: Number.isFinite(trimLeadMs) ? trimLeadMs : null,
+      trimTrailMs: Number.isFinite(trimTrailMs) ? trimTrailMs : null,
+      trimStatus,
       ext,
     });
     const garden = await recordGardenContribution({
@@ -249,10 +303,13 @@ export async function POST(request: Request) {
         session_token: sessionToken,
         ip_hash: ipHash,
         audio_data: encodeSupabaseBytea(buffer),
+        audio_data_original: hasOriginal && originalBuffer ? encodeSupabaseBytea(originalBuffer) : null,
+        trim_lead_ms: Number.isFinite(trimLeadMs) ? trimLeadMs : null,
+        trim_trail_ms: Number.isFinite(trimTrailMs) ? trimTrailMs : null,
+        trim_status: trimStatus,
+        has_original: hasOriginal,
       })
-      .select(
-        "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
-      )
+      .select(CLIP_SELECT)
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     const clip = rowToClip(data);

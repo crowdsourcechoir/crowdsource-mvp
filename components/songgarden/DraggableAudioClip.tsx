@@ -16,6 +16,7 @@ type DraggableAudioClipProps = {
   isNew?: boolean;
   onSelectToggle: (clipId: string, multi: boolean) => void;
   onPlayed?: () => void;
+  onOpenDetail?: (clip: SonggardenClip) => void;
 };
 
 function formatDuration(ms: number | null): string {
@@ -33,6 +34,7 @@ export default function DraggableAudioClip({
   isNew,
   onSelectToggle,
   onPlayed,
+  onOpenDetail,
 }: DraggableAudioClipProps) {
   const [dragging, setDragging] = useState(false);
   const [audioError, setAudioError] = useState(false);
@@ -67,7 +69,7 @@ export default function DraggableAudioClip({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [eventId, clip.id, clip.submittedAt]);
+  }, [eventId, clip.id, clip.submittedAt, clip.trimStatus]);
 
   async function ensureFile(): Promise<File> {
     if (fileCacheRef.current) return fileCacheRef.current;
@@ -132,6 +134,11 @@ export default function DraggableAudioClip({
           <p className="truncate text-xs text-gray-500">
             {clip.contributorName || "Anonymous"} · {songgardenCategoryLabel(clip.category)}
             {clip.durationMs ? ` · ${formatDuration(clip.durationMs)}` : ""}
+            {clip.trimStatus === "trimmed"
+              ? " · Trimmed"
+              : clip.hasOriginal
+                ? " · Original kept"
+                : ""}
           </p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
@@ -167,9 +174,23 @@ export default function DraggableAudioClip({
           onError={() => setAudioError(true)}
         />
       )}
-      <p className="mt-2 text-[10px] uppercase tracking-wide text-gray-600 group-hover:text-gray-400">
-        Drag this card into your DAW · use player to preview
-      </p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-wide text-gray-600 group-hover:text-gray-400">
+          Drag into DAW
+        </p>
+        {onOpenDetail ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDetail(clip);
+            }}
+            className="text-[10px] font-semibold uppercase tracking-wide text-[#CFFF81] hover:underline"
+          >
+            Edit
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

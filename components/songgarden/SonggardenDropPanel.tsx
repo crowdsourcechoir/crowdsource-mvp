@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import RecordAudio from "@/components/RecordAudio";
-import { blobToWavBlob } from "@/lib/audioToWav";
+import { prepareWavFromBlob } from "@/lib/songgarden/prepare-audio";
 import { SONGGARDEN_CATEGORIES, sanitizeSoundFilename } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId } from "@/lib/songgarden/types";
 import UploadConsentCheckbox from "@/components/songgarden/UploadConsentCheckbox";
@@ -42,23 +42,6 @@ export default function SonggardenDropPanel({ eventId, onSubmitted }: Songgarden
     setUploadConsentAgreed(false);
   }, []);
 
-  async function prepareWavBlob(source: Blob): Promise<{ blob: Blob; durationMs: number | null }> {
-    const wav = await blobToWavBlob(source);
-    const durationMs = await new Promise<number | null>((resolve) => {
-      const url = URL.createObjectURL(wav);
-      const audio = new Audio(url);
-      audio.addEventListener("loadedmetadata", () => {
-        URL.revokeObjectURL(url);
-        resolve(Number.isFinite(audio.duration) ? Math.round(audio.duration * 1000) : null);
-      });
-      audio.addEventListener("error", () => {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      });
-    });
-    return { blob: wav, durationMs };
-  }
-
   async function handleSubmit() {
     if (!audioBlob) {
       setError("Add a sound first — record or upload.");
@@ -73,16 +56,20 @@ export default function SonggardenDropPanel({ eventId, onSubmitted }: Songgarden
     setSuccess(null);
     try {
       if (name.trim()) setSonggardenContributorName(eventId, name.trim());
-      const { blob, durationMs } = await prepareWavBlob(audioBlob);
+      const prepared = await prepareWavFromBlob(audioBlob);
       const filename = sanitizeSoundFilename(label || name || "sound", "wav");
       await submitSonggardenClip({
         eventId,
         category,
-        audio: blob,
+        audio: prepared.blob,
         filename,
         contributorName: name.trim() || null,
         label: label.trim() || null,
-        durationMs,
+        durationMs: prepared.durationMs,
+        originalAudio: prepared.originalBlob,
+        trimLeadMs: prepared.trimLeadMs,
+        trimTrailMs: prepared.trimTrailMs,
+        trimStatus: prepared.trimStatus,
       });
       setSuccess("In the Song Garden — the team can hear it now.");
       resetForm();

@@ -163,17 +163,21 @@ export default function SoundMomentPad({
     stopPlayback();
     setPhase("uploading");
     try {
-      const { blob, durationMs } = await prepareWavFromBlob(pendingClip);
+      const prepared = await prepareWavFromBlob(pendingClip);
       const filename = sanitizeSoundFilename(activeSlot.label.toLowerCase().replace(/\s+/g, "-"), "wav");
       const credit = contributorName?.trim() || getSonggardenContributorName(eventId)?.trim() || null;
       const submitted = await submitSonggardenClip({
         eventId,
         category: activeSlot.category,
-        audio: blob,
+        audio: prepared.blob,
         filename,
         contributorName: credit,
         label: activeSlot.label,
-        durationMs,
+        durationMs: prepared.durationMs,
+        originalAudio: prepared.originalBlob,
+        trimLeadMs: prepared.trimLeadMs,
+        trimTrailMs: prepared.trimTrailMs,
+        trimStatus: prepared.trimStatus,
       });
       // Composition pads track by slot id; free sounds leave this null (parent uses step id).
       const trackId = progressSlotId === undefined ? slot.id : progressSlotId;

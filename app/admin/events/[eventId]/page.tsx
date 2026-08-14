@@ -313,7 +313,7 @@ export default function EventDetailPage() {
 
       const zip = new JSZip();
       const root = `${event.slug}_sound-pack`;
-      zip.file(`${root}/README.txt`, soundPackReadme(event.slug, songgardenClips.length));
+      zip.file(`${root}/README.txt`, soundPackReadme(event.slug, songgardenClips.length, manifest.kitClipCount));
       zip.file(`${root}/manifest.json`, JSON.stringify(manifest, null, 2));
 
       for (const entry of entries) {

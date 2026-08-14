@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import DraggableAudioClip, { dragClipsToDesktop } from "./DraggableAudioClip";
+import ClipDetailPanel from "./ClipDetailPanel";
 import { useSonggardenPoll } from "./useSonggardenPoll";
 import {
   SONGGARDEN_CATEGORIES,
@@ -19,6 +20,7 @@ export default function SonggardenCanvas({ eventId, eventTitle }: SonggardenCanv
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [categoryFilter, setCategoryFilter] = useState<SonggardenCategoryId | "all">("all");
+  const [detailClip, setDetailClip] = useState<SonggardenClip | null>(null);
 
   const filtered = useMemo(() => {
     if (categoryFilter === "all") return clips;
@@ -164,6 +166,7 @@ export default function SonggardenCanvas({ eventId, eventTitle }: SonggardenCanv
                     isNew={newClipIds.has(clip.id)}
                     onSelectToggle={toggleSelect}
                     onPlayed={() => clearNewHighlight(clip.id)}
+                    onOpenDetail={setDetailClip}
                   />
                 ))}
               </div>
@@ -181,6 +184,7 @@ export default function SonggardenCanvas({ eventId, eventTitle }: SonggardenCanv
               isNew={newClipIds.has(clip.id)}
               onSelectToggle={toggleSelect}
               onPlayed={() => clearNewHighlight(clip.id)}
+              onOpenDetail={setDetailClip}
             />
           ))}
         </div>
@@ -192,6 +196,18 @@ export default function SonggardenCanvas({ eventId, eventTitle }: SonggardenCanv
           drag handle
         </p>
       )}
+
+      {detailClip ? (
+        <ClipDetailPanel
+          eventId={eventId}
+          clip={detailClip}
+          onClose={() => setDetailClip(null)}
+          onUpdated={(updated) => {
+            setDetailClip(updated);
+            void refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

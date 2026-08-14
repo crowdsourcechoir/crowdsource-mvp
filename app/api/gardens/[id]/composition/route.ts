@@ -29,6 +29,10 @@ export type GardenCompositionMark = {
 };
 
 function rowToClip(row: Record<string, unknown>): SonggardenClip {
+  const trimStatus =
+    row.trim_status === "trimmed" || row.trim_status === "skipped" || row.trim_status === "none"
+      ? row.trim_status
+      : "none";
   return {
     id: String(row.id),
     eventId: String(row.event_id),
@@ -41,25 +45,52 @@ function rowToClip(row: Record<string, unknown>): SonggardenClip {
     deviceId: row.device_id != null ? String(row.device_id) : "",
     sessionToken: row.session_token != null ? String(row.session_token) : null,
     submittedAt: String(row.submitted_at),
+    trimLeadMs: row.trim_lead_ms != null ? Number(row.trim_lead_ms) : null,
+    trimTrailMs: row.trim_trail_ms != null ? Number(row.trim_trail_ms) : null,
+    trimStatus,
+    hasOriginal: Boolean(row.has_original),
   };
 }
 
 async function listClipsForEvent(eventId: string): Promise<SonggardenClip[]> {
   if (USE_LOCAL_EVENTS) return localSonggardenList(eventId);
   if (!supabaseAdmin) return [];
-  const { data, error } = await supabaseAdmin
+  const fullSelect =
+    "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, trim_lead_ms, trim_trail_ms, trim_status, has_original";
+  const primary = await supabaseAdmin
     .from("songgarden_clips")
-    .select(
-      "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
-    )
+    .select(fullSelect)
     .eq("event_id", eventId)
     .order("submitted_at", { ascending: false })
     .limit(500);
-  if (error || !data) {
-    console.warn("[gardens/composition] list clips failed:", error?.message);
+  if (primary.error && /trim_|has_original/i.test(primary.error.message)) {
+    const legacy = await supabaseAdmin
+      .from("songgarden_clips")
+      .select(
+        "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
+      )
+      .eq("event_id", eventId)
+      .order("submitted_at", { ascending: false })
+      .limit(500);
+    if (legacy.error || !legacy.data) {
+      console.warn("[gardens/composition] list clips failed:", legacy.error?.message);
+      return [];
+    }
+    return legacy.data.map((r) =>
+      rowToClip({
+        ...(r as Record<string, unknown>),
+        trim_lead_ms: null,
+        trim_trail_ms: null,
+        trim_status: "none",
+        has_original: false,
+      })
+    );
+  }
+  if (primary.error || !primary.data) {
+    console.warn("[gardens/composition] list clips failed:", primary.error?.message);
     return [];
   }
-  return data.map((r) => rowToClip(r as Record<string, unknown>));
+  return primary.data.map((r) => rowToClip(r as Record<string, unknown>));
 }
 
 /**

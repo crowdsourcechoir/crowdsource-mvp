@@ -34,6 +34,10 @@ async function main() {
         deviceId: "d",
         sessionToken: null,
         submittedAt: "2026-05-26T17:39:00Z",
+        trimLeadMs: 40,
+        trimTrailMs: 20,
+        trimStatus: "trimmed",
+        hasOriginal: true,
       },
       {
         id: "c2",
@@ -47,6 +51,10 @@ async function main() {
         deviceId: "d",
         sessionToken: null,
         submittedAt: "2026-05-26T17:40:00Z",
+        trimLeadMs: 0,
+        trimTrailMs: 0,
+        trimStatus: "skipped",
+        hasOriginal: true,
       },
       {
         id: "c3",
@@ -60,15 +68,23 @@ async function main() {
         deviceId: "d2",
         sessionToken: null,
         submittedAt: "2026-05-26T17:41:00Z",
+        trimLeadMs: null,
+        trimTrailMs: null,
+        trimStatus: "none",
+        hasOriginal: false,
       },
     ],
   });
 
   assert.equal(manifest.clipCount, 3);
-  assert.equal(entries.length, 6); // each clip in person + category trees
+  assert.ok(manifest.kitClipCount >= 2);
+  // person + category for each clip, plus kit entries
+  assert.ok(entries.length >= 6 + manifest.kitClipCount);
   assert.ok(entries.some((e) => e.path.startsWith("by-person/Joel/vocal/")));
   assert.ok(entries.some((e) => e.path.startsWith("by-category/percussion/Joel-")));
   assert.ok(entries.some((e) => e.path.startsWith("by-person/Anonymous/ambient/")));
+  assert.ok(entries.some((e) => e.path.startsWith("kit/ableton-starter/")));
+  assert.ok(manifest.clips.every((c) => typeof c.trimStatus === "string"));
 
   console.log("ok — sound pack layout");
 }

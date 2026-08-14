@@ -18,8 +18,17 @@ function audioPath(eventId: string, clipId: string, ext: string): string {
   return path.join(eventDir(eventId), "audio", `${clipId}.${ext}`);
 }
 
+function originalAudioPath(eventId: string, clipId: string, ext: string): string {
+  return path.join(eventDir(eventId), "audio", `${clipId}.original.${ext}`);
+}
+
 async function ensureEventDir(eventId: string): Promise<void> {
   await fs.mkdir(path.join(eventDir(eventId), "audio"), { recursive: true });
+}
+
+function normalizeTrimStatus(raw: unknown): SonggardenClip["trimStatus"] {
+  if (raw === "trimmed" || raw === "skipped" || raw === "none") return raw;
+  return "none";
 }
 
 function normalizeClip(raw: Record<string, unknown>): SonggardenClip {
@@ -35,6 +44,10 @@ function normalizeClip(raw: Record<string, unknown>): SonggardenClip {
     deviceId: typeof raw.deviceId === "string" ? raw.deviceId : "",
     sessionToken: raw.sessionToken != null ? String(raw.sessionToken) : null,
     submittedAt: typeof raw.submittedAt === "string" ? raw.submittedAt : new Date().toISOString(),
+    trimLeadMs: raw.trimLeadMs != null ? Number(raw.trimLeadMs) : null,
+    trimTrailMs: raw.trimTrailMs != null ? Number(raw.trimTrailMs) : null,
+    trimStatus: normalizeTrimStatus(raw.trimStatus),
+    hasOriginal: Boolean(raw.hasOriginal),
   };
 }
 
@@ -109,10 +122,15 @@ export async function localSonggardenAddClip(args: {
   deviceId: string;
   sessionToken?: string | null;
   audioBuffer: Buffer;
+  originalAudioBuffer?: Buffer | null;
+  trimLeadMs?: number | null;
+  trimTrailMs?: number | null;
+  trimStatus?: SonggardenClip["trimStatus"];
   ext: string;
 }): Promise<SonggardenClip> {
   await ensureEventDir(args.eventId);
   const id = randomUUID();
+  const hasOriginal = Boolean(args.originalAudioBuffer && args.originalAudioBuffer.length > 0);
   const clip: SonggardenClip = {
     id,
     eventId: args.eventId,
@@ -125,8 +143,15 @@ export async function localSonggardenAddClip(args: {
     deviceId: args.deviceId,
     sessionToken: args.sessionToken ?? null,
     submittedAt: new Date().toISOString(),
+    trimLeadMs: args.trimLeadMs ?? null,
+    trimTrailMs: args.trimTrailMs ?? null,
+    trimStatus: args.trimStatus ?? "none",
+    hasOriginal,
   };
   await fs.writeFile(audioPath(args.eventId, id, args.ext), args.audioBuffer);
+  if (hasOriginal && args.originalAudioBuffer) {
+    await fs.writeFile(originalAudioPath(args.eventId, id, args.ext), args.originalAudioBuffer);
+  }
   const clips = await readManifest(args.eventId);
   clips.push(clip);
   await writeManifest(args.eventId, clips);
@@ -135,17 +160,54 @@ export async function localSonggardenAddClip(args: {
 
 export async function localSonggardenReadAudio(
   eventId: string,
-  clipId: string
+  clipId: string,
+  opts?: { original?: boolean }
 ): Promise<{ buffer: Buffer; clip: SonggardenClip } | null> {
   const clip = await localSonggardenGetClip(eventId, clipId);
   if (!clip) return null;
   const ext = clip.filename.split(".").pop() || "wav";
   try {
+    if (opts?.original) {
+      try {
+        const buffer = await fs.readFile(originalAudioPath(eventId, clipId, ext));
+        return { buffer, clip };
+      } catch {
+        // Fall through to playable if original missing.
+      }
+    }
     const buffer = await fs.readFile(audioPath(eventId, clipId, ext));
     return { buffer, clip };
   } catch {
     return null;
   }
+}
+
+/** Replace playable bytes with stored original (untrimmed). */
+export async function localSonggardenRestoreOriginal(
+  eventId: string,
+  clipId: string
+): Promise<SonggardenClip | null> {
+  const clip = await localSonggardenGetClip(eventId, clipId);
+  if (!clip || !clip.hasOriginal) return null;
+  const ext = clip.filename.split(".").pop() || "wav";
+  let original: Buffer;
+  try {
+    original = await fs.readFile(originalAudioPath(eventId, clipId, ext));
+  } catch {
+    return null;
+  }
+  await fs.writeFile(audioPath(eventId, clipId, ext), original);
+  const updated: SonggardenClip = {
+    ...clip,
+    trimLeadMs: 0,
+    trimTrailMs: 0,
+    trimStatus: "none",
+    durationMs: null,
+  };
+  const clips = await readManifest(eventId);
+  const next = clips.map((c) => (c.id === clipId ? updated : c));
+  await writeManifest(eventId, next);
+  return updated;
 }
 
 export async function localSonggardenWipeEvent(eventId: string): Promise<number> {

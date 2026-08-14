@@ -215,18 +215,22 @@ export default function SoundGardenExperience({
 
   const submitSlot = useCallback(
     async (slot: GardenSlotDef, source: Blob) => {
-      const { blob, durationMs } = await prepareWavFromBlob(source);
+      const prepared = await prepareWavFromBlob(source);
       const filename = sanitizeSoundFilename(slot.label.toLowerCase().replace(/\s+/g, "-"), "wav");
       const credit =
         contributorName?.trim() || getSonggardenContributorName(eventId)?.trim() || null;
       await submitSonggardenClip({
         eventId,
         category: slot.category,
-        audio: blob,
+        audio: prepared.blob,
         filename,
         contributorName: credit,
         label: slot.label,
-        durationMs,
+        durationMs: prepared.durationMs,
+        originalAudio: prepared.originalBlob,
+        trimLeadMs: prepared.trimLeadMs,
+        trimTrailMs: prepared.trimTrailMs,
+        trimStatus: prepared.trimStatus,
       });
       saveDoneSlot(eventId, slot.id);
       setPad(slot.id, "done");

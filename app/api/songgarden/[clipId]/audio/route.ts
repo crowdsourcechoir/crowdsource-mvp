@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSonggardenReadAudio } from "@/lib/local-songgarden-store";
-import { decodeSupabaseBytea, encodeSupabaseBytea } from "@/lib/supabase-bytea";
+import { decodeSupabaseBytea } from "@/lib/supabase-bytea";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -12,6 +12,7 @@ export async function GET(
   const { clipId } = await context.params;
   const { searchParams } = new URL(request.url);
   const eventId = searchParams.get("eventId");
+  const wantOriginal = searchParams.get("original") === "1" || searchParams.get("original") === "true";
 
   const jsonError = (error: string, status: number) =>
     NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
@@ -21,13 +22,17 @@ export async function GET(
   }
 
   if (USE_LOCAL_EVENTS) {
-    const result = await localSonggardenReadAudio(eventId, clipId);
+    const result = await localSonggardenReadAudio(eventId, clipId, { original: wantOriginal });
     if (!result) return jsonError("Not found.", 404);
+    const filename = wantOriginal
+      ? result.clip.filename.replace(/(\.[^.]+)?$/, ".original$1")
+      : result.clip.filename;
     return new NextResponse(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": result.clip.mimeType || "audio/wav",
-        "Content-Disposition": `inline; filename="${result.clip.filename}"`,
+        "Content-Disposition": `inline; filename="${filename}"`,
         "Cache-Control": "public, max-age=3600",
+        "X-Songgarden-Audio": wantOriginal ? "original" : "playable",
       },
     });
   }
@@ -39,22 +44,42 @@ export async function GET(
   try {
     const { data, error } = await supabaseAdmin
       .from("songgarden_clips")
-      .select("filename, mime_type, audio_data")
+      .select(
+        wantOriginal
+          ? "filename, mime_type, audio_data, audio_data_original, has_original"
+          : "filename, mime_type, audio_data"
+      )
       .eq("id", clipId)
       .eq("event_id", eventId)
       .single();
     if (error || !data) return jsonError("Not found.", 404);
 
-    const buffer = decodeSupabaseBytea(data.audio_data);
+    const row = data as unknown as Record<string, unknown>;
+    let buffer: Buffer;
+    if (wantOriginal) {
+      if (!row.audio_data_original) {
+        return jsonError("No original audio stored for this clip.", 404);
+      }
+      buffer = decodeSupabaseBytea(row.audio_data_original);
+    } else {
+      buffer = decodeSupabaseBytea(row.audio_data);
+    }
+
     if (buffer.length === 0) {
       return jsonError("Audio data is empty.", 404);
     }
 
+    const filename = String(row.filename ?? "clip.wav");
+    const outName = wantOriginal
+      ? filename.replace(/(\.[^.]+)?$/, ".original$1")
+      : filename;
+
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        "Content-Type": (data.mime_type as string) || "audio/wav",
-        "Content-Disposition": `inline; filename="${data.filename as string}"`,
+        "Content-Type": (row.mime_type as string) || "audio/wav",
+        "Content-Disposition": `inline; filename="${outName}"`,
         "Cache-Control": "public, max-age=3600",
+        "X-Songgarden-Audio": wantOriginal ? "original" : "playable",
       },
     });
   } catch (err) {

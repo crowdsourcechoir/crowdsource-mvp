@@ -9,7 +9,8 @@ const ACCESS_PREFIX = "csc_songgarden_access_";
 export function songgardenAudioUrl(
   eventId: string,
   clipId: string,
-  cacheKey?: string | null
+  cacheKey?: string | null,
+  opts?: { original?: boolean }
 ): string {
   const params = new URLSearchParams({ eventId });
   if (cacheKey) {
@@ -18,6 +19,7 @@ export function songgardenAudioUrl(
       : cacheKey;
     params.set("v", version);
   }
+  if (opts?.original) params.set("original", "1");
   return `/api/songgarden/${clipId}/audio?${params.toString()}`;
 }
 
@@ -71,6 +73,11 @@ export async function submitSonggardenClip(args: {
   contributorName?: string | null;
   label?: string | null;
   durationMs?: number | null;
+  /** Untrimmed WAV — stored for audition / restore. */
+  originalAudio?: Blob | null;
+  trimLeadMs?: number | null;
+  trimTrailMs?: number | null;
+  trimStatus?: "none" | "trimmed" | "skipped";
 }): Promise<SonggardenSubmitResult> {
   const form = new FormData();
   form.set("eventId", args.eventId);
@@ -78,9 +85,15 @@ export async function submitSonggardenClip(args: {
   form.set("deviceId", getOrCreateSonggardenDeviceId());
   form.set("sessionToken", getOrCreateSonggardenSessionToken(args.eventId));
   form.set("audio", args.audio, args.filename);
+  if (args.originalAudio) {
+    form.set("audioOriginal", args.originalAudio, args.filename.replace(/\.wav$/i, ".original.wav"));
+  }
   if (args.contributorName) form.set("contributorName", args.contributorName);
   if (args.label) form.set("label", args.label);
   if (args.durationMs != null) form.set("durationMs", String(args.durationMs));
+  if (args.trimLeadMs != null) form.set("trimLeadMs", String(args.trimLeadMs));
+  if (args.trimTrailMs != null) form.set("trimTrailMs", String(args.trimTrailMs));
+  if (args.trimStatus) form.set("trimStatus", args.trimStatus);
 
   const res = await fetch("/api/songgarden", { method: "POST", body: form });
   if (!res.ok) {
@@ -89,6 +102,40 @@ export async function submitSonggardenClip(args: {
   }
   const data = (await res.json()) as SonggardenSubmitResult;
   return data;
+}
+
+export async function restoreSonggardenOriginal(
+  eventId: string,
+  clipId: string
+): Promise<SonggardenClip> {
+  const res = await fetch(`/api/songgarden/${clipId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId, action: "restore_original" }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to restore original");
+  }
+  const data = (await res.json()) as { clip: SonggardenClip };
+  return data.clip;
+}
+
+export async function fetchClipFile(
+  eventId: string,
+  clip: SonggardenClip,
+  opts?: { original?: boolean }
+): Promise<File> {
+  const res = await fetch(
+    songgardenAudioUrl(eventId, clip.id, clip.submittedAt, { original: opts?.original }),
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(opts?.original ? "Failed to fetch original audio" : "Failed to fetch audio");
+  const blob = await res.blob();
+  const name = opts?.original
+    ? clip.filename.replace(/(\.[^.]+)?$/, ".original$1")
+    : clip.filename;
+  return new File([blob], name, { type: clip.mimeType || blob.type || "audio/wav" });
 }
 
 export function grantSonggardenAccess(eventId: string): string {
@@ -113,13 +160,4 @@ export function getSonggardenContributorName(eventId: string): string | null {
 export function setSonggardenContributorName(eventId: string, name: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(`${ACCESS_PREFIX}${eventId}_name`, name.trim());
-}
-
-export async function fetchClipFile(eventId: string, clip: SonggardenClip): Promise<File> {
-  const res = await fetch(songgardenAudioUrl(eventId, clip.id, clip.submittedAt), {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error("Failed to fetch audio");
-  const blob = await res.blob();
-  return new File([blob], clip.filename, { type: clip.mimeType || blob.type || "audio/wav" });
 }

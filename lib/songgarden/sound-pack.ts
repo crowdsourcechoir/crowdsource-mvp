@@ -1,5 +1,6 @@
 import type { SonggardenClip } from "@/lib/songgarden/types";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
+import { JOURNEY_GARDEN_SLOTS } from "@/lib/songgarden/garden-slots";
 
 /** Build a clean, DAW-friendly `.wav` filename. */
 export function wavFilename(clip: SonggardenClip): string {
@@ -24,6 +25,7 @@ export type SoundPackManifestClip = {
   id: string;
   pathByPerson: string;
   pathByCategory: string;
+  pathKit?: string | null;
   filename: string;
   contributorName: string | null;
   label: string | null;
@@ -31,6 +33,10 @@ export type SoundPackManifestClip = {
   categoryLabel: string;
   durationMs: number | null;
   submittedAt: string;
+  trimStatus: string;
+  trimLeadMs: number | null;
+  trimTrailMs: number | null;
+  hasOriginal: boolean;
 };
 
 export type SoundPackManifest = {
@@ -39,6 +45,7 @@ export type SoundPackManifest = {
   eventSlug: string;
   exportedAt: string;
   clipCount: number;
+  kitClipCount: number;
   notes: string[];
   clips: SoundPackManifestClip[];
 };
@@ -49,8 +56,53 @@ export type SoundPackEntry = {
 };
 
 /**
+ * Pick a mixed starter kit: one clip per garden pad label when possible,
+ * preferring different contributors so the kit is not a bank of the same voice.
+ */
+export function pickMixedKitClips(clips: SonggardenClip[]): SonggardenClip[] {
+  const preferredLabels = JOURNEY_GARDEN_SLOTS.map((s) => s.label.toUpperCase());
+  const byLabel = new Map<string, SonggardenClip[]>();
+  for (const clip of clips) {
+    const key = (clip.label || "").trim().toUpperCase();
+    if (!key) continue;
+    const list = byLabel.get(key) ?? [];
+    list.push(clip);
+    byLabel.set(key, list);
+  }
+
+  const usedPeople = new Set<string>();
+  const picked: SonggardenClip[] = [];
+
+  for (const label of preferredLabels) {
+    const candidates = byLabel.get(label);
+    if (!candidates?.length) continue;
+    const diverse = candidates.find((c: SonggardenClip) => {
+      const who = (c.contributorName || "Anonymous").toLowerCase();
+      return !usedPeople.has(who);
+    });
+    const chosen = diverse ?? candidates[0]!;
+    picked.push(chosen);
+    usedPeople.add((chosen.contributorName || "Anonymous").toLowerCase());
+  }
+
+  for (const [label, candidates] of Array.from(byLabel.entries())) {
+    if (preferredLabels.includes(label)) continue;
+    if (picked.some((p) => (p.label || "").toUpperCase() === label)) continue;
+    const diverse = candidates.find((c: SonggardenClip) => {
+      const who = (c.contributorName || "Anonymous").toLowerCase();
+      return !usedPeople.has(who);
+    });
+    const chosen = diverse ?? candidates[0]!;
+    picked.push(chosen);
+    usedPeople.add((chosen.contributorName || "Anonymous").toLowerCase());
+  }
+
+  return picked;
+}
+
+/**
  * Build zip paths for an event sound pack.
- * Dual layout: by-person/{name}/{category}/file.wav and by-category/{category}/{name}-file.wav
+ * Dual layout: by-person + by-category, plus kit/ableton-starter mixed pads.
  */
 export function buildSoundPackLayout(args: {
   eventId: string;
@@ -62,8 +114,11 @@ export function buildSoundPackLayout(args: {
 } {
   const usedPersonPaths = new Set<string>();
   const usedCategoryPaths = new Set<string>();
+  const usedKitPaths = new Set<string>();
   const entries: SoundPackEntry[] = [];
   const manifestClips: SoundPackManifestClip[] = [];
+  const kitClips = pickMixedKitClips(args.clips);
+  const kitIds = new Set(kitClips.map((c) => c.id));
 
   function uniquePath(set: Set<string>, path: string): string {
     if (!set.has(path)) {
@@ -88,6 +143,20 @@ export function buildSoundPackLayout(args: {
     return (a.submittedAt || "").localeCompare(b.submittedAt || "");
   });
 
+  const kitPathById = new Map<string, string>();
+  let kitIndex = 1;
+  for (const clip of kitClips) {
+    const file =
+      soundPackPathSegment(
+        `${String(kitIndex).padStart(2, "0")}_${wavFilename(clip).replace(/\.wav$/i, "")}`,
+        "clip"
+      ) + ".wav";
+    const pathKit = uniquePath(usedKitPaths, `kit/ableton-starter/${file}`);
+    kitPathById.set(clip.id, pathKit);
+    entries.push({ path: pathKit, clip });
+    kitIndex += 1;
+  }
+
   for (const clip of sorted) {
     const person = soundPackPathSegment(clip.contributorName || "Anonymous", "Anonymous");
     const category = soundPackPathSegment(clip.category, "other");
@@ -109,6 +178,7 @@ export function buildSoundPackLayout(args: {
       id: clip.id,
       pathByPerson,
       pathByCategory,
+      pathKit: kitPathById.get(clip.id) ?? null,
       filename: file,
       contributorName: clip.contributorName,
       label: clip.label,
@@ -116,6 +186,10 @@ export function buildSoundPackLayout(args: {
       categoryLabel: songgardenCategoryLabel(clip.category),
       durationMs: clip.durationMs,
       submittedAt: clip.submittedAt,
+      trimStatus: clip.trimStatus ?? "none",
+      trimLeadMs: clip.trimLeadMs ?? null,
+      trimTrailMs: clip.trimTrailMs ?? null,
+      hasOriginal: Boolean(clip.hasOriginal),
     });
   }
 
@@ -127,28 +201,34 @@ export function buildSoundPackLayout(args: {
       eventSlug: args.eventSlug,
       exportedAt: new Date().toISOString(),
       clipCount: args.clips.length,
+      kitClipCount: kitIds.size,
       notes: [
-        "WAV samples for Ableton, MPC, and other DAWs.",
-        "by-person/ groups pads by contributor; by-category/ groups by sound type.",
-        "Each clip appears in both trees (same audio bytes).",
-        "Future: silence-trim layer, Ableton Drum Rack, and native MPC program export.",
+        "WAV samples for Ableton Live, Push, MPD Live 2, and other DAWs.",
+        "Playable WAVs are silence-trimmed on new uploads (leading + trailing).",
+        "Originals stay in the admin clip editor when hasOriginal is true.",
+        "by-person/ groups by contributor; by-category/ groups by sound type.",
+        "kit/ableton-starter/ is a mixed pad set (one per label when possible, diverse voices).",
+        "Each clip appears in person + category trees (same audio bytes).",
+        "Future: Ableton Drum Rack (.adg) and native MPC program export.",
       ],
       clips: manifestClips,
     },
   };
 }
 
-export function soundPackReadme(eventSlug: string, clipCount: number): string {
+export function soundPackReadme(eventSlug: string, clipCount: number, kitCount = 0): string {
   return [
     `Song Garden sound pack — ${eventSlug}`,
     ``,
-    `${clipCount} clip(s).`,
+    `${clipCount} clip(s)${kitCount ? ` · ${kitCount} in Ableton starter kit` : ""}.`,
     ``,
     `Folders`,
+    `- kit/ableton-starter/           — mixed kit (different pad types / voices)`,
     `- by-person/{name}/{category}/…  — browse by contributor`,
     `- by-category/{category}/…       — browse by pad type`,
     ``,
-    `Drop WAVs into Ableton Live, MPC, Logic, etc.`,
+    `Drop WAVs into Ableton Live (Push / MPD Live 2).`,
+    `New uploads are silence-trimmed so pads fire immediately; originals stay in admin.`,
     `Drag individual pads from the admin UI also works (Chrome/Edge desktop).`,
     ``,
     `manifest.json lists every clip for future Ableton / MPC pack tooling.`,
