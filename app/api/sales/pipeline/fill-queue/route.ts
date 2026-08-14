@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listAwaitingContactOrganizationIds } from "@/lib/sales/db/awaitingContact";
+import { getOrganization } from "@/lib/sales/db/organizations";
 import { getDigestMinScore } from "@/lib/sales/digest/config";
 import { fillQueueFromAwaitingContact } from "@/lib/sales/pipeline/fill-queue";
 
@@ -10,7 +11,17 @@ export const maxDuration = 300;
 export async function GET() {
   try {
     const minScore = getDigestMinScore();
-    const candidates = await listAwaitingContactOrganizationIds(25, minScore);
+    const rows = await listAwaitingContactOrganizationIds(25, minScore);
+    const candidates = await Promise.all(
+      rows.map(async (row) => {
+        const org = await getOrganization(row.organizationId);
+        return {
+          organizationId: row.organizationId,
+          organizationName: org?.name ?? row.organizationId,
+          score: row.score,
+        };
+      })
+    );
     const solid = candidates.filter((c) => c.score >= minScore);
     return NextResponse.json({
       minScore,
