@@ -7,7 +7,7 @@ import {
   type SonggardenClip,
 } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
-import { wavFilename } from "@/components/songgarden/DraggableAudioClip";
+import { wavFilename } from "@/lib/songgarden/sound-pack";
 
 type SoundPadTileProps = {
   eventId: string;

@@ -7,6 +7,7 @@ import {
   type SonggardenClip,
 } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
+import { wavFilename } from "@/lib/songgarden/sound-pack";
 
 type DraggableAudioClipProps = {
   eventId: string;
@@ -23,13 +24,7 @@ function formatDuration(ms: number | null): string {
   return `${s}s`;
 }
 
-/** Build a clean, DAW-friendly `.wav` filename. */
-export function wavFilename(clip: SonggardenClip): string {
-  const base =
-    (clip.label || clip.filename || "clip").replace(/\.[^.]+$/, "").trim() || "clip";
-  const who = clip.contributorName ? `${clip.contributorName}-` : "";
-  return `${who}${base}`.replace(/[^\w.-]+/g, "_").replace(/_+/g, "_") + ".wav";
-}
+export { wavFilename };
 
 export default function DraggableAudioClip({
   eventId,
