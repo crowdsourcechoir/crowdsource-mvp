@@ -1,35 +1,104 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getEventById, updateEvent } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import EventForm, { type EventFormValues } from "@/components/EventForm";
 import { toDateInputValue, toTimeInputValue } from "@/lib/event-datetime-input";
+import {
+  clearEventFormDraft,
+  draftMatchesBloom,
+  journeyStepsHaveContent,
+  readEventFormDraft,
+  type EventFormDraft,
+} from "@/lib/event-form-draft";
+import { normalizeSongGardenConfig } from "@/lib/songgarden/config";
 
 type LoadStatus = "loading" | "ready" | "notFound";
+
+function buildInitialValues(
+  event: Event,
+  draft: EventFormDraft | null,
+  useDraft: boolean
+): Partial<EventFormValues> {
+  return {
+    title: useDraft && draft?.title ? draft.title : event.title,
+    slug: event.slug,
+    description: useDraft && draft?.description ? draft.description : event.description,
+    date: toDateInputValue(useDraft && draft?.date ? draft.date : event.date),
+    time: toTimeInputValue(useDraft && draft?.time ? draft.time : event.time),
+    venue: useDraft && draft?.venue ? draft.venue : event.venue,
+    address: useDraft && draft?.address ? draft.address : event.address,
+    prompt: useDraft && draft?.prompt ? draft.prompt : event.prompt,
+    heroImage: event.heroImage,
+    heroImageMode: event.heroImageMode ?? "bw",
+    landingHeadline:
+      (useDraft && draft?.landingHeadline) ||
+      event.landingHeadline ||
+      "We're crowdsourcing a song for this event. Want to help create it?",
+    landingCopy: (useDraft && draft?.landingCopy) || event.landingCopy || "",
+    ctaText: (useDraft && draft?.ctaText) || event.ctaText || "Let's make an anthem",
+    anthemCompletionMessage:
+      (useDraft && draft?.anthemCompletionMessage) ||
+      event.anthemCompletionMessage ||
+      "Thanks! Your answers will help shape the song we're making.",
+    agentThemeId: (useDraft ? draft?.agentThemeId : null) ?? event.agentThemeId ?? null,
+    agentBrief: (useDraft ? draft?.agentBrief : null) ?? event.agentBrief ?? null,
+    songGardenConfig: useDraft && draft
+      ? normalizeSongGardenConfig({
+          ...(draft.songGardenConfig ?? { soundTransitionMessage: "", steps: [] }),
+          journeySteps: draft.journeySteps,
+        })
+      : event.songGardenConfig ?? undefined,
+    journeySteps: useDraft && draft ? draft.journeySteps : event.journeySteps ?? undefined,
+    worldConfig: event.worldConfig ?? null,
+  };
+}
 
 export default function EditEventPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const eventId = typeof params?.eventId === "string" ? params.eventId : "";
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [event, setEvent] = useState<Event | null>(null);
+  const [initialValues, setInitialValues] = useState<Partial<EventFormValues> | null>(null);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const restoredPrompts = searchParams.get("restoredPrompts") === "1";
 
   useEffect(() => {
     setStatus("loading");
     setEvent(null);
+    setInitialValues(null);
+    setDraftNotice(null);
     getEventById(eventId)
       .then((e) => {
-        if (e) {
-          setEvent(e);
-          setStatus("ready");
-        } else {
+        if (!e) {
           setStatus("notFound");
+          return;
         }
+        setEvent(e);
+        const serverHasPrompts = journeyStepsHaveContent(e.journeySteps);
+        const draft = readEventFormDraft();
+        const useDraft =
+          !serverHasPrompts &&
+          Boolean(draft) &&
+          draftMatchesBloom(draft, { slug: e.slug, eventId: e.id });
+        if (useDraft) {
+          setDraftNotice(
+            "Restored your unsaved journey prompts from this browser — hit Save to keep them on the bloom."
+          );
+        } else if (restoredPrompts && serverHasPrompts) {
+          setDraftNotice(
+            "Journey prompts were restored with the world — review and Save if you change anything."
+          );
+        }
+        setInitialValues(buildInitialValues(e, draft, useDraft));
+        setStatus("ready");
       })
       .catch(() => setStatus("notFound"));
-  }, [eventId]);
+  }, [eventId, restoredPrompts]);
 
   async function handleSubmit(values: EventFormValues) {
     if (!event) throw new Error("Event is still loading or missing.");
@@ -40,6 +109,7 @@ export default function EditEventPage() {
     }
     const updated = await updateEvent(event.id, payload);
     if (!updated) throw new Error("Could not save (event may have been deleted).");
+    clearEventFormDraft();
     router.push(`/admin/events/${event.id}`);
   }
 
@@ -51,7 +121,7 @@ export default function EditEventPage() {
     );
   }
 
-  if (status === "notFound" || !event) {
+  if (status === "notFound" || !event || !initialValues) {
     return (
       <div className="rounded-lg border border-gray-700 bg-[#18181b] p-6">
         <p className="text-gray-400">Event not found.</p>
@@ -66,36 +136,16 @@ export default function EditEventPage() {
     );
   }
 
-  const initialValues: Partial<EventFormValues> = {
-    title: event.title,
-    slug: event.slug,
-    description: event.description,
-    date: toDateInputValue(event.date),
-    time: toTimeInputValue(event.time),
-    venue: event.venue,
-    address: event.address,
-    prompt: event.prompt,
-    heroImage: event.heroImage,
-    heroImageMode: event.heroImageMode ?? "bw",
-    landingHeadline:
-      event.landingHeadline ?? "We're crowdsourcing a song for this event. Want to help create it?",
-    landingCopy: event.landingCopy ?? "",
-    ctaText: event.ctaText ?? "Let's make an anthem",
-    anthemCompletionMessage:
-      event.anthemCompletionMessage ??
-      "Thanks! Your answers will help shape the song we're making.",
-    agentThemeId: event.agentThemeId ?? null,
-    agentBrief: event.agentBrief ?? null,
-    songGardenConfig: event.songGardenConfig ?? undefined,
-    journeySteps: event.journeySteps ?? undefined,
-    worldConfig: event.worldConfig ?? null,
-  };
-
   return (
     <div className="mx-auto w-full max-w-3xl">
       <h2 className="mb-4 text-xl font-semibold text-white">Edit Event</h2>
+      {draftNotice && (
+        <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          {draftNotice}
+        </div>
+      )}
       <EventForm
-        key={event.id}
+        key={`${event.id}-${journeyStepsHaveContent(initialValues.journeySteps) ? "prompts" : "empty"}`}
         eventId={event.id}
         initialValues={initialValues}
         submitLabel="Save"

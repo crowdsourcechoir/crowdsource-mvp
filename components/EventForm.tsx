@@ -39,6 +39,13 @@ import {
   type WorldConfig,
 } from "@/lib/song-garden-v2/world-config";
 import FileDropZone from "@/components/ui/FileDropZone";
+import {
+  clearEventFormDraft,
+  journeyStepsHaveContent,
+  readEventFormDraft,
+  shouldPersistDraft,
+  writeEventFormDraft,
+} from "@/lib/event-form-draft";
 
 export type EventFormValues = {
   title: string;
@@ -260,6 +267,89 @@ export default function EventForm({
     getAgentThemes().then(setThemes).catch(() => setThemes([]));
   }, []);
 
+  // Create flow: restore unsaved journey prompts after a timeout / failed create.
+  useEffect(() => {
+    if (eventId) return;
+    if (journeyStepsHaveContent(initialProp?.journeySteps)) return;
+    const draft = readEventFormDraft();
+    if (!draft || !shouldPersistDraft(draft)) return;
+    setValues((v) => ({
+      ...v,
+      title: draft.title || v.title,
+      slug: draft.slug || v.slug,
+      description: draft.description || v.description,
+      date: draft.date || v.date,
+      time: draft.time || v.time,
+      venue: draft.venue || v.venue,
+      address: draft.address || v.address,
+      prompt: draft.prompt || v.prompt,
+      landingHeadline: draft.landingHeadline || v.landingHeadline,
+      landingCopy: draft.landingCopy || v.landingCopy,
+      ctaText: draft.ctaText || v.ctaText,
+      anthemCompletionMessage: draft.anthemCompletionMessage || v.anthemCompletionMessage,
+      agentThemeId: draft.agentThemeId ?? v.agentThemeId,
+      agentBrief: draft.agentBrief ?? v.agentBrief,
+      songGardenConfig: draft.songGardenConfig
+        ? normalizeSongGardenConfig({ ...draft.songGardenConfig, journeySteps: draft.journeySteps })
+        : v.songGardenConfig,
+      journeySteps: draft.journeySteps,
+    }));
+  }, [eventId, initialProp?.journeySteps]);
+
+  // Autosave prompts so Restore bloom / refresh don't lose the journey.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (
+      !shouldPersistDraft({
+        title: values.title,
+        slug: values.slug,
+        journeySteps: values.journeySteps,
+      })
+    ) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      writeEventFormDraft({
+        eventId,
+        slug: values.slug,
+        title: values.title,
+        description: values.description,
+        date: values.date,
+        time: values.time,
+        venue: values.venue,
+        address: values.address,
+        prompt: values.prompt,
+        landingHeadline: values.landingHeadline,
+        landingCopy: values.landingCopy,
+        ctaText: values.ctaText,
+        anthemCompletionMessage: values.anthemCompletionMessage,
+        agentThemeId: values.agentThemeId,
+        agentBrief: values.agentBrief,
+        songGardenConfig: values.songGardenConfig,
+        journeySteps: values.journeySteps,
+      });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [
+    eventId,
+    values.slug,
+    values.title,
+    values.description,
+    values.date,
+    values.time,
+    values.venue,
+    values.address,
+    values.prompt,
+    values.landingHeadline,
+    values.landingCopy,
+    values.ctaText,
+    values.anthemCompletionMessage,
+    values.agentThemeId,
+    values.agentBrief,
+    values.songGardenConfig,
+    values.journeySteps,
+  ]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -374,20 +464,42 @@ export default function EventForm({
     };
     setIsSubmitting(true);
     try {
+      const songGardenConfig = normalizeSongGardenConfig({
+        ...syncedGarden,
+        journeySteps,
+      });
+      // Keep draft until the API confirms — clears only after success.
+      writeEventFormDraft({
+        eventId,
+        slug: values.slug,
+        title: values.title,
+        description: values.description,
+        date: values.date,
+        time: values.time,
+        venue: values.venue,
+        address: values.address,
+        prompt: values.prompt,
+        landingHeadline: values.landingHeadline,
+        landingCopy: values.landingCopy,
+        ctaText: values.ctaText,
+        anthemCompletionMessage: values.anthemCompletionMessage,
+        agentThemeId: values.agentThemeId,
+        agentBrief: brief,
+        songGardenConfig,
+        journeySteps,
+      });
       await onSubmit({
         ...values,
         journeySteps,
         agentBrief: brief,
-        songGardenConfig: normalizeSongGardenConfig({
-          ...syncedGarden,
-          journeySteps,
-        }),
+        songGardenConfig,
         worldConfig: normalizeWorldConfigInput({
           ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
           // Vibe lives in local state for the AI controls — always fold it into the saved world.
           aiArtworkPrompt: aiVibePrompt.trim() || null,
         }),
       });
+      clearEventFormDraft();
       setSuccess(true);
     } catch (err) {
       setSuccess(false);

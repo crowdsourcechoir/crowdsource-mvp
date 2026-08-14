@@ -10,6 +10,7 @@ import { getAgentThemes, type AgentTheme } from "@/data/agentInterview";
 import AdminIndeterminateProgress from "@/components/AdminIndeterminateProgress";
 import AdminEventsLoadingSkeleton from "@/components/AdminEventsLoadingSkeleton";
 import { isEventUpcoming } from "@/lib/formatDate";
+import { draftToRestorePayload, readEventFormDraft } from "@/lib/event-form-draft";
 
 const LAST_CREATED_EVENT_KEY = "csc_last_created_event";
 
@@ -80,17 +81,32 @@ export default function AdminEventsList() {
   async function recoverOrphan(prefix: string) {
     setRecoveringPrefix(prefix);
     try {
+      const draft = readEventFormDraft();
+      const draftPayload =
+        draft &&
+        (!draft.slug.trim() ||
+          draft.slug.trim().toLowerCase() === prefix.toLowerCase() ||
+          Date.now() - draft.savedAt < 48 * 60 * 60 * 1000)
+          ? draftToRestorePayload(draft)
+          : {};
       const res = await fetch("/api/events/storyboard-orphans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prefix }),
+        body: JSON.stringify({ prefix, ...draftPayload }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((body as { error?: string }).error || "Recover failed");
       const id = (body as { event?: { id?: string }; eventId?: string }).event?.id
         || (body as { eventId?: string }).eventId;
+      const promptsRestored = Boolean((body as { promptsRestored?: boolean }).promptsRestored);
       await loadData();
-      if (id) router.push(`/admin/events/${id}`);
+      if (id) {
+        router.push(
+          promptsRestored
+            ? `/admin/events/${id}/edit?restoredPrompts=1`
+            : `/admin/events/${id}`
+        );
+      }
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Could not recover world.");
     } finally {
@@ -156,7 +172,9 @@ export default function AdminEventsList() {
         <div className="mb-6 rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
           <p className="font-medium">Unattached generated worlds</p>
           <p className="mt-1 text-xs text-amber-200/80">
-            Runway stills/loops are in storage but not on a bloom yet — restore so those credits aren’t lost.
+            Runway stills/loops are in storage but not on a bloom yet — restore so those credits
+            aren’t lost. If you still have a form draft in this browser, journey prompts are
+            restored with the world.
           </p>
           <ul className="mt-3 space-y-2">
             {orphans.map((o) => (
