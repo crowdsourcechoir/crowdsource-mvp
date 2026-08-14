@@ -32,6 +32,8 @@ export type EventFormDraft = {
   agentBrief: AgentBrief | null;
   songGardenConfig: SongGardenConfig | null;
   journeySteps: JourneyStep[];
+  /** Runway vibe prompt (worldConfig.aiArtworkPrompt). */
+  aiArtworkPrompt?: string | null;
   /** Existing event id when editing; empty for create. */
   eventId?: string;
 };
@@ -77,7 +79,9 @@ export function shouldPersistDraft(input: {
   title?: string;
   slug?: string;
   journeySteps: unknown;
+  aiArtworkPrompt?: string | null;
 }): boolean {
+  if ((input.aiArtworkPrompt ?? "").trim()) return true;
   if (!journeyStepsHaveContent(input.journeySteps)) return false;
   if ((input.title ?? "").trim() || (input.slug ?? "").trim()) return true;
   return !isStockDefaultJourney(input.journeySteps);
@@ -91,7 +95,9 @@ export function readEventFormDraft(): EventFormDraft | null {
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed) || parsed.version !== 1) return null;
     const journeySteps = normalizeJourneySteps(parsed.journeySteps);
-    if (!journeyStepsHaveContent(journeySteps)) return null;
+    const aiArtworkPrompt =
+      typeof parsed.aiArtworkPrompt === "string" ? parsed.aiArtworkPrompt : null;
+    if (!journeyStepsHaveContent(journeySteps) && !(aiArtworkPrompt ?? "").trim()) return null;
     return {
       version: 1,
       savedAt: typeof parsed.savedAt === "number" ? parsed.savedAt : Date.now(),
@@ -115,6 +121,7 @@ export function readEventFormDraft(): EventFormDraft | null {
       agentBrief: (parsed.agentBrief as AgentBrief | null) ?? null,
       songGardenConfig: (parsed.songGardenConfig as SongGardenConfig | null) ?? null,
       journeySteps,
+      aiArtworkPrompt,
       eventId: typeof parsed.eventId === "string" ? parsed.eventId : undefined,
     };
   } catch {
@@ -131,6 +138,7 @@ export function writeEventFormDraft(
       title: draft.title,
       slug: draft.slug,
       journeySteps: draft.journeySteps,
+      aiArtworkPrompt: draft.aiArtworkPrompt,
     })
   ) {
     return;
@@ -155,6 +163,7 @@ export function writeEventFormDraft(
       agentBrief: draft.agentBrief ?? null,
       songGardenConfig: draft.songGardenConfig ?? null,
       journeySteps: normalizeJourneySteps(draft.journeySteps),
+      aiArtworkPrompt: draft.aiArtworkPrompt?.trim() || null,
       eventId: draft.eventId,
     };
     localStorage.setItem(EVENT_FORM_DRAFT_KEY, JSON.stringify(payload));
@@ -177,7 +186,10 @@ export function draftMatchesBloom(
   draft: EventFormDraft | null,
   opts: { slug?: string | null; eventId?: string | null }
 ): boolean {
-  if (!draft || !journeyStepsHaveContent(draft.journeySteps)) return false;
+  if (!draft) return false;
+  const hasJourney = journeyStepsHaveContent(draft.journeySteps);
+  const hasVibe = Boolean((draft.aiArtworkPrompt ?? "").trim());
+  if (!hasJourney && !hasVibe) return false;
   const slug = (opts.slug ?? "").trim().toLowerCase();
   const eventId = (opts.eventId ?? "").trim();
   if (eventId && draft.eventId && draft.eventId === eventId) return true;
@@ -206,7 +218,10 @@ export function draftToRestorePayload(draft: EventFormDraft) {
     agentBrief: draft.agentBrief,
     songGardenConfig: draft.songGardenConfig
       ? { ...draft.songGardenConfig, journeySteps: draft.journeySteps }
-      : { soundTransitionMessage: "", steps: [], journeySteps: draft.journeySteps },
-    journeySteps: draft.journeySteps,
+      : journeyStepsHaveContent(draft.journeySteps)
+        ? { soundTransitionMessage: "", steps: [], journeySteps: draft.journeySteps }
+        : undefined,
+    journeySteps: journeyStepsHaveContent(draft.journeySteps) ? draft.journeySteps : undefined,
+    aiArtworkPrompt: draft.aiArtworkPrompt?.trim() || undefined,
   };
 }

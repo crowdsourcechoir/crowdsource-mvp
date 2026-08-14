@@ -39,6 +39,7 @@ import {
   type WorldConfig,
 } from "@/lib/song-garden-v2/world-config";
 import FileDropZone from "@/components/ui/FileDropZone";
+import { updateEvent } from "@/data/eventsClient";
 import {
   clearEventFormDraft,
   journeyStepsHaveContent,
@@ -267,12 +268,14 @@ export default function EventForm({
     getAgentThemes().then(setThemes).catch(() => setThemes([]));
   }, []);
 
-  // Create flow: restore unsaved journey prompts after a timeout / failed create.
+  // Create flow: restore unsaved journey + vibe after a timeout / failed create.
   useEffect(() => {
     if (eventId) return;
-    if (journeyStepsHaveContent(initialProp?.journeySteps)) return;
     const draft = readEventFormDraft();
     if (!draft || !shouldPersistDraft(draft)) return;
+    const draftVibe = draft.aiArtworkPrompt?.trim() || "";
+    if (journeyStepsHaveContent(initialProp?.journeySteps) && !draftVibe) return;
+    if (draftVibe) setAiVibePrompt(draftVibe);
     setValues((v) => ({
       ...v,
       title: draft.title || v.title,
@@ -289,21 +292,30 @@ export default function EventForm({
       anthemCompletionMessage: draft.anthemCompletionMessage || v.anthemCompletionMessage,
       agentThemeId: draft.agentThemeId ?? v.agentThemeId,
       agentBrief: draft.agentBrief ?? v.agentBrief,
-      songGardenConfig: draft.songGardenConfig
-        ? normalizeSongGardenConfig({ ...draft.songGardenConfig, journeySteps: draft.journeySteps })
-        : v.songGardenConfig,
-      journeySteps: draft.journeySteps,
+      songGardenConfig:
+        draft.songGardenConfig && journeyStepsHaveContent(draft.journeySteps)
+          ? normalizeSongGardenConfig({ ...draft.songGardenConfig, journeySteps: draft.journeySteps })
+          : v.songGardenConfig,
+      journeySteps: journeyStepsHaveContent(draft.journeySteps) ? draft.journeySteps : v.journeySteps,
+      worldConfig: draftVibe
+        ? {
+            ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+            aiArtworkPrompt: draftVibe,
+          }
+        : v.worldConfig,
     }));
   }, [eventId, initialProp?.journeySteps]);
 
-  // Autosave prompts so Restore bloom / refresh don't lose the journey.
+  // Autosave prompts + vibe so Restore bloom / refresh don't lose them.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const vibe = aiVibePrompt.trim() || values.worldConfig?.aiArtworkPrompt?.trim() || "";
     if (
       !shouldPersistDraft({
         title: values.title,
         slug: values.slug,
         journeySteps: values.journeySteps,
+        aiArtworkPrompt: vibe,
       })
     ) {
       return;
@@ -327,6 +339,7 @@ export default function EventForm({
         agentBrief: values.agentBrief,
         songGardenConfig: values.songGardenConfig,
         journeySteps: values.journeySteps,
+        aiArtworkPrompt: vibe || null,
       });
     }, 400);
     return () => window.clearTimeout(t);
@@ -348,6 +361,8 @@ export default function EventForm({
     values.agentBrief,
     values.songGardenConfig,
     values.journeySteps,
+    values.worldConfig?.aiArtworkPrompt,
+    aiVibePrompt,
   ]);
 
   useEffect(() => {
@@ -487,6 +502,7 @@ export default function EventForm({
         agentBrief: brief,
         songGardenConfig,
         journeySteps,
+        aiArtworkPrompt: aiVibePrompt.trim() || null,
       });
       await onSubmit({
         ...values,
@@ -671,6 +687,42 @@ export default function EventForm({
     }));
   }
 
+  /** Persist vibe + storyboard immediately when editing an existing bloom (don't wait for Save). */
+  async function persistWorldToServer(nextWorld: WorldConfig): Promise<boolean> {
+    if (!eventId) return false;
+    const normalized = normalizeWorldConfigInput({
+      ...nextWorld,
+      aiArtworkPrompt: aiVibePrompt.trim() || nextWorld.aiArtworkPrompt || null,
+    });
+    if (!normalized) return false;
+    try {
+      await updateEvent(eventId, { worldConfig: normalized });
+      writeEventFormDraft({
+        eventId,
+        slug: values.slug,
+        title: values.title,
+        description: values.description,
+        date: values.date,
+        time: values.time,
+        venue: values.venue,
+        address: values.address,
+        prompt: values.prompt,
+        landingHeadline: values.landingHeadline,
+        landingCopy: values.landingCopy,
+        ctaText: values.ctaText,
+        anthemCompletionMessage: values.anthemCompletionMessage,
+        agentThemeId: values.agentThemeId,
+        agentBrief: values.agentBrief,
+        songGardenConfig: values.songGardenConfig,
+        journeySteps: values.journeySteps,
+        aiArtworkPrompt: normalized.aiArtworkPrompt,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function checkRunwayStatus() {
     setRunwayStatus({ checked: false, configured: false });
     try {
@@ -818,32 +870,33 @@ export default function EventForm({
       });
       const data = await res.json();
       if (Array.isArray(data.frames) && data.frames.length) {
-        setValues((v) => ({
-          ...v,
-          worldConfig: {
-            ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
-            worldStoryboard: data.frames,
-            aiArtworkPrompt: aiVibePrompt.trim() || null,
-          },
-        }));
-      }
-      if (!res.ok) {
-        const partial = Array.isArray(data.frames) ? data.frames.length : 0;
-        setAiGenError(
-          partial > 0
-            ? `${data.error} (${partial}/${aiFrameCount} frames generated before this — kept below, click Generate again to retry the rest.)`
-            : data.error || "Generation failed."
-        );
-      } else {
-        const refNote =
-          aiReferencePhotos.length > 1
-            ? ` (guided by ${aiReferencePhotos.length} reference photos)`
-            : aiReferencePhotos.length === 1
-              ? " (guided by your reference photo)"
-              : "";
-        setAiGenNotice(
-          `Generated ${data.frames.length} new world frames${refNote} (still + 10s loop each). Review below, then Save to keep them.`
-        );
+        const nextWorld: WorldConfig = {
+          ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+          worldStoryboard: data.frames,
+          aiArtworkPrompt: aiVibePrompt.trim() || null,
+        };
+        setValues((v) => ({ ...v, worldConfig: nextWorld }));
+        const saved = await persistWorldToServer(nextWorld);
+        if (!res.ok) {
+          const partial = data.frames.length;
+          setAiGenError(
+            `${data.error} (${partial}/${aiFrameCount} frames generated before this — kept below, click Generate again to retry the rest.)`
+          );
+        } else {
+          const refNote =
+            aiReferencePhotos.length > 1
+              ? ` (guided by ${aiReferencePhotos.length} reference photos)`
+              : aiReferencePhotos.length === 1
+                ? " (guided by your reference photo)"
+                : "";
+          setAiGenNotice(
+            saved
+              ? `Generated ${data.frames.length} new world frames${refNote} (still + 10s loop each). Vibe + frames saved.`
+              : `Generated ${data.frames.length} new world frames${refNote} (still + 10s loop each). Review below, then Save to keep them.`
+          );
+        }
+      } else if (!res.ok) {
+        setAiGenError(data.error || "Generation failed.");
       }
     } catch {
       setAiGenError("Could not reach the server.");
@@ -862,7 +915,7 @@ export default function EventForm({
     const existing = values.worldConfig?.worldStoryboard ?? [];
     setAiRegeneratingFrame(frameIndex);
     try {
-      const eventIdForPath = values.slug?.trim() || "draft";
+      const eventIdForPath = values.slug?.trim() || eventId || "draft";
       const siblingSceneUrls = existing.map((f) => f.sceneUrl ?? null);
       const siblingCount = siblingSceneUrls.filter(
         (url, idx) => idx !== frameIndex && Boolean(url)
@@ -886,18 +939,19 @@ export default function EventForm({
       }
       if (data.frame) {
         const next = [...existing, data.frame];
-        setValues((v) => ({
-          ...v,
-          worldConfig: {
-            ...(v.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
-            worldStoryboard: next,
-            aiArtworkPrompt: aiVibePrompt.trim() || null,
-          },
-        }));
+        const nextWorld: WorldConfig = {
+          ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+          worldStoryboard: next,
+          aiArtworkPrompt: aiVibePrompt.trim() || null,
+        };
+        setValues((v) => ({ ...v, worldConfig: nextWorld }));
+        const saved = await persistWorldToServer(nextWorld);
         setAiGenNotice(
-          siblingCount > 0
-            ? `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Use × to dump ones you don’t want, then Save.`
-            : `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Use × to dump ones you don’t want, then Save.`
+          saved
+            ? `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Vibe + frames saved.`
+            : siblingCount > 0
+              ? `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Use × to dump ones you don’t want, then Save.`
+              : `Added frame ${next.length} as a variation of frame ${frameIndex + 1} (original kept). Use × to dump ones you don’t want, then Save.`
         );
       }
     } catch {
@@ -1381,6 +1435,19 @@ export default function EventForm({
                 const next = e.target.value;
                 setAiVibePrompt(next);
                 setWorldConfigField("aiArtworkPrompt", next.trim() || null);
+              }}
+              onBlur={() => {
+                const vibe = aiVibePrompt.trim();
+                setWorldConfigField("aiArtworkPrompt", vibe || null);
+                if (!eventId || !vibe) return;
+                void persistWorldToServer({
+                  ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+                  aiArtworkPrompt: vibe,
+                }).then((saved) => {
+                  if (saved) {
+                    setAiGenNotice((prev) => prev ?? "Vibe prompt saved.");
+                  }
+                });
               }}
               placeholder="e.g. Sphere Las Vegas at desert sunset — Mojave dunes, bioluminescent mycelial garden…"
               rows={3}

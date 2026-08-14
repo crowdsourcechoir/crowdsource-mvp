@@ -14,6 +14,7 @@ import {
   rowToEvent,
   storyboardNeedsRecovery,
 } from "@/lib/events-db";
+import { leanWorldConfigKeepingVibe, type WorldConfig } from "@/lib/song-garden-v2/world-config";
 
 export const dynamic = "force-dynamic";
 
@@ -147,10 +148,11 @@ export async function POST(request: Request) {
       row.hero_image = hosted ?? "";
     }
 
-    // Phase 1: persist prompts + metadata without the heavy world payload so a
-    // world/timeout failure cannot wipe the journey Joel already wrote.
-    const worldConfig = row.world_config ?? null;
-    const leanRow = { ...row, world_config: null };
+    // Phase 1: persist journey + vibe without heavy storyboard frames so a
+    // world/timeout failure cannot wipe prompts Joel already wrote.
+    const worldConfig = (row.world_config as WorldConfig | null) ?? null;
+    const leanWorld = leanWorldConfigKeepingVibe(worldConfig);
+    const leanRow = { ...row, world_config: leanWorld };
     const { data, error } = await supabaseAdmin
       .from("events")
       .insert(leanRow)
@@ -159,7 +161,8 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
     const created = rowToEvent(data as Record<string, unknown>);
-    if (worldConfig) {
+    const hasHeavyWorld = Boolean(worldConfig?.worldStoryboard?.length);
+    if (worldConfig && hasHeavyWorld) {
       const { data: withWorld, error: worldError } = await supabaseAdmin
         .from("events")
         .update({ world_config: worldConfig })
@@ -169,13 +172,12 @@ export async function POST(request: Request) {
       if (!worldError && withWorld) {
         return NextResponse.json(rowToEvent(withWorld as Record<string, unknown>));
       }
-      // Prompts already saved — return the bloom even if world attach failed.
+      // Vibe (+ lean world) already saved — return that even if frames did not attach.
       return NextResponse.json({
         ...created,
-        worldConfig: null,
         _worldAttachError:
           worldError?.message ||
-          "Bloom saved with prompts, but the generated world did not attach. Use Restore bloom if stills are in storage.",
+          "Bloom saved with vibe/prompts, but storyboard frames did not attach. Use Restore bloom if stills are in storage.",
       });
     }
     return NextResponse.json(created);
