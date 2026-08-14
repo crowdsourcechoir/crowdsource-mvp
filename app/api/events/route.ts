@@ -146,9 +146,39 @@ export async function POST(request: Request) {
       const hosted = await resolveHeroImageForStorage(row.hero_image, tempId);
       row.hero_image = hosted ?? "";
     }
-    const { data, error } = await supabaseAdmin.from("events").insert(row).select(EVENT_LIST_SELECT).single();
+
+    // Phase 1: persist prompts + metadata without the heavy world payload so a
+    // world/timeout failure cannot wipe the journey Joel already wrote.
+    const worldConfig = row.world_config ?? null;
+    const leanRow = { ...row, world_config: null };
+    const { data, error } = await supabaseAdmin
+      .from("events")
+      .insert(leanRow)
+      .select(EVENT_DETAIL_SELECT)
+      .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json(rowToEvent(data as Record<string, unknown>));
+
+    const created = rowToEvent(data as Record<string, unknown>);
+    if (worldConfig) {
+      const { data: withWorld, error: worldError } = await supabaseAdmin
+        .from("events")
+        .update({ world_config: worldConfig })
+        .eq("id", created.id)
+        .select(EVENT_DETAIL_SELECT)
+        .single();
+      if (!worldError && withWorld) {
+        return NextResponse.json(rowToEvent(withWorld as Record<string, unknown>));
+      }
+      // Prompts already saved — return the bloom even if world attach failed.
+      return NextResponse.json({
+        ...created,
+        worldConfig: null,
+        _worldAttachError:
+          worldError?.message ||
+          "Bloom saved with prompts, but the generated world did not attach. Use Restore bloom if stills are in storage.",
+      });
+    }
+    return NextResponse.json(created);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

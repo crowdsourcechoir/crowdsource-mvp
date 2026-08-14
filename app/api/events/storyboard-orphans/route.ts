@@ -1,11 +1,48 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { EVENT_LIST_SELECT, listStoryboardOrphans, recoverStoryboardForEvent } from "@/lib/events-db";
+import {
+  EVENT_DETAIL_SELECT,
+  listStoryboardOrphans,
+  recoverStoryboardForEvent,
+  rowToEvent,
+} from "@/lib/events-db";
 import { normalizeWorldConfigInput } from "@/lib/song-garden-v2/world-config";
+import type { SongGardenConfig } from "@/lib/songgarden/config";
 
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { headers: { "Cache-Control": "no-store" } };
+
+type RestoreBody = {
+  prefix?: string;
+  eventId?: string;
+  title?: string;
+  slug?: string;
+  description?: string;
+  date?: string;
+  time?: string;
+  venue?: string;
+  address?: string;
+  prompt?: string;
+  landingHeadline?: string;
+  landingCopy?: string;
+  ctaText?: string;
+  anthemCompletionMessage?: string;
+  agentThemeId?: string | null;
+  agentBrief?: unknown;
+  songGardenConfig?: SongGardenConfig | null;
+  journeySteps?: unknown;
+};
+
+function songGardenFromBody(body: RestoreBody): SongGardenConfig | null {
+  const garden = body.songGardenConfig ?? null;
+  const journeySteps = body.journeySteps;
+  if (!garden && !Array.isArray(journeySteps)) return null;
+  return {
+    ...(garden ?? { soundTransitionMessage: "", steps: [] }),
+    ...(Array.isArray(journeySteps) ? { journeySteps } : {}),
+  };
+}
 
 /**
  * Find Runway storyboard files in storage that aren't attached to any event yet
@@ -26,24 +63,31 @@ export async function GET() {
 
 /**
  * Attach orphaned storyboard files to an existing event, or create a bloom
- * so the generated world isn't lost.
+ * so the generated world isn't lost. Accepts optional form-draft fields so
+ * journey prompts survive a create that timed out after Runway finished.
  */
 export async function POST(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Database not configured." }, { status: 503 });
   }
-  const body = (await request.json().catch(() => ({}))) as {
-    prefix?: string;
-    eventId?: string;
-    title?: string;
-  };
+  const body = (await request.json().catch(() => ({}))) as RestoreBody;
   const prefix = body.prefix?.trim();
   if (!prefix) return NextResponse.json({ error: "prefix is required." }, { status: 400 });
+
+  const draftGarden = songGardenFromBody(body);
 
   let eventId = body.eventId?.trim() || "";
   if (!eventId) {
     const bySlug = await supabaseAdmin.from("events").select("id").eq("slug", prefix).maybeSingle();
     eventId = bySlug.data?.id ?? "";
+  }
+  if (!eventId && body.slug?.trim()) {
+    const byDraftSlug = await supabaseAdmin
+      .from("events")
+      .select("id")
+      .eq("slug", body.slug.trim())
+      .maybeSingle();
+    eventId = byDraftSlug.data?.id ?? "";
   }
   if (!eventId) {
     const byId = await supabaseAdmin.from("events").select("id").eq("id", prefix).maybeSingle();
@@ -58,28 +102,41 @@ export async function POST(request: Request) {
       worldConfig: null,
     });
     const world = recovered.worldConfig ?? normalizeWorldConfigInput({ worldStoryboard: [] });
+    const insertSlug = (body.slug?.trim() || prefix).slice(0, 80);
     const { data, error } = await supabaseAdmin
       .from("events")
       .insert({
-        slug: prefix.slice(0, 80),
+        slug: insertSlug,
         title: body.title?.trim() || prefix.replace(/[-_]+/g, " "),
-        description: "",
-        date: today,
-        time: "19:00",
-        venue: "",
-        address: "",
-        prompt: "",
+        description: body.description ?? "",
+        date: body.date?.trim() || today,
+        time: body.time?.trim() || "19:00",
+        venue: body.venue ?? "",
+        address: body.address ?? "",
+        prompt: body.prompt ?? "",
+        landing_headline: body.landingHeadline,
+        landing_copy: body.landingCopy,
+        cta_text: body.ctaText,
+        anthem_completion_message: body.anthemCompletionMessage,
+        agent_theme_id: body.agentThemeId ?? null,
+        agent_brief: body.agentBrief ?? null,
+        song_garden_config: draftGarden,
         world_config: world,
       })
-      .select(EVENT_LIST_SELECT)
+      .select(EVENT_DETAIL_SELECT)
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json({ created: true, event: data, recovered: recovered.recovered });
+    return NextResponse.json({
+      created: true,
+      event: rowToEvent(data as Record<string, unknown>),
+      recovered: recovered.recovered,
+      promptsRestored: Boolean(draftGarden),
+    });
   }
 
   const { data: row, error } = await supabaseAdmin
     .from("events")
-    .select("id,slug,world_config")
+    .select("id,slug,world_config,song_garden_config,agent_brief")
     .eq("id", eventId)
     .single();
   if (error || !row) return NextResponse.json({ error: "Event not found." }, { status: 404 });
@@ -89,13 +146,46 @@ export async function POST(request: Request) {
     slug: row.slug,
     worldConfig: row.world_config,
   });
+
+  const updates: Record<string, unknown> = {};
   if (recovered.recovered && recovered.worldConfig) {
-    await supabaseAdmin.from("events").update({ world_config: recovered.worldConfig }).eq("id", row.id);
+    updates.world_config = recovered.worldConfig;
   }
+
+  // Fill empty prompt fields from the browser draft when the bloom is a shell.
+  const existingGarden = row.song_garden_config as SongGardenConfig | null;
+  const existingSteps = existingGarden?.journeySteps;
+  const hasExistingPrompts = Array.isArray(existingSteps) && existingSteps.length > 0;
+  if (draftGarden && !hasExistingPrompts) {
+    updates.song_garden_config = draftGarden;
+    if (body.agentBrief != null && row.agent_brief == null) {
+      updates.agent_brief = body.agentBrief;
+    }
+    if (body.title?.trim()) updates.title = body.title.trim();
+    if (body.description != null) updates.description = body.description;
+    if (body.date?.trim()) updates.date = body.date.trim();
+    if (body.time?.trim()) updates.time = body.time.trim();
+    if (body.venue != null) updates.venue = body.venue;
+    if (body.address != null) updates.address = body.address;
+    if (body.prompt != null) updates.prompt = body.prompt;
+    if (body.landingHeadline != null) updates.landing_headline = body.landingHeadline;
+    if (body.landingCopy != null) updates.landing_copy = body.landingCopy;
+    if (body.ctaText != null) updates.cta_text = body.ctaText;
+    if (body.anthemCompletionMessage != null) {
+      updates.anthem_completion_message = body.anthemCompletionMessage;
+    }
+    if (body.agentThemeId !== undefined) updates.agent_theme_id = body.agentThemeId;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await supabaseAdmin.from("events").update(updates).eq("id", row.id);
+  }
+
   return NextResponse.json({
     created: false,
     eventId: row.id,
     recovered: recovered.recovered,
     frameCount: recovered.worldConfig?.worldStoryboard?.length ?? 0,
+    promptsRestored: Boolean(draftGarden && !hasExistingPrompts),
   });
 }
