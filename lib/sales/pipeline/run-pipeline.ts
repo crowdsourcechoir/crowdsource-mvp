@@ -180,8 +180,9 @@ export async function runPipelineForOrganization(
 
     // Search-backed deepen pass (tracked as another `research` agent_runs row), then re-score:
     // (1) near-miss salvage for 45–69 totals, aimed at clearing SALES_DIGEST_MIN_SCORE (70);
-    // (2) date-gap fill even above 70 when we still lack a real calendar event date — otherwise
-    // high-scoring leads (e.g. NAEA at 77) skip web search and ship drafts with only a year/name.
+    // (2) date-gap fill even above 70 when we still lack a real calendar event date;
+    // (3) contact-gap: solid score (≥70) but no verified email yet — chase leadership pages so
+    //     enrichment has named people to match (the main reason high scorers stall out of queue).
     const nearMiss =
       scoreResult.totalScore >= DEEPEN_MIN_SCORE && scoreResult.totalScore < DEEPEN_MAX_SCORE;
     const hasCalendarDate = await organizationHasCalendarEventDate(organizationId);
@@ -190,7 +191,9 @@ export async function runPipelineForOrganization(
       !nearMiss &&
       !hasCalendarDate &&
       (scoreResult.totalScore >= DEEPEN_MAX_SCORE || missingInfoSuggestsDateGap(scoreResult.missingInformation));
-    const deepenFocus: DeepenFocus | null = nearMiss ? "full" : dateGap ? "dates" : null;
+    const contactGap =
+      !nearMiss && !dateGap && !contactIsQueueReady && scoreResult.totalScore >= DEEPEN_MAX_SCORE;
+    const deepenFocus: DeepenFocus | null = nearMiss ? "full" : dateGap ? "dates" : contactGap ? "full" : null;
 
     if (deepenFocus) {
       const deepen = await runStage(
@@ -199,22 +202,25 @@ export async function runPipelineForOrganization(
           opportunityId: opportunity.id,
           deepen: true,
           deepenFocus,
+          contactGap,
           priorScore: scoreResult.totalScore,
           missingInformation: scoreResult.missingInformation,
         },
         () => runDeepenResearchPass(freshOrg, pipelineRun.id, scoreResult!.missingInformation, deepenFocus)
       );
-      if (deepen && (deepen.findingsCreated > 0 || deepen.namedPeopleMentioned.length > 0)) {
+      // Always re-run contact stages after a contact-gap deepen (even if no new people were
+      // extracted — enrichment may now succeed on names we already had after a prior provider error).
+      if (deepen && (deepen.findingsCreated > 0 || deepen.namedPeopleMentioned.length > 0 || contactGap)) {
         if (deepen.namedPeopleMentioned.length > 0) {
           await runStage("find_contact", { organizationId, afterDeepen: true }, () =>
             runDiscoverContactsStage(freshOrg, deepen.namedPeopleMentioned)
           );
-          await runStage("enrich_contact", { organizationId, afterDeepen: true }, () => runEnrichContactsStage(freshOrg));
-          await runStage("verify_contact", { organizationId, afterDeepen: true }, () => runVerifyContactsStage(freshOrg));
-          const refreshedContacts = await listContactsForOrganization(organizationId);
-          bestContact = pickBestContact(refreshedContacts);
-          contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
         }
+        await runStage("enrich_contact", { organizationId, afterDeepen: true }, () => runEnrichContactsStage(freshOrg));
+        await runStage("verify_contact", { organizationId, afterDeepen: true }, () => runVerifyContactsStage(freshOrg));
+        const refreshedContacts = await listContactsForOrganization(organizationId);
+        bestContact = pickBestContact(refreshedContacts);
+        contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
         const rescored = await runStage("score", { opportunityId: opportunity.id, rescoreAfterDeepen: true }, () =>
           runScoreStage(freshOrg, opportunity, pipelineRun.id)
         );

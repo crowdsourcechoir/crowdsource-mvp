@@ -1,4 +1,5 @@
 import { listUnprocessedOrganizations } from "../db/organizations";
+import { listAwaitingContactOrganizationIds } from "../db/awaitingContact";
 import { getLastSucceededDigestRun } from "../db/digestRuns";
 import { listQueueItems } from "../db/queue";
 import { assembleQueueItemDetail } from "../db/assemble";
@@ -22,6 +23,7 @@ export type DigestEnsureResult = {
   topupBatches: number;
   discoveryRuns: number;
   nearMissReprocesses: number;
+  awaitingContactReprocesses: number;
   pipelineSummaries: PipelineBatchSummary[];
   send?: DigestSendResult;
   error?: string;
@@ -34,7 +36,8 @@ export type DigestEnsureResult = {
 };
 
 const MAX_DISCOVERY_RUNS_PER_ENSURE = 2;
-const MAX_NEAR_MISS_REPROCESSES_PER_ENSURE = 3;
+const MAX_NEAR_MISS_REPROCESSES_PER_ENSURE = 6;
+const MAX_AWAITING_CONTACT_REPROCESSES_PER_ENSURE = 6;
 
 /**
  * Pending queue orgs whose latest score sits in the deepen band (45–69) — candidates for a
@@ -93,6 +96,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       topupBatches: 0,
       discoveryRuns: 0,
       nearMissReprocesses: 0,
+      awaitingContactReprocesses: 0,
       pipelineSummaries: [],
     };
   }
@@ -102,10 +106,27 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
   let discoveryRuns = 0;
   let topupBatches = 0;
   let nearMissReprocesses = 0;
+  let awaitingContactReprocesses = 0;
   const nearMissTried = new Set<string>();
+  const awaitingTried = new Set<string>();
 
   const startedAt = Date.now();
   while (loaded.items.length < targetCount && Date.now() - startedAt < topupBudgetMs) {
+    // Highest ROI: solid scorers stuck only on the contact gate.
+    if (awaitingContactReprocesses < MAX_AWAITING_CONTACT_REPROCESSES_PER_ENSURE) {
+      const awaiting = (
+        await listAwaitingContactOrganizationIds(MAX_AWAITING_CONTACT_REPROCESSES_PER_ENSURE, minScore)
+      ).filter((row) => !awaitingTried.has(row.organizationId) && row.score >= minScore);
+      if (awaiting.length > 0) {
+        const orgId = awaiting[0].organizationId;
+        awaitingTried.add(orgId);
+        awaitingContactReprocesses += 1;
+        await runPipelineForOrganization(orgId, "reprocess_request");
+        loaded = await loadQualifyingDigestItems(minScore);
+        continue;
+      }
+    }
+
     const unprocessed = await listUnprocessedOrganizations(1);
     if (unprocessed.length > 0) {
       const batchLimit = Number(process.env.SALES_PIPELINE_BATCH_SIZE) || undefined;
@@ -142,11 +163,13 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
 
   if (loaded.items.length < targetCount) {
     // Intentionally no digest_runs row: only `succeeded` advances the "new since" cutoff.
-    const [stillUnprocessed, stillNearMiss] = await Promise.all([
+    const [stillUnprocessed, stillNearMiss, stillAwaiting] = await Promise.all([
       listUnprocessedOrganizations(1),
       listNearMissOrganizationIds(1),
+      listAwaitingContactOrganizationIds(1, minScore),
     ]);
-    const continuationRecommended = stillUnprocessed.length > 0 || stillNearMiss.length > 0;
+    const continuationRecommended =
+      stillUnprocessed.length > 0 || stillNearMiss.length > 0 || stillAwaiting.some((r) => r.score >= minScore);
     return {
       status: "deferred",
       qualifyingCount: loaded.items.length,
@@ -155,11 +178,12 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       topupBatches,
       discoveryRuns,
       nearMissReprocesses,
+      awaitingContactReprocesses,
       pipelineSummaries,
       continuationRecommended,
       error: continuationRecommended
         ? `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Continuing overnight top-up until the target is met.`
-        : `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). No unprocessed orgs or near-miss salvage left — discovery/pipeline must add more before another attempt helps.`,
+        : `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). No unprocessed orgs, awaiting-contact salvage, or near-miss salvage left — discovery/pipeline must add more before another attempt helps.`,
     };
   }
 
@@ -178,6 +202,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
     topupBatches,
     discoveryRuns,
     nearMissReprocesses,
+    awaitingContactReprocesses,
     pipelineSummaries,
     send,
     error: send.error,

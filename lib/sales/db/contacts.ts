@@ -129,8 +129,9 @@ export async function updateContactVerification(
 /**
  * Records the outcome of a paid enrichment API call and, if an email was found, sets it (and
  * resets email_verification_status to 'unverified' so the verify_contact stage re-checks it).
- * `enrichment_attempted_at` is always set regardless of outcome — this is what prevents the
- * pipeline from re-spending a credit on the same contact on every future re-run.
+ *
+ * `enrichment_attempted_at` is set on `found` / `not_found` only — provider errors (429, timeout,
+ * free-plan 403) must be retryable on the next pipeline re-run or after monthly credit reset.
  */
 export async function markContactEnriched(
   id: string,
@@ -138,11 +139,13 @@ export async function markContactEnriched(
 ): Promise<Contact> {
   const db = requireSupabaseAdmin();
   const patch: Record<string, unknown> = {
-    enrichment_attempted_at: new Date().toISOString(),
     enrichment_provider: result.provider,
     enrichment_status: result.status,
     updated_at: new Date().toISOString(),
   };
+  if (result.status === "found" || result.status === "not_found") {
+    patch.enrichment_attempted_at = new Date().toISOString();
+  }
   if (result.status === "found" && result.email) {
     patch.email = result.email;
     patch.normalized_email = normalizeEmail(result.email);

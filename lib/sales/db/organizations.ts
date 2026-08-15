@@ -48,7 +48,11 @@ export async function listOrganizations(params?: { limit?: number; search?: stri
   return (data ?? []).map(rowToOrganization);
 }
 
-/** Organizations that have never been through a real pipeline run (excludes the `csv_import` bookkeeping runs created at import time) and aren't marked as existing clients — the pool the "run next N" batch control draws from. Priority "A" rows (from the source CSVs) go first. */
+/** Organizations that have never been through a real pipeline run (excludes the `csv_import` bookkeeping runs created at import time) and aren't marked as existing clients — the pool the "run next N" batch control draws from.
+ *
+ * Ordering: Priority A CSV rows and recent `ai_discovered` rows are interleaved so discovery
+ * inventory is not starved behind a long Priority A backlog.
+ */
 export async function listUnprocessedOrganizations(limit: number): Promise<Organization[]> {
   const db = requireSupabaseAdmin();
   const { data: runs, error: runsError } = await db.from("pipeline_runs").select("organization_id").neq("trigger", "csv_import");
@@ -64,11 +68,35 @@ export async function listUnprocessedOrganizations(limit: number): Promise<Organ
   if (orgsError) throw new Error(orgsError.message);
 
   const candidates = (orgs ?? []).map(rowToOrganization).filter((o) => !processedIds.has(o.id));
-  candidates.sort((a, b) => {
-    const priority = (o: Organization) => String((o.importMetadata as { Priority?: string } | null)?.Priority ?? "Z");
-    return priority(a).localeCompare(priority(b));
-  });
-  return candidates.slice(0, limit);
+
+  const priorityOf = (o: Organization) =>
+    String((o.importMetadata as { Priority?: string } | null)?.Priority ?? "Z");
+
+  const priorityA = candidates.filter((o) => priorityOf(o) === "A");
+  const aiDiscovered = candidates
+    .filter((o) => o.source === "ai_discovered" && priorityOf(o) !== "A")
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const rest = candidates
+    .filter((o) => priorityOf(o) !== "A" && o.source !== "ai_discovered")
+    .sort((a, b) => priorityOf(a).localeCompare(priorityOf(b)));
+
+  const interleaved: Organization[] = [];
+  let iA = 0;
+  let iAi = 0;
+  let iRest = 0;
+  while (interleaved.length < limit && (iA < priorityA.length || iAi < aiDiscovered.length || iRest < rest.length)) {
+    if (iA < priorityA.length) interleaved.push(priorityA[iA++]);
+    if (interleaved.length >= limit) break;
+    if (iAi < aiDiscovered.length) interleaved.push(aiDiscovered[iAi++]);
+    if (interleaved.length >= limit) break;
+    // Every other cycle also pull from the non-A remainder so B-list CSV still moves.
+    if (iRest < rest.length && interleaved.length % 3 === 2) interleaved.push(rest[iRest++]);
+  }
+  while (interleaved.length < limit && iRest < rest.length) interleaved.push(rest[iRest++]);
+  while (interleaved.length < limit && iA < priorityA.length) interleaved.push(priorityA[iA++]);
+  while (interleaved.length < limit && iAi < aiDiscovered.length) interleaved.push(aiDiscovered[iAi++]);
+
+  return interleaved;
 }
 
 export async function getOrganization(id: string): Promise<Organization | null> {

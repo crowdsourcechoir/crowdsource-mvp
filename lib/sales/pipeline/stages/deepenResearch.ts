@@ -6,8 +6,8 @@ import type { Organization } from "../../types";
 export const DEEPEN_MIN_SCORE = 45;
 export const DEEPEN_MAX_SCORE = 70;
 
-const MAX_DEEPEN_QUERIES = 4;
-const MAX_DEEPEN_PAGES = 5;
+const MAX_DEEPEN_QUERIES = 6;
+const MAX_DEEPEN_PAGES = 8;
 const SKIP_URL_PATTERN = /facebook\.com|twitter\.com|x\.com|instagram\.com|linkedin\.com|youtube\.com|tiktok\.com/i;
 
 export type DeepenFocus = "full" | "dates";
