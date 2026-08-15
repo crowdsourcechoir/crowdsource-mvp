@@ -79,11 +79,12 @@ export async function ensureContactDrafts(input: {
   const drafts: OutreachDraft[] = [];
 
   for (const contact of contacts) {
-    const found = existing.find(
-      (d) => d.kind === "initial" && d.contactId === contact.id && (d.status === "draft" || d.status === "qa_flagged")
-    );
-    if (found) {
-      drafts.push(found);
+    const candidates = existing
+      .filter((d) => d.kind === "initial" && d.contactId === contact.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const open = candidates.find((d) => d.status === "draft" || d.status === "qa_flagged");
+    if (open) {
+      drafts.push(open);
       continue;
     }
     const copy = draftCopyForContact(input.organization.name, contact);
