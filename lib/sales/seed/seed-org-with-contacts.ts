@@ -11,6 +11,7 @@ import {
 } from "@/lib/sales/db/organizations";
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { runPipelineForOrganization } from "@/lib/sales/pipeline/run-pipeline";
+import { enqueueOrgManually, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
 import type { Contact, Organization } from "@/lib/sales/types";
 
 export type SeedContactInput = {
@@ -30,6 +31,14 @@ export type SeedOrgWithContactsInput = {
   contacts: SeedContactInput[];
   /** Run full pipeline so opportunity + queue row are created. Default true. */
   runPipeline?: boolean;
+  /**
+   * If AI pipeline fails (e.g. OpenAI out of credits) or this is true, create opportunity +
+   * score + draft + queue row without AI.
+   */
+  forceManualQueue?: boolean;
+  manualQueueTitle?: string;
+  manualQueueDescription?: string;
+  manualEventName?: string;
 };
 
 export type SeedOrgWithContactsResult = {
@@ -39,6 +48,7 @@ export type SeedOrgWithContactsResult = {
   contactsCreated: number;
   contactsUpdated: number;
   pipeline: Awaited<ReturnType<typeof runPipelineForOrganization>> | null;
+  manualEnqueue: ManualEnqueueResult | null;
 };
 
 /**
@@ -116,9 +126,32 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
   }
 
   const runPipeline = input.runPipeline !== false;
-  const pipeline = runPipeline
-    ? await runPipelineForOrganization(organization.id, created ? "manual" : "reprocess_request")
-    : null;
+  let pipeline: Awaited<ReturnType<typeof runPipelineForOrganization>> | null = null;
+  if (runPipeline && !input.forceManualQueue) {
+    pipeline = await runPipelineForOrganization(organization.id, created ? "manual" : "reprocess_request");
+  }
+
+  const pipelineFailed =
+    !pipeline ||
+    pipeline.status === "failed" ||
+    pipeline.opportunityIds.length === 0 ||
+    !(pipeline.stagesRun ?? []).some((s) => s.stage === "queue" && s.status === "succeeded");
+
+  let manualEnqueue: ManualEnqueueResult | null = null;
+  if (input.forceManualQueue || (runPipeline && pipelineFailed)) {
+    manualEnqueue = await enqueueOrgManually({
+      organization,
+      title:
+        input.manualQueueTitle ??
+        `${organization.name} — Song Garden / shared-creation anthem (training camp & game ritual)`,
+      description:
+        input.manualQueueDescription ??
+        "Participatory anthem / belonging ritual for training camp and in-stadium moments. Doorway contacts (COO, game entertainment, marketing) verified via Hunter Email Finder.",
+      eventOrInitiativeName: input.manualEventName ?? "Training camp / game entertainment ritual",
+      opportunityTypeKey: "brand_moment",
+      totalScoreHint: 82,
+    });
+  }
 
   return {
     organization,
@@ -127,6 +160,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     contactsCreated,
     contactsUpdated,
     pipeline,
+    manualEnqueue,
   };
 }
 

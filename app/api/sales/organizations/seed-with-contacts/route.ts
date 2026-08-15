@@ -61,6 +61,7 @@ export async function POST(request: Request) {
             stagesRun: result.pipeline.stagesRun,
           }
         : null,
+      manualEnqueue: result.manualEnqueue,
     });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
