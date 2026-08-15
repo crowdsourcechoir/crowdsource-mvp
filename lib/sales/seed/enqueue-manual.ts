@@ -7,6 +7,7 @@ import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
 import { looksLikePersonName, hasVerifiedEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
+import { buildSeahawksEmail } from "@/lib/sales/outreach/sports-voice";
 import { computeTotalScore } from "@/lib/sales/scoring/score";
 import { SCORE_COMPONENT_KEYS, type Contact, type Organization, type OutreachDraft, type ScoreComponentKey } from "@/lib/sales/types";
 
@@ -49,26 +50,26 @@ function pickPrimaryContact(contacts: Contact[]): Contact | null {
 
 function draftCopyForContact(orgName: string, contact: Contact): { subject: string; body: string } {
   const firstName = (contact.fullName ?? "there").split(/\s+/)[0];
-  const title = (contact.roleTitle ?? "").toLowerCase();
-
-  let angle: string;
-  if (/game entertainment|special events|entertainment experience|programming/.test(title)) {
-    angle =
-      "a natural doorway is training camp and in-stadium ritual: an anthem the crowd helps make, then owns — sitting in game entertainment / fan experience.";
-  } else if (/marketing/.test(title)) {
-    angle =
-      "a natural doorway is brand and belonging: a shared-creation anthem that gives fans identity they help author, not just consume.";
-  } else if (/coo|chief operating|operations/.test(title)) {
-    angle =
-      "this is a club-wide belonging play — operations often helps route the right owners across entertainment and marketing.";
-  } else {
-    angle =
-      "a natural doorway is training camp and game-day ritual: fans helping create an anthem they then own together.";
+  if (/seahawk/i.test(orgName)) {
+    return buildSeahawksEmail({ firstName, roleTitle: contact.roleTitle });
   }
-
+  // Non-Seahawks sports manual drafts stay short until we have Joel-finals for that club.
+  const title = (contact.roleTitle ?? "").toLowerCase();
+  let angle =
+    "a natural doorway is game-day ritual and fan belonging: supporters helping create an anthem they then own together.";
+  if (/entertainment|special events|programming|presentation/.test(title)) {
+    angle =
+      "a natural doorway is live entertainment and in-venue ritual — participation fans help create, not only consume.";
+  } else if (/marketing|fan engagement|brand/.test(title)) {
+    angle =
+      "a natural doorway is brand and belonging: a shared-creation story fans help author across the season.";
+  } else if (/coo|chief operating|operations|athletics director|athletic director/.test(title)) {
+    angle =
+      "this is an org-wide belonging play — operations often helps route the right owners across entertainment and marketing.";
+  }
   return {
-    subject: `${orgName} — shared-creation anthem for training camp / fan ritual`,
-    body: `Hi ${firstName},\n\nWe're Crowdsource / Song Garden — we help teams turn belonging into a shared song fans and community help create live (not a playlist, not a one-way performance).\n\nFor the Seahawks, ${angle}\n\nWould you or the right teammate take a short look at fit?\n\n— Joel\n\n[Draft for queue review — edit before approving.]`,
+    subject: `Crowdsourcing a ${orgName} choir`,
+    body: `Hi ${firstName},\n\nI’m Joel DeJong, founder of Crowdsource Choir here in Seattle. We design and deliver participatory music experiences, custom anthems, and crowdsourced chants to create energy, resonance, and cohesion within groups.\n\nFor ${orgName}, ${angle}\n\nI’d love to connect, share what we’re building, and explore whether there’s a fit — or be pointed to the right person.\n\nThere’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book\n\nBest,\nJoel`,
   };
 }
 

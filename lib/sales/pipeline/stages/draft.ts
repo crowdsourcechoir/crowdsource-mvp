@@ -8,6 +8,7 @@ import { indexFindingsForPrompt, resolveFindingIds } from "../context";
 import { hasVerifiedEmail } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
 import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "../../outreach/bookUrl";
+import { SPORTS_VOICE_REFERENCE_EMAILS } from "../../outreach/sports-voice";
 import type { Contact, Organization, Opportunity } from "../../types";
 import type { BriefStageOutput } from "./brief";
 
@@ -58,9 +59,13 @@ If it resonates, I'd love to connect and explore whether Crowdsource Choir might
 Thanks for your time, and I hope we have a chance to connect.
 
 Best,
-Joel DeJong`;
+Joel DeJong
 
-const SYSTEM_PROMPT = `You fill in three fields (subject, openingReason, fitReason) inside a fixed outreach email template — you do not write a full free-form email, and you do not write the greeting, sign-off, or closing ask, those are already fixed elsewhere. Match the voice of the two real emails below exactly: warm but plain-spoken, never salesy, no corporate throat-clearing.
+${SPORTS_VOICE_REFERENCE_EMAILS}`;
+
+const SYSTEM_PROMPT = `You fill in three fields (subject, openingReason, fitReason) inside a fixed outreach email template — you do not write a full free-form email, and you do not write the greeting, sign-off, or closing ask, those are already fixed elsewhere. Match the voice of the real emails below exactly: warm but plain-spoken, never salesy, no corporate throat-clearing.
+
+For conference/association prospects, prefer EXAMPLES 1–2. For sports / team / athletics / fan-culture prospects, prefer the SPORTS EXAMPLES (belonging with the fan base, training camp / game-day / season-long participation — not “conference theme”).
 
 ${VOICE_REFERENCE_EMAILS}
 
