@@ -32,7 +32,22 @@ async function main() {
   const merged = mergeRecoveredStoryboard({ worldStoryboard: [] }, frames);
   assert.equal(merged.worldStoryboard.length, 2);
 
-  console.log("ok — storyboard recovery grouping");
+  const { listStoryboardVersions } = await load("lib/events-db.ts");
+  const versions = listStoryboardVersions(
+    [
+      { name: "csc-dec3-scene-1-100.jpg", created_at: "2026-08-15T00:00:00Z" },
+      { name: "csc-dec3-frame-1-101.mp4", created_at: "2026-08-15T00:00:10Z" },
+      { name: "csc-dec3-scene-1-200.jpg", created_at: "2026-08-15T01:00:00Z" },
+      { name: "csc-dec3-frame-1-201.mp4", created_at: "2026-08-15T01:00:10Z" },
+      { name: "other-scene-1-300.jpg", created_at: "2026-08-15T02:00:00Z" },
+    ],
+    ["csc-dec3"]
+  );
+  assert.equal(versions.length, 2);
+  assert.ok(versions[0].sceneFilename?.includes("200"));
+  assert.ok(versions[1].sceneFilename?.includes("100"));
+
+  console.log("ok — storyboard recovery grouping + versions");
 }
 
 main().catch((err) => {

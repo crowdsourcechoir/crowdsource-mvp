@@ -228,18 +228,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const frameCount = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, body.frameCount || DEFAULT_FRAMES));
+  const existingSiblings = Array.isArray(body.siblingSceneUrls) ? body.siblingSceneUrls : [];
+  const startIndex = existingSiblings.length;
+  const newCount = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, body.frameCount || DEFAULT_FRAMES));
+  const boardSpan = Math.max(startIndex + newCount, newCount);
   const frames: WorldStoryboardFrame[] = [];
 
-  for (let i = 0; i < frameCount; i += 1) {
+  for (let i = 0; i < newCount; i += 1) {
     try {
+      const frameIndex = startIndex + i;
+      const siblingSceneUrls = [
+        ...existingSiblings,
+        ...frames.map((f) => f.sceneUrl ?? null),
+      ];
       frames.push(
         await generateOneFrame({
           eventId,
           vibePrompt,
-          frameIndex: i,
-          frameCount,
+          frameIndex,
+          frameCount: boardSpan,
           placeUris,
+          siblingSceneUrls,
         })
       );
     } catch (err) {
@@ -251,12 +260,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           code,
           frames,
           framesCompleted: frames.length,
-          framesRequested: frameCount,
+          framesRequested: newCount,
+          appendedFrom: startIndex,
         },
         { status: code === "insufficient_credits" ? 402 : 502 }
       );
     }
   }
 
-  return NextResponse.json({ frames });
+  return NextResponse.json({ frames, appendedFrom: startIndex });
 }

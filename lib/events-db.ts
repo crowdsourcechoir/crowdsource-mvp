@@ -71,9 +71,15 @@ async function listStoryboardFiles(): Promise<StorageFile[]> {
 }
 
 function publicStoryboardUrl(filename: string): string {
-  if (!supabaseAdmin) return `storyboards/${filename}`;
-  const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(`storyboards/${filename}`);
-  return data.publicUrl;
+  if (supabaseAdmin) {
+    const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(`storyboards/${filename}`);
+    return data.publicUrl;
+  }
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  if (base) {
+    return `${base}/storage/v1/object/public/${BUCKET}/storyboards/${filename}`;
+  }
+  return `/song-garden-v2/world-scenes/generated/${filename}`;
 }
 
 export type RecoveredStoryboard = {
@@ -214,4 +220,121 @@ export async function listStoryboardOrphans(knownSlugsAndIds: string[]): Promise
     orphans.push({ prefix, frameCount: frames.length });
   }
   return orphans.sort((a, b) => b.frameCount - a.frameCount);
+}
+
+/** One historical still+loop pair for a frame slot (includes superseded regenerations). */
+export type StoryboardVersion = {
+  prefix: string;
+  frameIndex: number;
+  sceneUrl: string | null;
+  videoUrl: string | null;
+  createdAt: string | null;
+  sceneFilename: string | null;
+  videoFilename: string | null;
+};
+
+/**
+ * Every persisted scene/video for the given event prefixes — not just the newest per slot.
+ * Used to restore frames that Generate used to replace in worldConfig.
+ */
+export function listStoryboardVersions(
+  files: StorageFile[],
+  prefixes: string[]
+): StoryboardVersion[] {
+  const want = new Set(prefixes.map((p) => p.trim().toLowerCase()).filter(Boolean));
+  if (!want.size) return [];
+
+  type Named = { name: string; created?: string; prefix: string; index: number };
+  const scenes: Named[] = [];
+  const videos: Named[] = [];
+
+  for (const file of files) {
+    const scene = SCENE_RE.exec(file.name);
+    if (scene) {
+      const prefix = scene[1].toLowerCase();
+      if (!want.has(prefix)) continue;
+      scenes.push({
+        name: file.name,
+        created: file.created_at,
+        prefix,
+        index: Number(scene[2]) - 1,
+      });
+      continue;
+    }
+    const video = VIDEO_RE.exec(file.name);
+    if (video) {
+      const prefix = video[1].toLowerCase();
+      if (!want.has(prefix)) continue;
+      videos.push({
+        name: file.name,
+        created: file.created_at,
+        prefix,
+        index: Number(video[2]) - 1,
+      });
+    }
+  }
+
+  const bySlot = new Map<string, { scenes: Named[]; videos: Named[] }>();
+  function slot(prefix: string, index: number) {
+    const key = `${prefix}::${index}`;
+    let entry = bySlot.get(key);
+    if (!entry) {
+      entry = { scenes: [], videos: [] };
+      bySlot.set(key, entry);
+    }
+    return entry;
+  }
+  for (const s of scenes) slot(s.prefix, s.index).scenes.push(s);
+  for (const v of videos) slot(v.prefix, v.index).videos.push(v);
+
+  const newerFirst = (a: Named, b: Named) => {
+    const ac = a.created ?? "";
+    const bc = b.created ?? "";
+    if (ac !== bc) return bc.localeCompare(ac);
+    return b.name.localeCompare(a.name);
+  };
+
+  const out: StoryboardVersion[] = [];
+  for (const [key, entry] of Array.from(bySlot.entries())) {
+    const [prefix, idxStr] = key.split("::");
+    const frameIndex = Number(idxStr);
+    entry.scenes.sort(newerFirst);
+    entry.videos.sort(newerFirst);
+    const n = Math.max(entry.scenes.length, entry.videos.length);
+    for (let i = 0; i < n; i += 1) {
+      const scene = entry.scenes[i];
+      const video = entry.videos[i];
+      out.push({
+        prefix,
+        frameIndex,
+        sceneUrl: scene ? publicStoryboardUrl(scene.name) : null,
+        videoUrl: video ? publicStoryboardUrl(video.name) : null,
+        createdAt: scene?.created ?? video?.created ?? null,
+        sceneFilename: scene?.name ?? null,
+        videoFilename: video?.name ?? null,
+      });
+    }
+  }
+
+  return out.sort((a, b) => {
+    const ac = a.createdAt ?? "";
+    const bc = b.createdAt ?? "";
+    if (ac !== bc) return bc.localeCompare(ac);
+    if (a.frameIndex !== b.frameIndex) return a.frameIndex - b.frameIndex;
+    return 0;
+  });
+}
+
+export async function listStoryboardVersionsForEvent(opts: {
+  eventId: string;
+  slug?: string | null;
+}): Promise<StoryboardVersion[]> {
+  const files = await listStoryboardFiles();
+  const prefixes = [opts.slug, opts.eventId]
+    .map((p) => (typeof p === "string" ? p.trim().toLowerCase() : ""))
+    .filter(Boolean);
+  // de-dupe while preserving order
+  const seen = new Set<string>();
+  const unique = prefixes.filter((p) => (seen.has(p) ? false : (seen.add(p), true)));
+  return listStoryboardVersions(files, unique);
 }

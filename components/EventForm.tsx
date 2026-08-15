@@ -264,6 +264,16 @@ export default function EventForm({
   const [aiRegeneratingFrame, setAiRegeneratingFrame] = useState<number | null>(null);
   const [aiGenError, setAiGenError] = useState<string | null>(null);
   const [aiGenNotice, setAiGenNotice] = useState<string | null>(null);
+  const [storyboardVersions, setStoryboardVersions] = useState<
+    Array<{
+      prefix: string;
+      frameIndex: number;
+      sceneUrl: string | null;
+      videoUrl: string | null;
+      createdAt: string | null;
+    }>
+  >([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
   /** Lightbox preview for a storyboard still/loop or a place reference. */
   const [mediaPreview, setMediaPreview] = useState<{
     title: string;
@@ -872,15 +882,18 @@ export default function EventForm({
       setAiGenError("Describe the vibe (place, mood, community) first — the AI invents a new world from that.");
       return;
     }
+    const existing = values.worldConfig?.worldStoryboard ?? [];
     setAiGenerating(true);
     try {
-      const eventIdForPath = values.slug?.trim() || "draft";
+      const eventIdForPath = values.slug?.trim() || eventId || "draft";
       const res = await fetch(`/api/events/${encodeURIComponent(eventIdForPath)}/generate-storyboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vibePrompt: aiVibePrompt,
           frameCount: aiFrameCount,
+          // Continuity with frames already on the board (Generate never replaces them).
+          siblingSceneUrls: existing.map((f) => f.sceneUrl ?? null),
           ...(aiReferencePhotos.length ? { referenceUrls: aiReferencePhotos } : {}),
         }),
       });
@@ -888,7 +901,7 @@ export default function EventForm({
       if (Array.isArray(data.frames) && data.frames.length) {
         const nextWorld: WorldConfig = {
           ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
-          worldStoryboard: data.frames,
+          worldStoryboard: [...existing, ...data.frames],
           aiArtworkPrompt: aiVibePrompt.trim() || null,
         };
         setValues((v) => ({ ...v, worldConfig: nextWorld }));
@@ -896,7 +909,7 @@ export default function EventForm({
         if (!res.ok) {
           const partial = data.frames.length;
           setAiGenError(
-            `${data.error} (${partial}/${aiFrameCount} frames generated before this — kept below, click Generate again to retry the rest.)`
+            `${data.error} (${partial}/${aiFrameCount} frames generated before this — kept below with your earlier frames; Generate again to add more.)`
           );
         } else {
           const refNote =
@@ -907,8 +920,8 @@ export default function EventForm({
                 : "";
           setAiGenNotice(
             saved
-              ? `Generated ${data.frames.length} new world frames${refNote} (still + 10s loop each). Vibe + frames saved.`
-              : `Generated ${data.frames.length} new world frames${refNote} (still + 10s loop each). Review below, then Save to keep them.`
+              ? `Added ${data.frames.length} frame${data.frames.length === 1 ? "" : "s"}${refNote} (still + 10s loop). Nothing was replaced — dump with × only if you want a frame gone.`
+              : `Added ${data.frames.length} frame${data.frames.length === 1 ? "" : "s"}${refNote}. Review below, then Save. Nothing was replaced.`
           );
         }
       } else if (!res.ok) {
@@ -919,6 +932,86 @@ export default function EventForm({
     } finally {
       setAiGenerating(false);
     }
+  }
+
+  async function handleLoadStoryboardVersions() {
+    setAiGenError(null);
+    setAiGenNotice(null);
+    const key = values.slug?.trim() || eventId;
+    if (!key) {
+      setAiGenError("Save the bloom (or set a slug) first so we know which storage prefix to search.");
+      return;
+    }
+    setLoadingVersions(true);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(key)}/storyboard-versions`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiGenError(data.error || "Could not load stored frame versions.");
+        return;
+      }
+      const versions = Array.isArray(data.versions) ? data.versions : [];
+      setStoryboardVersions(versions);
+      const onBoard = new Set(
+        (values.worldConfig?.worldStoryboard ?? []).flatMap((f) =>
+          [f.sceneUrl, f.videoUrl].filter(Boolean)
+        )
+      );
+      const unlinked = versions.filter(
+        (v: { sceneUrl: string | null; videoUrl: string | null }) =>
+          (v.sceneUrl && !onBoard.has(v.sceneUrl)) || (v.videoUrl && !onBoard.has(v.videoUrl))
+      );
+      setAiGenNotice(
+        unlinked.length
+          ? `Found ${unlinked.length} stored generation${unlinked.length === 1 ? "" : "s"} not on this board — add any you want back below.`
+          : versions.length
+            ? "All stored generations for this bloom are already on the board."
+            : "No stored storyboard files found for this bloom’s slug/id yet."
+      );
+    } catch {
+      setAiGenError("Could not reach the server.");
+    } finally {
+      setLoadingVersions(false);
+    }
+  }
+
+  function handleAddVersionToBoard(version: {
+    sceneUrl: string | null;
+    videoUrl: string | null;
+    frameIndex: number;
+  }) {
+    const existing = values.worldConfig?.worldStoryboard ?? [];
+    if (
+      existing.some(
+        (f) =>
+          (version.sceneUrl && f.sceneUrl === version.sceneUrl) ||
+          (version.videoUrl && f.videoUrl === version.videoUrl)
+      )
+    ) {
+      setAiGenNotice("That generation is already on the board.");
+      return;
+    }
+    const nextWorld: WorldConfig = {
+      ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+      worldStoryboard: [
+        ...existing,
+        {
+          sceneUrl: version.sceneUrl,
+          videoUrl: version.videoUrl,
+          energy: existing.length > 0 ? 1 : version.frameIndex > 0 ? 1 : 0,
+        },
+      ],
+    };
+    setValues((v) => ({ ...v, worldConfig: nextWorld }));
+    void persistWorldToServer(nextWorld).then((saved) => {
+      setAiGenNotice(
+        saved
+          ? "Restored that generation onto the board (saved)."
+          : "Restored onto the board — Save the bloom to keep it."
+      );
+    });
   }
 
   async function handleRegenerateFrame(frameIndex: number) {
@@ -1512,11 +1605,74 @@ export default function EventForm({
             </button>
           </div>
           <p className="text-[11px] text-gray-500">
-            <span className="text-gray-400">Regen</span> adds another variation and keeps the original —
-            dump with × when you don’t want a frame.{" "}
-            <span className="text-gray-400">Generate with AI</span> rebuilds a new set (replaces the list
-            in this form until you Save).
+            <span className="text-gray-400">Generate</span> and{" "}
+            <span className="text-gray-400">Regen</span> always add frames — nothing is replaced.
+            Only the × removes a frame from this board.{" "}
+            <button
+              type="button"
+              onClick={() => void handleLoadStoryboardVersions()}
+              disabled={loadingVersions || aiGenerating}
+              className="text-[#CFFF81]/90 underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              {loadingVersions ? "Searching storage…" : "Find earlier generations"}
+            </button>
           </p>
+          {storyboardVersions.length > 0 && (() => {
+            const onBoard = new Set(
+              (values.worldConfig?.worldStoryboard ?? []).flatMap((f) =>
+                [f.sceneUrl, f.videoUrl].filter(Boolean)
+              )
+            );
+            const unlinked = storyboardVersions.filter(
+              (v) =>
+                (v.sceneUrl && !onBoard.has(v.sceneUrl)) ||
+                (v.videoUrl && !onBoard.has(v.videoUrl))
+            );
+            if (!unlinked.length) return null;
+            return (
+              <div className="space-y-2 rounded-lg border border-gray-800 bg-black/30 p-2">
+                <p className="text-[11px] text-gray-400">
+                  Stored generations not on this board (media was kept in storage):
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {unlinked.map((v, i) => (
+                    <div
+                      key={`${v.sceneUrl ?? v.videoUrl ?? i}-${v.createdAt ?? i}`}
+                      className="flex flex-col gap-1"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMediaPreview({
+                            title: `Earlier · slot ${v.frameIndex + 1}`,
+                            stillUrl: v.sceneUrl,
+                            videoUrl: v.videoUrl,
+                          })
+                        }
+                        className="relative h-14 w-24 overflow-hidden rounded ring-offset-2 ring-offset-[#18181b] hover:ring-2 hover:ring-[#CFFF81]/70"
+                      >
+                        {v.sceneUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={v.sceneUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="flex h-full items-center justify-center text-[10px] text-gray-500">
+                            video
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAddVersionToBoard(v)}
+                        className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-[#CFFF81] hover:bg-white/15"
+                      >
+                        Add to board
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {aiReferencePhotos.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               {aiReferencePhotos.map((src, i) => (
