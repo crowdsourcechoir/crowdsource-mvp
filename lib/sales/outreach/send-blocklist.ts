@@ -1,9 +1,10 @@
 /**
  * Hard outbound blocklist — cannot be overridden by env flags.
- * Added after accidental multi-send to Tyler Cofer (Seahawks), 2026-08-15.
+ * Cleared 2026-08-15 after Joel asked to re-add Tyler Cofer to the Seahawks queue.
+ * Keep the helper so a future incident can re-block specific addresses quickly.
  */
-const HARD_BLOCKED_EMAILS = new Set([
-  "tylerc@seahawks.com",
+const HARD_BLOCKED_EMAILS = new Set<string>([
+  // intentionally empty — tylerc@seahawks.com was removed at Joel's request
 ]);
 
 export function normalizeEmailForBlocklist(email: string): string {

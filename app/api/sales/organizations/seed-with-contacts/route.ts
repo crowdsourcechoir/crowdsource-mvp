@@ -22,7 +22,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as SeedOrgWithContactsInput & { preset?: string };
+    const body = (await request.json()) as SeedOrgWithContactsInput & {
+      preset?: string;
+      remintTyler?: boolean;
+    };
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -30,6 +33,11 @@ export async function POST(request: Request) {
             runPipeline: body.runPipeline !== false,
             forceManualQueue: Boolean(body.forceManualQueue),
             reopenDecided: Boolean(body.reopenDecided),
+            remintApprovedEmails: Array.isArray(body.remintApprovedEmails)
+              ? body.remintApprovedEmails
+              : body.remintTyler
+                ? ["tylerc@seahawks.com"]
+                : undefined,
             manualQueueTitle: body.manualQueueTitle,
             manualQueueDescription: body.manualQueueDescription,
             manualEventName: body.manualEventName,

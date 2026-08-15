@@ -77,7 +77,15 @@ export async function ensureContactDrafts(input: {
   organization: Organization;
   opportunityId: string;
   pipelineRunId?: string | null;
+  /**
+   * Mint a fresh open draft even if this contact already has an approved/rejected initial
+   * (explicit operator remint — e.g. re-add Tyler after a hard-block).
+   */
+  remintApprovedEmails?: string[];
 }): Promise<{ drafts: OutreachDraft[]; primaryDraft: OutreachDraft; primaryContact: Contact }> {
+  const remint = new Set(
+    (input.remintApprovedEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean)
+  );
   const contacts = readyContacts(await listContactsForOrganization(input.organization.id));
   if (contacts.length === 0) {
     throw new Error("No named contact with a verified-format email — cannot enqueue.");
@@ -110,13 +118,15 @@ export async function ensureContactDrafts(input: {
       }
       continue;
     }
+    const emailKey = (contact.email ?? "").trim().toLowerCase();
+    const allowRemint = Boolean(emailKey && remint.has(emailKey));
     // Never mint a fresh draft after this contact was already approved/sent — that caused
-    // multi-approve loops that re-emailed the same person (Tyler spam).
+    // multi-approve loops that re-emailed the same person — unless operator explicitly remints.
     const alreadyHandled = candidates.find(
       (d) =>
         d.status === "approved" || d.status === "approved_with_edits" || d.status === "rejected"
     );
-    if (alreadyHandled) {
+    if (alreadyHandled && !allowRemint) {
       drafts.push(alreadyHandled);
       continue;
     }
@@ -134,8 +144,19 @@ export async function ensureContactDrafts(input: {
     drafts.push(created);
   }
 
-  const primaryDraft = drafts.find((d) => d.contactId === primary.id) ?? drafts[0];
-  return { drafts, primaryDraft, primaryContact: primary };
+  // Prefer an open reminted draft as primary when present (e.g. Tyler re-add).
+  const remintedOpen = drafts.find(
+    (d) =>
+      (d.status === "draft" || d.status === "qa_flagged") &&
+      contacts.some(
+        (c) => c.id === d.contactId && remint.has((c.email ?? "").trim().toLowerCase())
+      )
+  );
+  const primaryDraft =
+    remintedOpen ?? drafts.find((d) => d.contactId === primary.id) ?? drafts[0];
+  const primaryContact =
+    contacts.find((c) => c.id === primaryDraft.contactId) ?? primary;
+  return { drafts, primaryDraft, primaryContact };
 }
 
 /**
@@ -151,6 +172,8 @@ export async function enqueueOrgManually(input: {
   totalScoreHint?: number;
   /** Reopen a previously rejected/deferred initial queue row (manual operator action only). */
   reopenDecided?: boolean;
+  /** Mint fresh open drafts for these emails even if already approved/sent. */
+  remintApprovedEmails?: string[];
 }): Promise<ManualEnqueueResult> {
   const contacts = await listContactsForOrganization(input.organization.id);
   const primary = pickPrimaryContact(contacts);
@@ -210,6 +233,7 @@ export async function enqueueOrgManually(input: {
     organization: input.organization,
     opportunityId: opportunity.id,
     pipelineRunId: pipelineRun.id,
+    remintApprovedEmails: input.remintApprovedEmails,
   });
 
   const queueItem = await createOrUpdateQueueItem({

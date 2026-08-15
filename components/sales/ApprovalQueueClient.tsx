@@ -479,8 +479,11 @@ export default function ApprovalQueueClient() {
                           <span className="flex items-start justify-between gap-2">
                             <span className="font-medium">
                               {c.fullName ?? "Unnamed"}
-                              {sent ? <span className="ml-2 text-xs text-emerald-400">sent</span> : null}
-                              {!sent && hasDraft ? <span className="ml-2 text-xs text-gray-500">draft</span> : null}
+                              {hasDraft ? (
+                                <span className="ml-2 text-xs text-gray-500">draft</span>
+                              ) : sent ? (
+                                <span className="ml-2 text-xs text-emerald-400">sent</span>
+                              ) : null}
                             </span>
                           </span>
                           <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
