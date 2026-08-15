@@ -1495,10 +1495,10 @@ export default function EventForm({
               <span className={labelClass}>Frames</span>
               <input
                 type="number"
-                min={2}
+                min={1}
                 max={6}
                 value={aiFrameCount}
-                onChange={(e) => setAiFrameCount(Math.max(2, Math.min(6, Number(e.target.value) || 4)))}
+                onChange={(e) => setAiFrameCount(Math.max(1, Math.min(6, Number(e.target.value) || 4)))}
                 className={inputClass}
               />
             </label>
