@@ -1,19 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
+import { copyEmailToClipboard } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 
 /**
- * Fallback "copy / open mailto" trigger when Gmail API isn't connected. Approve & send in the
- * queue is the primary path once Gmail is linked.
+ * Copy-only draft helper. Never opens mailto or sends — Joel browses and copies freely;
+ * actual send is Approve → confirm → Gmail (or mailto only from that confirm click).
  */
 export default function EmailLaunchLink({
   to,
   subject,
   body,
   className,
-  label = "Copy draft / mailto fallback ↗",
+  label = "Copy draft (no send)",
 }: {
   to: string;
   subject: string;
@@ -31,14 +31,12 @@ export default function EmailLaunchLink({
   }, []);
 
   const handleClick = useCallback(() => {
-    // Strip any previously embedded press-quote block — Gmail appends Joel's signature itself.
     const cleanBody = stripEmailSignature(body);
-    launchMailto(buildMailtoUrl(to, subject, cleanBody));
 
     if (clearTimer.current) clearTimeout(clearTimer.current);
 
     copyEmailToClipboard(to, subject, cleanBody)
-      .then(() => setStatus(`Draft copied — paste into a new email to ${to} if needed.`))
+      .then(() => setStatus(`Copied for ${to} — not sent. Use Approve → confirm to send.`))
       .catch(() => setStatus("Couldn't copy the draft to your clipboard automatically."));
 
     clearTimer.current = setTimeout(() => setStatus(null), 6000);

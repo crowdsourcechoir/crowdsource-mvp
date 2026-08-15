@@ -70,6 +70,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const providedEditedBody = typeof body?.editedBody === "string" ? (body.editedBody as string) : undefined;
 
     const isApproveAction = action === "approve" || action === "approve_with_edits";
+    if (isApproveAction && body?.confirmed !== true) {
+      return NextResponse.json(
+        {
+          error:
+            "Send requires explicit confirmation. Click Approve, then Yes, send now — browsing contacts never sends.",
+        },
+        { status: 400 }
+      );
+    }
+
     const finalSubject =
       providedEditedSubject ?? draft?.editedSubject ?? draft?.aiSubject ?? null;
     const finalBody = providedEditedBody ?? draft?.editedBody ?? draft?.aiBody ?? null;

@@ -40,6 +40,8 @@ export default function ApprovalQueueClient() {
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  /** Approve/send never runs until Joel confirms in this dialog. Contact browsing never opens it. */
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showCopyStatus = useCallback((message: string) => {
@@ -89,6 +91,7 @@ export default function ApprovalQueueClient() {
   }, [current?.queueItem.id, current?.draft?.id]);
 
   const selectItem = useCallback((index: number) => {
+    setSendConfirmOpen(false);
     setSelectedIndex(index);
     setMobileDetailOpen(true);
   }, []);
@@ -96,6 +99,8 @@ export default function ApprovalQueueClient() {
   const selectContact = useCallback(
     async (contactId: string) => {
       if (!current || busy || current.contact?.id === contactId) return;
+      // Browse-only: switching contacts never sends and dismisses any send confirm.
+      setSendConfirmOpen(false);
       setBusy(true);
       setError(null);
       try {
@@ -113,7 +118,7 @@ export default function ApprovalQueueClient() {
           setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
           setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
         }
-        showCopyStatus(`Switched to ${detail.contact?.fullName ?? "contact"} — draft ready to edit.`);
+        showCopyStatus(`Viewing ${detail.contact?.fullName ?? "contact"} — nothing sent.`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not switch contact");
       } finally {
@@ -161,14 +166,14 @@ export default function ApprovalQueueClient() {
     }
   }, [current, busy, editing, editedSubject, editedBody, showCopyStatus]);
 
-  const decide = useCallback(
+  /** Runs only after explicit confirm for approve, or immediately for non-send decisions. */
+  const executeDecision = useCallback(
     async (action: ActionKey) => {
       if (!current || busy) return;
 
       const aiSubject = current.draft?.aiSubject ?? "";
       const aiBody = stripEmailSignature(current.draft?.aiBody ?? "");
       const cleanedEditedBody = stripEmailSignature(editedBody);
-      // Always prefer the in-editor text as what will be sent/saved.
       const finalSubject = current.draft ? editedSubject : "";
       const finalBody = current.draft ? cleanedEditedBody : "";
       const differedFromAi =
@@ -178,19 +183,21 @@ export default function ApprovalQueueClient() {
       const effectiveAction: ActionKey =
         isApprove && differedFromAi ? "approve_with_edits" : action;
 
-      // When Gmail isn't connected, keep the mailto + clipboard fallback (must run before any
-      // await so the browser treats it as a user gesture).
+      // Mailto only after confirm click (this function), never on contact browse / Approve hover.
       if (!gmailConnected && isApprove && current.contact?.email && current.draft) {
         const to = current.contact.email;
         launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
         copyEmailToClipboard(to, finalSubject, finalBody)
           .then(() =>
-            showCopyStatus(`Gmail not connected — draft copied for ${to}. Connect Gmail on Sales overview for tracked send.`)
+            showCopyStatus(
+              `Gmail not connected — draft copied for ${to}. Connect Gmail on Sales overview for tracked send.`
+            )
           )
           .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
       }
 
       setBusy(true);
+      setSendConfirmOpen(false);
       try {
         const res = await fetch(`/api/sales/queue/${current.queueItem.id}/decision`, {
           method: "POST",
@@ -198,8 +205,8 @@ export default function ApprovalQueueClient() {
           body: JSON.stringify({
             action: effectiveAction,
             notes: notes || null,
-            // Always send the final text on approve so the server can learn vs the AI original,
-            // even after Save draft made the client-side "dirty" check look clean.
+            // Server refuses approve/send unless confirmed is true.
+            ...(isApprove ? { confirmed: true } : {}),
             ...(isApprove && current.draft
               ? { editedSubject: finalSubject, editedBody: finalBody }
               : {}),
@@ -244,6 +251,19 @@ export default function ApprovalQueueClient() {
     [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus, gmailConnected]
   );
 
+  /** Skip/reject/defer run now. Approve only opens “Do you really want to send?” */
+  const requestDecision = useCallback(
+    (action: ActionKey) => {
+      if (!current || busy) return;
+      if (action === "approve" || action === "approve_with_edits") {
+        setSendConfirmOpen(true);
+        return;
+      }
+      void executeDecision(action);
+    },
+    [current, busy, executeDecision]
+  );
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && current?.draft) {
@@ -251,15 +271,25 @@ export default function ApprovalQueueClient() {
         void saveDraft();
         return;
       }
+      if (sendConfirmOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setSendConfirmOpen(false);
+        }
+        // Block A/R/etc while the confirm dialog is open — only the Yes button sends.
+        return;
+      }
       if (editing) return;
       const target = e.target as HTMLElement;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
+        setSendConfirmOpen(false);
         setSelectedIndex((i) => Math.min(items.length - 1, i + 1));
         setMobileDetailOpen(true);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
+        setSendConfirmOpen(false);
         setSelectedIndex((i) => Math.max(0, i - 1));
         setMobileDetailOpen(true);
       } else if (e.key === "Escape" && mobileDetailOpen) {
@@ -270,18 +300,33 @@ export default function ApprovalQueueClient() {
         void saveDraft();
       } else {
         const action = ACTIONS.find((a) => a.shortcut.toLowerCase() === e.key.toLowerCase());
-        if (action && action.key !== "approve_with_edits") {
+        if (action?.key === "approve" || action?.key === "approve_with_edits") {
+          // Never one-keystroke send. A/E open edit or the confirm dialog — never POST send.
           e.preventDefault();
-          decide(action.key);
-        } else if (action?.key === "approve_with_edits") {
+          if (action.key === "approve_with_edits" || !current?.draft) {
+            setEditing(true);
+            return;
+          }
+          setSendConfirmOpen(true);
+          return;
+        }
+        if (action) {
           e.preventDefault();
-          setEditing(true);
+          requestDecision(action.key);
         }
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items.length, decide, saveDraft, editing, mobileDetailOpen, current?.draft]);
+  }, [
+    items.length,
+    requestDecision,
+    saveDraft,
+    editing,
+    mobileDetailOpen,
+    current?.draft,
+    sendConfirmOpen,
+  ]);
 
   const pendingCount = items.length;
 
@@ -452,12 +497,12 @@ export default function ApprovalQueueClient() {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Gmail status</h3>
               {gmailConnected ? (
                 <p className="mt-1 text-sm text-emerald-400">
-                  Connected{gmailEmail ? ` · ${gmailEmail}` : ""} — approve will send
-                  {current.queueItem.kind === "nudge" && current.opportunity.gmailThreadId ? " in-thread" : ""}
+                  Connected{gmailEmail ? ` · ${gmailEmail}` : ""} — send only after you confirm
+                  {current.queueItem.kind === "nudge" && current.opportunity.gmailThreadId ? " (in-thread)" : ""}
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-amber-300">
-                  Not connected — approve uses mailto/clipboard.{" "}
+                  Not connected — confirm uses mailto/clipboard.{" "}
                   <Link href="/admin/sales" className="underline">
                     Connect Gmail
                   </Link>
@@ -475,8 +520,8 @@ export default function ApprovalQueueClient() {
               )}
               {(current.contacts?.length ?? 0) > 1 && (
                 <p className="mt-3 text-xs text-gray-500">
-                  Select a contact to load their draft. Approve &amp; send goes to the selected person only — the org
-                  stays in queue until every contact is sent or you reject/defer.
+                  Click contacts freely to read drafts — browsing never sends. Approve opens a “really send?” check;
+                  each send goes to the selected person only.
                 </p>
               )}
             </div>
@@ -572,7 +617,11 @@ export default function ApprovalQueueClient() {
                 key={action.key}
                 type="button"
                 disabled={busy}
-                onClick={() => (action.key === "approve_with_edits" && !editing ? setEditing(true) : decide(action.key))}
+                onClick={() =>
+                  action.key === "approve_with_edits" && !editing
+                    ? setEditing(true)
+                    : requestDecision(action.key)
+                }
                 className={`rounded-lg px-3 py-2 text-sm font-medium text-white touch-manipulation disabled:opacity-50 ${action.tone}`}
               >
                 {action.key === "approve_with_edits" && !editing ? "Edit draft" : action.label}{" "}
@@ -592,13 +641,62 @@ export default function ApprovalQueueClient() {
           </div>
           {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
           <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>a</kbd> approve &amp; send, <kbd>s</kbd> / <kbd>⌘S</kbd> save
-            draft (no send), <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd> duplicate. With
-            Gmail connected, approve sends from your inbox and tracks the thread for replies.{" "}
+            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>a</kbd> asks “really send?”, <kbd>s</kbd> / <kbd>⌘S</kbd>{" "}
+            save draft (no send), <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd>{" "}
+            duplicate. Nothing emails until you confirm Yes.{" "}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
               View organization
             </Link>
           </p>
+        </div>
+      )}
+
+      {sendConfirmOpen && current && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-confirm-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-950 p-5 shadow-xl">
+            <h2 id="send-confirm-title" className="text-lg font-semibold text-white">
+              Do you really want to send?
+            </h2>
+            <p className="mt-2 text-sm text-gray-300">
+              This will email{" "}
+              <span className="font-medium text-white">
+                {current.contact?.fullName ?? "the selected contact"}
+              </span>
+              {current.contact?.email ? (
+                <>
+                  {" "}
+                  at <span className="text-sky-300">{current.contact.email}</span>
+                </>
+              ) : null}
+              {gmailConnected ? " from your connected Gmail." : " (mailto / clipboard — Gmail not connected)."}
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Cancel keeps you browsing. Contact clicks never send.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setSendConfirmOpen(false)}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-900 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || !current.draft || !current.contact?.email}
+                onClick={() => void executeDecision("approve")}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                Yes, send now
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
