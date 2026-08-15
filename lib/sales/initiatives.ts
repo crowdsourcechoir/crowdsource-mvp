@@ -55,7 +55,7 @@ export const SEATTLE_SPORTS_PRIORITY: {
     name: "Seattle Seahawks",
     tier: "pro",
     targetRoles: ["Game Entertainment", "Entertainment Experience", "Marketing"],
-    notes: "Active outreach — Tyler hard-blocked; others in queue.",
+    notes: "Active outreach in queue — send only with confirm; Gmail kill switch still off.",
   },
   {
     name: "Seattle Sounders FC",

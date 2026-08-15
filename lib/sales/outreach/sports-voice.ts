@@ -33,8 +33,9 @@ export type SportsDoorway =
 
 export function classifySportsDoorway(roleTitle: string | null | undefined): SportsDoorway {
   const title = (roleTitle ?? "").toLowerCase();
-  if (/coo|chief operating/.test(title)) return "coo";
-  if (/operations|reports to coo/.test(title)) return "operations";
+  // Check ops/reporting-to-COO before bare "COO" so "Reports to COO / Operations" ≠ David.
+  if (/reports to coo|operations/.test(title) && !/chief operating/.test(title)) return "operations";
+  if (/chief operating|^coo\b|chief operating officer/.test(title)) return "coo";
   if (/game entertainment|special events|entertainment experience|programming/.test(title)) {
     return "entertainment";
   }
