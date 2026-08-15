@@ -259,6 +259,8 @@ export default function EventForm({
   const [aiReferencePhotos, setAiReferencePhotos] = useState<string[]>([]);
   const [uploadingAiRefs, setUploadingAiRefs] = useState(false);
   const [aiFrameCount, setAiFrameCount] = useState<number>(4);
+  /** journey = invent one escalating world; landmarks = one real place per frame (swap refs). */
+  const [aiBoardMode, setAiBoardMode] = useState<"journey" | "landmarks">("landmarks");
   const [aiGenerating, setAiGenerating] = useState(false);
   /** When set, only that storyboard frame index is regenerating. */
   const [aiRegeneratingFrame, setAiRegeneratingFrame] = useState<number | null>(null);
@@ -759,7 +761,7 @@ export default function EventForm({
   async function handleAiReferencePhotoFiles(files: File[]) {
     if (files.length === 0) return;
 
-    const MAX_REFS = 3;
+    const MAX_REFS = aiBoardMode === "landmarks" ? 1 : 3;
     const MAX_REF_BYTES = 20 * 1024 * 1024;
     const DATA_URL_SAFE_BYTES = 3 * 1024 * 1024;
 
@@ -775,7 +777,11 @@ export default function EventForm({
 
     const room = Math.max(0, MAX_REFS - aiReferencePhotos.length);
     if (room === 0) {
-      setAiGenError("Already at 3 reference photos (Runway’s max). Remove one first.");
+      setAiGenError(
+        aiBoardMode === "landmarks"
+          ? "Clear the current landmark photo before adding the next one."
+          : "Already at 3 reference photos (Runway’s max). Remove one first."
+      );
       return;
     }
     const batch = images.slice(0, room);
@@ -869,18 +875,28 @@ export default function EventForm({
     setAiGenError(null);
     setAiGenNotice(null);
     if (!aiVibePrompt.trim()) {
-      setAiGenError("Describe the vibe (place, mood, community) first — the AI invents a new world from that.");
+      setAiGenError(
+        aiBoardMode === "landmarks"
+          ? "Describe the vibe (city, light, community) first."
+          : "Describe the vibe (place, mood, community) first — the AI invents a new world from that."
+      );
+      return;
+    }
+    if (aiBoardMode === "landmarks") {
+      // Same one-landmark-at-a-time path as Add AI frame.
+      await handleAddAiFrame();
       return;
     }
     setAiGenerating(true);
     try {
-      const eventIdForPath = values.slug?.trim() || "draft";
+      const eventIdForPath = values.slug?.trim() || eventId || "draft";
       const res = await fetch(`/api/events/${encodeURIComponent(eventIdForPath)}/generate-storyboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vibePrompt: aiVibePrompt,
           frameCount: aiFrameCount,
+          boardMode: aiBoardMode,
           ...(aiReferencePhotos.length ? { referenceUrls: aiReferencePhotos } : {}),
         }),
       });
@@ -896,7 +912,7 @@ export default function EventForm({
         if (!res.ok) {
           const partial = data.frames.length;
           setAiGenError(
-            `${data.error} (${partial}/${aiFrameCount} frames generated before this — kept below, click Generate again to retry the rest.)`
+            `${data.error} (${partial} frame${partial === 1 ? "" : "s"} generated before this — kept below.)`
           );
         } else {
           const refNote =
@@ -913,6 +929,66 @@ export default function EventForm({
         }
       } else if (!res.ok) {
         setAiGenError(data.error || "Generation failed.");
+      }
+    } catch {
+      setAiGenError("Could not reach the server.");
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
+  /** Landmarks workflow: append one frame from the current single place ref. */
+  async function handleAddAiFrame() {
+    setAiGenError(null);
+    setAiGenNotice(null);
+    if (!aiVibePrompt.trim()) {
+      setAiGenError("Describe the vibe first.");
+      return;
+    }
+    if (aiReferencePhotos.length === 0) {
+      setAiGenError("Add one landmark reference photo, then Add AI frame.");
+      return;
+    }
+    const existing = values.worldConfig?.worldStoryboard ?? [];
+    if (existing.length >= 6) {
+      setAiGenError("Already at 6 frames. Dump one with × before adding another.");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const eventIdForPath = values.slug?.trim() || eventId || "draft";
+      // Plan a 4-frame light ladder so energy/intensity steps dusk → bloom across the board.
+      const plannedFrames = Math.max(4, existing.length + 1);
+      const res = await fetch(`/api/events/${encodeURIComponent(eventIdForPath)}/generate-storyboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vibePrompt: aiVibePrompt,
+          boardMode: "landmarks",
+          append: true,
+          frameCount: plannedFrames,
+          siblingSceneUrls: existing.map((f) => f.sceneUrl ?? null),
+          referenceUrls: aiReferencePhotos.slice(0, 1),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiGenError(data.error || "Could not add this landmark frame.");
+        return;
+      }
+      if (data.frame) {
+        const nextWorld: WorldConfig = {
+          ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+          worldStoryboard: [...existing, data.frame],
+          aiArtworkPrompt: aiVibePrompt.trim() || null,
+        };
+        setValues((v) => ({ ...v, worldConfig: nextWorld }));
+        const saved = await persistWorldToServer(nextWorld);
+        setAiGenNotice(
+          saved
+            ? `Frame ${existing.length + 1} added from your landmark ref. Clear it, drop the next place photo, Add AI frame again.`
+            : `Frame ${existing.length + 1} added. Save to keep — then swap the reference for the next landmark.`
+        );
       }
     } catch {
       setAiGenError("Could not reach the server.");
@@ -941,10 +1017,11 @@ export default function EventForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vibePrompt: aiVibePrompt,
+          boardMode: aiBoardMode,
           // Intensity / sibling continuity keyed to the source frame; result is appended, not replaced.
           frameIndex,
           frameCount: Math.max(existing.length, frameIndex + 1, aiFrameCount),
-          siblingSceneUrls,
+          siblingSceneUrls: aiBoardMode === "landmarks" ? [] : siblingSceneUrls,
           ...(aiReferencePhotos.length ? { referenceUrls: aiReferencePhotos } : {}),
         }),
       });
@@ -1465,57 +1542,119 @@ export default function EventForm({
                   }
                 });
               }}
-              placeholder="e.g. Sphere Las Vegas at desert sunset — Mojave dunes, bioluminescent mycelial garden…"
+              placeholder={
+                aiBoardMode === "landmarks"
+                  ? "e.g. Gather Boston · real city landmarks · soft evening Song Garden glow, gentle luminous life — keep each place recognizable, not surreal collage…"
+                  : "e.g. Sphere Las Vegas at desert sunset — Mojave dunes, bioluminescent mycelial garden…"
+              }
               rows={3}
               className={inputClass}
             />
           </label>
           <div className="flex flex-wrap items-end gap-3">
+            <label className="block w-[9.5rem]">
+              <span className={labelClass}>Board mode</span>
+              <select
+                value={aiBoardMode}
+                onChange={(e) =>
+                  setAiBoardMode(e.target.value === "journey" ? "journey" : "landmarks")
+                }
+                className={inputClass}
+                disabled={aiGenerating || aiRegeneratingFrame != null}
+              >
+                <option value="landmarks">Landmarks (1 place / frame)</option>
+                <option value="journey">Journey (invented world)</option>
+              </select>
+            </label>
             <div className="min-w-0 flex-1 space-y-1">
-              <span className={labelClass}>Reference photos (optional · up to 3)</span>
+              <span className={labelClass}>
+                {aiBoardMode === "landmarks"
+                  ? "Landmark photo (one at a time)"
+                  : "Reference photos (optional · up to 3)"}
+              </span>
               <FileDropZone
                 variant="inline"
-                multiple
+                multiple={aiBoardMode !== "landmarks"}
                 accept="image/jpeg,image/png,image/webp"
-                disabled={uploadingAiRefs || aiGenerating || aiReferencePhotos.length >= 3}
+                disabled={
+                  uploadingAiRefs ||
+                  aiGenerating ||
+                  (aiBoardMode === "landmarks"
+                    ? aiReferencePhotos.length >= 1
+                    : aiReferencePhotos.length >= 3)
+                }
                 label={
                   uploadingAiRefs
                     ? "Uploading…"
-                    : aiReferencePhotos.length >= 3
-                      ? "At 3 photos — remove one to add more"
-                      : aiReferencePhotos.length > 0
-                        ? "Drop more photos, or click to browse"
-                        : "Drop reference photos or click"
+                    : aiBoardMode === "landmarks"
+                      ? aiReferencePhotos.length >= 1
+                        ? "Clear the photo to swap landmarks"
+                        : "Drop one place photo, or click"
+                      : aiReferencePhotos.length >= 3
+                        ? "At 3 photos — remove one to add more"
+                        : aiReferencePhotos.length > 0
+                          ? "Drop more photos, or click to browse"
+                          : "Drop reference photos or click"
                 }
-                hint="JPEG / PNG / WebP · up to 20MB each · Runway uses up to 3"
+                hint={
+                  aiBoardMode === "landmarks"
+                    ? "JPEG / PNG / WebP · one landmark per frame · clear & swap for the next"
+                    : "JPEG / PNG / WebP · up to 20MB each · Runway uses up to 3"
+                }
                 onFiles={(files) => void handleAiReferencePhotoFiles(files)}
               />
             </div>
-            <label className="block w-20">
-              <span className={labelClass}>Frames</span>
-              <input
-                type="number"
-                min={2}
-                max={6}
-                value={aiFrameCount}
-                onChange={(e) => setAiFrameCount(Math.max(2, Math.min(6, Number(e.target.value) || 4)))}
-                className={inputClass}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={handleGenerateStoryboard}
-              disabled={aiGenerating || aiRegeneratingFrame != null || uploadingAiRefs}
-              className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-[#1a0f2d] hover:bg-[#bdf25e] disabled:opacity-50"
-            >
-              {aiGenerating ? "Generating…" : "Generate with AI"}
-            </button>
+            {aiBoardMode === "journey" && (
+              <label className="block w-20">
+                <span className={labelClass}>Frames</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={6}
+                  value={aiFrameCount}
+                  onChange={(e) =>
+                    setAiFrameCount(Math.max(2, Math.min(6, Number(e.target.value) || 4)))
+                  }
+                  className={inputClass}
+                />
+              </label>
+            )}
+            {aiBoardMode === "landmarks" ? (
+              <button
+                type="button"
+                onClick={handleAddAiFrame}
+                disabled={aiGenerating || aiRegeneratingFrame != null || uploadingAiRefs}
+                className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-[#1a0f2d] hover:bg-[#bdf25e] disabled:opacity-50"
+              >
+                {aiGenerating ? "Generating…" : "Add AI frame"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGenerateStoryboard}
+                disabled={aiGenerating || aiRegeneratingFrame != null || uploadingAiRefs}
+                className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-[#1a0f2d] hover:bg-[#bdf25e] disabled:opacity-50"
+              >
+                {aiGenerating ? "Generating…" : "Generate with AI"}
+              </button>
+            )}
           </div>
           <p className="text-[11px] text-gray-500">
-            <span className="text-gray-400">Regen</span> adds another variation and keeps the original —
-            dump with × when you don’t want a frame.{" "}
-            <span className="text-gray-400">Generate with AI</span> rebuilds a new set (replaces the list
-            in this form until you Save).
+            {aiBoardMode === "landmarks" ? (
+              <>
+                <span className="text-gray-400">Landmarks:</span> drop one place photo →{" "}
+                <span className="text-gray-400">Add AI frame</span> → clear ref → next landmark (×4).
+                Soft light &amp; motion only — keeps the real place.{" "}
+                <span className="text-gray-400">Regen</span> keeps the original; dump with ×.
+              </>
+            ) : (
+              <>
+                <span className="text-gray-400">Regen</span> adds another variation and keeps the
+                original — dump with × when you don’t want a frame.{" "}
+                <span className="text-gray-400">Generate with AI</span> rebuilds a new set (replaces
+                the list in this form until you Save).
+              </>
+            )}
           </p>
           {aiReferencePhotos.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
