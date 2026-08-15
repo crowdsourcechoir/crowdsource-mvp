@@ -1,15 +1,17 @@
 import { createOpportunity, findExistingOpportunityByTitle, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { createPipelineRun, updatePipelineRun } from "@/lib/sales/db/pipeline";
 import { createProspectScore } from "@/lib/sales/db/scores";
-import { createOutreachDraft, listDraftsForOpportunity } from "@/lib/sales/db/outreach";
+import { createOutreachDraft, listDraftsForOpportunity, updateDraftAiCopy } from "@/lib/sales/db/outreach";
 import { createOrUpdateQueueItem } from "@/lib/sales/db/queue";
 import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
 import { looksLikePersonName, hasVerifiedEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { computeTotalScore } from "@/lib/sales/scoring/score";
-import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { SCORE_COMPONENT_KEYS, type Contact, type Organization, type OutreachDraft, type ScoreComponentKey } from "@/lib/sales/types";
+
+/** Operator-only role blurbs must never ship in the email body (queue UI still shows them). */
+const CONTACT_CONTEXT_IN_EMAIL = /\(Context on your seat:/i;
 
 export type ManualEnqueueResult = {
   opportunityId: string;
@@ -48,7 +50,6 @@ function pickPrimaryContact(contacts: Contact[]): Contact | null {
 function draftCopyForContact(orgName: string, contact: Contact): { subject: string; body: string } {
   const firstName = (contact.fullName ?? "there").split(/\s+/)[0];
   const title = (contact.roleTitle ?? "").toLowerCase();
-  const blurb = contactRoleDescription(contact) ?? fallbackRoleDescription(contact.roleTitle);
 
   let angle: string;
   if (/game entertainment|special events|entertainment experience|programming/.test(title)) {
@@ -67,7 +68,7 @@ function draftCopyForContact(orgName: string, contact: Contact): { subject: stri
 
   return {
     subject: `${orgName} — shared-creation anthem for training camp / fan ritual`,
-    body: `Hi ${firstName},\n\nWe're Crowdsource / Song Garden — we help teams turn belonging into a shared song fans and community help create live (not a playlist, not a one-way performance).\n\nFor the Seahawks, ${angle}\n\n(Context on your seat: ${blurb})\n\nWould you or the right teammate take a short look at fit?\n\n— Joel\n\n[Draft for queue review — edit before approving.]`,
+    body: `Hi ${firstName},\n\nWe're Crowdsource / Song Garden — we help teams turn belonging into a shared song fans and community help create live (not a playlist, not a one-way performance).\n\nFor the Seahawks, ${angle}\n\nWould you or the right teammate take a short look at fit?\n\n— Joel\n\n[Draft for queue review — edit before approving.]`,
   };
 }
 
@@ -91,7 +92,22 @@ export async function ensureContactDrafts(input: {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const open = candidates.find((d) => d.status === "draft" || d.status === "qa_flagged");
     if (open) {
-      drafts.push(open);
+      const bodyHasContext =
+        CONTACT_CONTEXT_IN_EMAIL.test(open.aiBody) ||
+        (open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody));
+      if (bodyHasContext) {
+        const copy = draftCopyForContact(input.organization.name, contact);
+        const clearedEdited = open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody);
+        drafts.push(
+          await updateDraftAiCopy(open.id, {
+            aiSubject: copy.subject,
+            aiBody: copy.body,
+            clearEdited: clearedEdited,
+          })
+        );
+      } else {
+        drafts.push(open);
+      }
       continue;
     }
     // Never mint a fresh draft after this contact was already approved/sent — that caused

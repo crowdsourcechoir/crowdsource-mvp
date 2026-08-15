@@ -169,6 +169,26 @@ export async function updateDraftEdits(
   return rowToDraft(data);
 }
 
+/** Rewrite AI subject/body on an open draft (e.g. strip operator-only notes from email copy). */
+export async function updateDraftAiCopy(
+  id: string,
+  input: { aiSubject: string; aiBody: string; clearEdited?: boolean }
+): Promise<OutreachDraft> {
+  const db = requireSupabaseAdmin();
+  const row: Record<string, unknown> = {
+    ai_subject: input.aiSubject,
+    ai_body: input.aiBody,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.clearEdited) {
+    row.edited_subject = null;
+    row.edited_body = null;
+  }
+  const { data, error } = await db.from("outreach_drafts").update(row).eq("id", id).select().single();
+  if (error) throw new Error(error.message);
+  return rowToDraft(data);
+}
+
 export async function getDraft(id: string): Promise<OutreachDraft | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db.from("outreach_drafts").select("*").eq("id", id).maybeSingle();
