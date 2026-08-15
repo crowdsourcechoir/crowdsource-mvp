@@ -112,10 +112,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
       if (gmailStatus.connected) {
         try {
+          const activities = await listActivitiesForOpportunity(opportunity.id);
+          const priorSent = [...activities].reverse().find((a) => a.activityType === "sent");
+          // Never blast the same opportunity twice as "initial" cold outreach (duplicate drafts /
+          // accidental multi-approve). Nudges still send in-thread under their own caps.
+          if (item.kind === "initial" && (opportunity.lastOutboundAt || priorSent)) {
+            return NextResponse.json(
+              {
+                error:
+                  "Gmail send blocked — this opportunity already has an outbound send. Reject/defer this draft; do not re-send cold outreach.",
+                gmailConnected: true,
+                alreadySent: true,
+              },
+              { status: 409 }
+            );
+          }
+
           let inReplyTo: string | null = null;
           let threadId = opportunity.gmailThreadId;
           if (item.kind === "nudge" && threadId) {
-            const activities = await listActivitiesForOpportunity(opportunity.id);
             const lastSent = [...activities].reverse().find((a) => a.activityType === "sent" && a.gmailMessageId);
             if (lastSent?.gmailMessageId) {
               inReplyTo = await getGmailRfcMessageId(lastSent.gmailMessageId);

@@ -5,12 +5,31 @@ export type GmailSendResult = {
   threadId: string;
 };
 
+/**
+ * Emergency kill switch (2026-08-15 multi-send incident). Outbound Gmail stays blocked until
+ * Vercel has `SALES_GMAIL_SENDS_ENABLED=true`. Disconnecting Gmail is the immediate stop;
+ * this keeps sends dead even after someone reconnects by mistake.
+ */
+export function assertGmailSendsEnabled(): void {
+  if (process.env.SALES_GMAIL_SENDS_ENABLED?.trim() !== "true") {
+    throw new Error(
+      "Gmail outbound sends are paused (SALES_GMAIL_SENDS_ENABLED is not true). Reconnect alone will not send."
+    );
+  }
+}
+
 function encodeRawMessage(raw: string): string {
   return Buffer.from(raw)
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
+}
+
+/** RFC 2047 encode Subject so em dashes / curly quotes don't mojibake in clients. */
+function encodeSubjectHeader(subject: string): string {
+  if (/^[\x20-\x7E]*$/.test(subject)) return subject;
+  return `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
 }
 
 function buildRfc822(input: {
@@ -24,7 +43,7 @@ function buildRfc822(input: {
   const headers = [
     `From: ${input.from}`,
     `To: ${input.to}`,
-    `Subject: ${input.subject}`,
+    `Subject: ${encodeSubjectHeader(input.subject)}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
   ];
@@ -45,6 +64,8 @@ export async function sendGmailMessage(input: {
   inReplyTo?: string | null;
   references?: string | null;
 }): Promise<GmailSendResult> {
+  assertGmailSendsEnabled();
+
   const bundle = await getGmailClient();
   if (!bundle) {
     throw new Error("Gmail is not connected. Connect Gmail on the Sales overview page first.");
