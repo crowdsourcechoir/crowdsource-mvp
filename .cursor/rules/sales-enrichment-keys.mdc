@@ -1,33 +1,31 @@
 ---
-description: Sales contact enrichment requires Hunter + Apollo keys; agents must report when missing
+description: Sales enrichment is Hunter-only; agents must report if HUNTER_API_KEY is missing
 alwaysApply: true
 ---
 
-# Sales enrichment API keys (required)
+# Sales enrichment — Hunter only
 
-Contact email enrichment needs **both**:
+Joel’s sole sales contact-enrichment provider is **Hunter.io** (`HUNTER_API_KEY`).
 
-- `HUNTER_API_KEY` — free-tier Email Finder (preferred path in code)
-- `APOLLO_API_KEY` — fallback when Hunter errors
+- Do **not** call Apollo / do not treat `APOLLO_API_KEY` as required.
+- Email Finder: 1 credit **only when an email is found**; misses are free.
+- Account balance check (`GET /api/sales/enrichment/credits` or Hunter `/v2/account`) is free.
 
-Without them, named contacts stay `awaiting_contact` and the approval queue stays empty.
+Without `HUNTER_API_KEY`, named contacts stay `awaiting_contact` and the approval queue stays empty.
 
-## Where keys must live
+## Where the key must live
 
-1. **Vercel Production** — Project Settings → Environment Variables (so `app.crowdsourcechoir.com` enrichment/find works).
-2. **Cursor Cloud Agent secrets** — [Crowdsource environment](https://cursor.com/dashboard/cloud-agents/environments/e/7f9121d7-2fd3-4dc7-9c5e-dc02e5ee8fa4) → Secrets (so agents can call Hunter/Apollo from this VM). New agents only pick up new secrets after restart.
+1. **Vercel Production** — so `app.crowdsourcechoir.com` works.
+2. **Cursor Cloud Agent secrets** — [environment](https://cursor.com/dashboard/cloud-agents/environments/e/7f9121d7-2fd3-4dc7-9c5e-dc02e5ee8fa4) (new agents only pick up new secrets).
 
-Also set locally in `.env.local` when developing on a laptop.
-
-## Agent duty — always tell Joel if a key is missing
-
-Before relying on enrichment or email finders, check presence (never print secret values):
+## Agent duty — always tell Joel if Hunter is missing
 
 ```bash
-# presence only
-node -e "const m=[]; if(!process.env.HUNTER_API_KEY?.trim()) m.push('HUNTER_API_KEY'); if(!process.env.APOLLO_API_KEY?.trim()) m.push('APOLLO_API_KEY'); console.log(m.length? 'MISSING: '+m.join(', '): 'ok');"
+node -e "console.log(process.env.HUNTER_API_KEY?.trim() ? 'ok' : 'MISSING: HUNTER_API_KEY')"
 ```
 
-Or `GET /api/sales/enrichment/status` against the running app / production.
+Or `GET /api/sales/enrichment/status` / `GET /api/sales/enrichment/credits` on production.
 
-If either key is missing: **say so explicitly in your reply** (name the missing env var(s) and that both Vercel + Cursor secrets need them). Do not silently fall back to guessing emails or pretending enrichment worked.
+If missing: say so explicitly. Do not guess emails or pretend enrichment worked.
+
+When running finders, report credit delta (credits used before vs after) from `/api/sales/enrichment/credits`.

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * One-shot contact email finder for sales research.
- * Uses Hunter (preferred) / Apollo enrichment + optional Tavily/Serper search context.
+ * Uses Hunter Email Finder only (+ optional Tavily/Serper search context).
  *
  * GET ?firstName=&lastName=&domain=seahawks.com
  * Optional: &search=1 to also run a web search for public contact clues.

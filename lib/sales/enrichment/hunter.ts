@@ -4,12 +4,8 @@ const HUNTER_FINDER_URL = "https://api.hunter.io/v2/email-finder";
 const FETCH_TIMEOUT_MS = 10000;
 
 /**
- * Hunter.io Email Finder — self-serve REST API, genuinely usable on Hunter's free plan (50
- * credits/month, unlike Apollo's equivalent endpoint which needs a paid plan — see
- * lib/sales/enrichment/index.ts). Matches a person by first name + last name + employer domain
- * and returns their most likely professional email with a confidence score. Used whenever
- * APOLLO_API_KEY isn't configured at all, and also as an automatic runtime fallback when an
- * Apollo call errors out (see lib/sales/enrichment/index.ts for the full provider-selection logic).
+ * Hunter.io Email Finder — sole contact-enrichment provider for the sales agent.
+ * 1 credit per call only when an email is found (misses are free per Hunter docs).
  */
 export async function enrichWithHunter(input: EnrichmentInput): Promise<EnrichmentResult> {
   const apiKey = process.env.HUNTER_API_KEY;

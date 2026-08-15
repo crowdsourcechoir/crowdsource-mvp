@@ -32,8 +32,8 @@ function rankEnrichmentCandidates(contacts: Contact[]): Contact[] {
 
 /**
  * Phase 2: fills in missing emails for named people already discovered from an org's own
- * website (stage 4) via a paid contact-enrichment API — Apollo.io if APOLLO_API_KEY is set,
- * else Hunter.io if HUNTER_API_KEY is set, else this stage is a no-op (never blocks the
+ * website (stage 4) via Hunter.io Email Finder if HUNTER_API_KEY is set,
+ * else this stage is a no-op (never blocks the
  * pipeline; a human can always find/verify an email manually at review time either way). Never
  * invents an email itself — every email either comes verbatim from the org's own site (stage 4)
  * or from the enrichment provider's own database.
