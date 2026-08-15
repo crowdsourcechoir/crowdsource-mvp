@@ -173,6 +173,8 @@ export async function updateOrganization(id: string, patch: Partial<CreateOrgani
   if (patch.locationCountry !== undefined) row.location_country = patch.locationCountry;
   if (patch.estimatedSize !== undefined) row.estimated_size = patch.estimatedSize;
   if (patch.isExistingClient !== undefined) row.is_existing_client = patch.isExistingClient;
+  if (patch.importMetadata !== undefined) row.import_metadata = patch.importMetadata;
+  if (patch.source !== undefined) row.source = patch.source;
   const { data, error } = await db.from("organizations").update(row).eq("id", id).select().single();
   if (error) throw new Error(error.message);
   return rowToOrganization(data);
