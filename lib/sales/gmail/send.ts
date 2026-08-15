@@ -36,6 +36,9 @@ function buildRfc822(input: {
 /**
  * Sends a plain-text email from the connected Gmail account. When `threadId` is set, Gmail
  * places the message in that thread (follow-up / nudge).
+ *
+ * Kill switch: requires SALES_GMAIL_SEND_ENABLED=true. After accidental multi-sends, fail closed
+ * until Joel explicitly re-enables sending in Vercel.
  */
 export async function sendGmailMessage(input: {
   to: string;
@@ -45,6 +48,11 @@ export async function sendGmailMessage(input: {
   inReplyTo?: string | null;
   references?: string | null;
 }): Promise<GmailSendResult> {
+  if (process.env.SALES_GMAIL_SEND_ENABLED?.trim() !== "true") {
+    throw new Error(
+      "Gmail sending is paused (SALES_GMAIL_SEND_ENABLED is not true). Reconnect/enable only when ready to send with confirm."
+    );
+  }
   const bundle = await getGmailClient();
   if (!bundle) {
     throw new Error("Gmail is not connected. Connect Gmail on the Sales overview page first.");

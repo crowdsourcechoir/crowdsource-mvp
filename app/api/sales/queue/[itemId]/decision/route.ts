@@ -151,8 +151,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       await updateDraftDecision(draft.id, { status: "rejected" });
     }
 
-    // Multi-contact queue: after sending one contact, keep the item pending if other
-    // email-ready contacts still have unsent initial drafts.
+    // Multi-contact queue: after sending one contact, keep the item pending if OTHER
+    // email-ready contacts still have unsent initial drafts. Never re-pick a contact who
+    // already has an approved/sent draft (duplicate drafts caused same-person spam).
     let remaining = false;
     let nextDetail = null;
     if (isApprove && item.kind === "initial") {
@@ -163,12 +164,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           .map((c) => c.id)
       );
       const drafts = await listDraftsForOpportunity(opportunity.id);
+      const handledContactIds = new Set(
+        drafts
+          .filter(
+            (d) =>
+              d.kind === "initial" &&
+              d.contactId &&
+              (d.status === "approved" ||
+                d.status === "approved_with_edits" ||
+                d.status === "rejected")
+          )
+          .map((d) => d.contactId as string)
+      );
       const nextDraft = drafts.find(
         (d) =>
           d.kind === "initial" &&
           d.contactId &&
           readyIds.has(d.contactId) &&
           d.id !== draft?.id &&
+          !handledContactIds.has(d.contactId) &&
           (d.status === "draft" || d.status === "qa_flagged")
       );
       if (nextDraft) {
