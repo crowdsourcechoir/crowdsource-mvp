@@ -110,9 +110,17 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
   // Email-ready named people for the queue picker (verified format or any email).
   const contacts = orgContacts.filter((c) => looksLikeSelectableContact(c));
   const allDrafts = await listDraftsForOpportunity(opportunity.id);
-  const contactDrafts = allDrafts.filter(
-    (d) => d.kind === "initial" && d.contactId && contacts.some((c) => c.id === d.contactId)
-  );
+  // One initial draft per contact (prefer newest) so re-seeds don't spam the picker.
+  const latestByContact = new Map<string, (typeof allDrafts)[number]>();
+  for (const d of allDrafts) {
+    if (d.kind !== "initial" || !d.contactId) continue;
+    if (!contacts.some((c) => c.id === d.contactId)) continue;
+    const prev = latestByContact.get(d.contactId);
+    if (!prev || new Date(d.createdAt).getTime() >= new Date(prev.createdAt).getTime()) {
+      latestByContact.set(d.contactId, d);
+    }
+  }
+  const contactDrafts = [...latestByContact.values()];
 
   let score = null;
   if (queueItem?.prospectScoreId) {
