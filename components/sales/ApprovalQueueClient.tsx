@@ -7,6 +7,7 @@ import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
+import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
