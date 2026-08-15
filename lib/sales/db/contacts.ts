@@ -111,6 +111,36 @@ export async function createContact(input: CreateContactInput): Promise<Contact>
   return rowToContact(data);
 }
 
+export type UpdateContactInput = {
+  fullName?: string | null;
+  roleTitle?: string | null;
+  roleCategory?: string | null;
+  email?: string | null;
+  emailVerificationStatus?: Contact["emailVerificationStatus"];
+};
+
+export async function updateContact(id: string, patch: UpdateContactInput): Promise<Contact> {
+  const db = requireSupabaseAdmin();
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.fullName !== undefined) row.full_name = patch.fullName;
+  if (patch.roleTitle !== undefined) {
+    row.role_title = patch.roleTitle;
+    row.outreach_persona = classifyOutreachPersona(patch.roleTitle);
+  }
+  if (patch.roleCategory !== undefined) row.role_category = patch.roleCategory;
+  if (patch.email !== undefined) {
+    const normalized = normalizeEmail(patch.email);
+    row.email = normalized ? patch.email : null;
+    row.normalized_email = normalized;
+  }
+  if (patch.emailVerificationStatus !== undefined) {
+    row.email_verification_status = patch.emailVerificationStatus;
+  }
+  const { data, error } = await db.from("contacts").update(row).eq("id", id).select().single();
+  if (error) throw new Error(error.message);
+  return rowToContact(data);
+}
+
 export async function updateContactVerification(
   id: string,
   status: Contact["emailVerificationStatus"]
