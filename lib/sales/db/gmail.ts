@@ -27,13 +27,15 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
   connected: boolean;
   email: string | null;
   configured: boolean;
+  sendsEnabled: boolean;
 }> {
   const configured = Boolean(
     process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim() && process.env.GMAIL_TOKEN_ENCRYPTION_KEY?.trim()
   );
-  if (!configured) return { connected: false, email: null, configured: false };
+  const sendsEnabled = process.env.SALES_GMAIL_SENDS_ENABLED?.trim() === "true";
+  if (!configured) return { connected: false, email: null, configured: false, sendsEnabled };
   const connection = await getGmailConnection(ownerKey);
-  return { connected: Boolean(connection), email: connection?.email ?? null, configured: true };
+  return { connected: Boolean(connection), email: connection?.email ?? null, configured: true, sendsEnabled };
 }
 
 export async function upsertGmailConnection(input: {

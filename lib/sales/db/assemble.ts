@@ -120,7 +120,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
       latestByContact.set(d.contactId, d);
     }
   }
-  const contactDrafts = [...latestByContact.values()];
+  const contactDrafts = Array.from(latestByContact.values());
 
   let score = null;
   if (queueItem?.prospectScoreId) {

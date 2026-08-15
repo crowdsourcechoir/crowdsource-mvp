@@ -87,6 +87,16 @@ export async function ensureContactDrafts(input: {
       drafts.push(open);
       continue;
     }
+    // Never mint a fresh draft after this contact was already approved/sent — that caused
+    // multi-approve loops that re-emailed the same person (Tyler spam).
+    const alreadyHandled = candidates.find(
+      (d) =>
+        d.status === "approved" || d.status === "approved_with_edits" || d.status === "rejected"
+    );
+    if (alreadyHandled) {
+      drafts.push(alreadyHandled);
+      continue;
+    }
     const copy = draftCopyForContact(input.organization.name, contact);
     const created = await createOutreachDraft({
       opportunityId: input.opportunityId,

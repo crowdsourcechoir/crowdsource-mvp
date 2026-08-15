@@ -40,6 +40,7 @@ export default function ApprovalQueueClient() {
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   /** Approve/send never runs until Joel confirms in this dialog. Contact browsing never opens it. */
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,6 +66,7 @@ export default function ApprovalQueueClient() {
       setItems(data.items ?? []);
       setGmailConnected(Boolean(data.gmail?.connected));
       setGmailEmail(data.gmail?.email ?? null);
+      setGmailSendEnabled(Boolean(data.gmail?.sendsEnabled ?? data.gmail?.sendEnabled));
       setError(null);
       setSelectedIndex(0);
       setMobileDetailOpen(false);
@@ -498,8 +500,15 @@ export default function ApprovalQueueClient() {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Gmail status</h3>
               {gmailConnected ? (
                 <p className="mt-1 text-sm text-emerald-400">
-                  Connected{gmailEmail ? ` · ${gmailEmail}` : ""} — send only after you confirm
-                  {current.queueItem.kind === "nudge" && current.opportunity.gmailThreadId ? " (in-thread)" : ""}
+                  Connected{gmailEmail ? ` · ${gmailEmail}` : ""}
+                  {gmailSendEnabled
+                    ? " — send only after you confirm"
+                    : " — sending PAUSED (SALES_GMAIL_SENDS_ENABLED off)"}
+                  {gmailSendEnabled &&
+                  current.queueItem.kind === "nudge" &&
+                  current.opportunity.gmailThreadId
+                    ? " (in-thread)"
+                    : ""}
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-amber-300">
@@ -507,6 +516,13 @@ export default function ApprovalQueueClient() {
                   <Link href="/admin/sales" className="underline">
                     Connect Gmail
                   </Link>
+                </p>
+              )}
+              {!gmailSendEnabled && (
+                <p className="mt-1 text-xs text-amber-400">
+                  Outreach send kill switch is off. Nothing will email via Gmail until you set{" "}
+                  <code className="text-amber-200">SALES_GMAIL_SENDS_ENABLED=true</code> in Vercel and
+                  redeploy.
                 </p>
               )}
               {current.opportunity.gmailThreadId && (
@@ -674,7 +690,15 @@ export default function ApprovalQueueClient() {
                   at <span className="text-sky-300">{current.contact.email}</span>
                 </>
               ) : null}
-              {gmailConnected ? " from your connected Gmail." : " (mailto / clipboard — Gmail not connected)."}
+              {gmailConnected ? (
+                gmailSendEnabled ? (
+                  <> from your connected Gmail.</>
+                ) : (
+                  <> — but Gmail sending is PAUSED, so this will fail closed (nothing emailed).</>
+                )
+              ) : (
+                <> (mailto / clipboard — Gmail not connected).</>
+              )}
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Cancel keeps you browsing. Contact clicks never send.
