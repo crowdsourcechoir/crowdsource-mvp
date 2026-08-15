@@ -3,6 +3,8 @@ import { enrichWithHunter } from "./hunter";
 import type { EnrichmentInput, EnrichmentProvider, EnrichmentResult } from "./types";
 
 export type { EnrichmentInput, EnrichmentProvider, EnrichmentResult } from "./types";
+export { getEnrichmentConfigStatus } from "./config-status";
+export type { EnrichmentConfigStatus } from "./config-status";
 
 /**
  * Hunter is preferred for now — Apollo's people-enrichment/"match" endpoint (what
@@ -17,14 +19,14 @@ export type { EnrichmentInput, EnrichmentProvider, EnrichmentResult } from "./ty
  * paid plan.
  */
 export function activeEnrichmentProvider(): EnrichmentProvider | null {
-  if (process.env.HUNTER_API_KEY) return "hunter";
-  if (process.env.APOLLO_API_KEY) return "apollo";
+  if (process.env.HUNTER_API_KEY?.trim()) return "hunter";
+  if (process.env.APOLLO_API_KEY?.trim()) return "apollo";
   return null;
 }
 
 export async function enrichContactEmail(input: EnrichmentInput): Promise<EnrichmentResult | null> {
-  const hasApollo = Boolean(process.env.APOLLO_API_KEY);
-  const hasHunter = Boolean(process.env.HUNTER_API_KEY);
+  const hasApollo = Boolean(process.env.APOLLO_API_KEY?.trim());
+  const hasHunter = Boolean(process.env.HUNTER_API_KEY?.trim());
   if (!hasApollo && !hasHunter) return null;
 
   if (!hasHunter) return enrichWithApollo(input);

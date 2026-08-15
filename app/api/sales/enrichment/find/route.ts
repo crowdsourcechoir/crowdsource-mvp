@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { enrichContactEmail, activeEnrichmentProvider } from "@/lib/sales/enrichment";
+import { getEnrichmentConfigStatus } from "@/lib/sales/enrichment/config-status";
 import { activeSearchProvider, runSearch } from "@/lib/sales/discovery/search";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +27,16 @@ export async function GET(request: Request) {
       );
     }
 
+    const config = getEnrichmentConfigStatus();
     const provider = activeEnrichmentProvider();
     const enrichment = provider
       ? await enrichContactEmail({ firstName, lastName, domain })
-      : { provider: null, status: "error" as const, email: null, error: "No enrichment provider configured" };
+      : {
+          provider: null,
+          status: "error" as const,
+          email: null,
+          error: config.message ?? "No enrichment provider configured",
+        };
 
     let search: { provider: string | null; results: { title: string; url: string; snippet: string }[]; error: string | null } | null =
       null;
@@ -49,6 +56,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         query: { firstName, lastName, domain },
+        config,
         enrichment,
         search,
       },
