@@ -397,6 +397,10 @@ export type QueueItemDetail = {
   organization: Organization;
   organizationTypeLabel: string | null;
   contact: Contact | null;
+  /** All org contacts with usable emails — for the queue contact picker. */
+  contacts: Contact[];
+  /** Initial drafts keyed to those contacts (may be fewer than contacts until generated). */
+  contactDrafts: OutreachDraft[];
   score: ProspectScore | null;
   /** Latest succeeded brief-stage output for this opportunity, if any. */
   brief: OpportunityBrief | null;

@@ -6,6 +6,7 @@ import type { QueueItemDetail } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -85,12 +86,42 @@ export default function ApprovalQueueClient() {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
       setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
     }
-  }, [current?.queueItem.id]);
+  }, [current?.queueItem.id, current?.draft?.id]);
 
   const selectItem = useCallback((index: number) => {
     setSelectedIndex(index);
     setMobileDetailOpen(true);
   }, []);
+
+  const selectContact = useCallback(
+    async (contactId: string) => {
+      if (!current || busy || current.contact?.id === contactId) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/sales/queue/${current.queueItem.id}/select-contact`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contactId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not switch contact");
+        const detail = data.detail as QueueItemDetail;
+        setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
+        setEditing(false);
+        if (detail.draft) {
+          setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
+          setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
+        }
+        showCopyStatus(`Switched to ${detail.contact?.fullName ?? "contact"} — draft ready to edit.`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not switch contact");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [current, busy, showCopyStatus]
+  );
 
   const saveDraft = useCallback(async () => {
     if (!current?.draft || busy) return;
@@ -188,9 +219,22 @@ export default function ApprovalQueueClient() {
           parts.push("edits sent (learning may not have recorded)");
         }
         if (parts.length) showCopyStatus(`${parts.join(" — ")}.`);
-        setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
-        setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
-        setMobileDetailOpen(false);
+        if (data.remaining && data.detail) {
+          const detail = data.detail as QueueItemDetail;
+          setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
+          setEditing(false);
+          if (detail.draft) {
+            setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
+            setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
+          }
+          showCopyStatus(
+            `${parts.length ? `${parts.join(" — ")}. ` : ""}Sent — next contact: ${detail.contact?.fullName ?? "ready"}.`
+          );
+        } else {
+          setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
+          setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
+          setMobileDetailOpen(false);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Decision failed");
       } finally {
@@ -345,22 +389,63 @@ export default function ApprovalQueueClient() {
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact</h3>
-              {current.contact ? (
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Contacts{(current.contacts?.length ?? 0) > 1 ? ` (${current.contacts.length})` : ""}
+              </h3>
+              {(current.contacts?.length ?? 0) > 0 ? (
+                <ul className="mt-2 space-y-2">
+                  {current.contacts.map((c) => {
+                    const selected = current.contact?.id === c.id;
+                    const hasDraft = (current.contactDrafts ?? []).some(
+                      (d) => d.contactId === c.id && (d.status === "draft" || d.status === "qa_flagged")
+                    );
+                    const sent = (current.contactDrafts ?? []).some(
+                      (d) => d.contactId === c.id && (d.status === "approved" || d.status === "approved_with_edits")
+                    );
+                    const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          disabled={busy || selected}
+                          onClick={() => void selectContact(c.id)}
+                          className={`w-full rounded-lg border px-3 py-2 text-left text-sm touch-manipulation disabled:opacity-100 ${
+                            selected
+                              ? "border-sky-600 bg-sky-950/40 text-white"
+                              : "border-gray-800 bg-gray-900/40 text-gray-200 hover:border-gray-600"
+                          }`}
+                        >
+                          <span className="flex items-start justify-between gap-2">
+                            <span className="font-medium">
+                              {c.fullName ?? "Unnamed"}
+                              {sent ? <span className="ml-2 text-xs text-emerald-400">sent</span> : null}
+                              {!sent && hasDraft ? <span className="ml-2 text-xs text-gray-500">draft</span> : null}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
+                          <span className="mt-1 block text-xs leading-snug text-gray-500">{blurb}</span>
+                          <span className="mt-1 block text-xs text-gray-400">{c.email}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : current.contact ? (
                 <p className="mt-1 text-sm text-gray-200">
                   {current.contact.fullName ?? "Unnamed"} — {current.contact.roleTitle ?? "unknown role"}
                   <br />
                   <span className="text-gray-400">
                     {current.contact.email ?? "no email"} · {current.contact.emailVerificationStatus}
                   </span>
-                  <br />
-                  <span className="text-xs text-sky-400">
-                    Persona: {PERSONA_STRATEGIES[current.contact.outreachPersona].label} → goal:{" "}
-                    {PERSONA_STRATEGIES[current.contact.outreachPersona].primaryGoal}
-                  </span>
                 </p>
               ) : (
                 <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
+              )}
+              {current.contact && (
+                <p className="mt-2 text-xs text-sky-400">
+                  Active persona: {PERSONA_STRATEGIES[current.contact.outreachPersona].label} → goal:{" "}
+                  {PERSONA_STRATEGIES[current.contact.outreachPersona].primaryGoal}
+                </p>
               )}
             </div>
             <div>
@@ -387,6 +472,12 @@ export default function ApprovalQueueClient() {
                 >
                   Open Gmail thread
                 </a>
+              )}
+              {(current.contacts?.length ?? 0) > 1 && (
+                <p className="mt-3 text-xs text-gray-500">
+                  Select a contact to load their draft. Approve &amp; send goes to the selected person only — the org
+                  stays in queue until every contact is sent or you reject/defer.
+                </p>
               )}
             </div>
           </div>

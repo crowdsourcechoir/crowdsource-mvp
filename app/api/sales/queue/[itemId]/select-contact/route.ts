@@ -1,0 +1,56 @@
+import { NextResponse } from "next/server";
+import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
+import { getOpportunity } from "@/lib/sales/db/opportunities";
+import { getOrganization } from "@/lib/sales/db/organizations";
+import { getContact } from "@/lib/sales/db/contacts";
+import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
+import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
+import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Switch the active queue draft to a specific org contact (creates a draft if missing).
+ * Body: { contactId: string }
+ */
+export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
+  try {
+    const { itemId } = await params;
+    const body = await request.json();
+    const contactId = typeof body?.contactId === "string" ? body.contactId : "";
+    if (!contactId) return NextResponse.json({ error: "contactId is required" }, { status: 400 });
+
+    const item = await getQueueItem(itemId);
+    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (item.status !== "pending") {
+      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    }
+
+    const opportunity = await getOpportunity(item.opportunityId);
+    if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
+    const organization = await getOrganization(opportunity.organizationId);
+    if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+
+    const contact = await getContact(contactId);
+    if (!contact || contact.organizationId !== organization.id) {
+      return NextResponse.json({ error: "Contact not on this organization" }, { status: 400 });
+    }
+    if (!looksLikePersonName(contact.fullName) || !contact.email || !hasVerifiedEmail(contact)) {
+      return NextResponse.json({ error: "Contact needs a name and verified-format email" }, { status: 400 });
+    }
+
+    const { drafts } = await ensureContactDrafts({
+      organization,
+      opportunityId: opportunity.id,
+      pipelineRunId: null,
+    });
+    const draft = drafts.find((d) => d.contactId === contactId);
+    if (!draft) return NextResponse.json({ error: "Could not create draft for contact" }, { status: 500 });
+
+    await setQueueItemOutreachDraft(itemId, draft.id);
+    const detail = await assembleQueueItemDetailFromQueueItem((await getQueueItem(itemId))!);
+    return NextResponse.json({ detail, draftId: draft.id });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
+  }
+}

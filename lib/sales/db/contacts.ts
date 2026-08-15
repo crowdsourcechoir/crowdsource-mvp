@@ -117,6 +117,7 @@ export type UpdateContactInput = {
   roleCategory?: string | null;
   email?: string | null;
   emailVerificationStatus?: Contact["emailVerificationStatus"];
+  importMetadata?: Record<string, unknown> | null;
 };
 
 export async function updateContact(id: string, patch: UpdateContactInput): Promise<Contact> {
@@ -136,6 +137,7 @@ export async function updateContact(id: string, patch: UpdateContactInput): Prom
   if (patch.emailVerificationStatus !== undefined) {
     row.email_verification_status = patch.emailVerificationStatus;
   }
+  if (patch.importMetadata !== undefined) row.import_metadata = patch.importMetadata;
   const { data, error } = await db.from("contacts").update(row).eq("id", id).select().single();
   if (error) throw new Error(error.message);
   return rowToContact(data);

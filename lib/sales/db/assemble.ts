@@ -2,13 +2,17 @@ import { requireSupabaseAdmin } from "./client";
 import { getOpportunity, listOpportunitiesInFunnel } from "./opportunities";
 import { getOrganization } from "./organizations";
 import { getContact, listContactsForOrganization } from "./contacts";
-import { getDraft } from "./outreach";
+import { getDraft, listDraftsForOpportunity } from "./outreach";
 import { listFindingsWithSourcesForOpportunity } from "./research";
 import { getQueueItemByOpportunity, getInitialQueueItemByOpportunity } from "./queue";
 import { getLatestBriefForOpportunity } from "./pipeline";
 import { listActivitiesForOpportunity } from "./activities";
-import { hasVerifiedEmail } from "../dedupe";
+import { hasVerifiedEmail, looksLikePersonName } from "../dedupe";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, QueueItemDetail } from "../types";
+
+function looksLikeSelectableContact(c: Contact): boolean {
+  return Boolean(looksLikePersonName(c.fullName) && c.email);
+}
 
 function emptyQueueItem(opportunityId: string, createdAt: string): ApprovalQueueItem {
   return {
@@ -96,12 +100,19 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
   ]);
   if (!organization) return null;
 
+  const orgContacts = await listContactsForOrganization(opportunity.organizationId);
   const draft = queueItem?.outreachDraftId ? await getDraft(queueItem.outreachDraftId) : null;
   let contact = draft?.contactId ? await getContact(draft.contactId) : null;
   if (!contact) {
-    const orgContacts = await listContactsForOrganization(opportunity.organizationId);
     contact = pickBestContact(orgContacts);
   }
+
+  // Email-ready named people for the queue picker (verified format or any email).
+  const contacts = orgContacts.filter((c) => looksLikeSelectableContact(c));
+  const allDrafts = await listDraftsForOpportunity(opportunity.id);
+  const contactDrafts = allDrafts.filter(
+    (d) => d.kind === "initial" && d.contactId && contacts.some((c) => c.id === d.contactId)
+  );
 
   let score = null;
   if (queueItem?.prospectScoreId) {
@@ -163,6 +174,8 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     organization,
     organizationTypeLabel,
     contact,
+    contacts,
+    contactDrafts,
     score,
     brief,
     draft,

@@ -1,13 +1,14 @@
 import { createOpportunity, findExistingOpportunityByTitle, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { createPipelineRun, updatePipelineRun } from "@/lib/sales/db/pipeline";
 import { createProspectScore } from "@/lib/sales/db/scores";
-import { createOutreachDraft } from "@/lib/sales/db/outreach";
+import { createOutreachDraft, listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { createOrUpdateQueueItem } from "@/lib/sales/db/queue";
 import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
 import { looksLikePersonName, hasVerifiedEmail } from "@/lib/sales/dedupe";
 import { computeTotalScore } from "@/lib/sales/scoring/score";
-import { SCORE_COMPONENT_KEYS, type Contact, type Organization, type ScoreComponentKey } from "@/lib/sales/types";
+import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
+import { SCORE_COMPONENT_KEYS, type Contact, type Organization, type OutreachDraft, type ScoreComponentKey } from "@/lib/sales/types";
 
 export type ManualEnqueueResult = {
   opportunityId: string;
@@ -15,12 +16,17 @@ export type ManualEnqueueResult = {
   prospectScoreId: string;
   outreachDraftId: string;
   primaryContactId: string | null;
+  draftCount: number;
   totalScore: number;
 };
 
+function readyContacts(contacts: Contact[]): Contact[] {
+  return contacts.filter((c) => looksLikePersonName(c.fullName) && hasVerifiedEmail(c) && c.email);
+}
+
 /** Prefer game-entertainment / marketing doorway contacts for NFL team outreach. */
 function pickPrimaryContact(contacts: Contact[]): Contact | null {
-  const ready = contacts.filter((c) => looksLikePersonName(c.fullName) && hasVerifiedEmail(c));
+  const ready = readyContacts(contacts);
   if (ready.length === 0) return null;
   const rank = (c: Contact) => {
     const title = `${c.roleTitle ?? ""} ${c.roleCategory ?? ""}`.toLowerCase();
@@ -32,9 +38,75 @@ function pickPrimaryContact(contacts: Contact[]): Contact | null {
   return [...ready].sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
+function draftCopyForContact(orgName: string, contact: Contact): { subject: string; body: string } {
+  const firstName = (contact.fullName ?? "there").split(/\s+/)[0];
+  const title = (contact.roleTitle ?? "").toLowerCase();
+  const blurb = contactRoleDescription(contact) ?? fallbackRoleDescription(contact.roleTitle);
+
+  let angle: string;
+  if (/game entertainment|special events|entertainment experience|programming/.test(title)) {
+    angle =
+      "a natural doorway is training camp and in-stadium ritual: an anthem the crowd helps make, then owns — sitting in game entertainment / fan experience.";
+  } else if (/marketing/.test(title)) {
+    angle =
+      "a natural doorway is brand and belonging: a shared-creation anthem that gives fans identity they help author, not just consume.";
+  } else if (/coo|chief operating|operations/.test(title)) {
+    angle =
+      "this is a club-wide belonging play — operations often helps route the right owners across entertainment and marketing.";
+  } else {
+    angle =
+      "a natural doorway is training camp and game-day ritual: fans helping create an anthem they then own together.";
+  }
+
+  return {
+    subject: `${orgName} — shared-creation anthem for training camp / fan ritual`,
+    body: `Hi ${firstName},\n\nWe're Crowdsource / Song Garden — we help teams turn belonging into a shared song fans and community help create live (not a playlist, not a one-way performance).\n\nFor the Seahawks, ${angle}\n\n(Context on your seat: ${blurb})\n\nWould you or the right teammate take a short look at fit?\n\n— Joel\n\n[Draft for queue review — edit before approving.]`,
+  };
+}
+
+/** Ensure every email-ready contact has an initial draft; returns drafts and primary draft id. */
+export async function ensureContactDrafts(input: {
+  organization: Organization;
+  opportunityId: string;
+  pipelineRunId?: string | null;
+}): Promise<{ drafts: OutreachDraft[]; primaryDraft: OutreachDraft; primaryContact: Contact }> {
+  const contacts = readyContacts(await listContactsForOrganization(input.organization.id));
+  if (contacts.length === 0) {
+    throw new Error("No named contact with a verified-format email — cannot enqueue.");
+  }
+  const primary = pickPrimaryContact(contacts) ?? contacts[0];
+  const existing = await listDraftsForOpportunity(input.opportunityId);
+  const drafts: OutreachDraft[] = [];
+
+  for (const contact of contacts) {
+    const found = existing.find(
+      (d) => d.kind === "initial" && d.contactId === contact.id && (d.status === "draft" || d.status === "qa_flagged")
+    );
+    if (found) {
+      drafts.push(found);
+      continue;
+    }
+    const copy = draftCopyForContact(input.organization.name, contact);
+    const created = await createOutreachDraft({
+      opportunityId: input.opportunityId,
+      contactId: contact.id,
+      pipelineRunId: input.pipelineRunId ?? null,
+      kind: "initial",
+      status: "draft",
+      confidenceScore: 0.55,
+      aiSubject: copy.subject,
+      aiBody: copy.body,
+    });
+    drafts.push(created);
+  }
+
+  const primaryDraft = drafts.find((d) => d.contactId === primary.id) ?? drafts[0];
+  return { drafts, primaryDraft, primaryContact: primary };
+}
+
 /**
  * When OpenAI credits are exhausted (or AI detect/score/draft can't run), still put a solid
- * lead with verified contacts into the approval queue for human review.
+ * lead with verified contacts into the approval queue for human review — one draft per contact.
  */
 export async function enqueueOrgManually(input: {
   organization: Organization;
@@ -79,7 +151,6 @@ export async function enqueueOrgManually(input: {
       findingIds: [],
     };
   }
-  // Decision-maker access / contact quality higher — we have verified doorway emails.
   raw.decision_maker_access.score = 9;
   raw.contact_quality.score = 9;
   raw.participatory_program_fit.score = 8;
@@ -91,27 +162,21 @@ export async function enqueueOrgManually(input: {
     pipelineRunId: pipelineRun.id,
     totalScore: total,
     componentScores: components,
-    rationale: `Manual queue entry for ${input.organization.name}: verified doorway contacts loaded; AI detect/score skipped (OpenAI credits or forceManualQueue).`,
+    rationale: `Manual queue entry for ${input.organization.name}: ${readyContacts(contacts).length} verified doorway contacts with role context; pick a contact in the queue to review/edit each draft.`,
     confidence: "medium",
-    missingInformation: ["AI research brief not generated — review contacts and draft before send."],
+    missingInformation: ["AI research brief not generated — review contact role blurbs and drafts before send."],
     model: "manual",
   });
 
-  const firstName = (primary.fullName ?? "there").split(/\s+/)[0];
-  const draft = await createOutreachDraft({
+  const { drafts, primaryDraft, primaryContact } = await ensureContactDrafts({
+    organization: input.organization,
     opportunityId: opportunity.id,
-    contactId: primary.id,
     pipelineRunId: pipelineRun.id,
-    kind: "initial",
-    status: "draft",
-    confidenceScore: 0.55,
-    aiSubject: `${input.organization.name} — shared-creation anthem for training camp / fan ritual`,
-    aiBody: `Hi ${firstName},\n\nWe're Crowdsource / Song Garden — we help teams turn belonging into a shared song fans and community help create live (not a playlist, not a one-way performance).\n\nFor the Seahawks, a natural doorway is training camp and in-stadium ritual: an anthem the crowd helps make, then owns.\n\nWould you or the right teammate take a short look at how this could fit game entertainment / marketing?\n\n— Joel\n\n[Draft seeded manually for queue review — edit before approving.]`,
   });
 
   const queueItem = await createOrUpdateQueueItem({
     opportunityId: opportunity.id,
-    outreachDraftId: draft.id,
+    outreachDraftId: primaryDraft.id,
     prospectScoreId: score.id,
     duplicateWarning: false,
   });
@@ -126,8 +191,9 @@ export async function enqueueOrgManually(input: {
     opportunityId: opportunity.id,
     queueItemId: queueItem.id,
     prospectScoreId: score.id,
-    outreachDraftId: draft.id,
-    primaryContactId: primary.id,
+    outreachDraftId: primaryDraft.id,
+    primaryContactId: primaryContact.id,
+    draftCount: drafts.length,
     totalScore: total,
   };
 }

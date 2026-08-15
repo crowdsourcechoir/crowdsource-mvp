@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
-import { updateDraftDecision, getDraft } from "@/lib/sales/db/outreach";
+import { decideQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
+import { updateDraftDecision, getDraft, listDraftsForOpportunity } from "@/lib/sales/db/outreach";
+import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
+import { getContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
 import {
   getOpportunity,
   updateOpportunityStatus,
   updateOpportunityRelationshipStage,
   updateOpportunityTouchTimestamps,
 } from "@/lib/sales/db/opportunities";
-import { getContact } from "@/lib/sales/db/contacts";
 import { getOrganization } from "@/lib/sales/db/organizations";
 import { resolveIndustrySegmentIdForOrganization } from "@/lib/sales/db/lookups";
 import { createOutreachActivity, listActivitiesForOpportunity } from "@/lib/sales/db/activities";
@@ -16,6 +17,7 @@ import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -129,21 +131,62 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       }
     }
 
-    const updated = await decideQueueItem(itemId, {
-      status: effectiveQueueStatus,
-      decisionNotes: body?.notes ?? null,
-      decidedBy: body?.decidedBy ?? "operator",
-      deferredUntil: body?.deferredUntil ?? undefined,
-    });
+    if (draft && isApprove) {
+      await updateDraftDecision(draft.id, {
+        status: contentDiffersFromAi ? "approved_with_edits" : "approved",
+        editedSubject: contentDiffersFromAi ? finalSubject : undefined,
+        editedBody: contentDiffersFromAi ? finalBody : undefined,
+      });
+    } else if (draft && effectiveAction === "reject") {
+      await updateDraftDecision(draft.id, { status: "rejected" });
+    }
 
-    // Nudge decisions shouldn't bounce the opportunity out of the funnel / change pipeline status
-    // back to rejected etc. in surprising ways — only initial items drive opportunity.status.
-    if (item.kind === "initial") {
-      await updateOpportunityStatus(item.opportunityId, QUEUE_STATUS_TO_OPPORTUNITY_STATUS[effectiveQueueStatus]);
+    // Multi-contact queue: after sending one contact, keep the item pending if other
+    // email-ready contacts still have unsent initial drafts.
+    let remaining = false;
+    let nextDetail = null;
+    if (isApprove && item.kind === "initial") {
+      const orgContacts = await listContactsForOrganization(opportunity.organizationId);
+      const readyIds = new Set(
+        orgContacts
+          .filter((c) => looksLikePersonName(c.fullName) && c.email && hasVerifiedEmail(c))
+          .map((c) => c.id)
+      );
+      const drafts = await listDraftsForOpportunity(opportunity.id);
+      const nextDraft = drafts.find(
+        (d) =>
+          d.kind === "initial" &&
+          d.contactId &&
+          readyIds.has(d.contactId) &&
+          d.id !== draft?.id &&
+          (d.status === "draft" || d.status === "qa_flagged")
+      );
+      if (nextDraft) {
+        remaining = true;
+        await setQueueItemOutreachDraft(itemId, nextDraft.id);
+        // Stay pending / ready_for_review so Joel can send the next contact.
+        nextDetail = await assembleQueueItemDetailFromQueueItem((await getQueueItem(itemId))!);
+      }
+    }
+
+    let decidedQueueItem = null;
+    if (!remaining) {
+      decidedQueueItem = await decideQueueItem(itemId, {
+        status: effectiveQueueStatus,
+        decisionNotes: body?.notes ?? null,
+        decidedBy: body?.decidedBy ?? "operator",
+        deferredUntil: body?.deferredUntil ?? undefined,
+      });
+
+      if (item.kind === "initial") {
+        await updateOpportunityStatus(item.opportunityId, QUEUE_STATUS_TO_OPPORTUNITY_STATUS[effectiveQueueStatus]);
+      }
     }
 
     if (isApprove) {
-      if (item.kind === "initial" || !opportunity.relationshipStage) {
+      if ((item.kind === "initial" || !opportunity.relationshipStage) && !remaining) {
+        await updateOpportunityRelationshipStage(item.opportunityId, "awareness");
+      } else if (isApprove && !opportunity.relationshipStage) {
         await updateOpportunityRelationshipStage(item.opportunityId, "awareness");
       }
 
@@ -151,7 +194,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
         opportunityId: item.opportunityId,
         contactId: draft?.contactId ?? null,
         activityType: "approved",
-        metadata: { queueItemId: item.id, kind: item.kind, viaGmail: Boolean(gmailSend) },
+        metadata: { queueItemId: item.id, kind: item.kind, viaGmail: Boolean(gmailSend), remainingContacts: remaining },
         gmailThreadId: gmailSend?.threadId ?? opportunity.gmailThreadId,
       });
 
@@ -172,16 +215,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           gmailThreadId: gmailSend.threadId,
         });
       }
-    }
-
-    if (draft && isApprove) {
-      await updateDraftDecision(draft.id, {
-        status: contentDiffersFromAi ? "approved_with_edits" : "approved",
-        editedSubject: contentDiffersFromAi ? finalSubject : undefined,
-        editedBody: contentDiffersFromAi ? finalBody : undefined,
-      });
-    } else if (draft && effectiveAction === "reject") {
-      await updateDraftDecision(draft.id, { status: "rejected" });
     }
 
     // Learning loop: persist edits / rejections for future draft few-shots.
@@ -214,7 +247,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
     gmailStatus = await getGmailConnectionStatus();
     return NextResponse.json({
-      queueItem: updated,
+      queueItem: remaining ? await getQueueItem(itemId) : decidedQueueItem,
+      remaining,
+      detail: nextDetail,
       learned: Boolean(contentDiffersFromAi && learned && !learningError),
       learningError,
       gmail: {

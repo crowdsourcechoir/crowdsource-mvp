@@ -19,6 +19,8 @@ export type SeedContactInput = {
   email: string;
   roleTitle: string;
   roleCategory?: string | null;
+  /** Short “what they do” blurb for queue copy tweaking. */
+  roleDescription?: string | null;
 };
 
 export type SeedOrgWithContactsInput = {
@@ -29,12 +31,7 @@ export type SeedOrgWithContactsInput = {
   locationCountry?: string | null;
   organizationTypeKey?: string;
   contacts: SeedContactInput[];
-  /** Run full pipeline so opportunity + queue row are created. Default true. */
   runPipeline?: boolean;
-  /**
-   * If AI pipeline fails (e.g. OpenAI out of credits) or this is true, create opportunity +
-   * score + draft + queue row without AI.
-   */
   forceManualQueue?: boolean;
   manualQueueTitle?: string;
   manualQueueDescription?: string;
@@ -51,10 +48,6 @@ export type SeedOrgWithContactsResult = {
   manualEnqueue: ManualEnqueueResult | null;
 };
 
-/**
- * Upsert a manual organization + named contacts with verified-format emails, then optionally
- * run the pipeline so a pending approval_queue_items row appears.
- */
 export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Promise<SeedOrgWithContactsResult> {
   if (!input.name?.trim()) throw new Error("name is required");
   if (!input.websiteUrl?.trim()) throw new Error("websiteUrl is required");
@@ -100,6 +93,10 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     if (!fullName || !email || !c.roleTitle?.trim()) {
       throw new Error(`Each contact needs fullName, email, and roleTitle (bad: ${JSON.stringify(c)})`);
     }
+    const meta = {
+      seededManually: true,
+      ...(c.roleDescription?.trim() ? { roleDescription: c.roleDescription.trim() } : {}),
+    };
     const existing = await findExistingContact(organization.id, email, fullName);
     if (existing) {
       await updateContact(existing.id, {
@@ -108,6 +105,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         roleCategory: c.roleCategory ?? existing.roleCategory,
         email,
         emailVerificationStatus: "valid_format",
+        importMetadata: { ...(existing.importMetadata ?? {}), ...meta },
       });
       contactsUpdated += 1;
     } else {
@@ -119,7 +117,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         email,
         source: "manual",
         emailVerificationStatus: "valid_format",
-        importMetadata: { seededManually: true },
+        importMetadata: meta,
       });
       contactsCreated += 1;
     }
@@ -173,33 +171,69 @@ export const SEAHAWKS_SEED: SeedOrgWithContactsInput = {
   locationCountry: "US",
   organizationTypeKey: "sports_team",
   contacts: [
-    { fullName: "David Young", email: "davidy@seahawks.com", roleTitle: "Chief Operating Officer", roleCategory: "executive" },
-    { fullName: "Ryan Flandreau", email: "ryanf@seahawks.com", roleTitle: "Reports to COO / Operations", roleCategory: "operations" },
-    { fullName: "Mario Bailey", email: "mariob@seahawks.com", roleTitle: "Front office contact", roleCategory: "operations" },
-    { fullName: "Becca Stout", email: "beccas@seahawks.com", roleTitle: "Front office contact", roleCategory: "operations" },
+    {
+      fullName: "David Young",
+      email: "davidy@seahawks.com",
+      roleTitle: "Chief Operating Officer",
+      roleCategory: "executive",
+      roleDescription:
+        "Top business operator for the club — owns cross-department priorities and can green-light or route a training-camp / stadium belonging initiative that spans entertainment and marketing.",
+    },
+    {
+      fullName: "Ryan Flandreau",
+      email: "ryanf@seahawks.com",
+      roleTitle: "Reports to COO / Operations",
+      roleCategory: "operations",
+      roleDescription:
+        "In the COO’s operations orbit — useful internal champion/router who can move a proposal to the right entertainment or marketing owners without owning game-day creative themselves.",
+    },
+    {
+      fullName: "Mario Bailey",
+      email: "mariob@seahawks.com",
+      roleTitle: "Front office contact",
+      roleCategory: "operations",
+      roleDescription:
+        "Front-office contact — treat as a doorway to confirm ownership; angle lightly until you know whether they sit closer to ops, community, or entertainment.",
+    },
+    {
+      fullName: "Becca Stout",
+      email: "beccas@seahawks.com",
+      roleTitle: "Front office contact",
+      roleCategory: "operations",
+      roleDescription:
+        "Front-office contact — useful for routing; keep the ask short and ask who owns game entertainment / fan experience for training camp.",
+    },
     {
       fullName: "Tyler Cofer",
       email: "tylerc@seahawks.com",
       roleTitle: "Director of Game Entertainment & Special Events",
       roleCategory: "events",
+      roleDescription:
+        "Owns in-stadium entertainment and special events — primary buyer for a live participatory anthem, training-camp moment, or special-event ritual fans help create.",
     },
     {
       fullName: "Lee Herteg",
       email: "leeh@seahawks.com",
       roleTitle: "Manager, Entertainment Experience & Programming",
       roleCategory: "events",
+      roleDescription:
+        "Builds entertainment experience and programming — cares how moments feel for fans in the building; strong collaborator/owner for Song Garden-style shared creation.",
     },
     {
       fullName: "Allison Hoover",
       email: "allisonh@seahawks.com",
       roleTitle: "Managing Director of Marketing",
       roleCategory: "marketing",
+      roleDescription:
+        "Leads marketing at the club — strong fit for belonging/identity narrative that scales beyond one game into brand and season-long fan story.",
     },
     {
       fullName: "Dan Stropes",
       email: "dstropes@seahawks.com",
       roleTitle: "Director of Marketing",
       roleCategory: "marketing",
+      roleDescription:
+        "Marketing director — campaigns and fan-facing story; pitch shared-creation as something fans author with the team, not a one-off promo.",
     },
   ],
 };

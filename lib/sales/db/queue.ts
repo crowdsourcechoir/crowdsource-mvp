@@ -202,3 +202,17 @@ export async function decideQueueItem(
   if (error) throw new Error(error.message);
   return rowToQueueItem(data);
 }
+
+/** Point a still-pending queue row at a different contact's draft (multi-contact picker). */
+export async function setQueueItemOutreachDraft(id: string, outreachDraftId: string): Promise<ApprovalQueueItem> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .update({ outreach_draft_id: outreachDraftId })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToQueueItem(data);
+}
