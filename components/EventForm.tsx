@@ -1558,11 +1558,15 @@ export default function EventForm({
                   }
                 });
               }}
-              placeholder="e.g. Sphere Las Vegas at desert sunset — Mojave dunes, bioluminescent mycelial garden…"
+              placeholder="e.g. Gather Boston · Faneuil Hall at dusk · soft evening light, natural sky — keep the real place, no fantasy overlays…"
               rows={3}
               className={inputClass}
             />
           </label>
+          <p className="text-[11px] text-gray-500">
+            With a reference photo attached, Generate keeps the real landmark and only softens light —
+            it will not invent glowing vines / orbs. Without a ref, it invents a Song Garden world.
+          </p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 flex-1 space-y-1">
               <span className={labelClass}>Reference photos (optional · up to 3)</span>
