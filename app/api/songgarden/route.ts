@@ -54,6 +54,13 @@ function rowToClip(row: Record<string, unknown>): SonggardenClip {
 
 const CLIP_SELECT =
   "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, trim_lead_ms, trim_trail_ms, trim_status, has_original";
+const CLIP_SELECT_LEGACY =
+  "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at";
+
+/** True when supabase/songgarden-trim-originals.sql has not been applied yet. */
+function isTrimSchemaMissing(message: string): boolean {
+  return /audio_data_original|trim_lead_ms|trim_trail_ms|trim_status|has_original/i.test(message);
+}
 
 function parseDeviceId(value: FormDataEntryValue | null): string | null {
   if (typeof value !== "string") return null;
@@ -95,13 +102,11 @@ export async function GET(request: Request) {
       .order("submitted_at", { ascending: false });
     if (since) q = q.gt("submitted_at", since);
     let { data, error } = await q;
-    if (error && /trim_|has_original/i.test(error.message)) {
+    if (error && isTrimSchemaMissing(error.message)) {
       // Migration not applied yet — fall back to legacy columns.
       let legacy = supabaseAdmin
         .from("songgarden_clips")
-        .select(
-          "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at"
-        )
+        .select(CLIP_SELECT_LEGACY)
         .eq("event_id", eventId)
         .order("submitted_at", { ascending: false });
       if (since) legacy = legacy.gt("submitted_at", since);
@@ -288,30 +293,61 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { data, error } = await supabaseAdmin
+    const insertRow = {
+      event_id: trimmedEventId,
+      contributor_name:
+        typeof contributorName === "string" ? contributorName.trim() || null : null,
+      label: typeof label === "string" ? label.trim() || null : null,
+      category,
+      filename: safeFilename,
+      mime_type: mimeType,
+      duration_ms: Number.isFinite(durationMs) ? durationMs : null,
+      device_id: deviceId,
+      session_token: sessionToken,
+      ip_hash: ipHash,
+      audio_data: encodeSupabaseBytea(buffer),
+      audio_data_original: hasOriginal && originalBuffer ? encodeSupabaseBytea(originalBuffer) : null,
+      trim_lead_ms: Number.isFinite(trimLeadMs) ? trimLeadMs : null,
+      trim_trail_ms: Number.isFinite(trimTrailMs) ? trimTrailMs : null,
+      trim_status: trimStatus,
+      has_original: hasOriginal,
+    };
+
+    let { data, error } = await supabaseAdmin
       .from("songgarden_clips")
-      .insert({
-        event_id: trimmedEventId,
-        contributor_name:
-          typeof contributorName === "string" ? contributorName.trim() || null : null,
-        label: typeof label === "string" ? label.trim() || null : null,
-        category,
-        filename: safeFilename,
-        mime_type: mimeType,
-        duration_ms: Number.isFinite(durationMs) ? durationMs : null,
-        device_id: deviceId,
-        session_token: sessionToken,
-        ip_hash: ipHash,
-        audio_data: encodeSupabaseBytea(buffer),
-        audio_data_original: hasOriginal && originalBuffer ? encodeSupabaseBytea(originalBuffer) : null,
-        trim_lead_ms: Number.isFinite(trimLeadMs) ? trimLeadMs : null,
-        trim_trail_ms: Number.isFinite(trimTrailMs) ? trimTrailMs : null,
-        trim_status: trimStatus,
-        has_original: hasOriginal,
-      })
+      .insert(insertRow)
       .select(CLIP_SELECT)
       .single();
+
+    // Prod may not have run supabase/songgarden-trim-originals.sql yet — save playable audio only.
+    if (error && isTrimSchemaMissing(error.message)) {
+      const {
+        audio_data_original: _o,
+        trim_lead_ms: _l,
+        trim_trail_ms: _t,
+        trim_status: _s,
+        has_original: _h,
+        ...legacyRow
+      } = insertRow;
+      const fallback = await supabaseAdmin
+        .from("songgarden_clips")
+        .insert(legacyRow)
+        .select(CLIP_SELECT_LEGACY)
+        .single();
+      data = fallback.data
+        ? {
+            ...fallback.data,
+            trim_lead_ms: null,
+            trim_trail_ms: null,
+            trim_status: "none",
+            has_original: false,
+          }
+        : null;
+      error = fallback.error;
+    }
+
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!data) return NextResponse.json({ error: "Insert failed." }, { status: 500 });
     const clip = rowToClip(data);
     const garden = await recordGardenContribution({
       eventId: trimmedEventId,

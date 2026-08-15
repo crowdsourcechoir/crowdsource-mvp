@@ -82,6 +82,15 @@ export async function PATCH(
       .eq("id", clipId)
       .eq("event_id", eventId)
       .single();
+    if (error && /audio_data_original|has_original/i.test(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Original audio columns are not available yet. Run supabase/songgarden-trim-originals.sql in the Supabase SQL Editor.",
+        },
+        { status: 400 }
+      );
+    }
     if (error || !data) return NextResponse.json({ error: "Not found." }, { status: 404 });
     if (!data.has_original || !data.audio_data_original) {
       return NextResponse.json({ error: "No original stored for this clip." }, { status: 400 });

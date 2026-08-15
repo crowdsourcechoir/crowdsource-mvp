@@ -63,7 +63,12 @@ async function listClipsForEvent(eventId: string): Promise<SonggardenClip[]> {
     .eq("event_id", eventId)
     .order("submitted_at", { ascending: false })
     .limit(500);
-  if (primary.error && /trim_|has_original/i.test(primary.error.message)) {
+  if (
+    primary.error &&
+    /audio_data_original|trim_lead_ms|trim_trail_ms|trim_status|has_original|trim_/i.test(
+      primary.error.message
+    )
+  ) {
     const legacy = await supabaseAdmin
       .from("songgarden_clips")
       .select(

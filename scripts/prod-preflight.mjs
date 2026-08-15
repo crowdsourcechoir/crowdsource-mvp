@@ -173,6 +173,7 @@ const sqlFiles = [
   "supabase/agent-turn-transcripts.sql",
   "supabase/songgarden-tables.sql",
   "supabase/songgarden-spam-columns.sql (if songgarden exists)",
+  "supabase/songgarden-trim-originals.sql (keeps untrimmed originals; required for restore)",
 ];
 sqlFiles.forEach((f) => console.log(`   • ${f}`));
 

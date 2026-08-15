@@ -42,19 +42,38 @@ export async function GET(
   }
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from("songgarden_clips")
-      .select(
-        wantOriginal
-          ? "filename, mime_type, audio_data, audio_data_original, has_original"
-          : "filename, mime_type, audio_data"
-      )
-      .eq("id", clipId)
-      .eq("event_id", eventId)
-      .single();
+    let data: Record<string, unknown> | null = null;
+    let error: { message: string } | null = null;
+
+    if (wantOriginal) {
+      const full = await supabaseAdmin
+        .from("songgarden_clips")
+        .select("filename, mime_type, audio_data, audio_data_original, has_original")
+        .eq("id", clipId)
+        .eq("event_id", eventId)
+        .single();
+      if (full.error && /audio_data_original|has_original/i.test(full.error.message)) {
+        return jsonError(
+          "Original audio columns are not available yet. Run supabase/songgarden-trim-originals.sql in Supabase.",
+          404
+        );
+      }
+      data = (full.data as Record<string, unknown> | null) ?? null;
+      error = full.error;
+    } else {
+      const playable = await supabaseAdmin
+        .from("songgarden_clips")
+        .select("filename, mime_type, audio_data")
+        .eq("id", clipId)
+        .eq("event_id", eventId)
+        .single();
+      data = (playable.data as Record<string, unknown> | null) ?? null;
+      error = playable.error;
+    }
+
     if (error || !data) return jsonError("Not found.", 404);
 
-    const row = data as unknown as Record<string, unknown>;
+    const row = data;
     let buffer: Buffer;
     if (wantOriginal) {
       if (!row.audio_data_original) {
