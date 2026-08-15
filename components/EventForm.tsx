@@ -258,7 +258,7 @@ export default function EventForm({
   /** Place/atmosphere refs for storyboard AI (Runway uses up to 3). */
   const [aiReferencePhotos, setAiReferencePhotos] = useState<string[]>([]);
   const [uploadingAiRefs, setUploadingAiRefs] = useState(false);
-  const [aiFrameCount, setAiFrameCount] = useState<number>(4);
+  const [aiFrameCount, setAiFrameCount] = useState<number>(1);
   const [aiGenerating, setAiGenerating] = useState(false);
   /** When set, only that storyboard frame index is regenerating. */
   const [aiRegeneratingFrame, setAiRegeneratingFrame] = useState<number | null>(null);

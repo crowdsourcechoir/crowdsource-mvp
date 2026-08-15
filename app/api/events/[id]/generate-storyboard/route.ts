@@ -21,7 +21,7 @@ export const maxDuration = 300;
 
 const MIN_FRAMES = 1;
 const MAX_FRAMES = 6;
-const DEFAULT_FRAMES = 4;
+const DEFAULT_FRAMES = 1;
 /** 10s loops feel continuous; 5s resets read as a glitch. */
 const VIDEO_DURATION_SEC = 10;
 
