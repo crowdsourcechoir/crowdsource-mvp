@@ -188,7 +188,14 @@ export default function ApprovalQueueClient() {
         isApprove && differedFromAi ? "approve_with_edits" : action;
 
       // Mailto only after confirm click (this function), never on contact browse / Approve hover.
-      if (!gmailConnected && isApprove && current.contact?.email && current.draft) {
+      // Never mailto a hard-blocked address (Tyler / Seahawks incident).
+      if (
+        !gmailConnected &&
+        isApprove &&
+        current.contact?.email &&
+        current.draft &&
+        !isOutboundEmailBlocked(current.contact.email)
+      ) {
         const to = current.contact.email;
         launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
         copyEmailToClipboard(to, finalSubject, finalBody)
@@ -198,6 +205,11 @@ export default function ApprovalQueueClient() {
             )
           )
           .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
+      }
+      if (isApprove && current.contact?.email && isOutboundEmailBlocked(current.contact.email)) {
+        setError(`Hard block: will not send to ${current.contact.email}.`);
+        setSendConfirmOpen(false);
+        return;
       }
 
       setBusy(true);
