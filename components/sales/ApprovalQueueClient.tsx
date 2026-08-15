@@ -84,6 +84,7 @@ export default function ApprovalQueueClient() {
   useEffect(() => {
     setEditing(false);
     setNotes("");
+    setSendConfirmOpen(false);
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
       setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
