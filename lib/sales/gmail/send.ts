@@ -1,4 +1,5 @@
 import { getGmailClient } from "./client";
+import { assertOutboundEmailAllowed } from "@/lib/sales/outreach/send-blocklist";
 
 export type GmailSendResult = {
   messageId: string;
@@ -65,6 +66,7 @@ export async function sendGmailMessage(input: {
   references?: string | null;
 }): Promise<GmailSendResult> {
   assertGmailSendsEnabled();
+  assertOutboundEmailAllowed(input.to);
 
   const bundle = await getGmailClient();
   if (!bundle) {

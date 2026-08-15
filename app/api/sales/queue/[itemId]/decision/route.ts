@@ -18,6 +18,7 @@ import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +109,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       const contact = draft.contactId ? await getContact(draft.contactId) : null;
       if (!contact?.email) {
         return NextResponse.json({ error: "Cannot approve — draft has no contact email." }, { status: 400 });
+      }
+      if (isOutboundEmailBlocked(contact.email)) {
+        return NextResponse.json(
+          {
+            error: `Hard block: will not send to ${contact.email}. Contact is on the outbound blocklist.`,
+            blocked: true,
+          },
+          { status: 403 }
+        );
       }
 
       if (gmailStatus.connected) {
