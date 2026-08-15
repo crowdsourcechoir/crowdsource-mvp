@@ -25,7 +25,14 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SeedOrgWithContactsInput & { preset?: string };
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
-        ? { ...SEAHAWKS_SEED, runPipeline: body.runPipeline !== false }
+        ? {
+            ...SEAHAWKS_SEED,
+            runPipeline: body.runPipeline !== false,
+            forceManualQueue: Boolean(body.forceManualQueue),
+            manualQueueTitle: body.manualQueueTitle,
+            manualQueueDescription: body.manualQueueDescription,
+            manualEventName: body.manualEventName,
+          }
         : body;
 
     if (!input?.name || !input?.websiteUrl || !Array.isArray(input.contacts)) {
