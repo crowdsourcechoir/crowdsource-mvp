@@ -155,3 +155,26 @@ export async function markContactEnriched(
   if (error) throw new Error(error.message);
   return rowToContact(data);
 }
+
+/**
+ * Clears burned enrichment attempts that ended in provider error so Hunter/Apollo can be
+ * retried (free-plan 403s and rate limits used to stamp enrichment_attempted_at forever).
+ */
+export async function clearFailedEnrichmentAttempts(organizationIds?: string[]): Promise<number> {
+  const db = requireSupabaseAdmin();
+  let query = db
+    .from("contacts")
+    .update({
+      enrichment_attempted_at: null,
+      enrichment_status: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("enrichment_status", "error")
+    .is("email", null);
+  if (organizationIds && organizationIds.length > 0) {
+    query = query.in("organization_id", organizationIds);
+  }
+  const { data, error } = await query.select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}

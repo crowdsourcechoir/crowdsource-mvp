@@ -13,11 +13,16 @@ export type EnrichContactsStageOutput = {
 const MAX_ENRICHMENT_PER_RUN = 3; // hard cap on paid API calls per pipeline run — this is a cost control, not a quality one
 const DECISION_MAKER_ROLE_PATTERN = /director|president|executive|head\b|chief|coordinator|manager|founder|dean|principal/i;
 
-/** Named people with no email yet, ranked so a decision-maker-sounding title is tried before a generic one (e.g. "board governor"), then by discovery order. */
+/** Named people with no email yet, ranked so a decision-maker-sounding title is tried before a generic one (e.g. "board governor"), then by discovery order.
+ * Prior provider errors (Apollo free-plan 403, Hunter 429, etc.) are retryable — only a
+ * definitive found/not_found burns the contact for future runs.
+ */
 function rankEnrichmentCandidates(contacts: Contact[]): Contact[] {
-  const candidates = contacts.filter(
-    (c) => looksLikePersonName(c.fullName) && !c.email && !c.enrichmentAttemptedAt
-  );
+  const candidates = contacts.filter((c) => {
+    if (!looksLikePersonName(c.fullName) || c.email) return false;
+    if (!c.enrichmentAttemptedAt) return true;
+    return c.enrichmentStatus === "error";
+  });
   return [...candidates].sort((a, b) => {
     const roleRank = (c: Contact) => (DECISION_MAKER_ROLE_PATTERN.test(c.roleTitle ?? "") ? 0 : 1);
     const diff = roleRank(a) - roleRank(b);

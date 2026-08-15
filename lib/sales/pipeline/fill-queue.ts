@@ -1,4 +1,5 @@
 import { listAwaitingContactOrganizationIds } from "../db/awaitingContact";
+import { clearFailedEnrichmentAttempts } from "../db/contacts";
 import { getDigestMinScore } from "../digest/config";
 import { runPipelineForOrganization, type PipelineRunSummary } from "./run-pipeline";
 
@@ -6,6 +7,7 @@ export type FillQueueSummary = {
   considered: number;
   attempted: number;
   queuedOrAdvanced: number;
+  enrichmentErrorsCleared: number;
   results: {
     organizationId: string;
     priorScore: number;
@@ -23,6 +25,11 @@ export async function fillQueueFromAwaitingContact(limit: number = 10): Promise<
   const capped = Math.max(1, Math.min(25, Math.floor(limit) || 10));
   const minScore = getDigestMinScore();
   const candidates = await listAwaitingContactOrganizationIds(capped, minScore);
+  const orgIds = candidates.map((c) => c.organizationId);
+  const enrichmentErrorsCleared = orgIds.length
+    ? await clearFailedEnrichmentAttempts(orgIds).catch(() => 0)
+    : 0;
+
   const results: FillQueueSummary["results"] = [];
   const errors: string[] = [];
   let queuedOrAdvanced = 0;
@@ -50,6 +57,7 @@ export async function fillQueueFromAwaitingContact(limit: number = 10): Promise<
     considered: candidates.length,
     attempted: results.length,
     queuedOrAdvanced,
+    enrichmentErrorsCleared,
     results,
     errors,
   };
