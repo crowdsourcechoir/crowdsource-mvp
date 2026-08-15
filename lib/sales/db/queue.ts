@@ -24,20 +24,34 @@ export async function createOrUpdateQueueItem(input: {
   outreachDraftId?: string | null;
   prospectScoreId?: string | null;
   duplicateWarning?: boolean;
+  /**
+   * Explicit operator reopen (manual seed / force queue). Default false so the AI pipeline
+   * never clobbers a human reject/defer/duplicate decision.
+   */
+  reopenDecided?: boolean;
 }): Promise<ApprovalQueueItem> {
   const db = requireSupabaseAdmin();
   const existing = await getInitialQueueItemByOpportunity(input.opportunityId);
   if (existing) {
-    // Only refresh draft/score pointers while still pending — never clobber a human decision.
-    if (existing.status !== "pending") return existing;
+    // Only refresh draft/score pointers while still pending — never clobber a human decision
+    // unless reopenDecided is explicitly requested (e.g. Joel asks to put Seahawks back).
+    if (existing.status !== "pending" && !input.reopenDecided) return existing;
+    const row: Record<string, unknown> = {
+      outreach_draft_id: input.outreachDraftId ?? null,
+      prospect_score_id: input.prospectScoreId ?? null,
+      duplicate_warning: input.duplicateWarning ?? false,
+      kind: "initial",
+    };
+    if (existing.status !== "pending" && input.reopenDecided) {
+      row.status = "pending";
+      row.decision_notes = null;
+      row.decided_by = null;
+      row.decided_at = null;
+      row.deferred_until = null;
+    }
     const { data, error } = await db
       .from("approval_queue_items")
-      .update({
-        outreach_draft_id: input.outreachDraftId ?? null,
-        prospect_score_id: input.prospectScoreId ?? null,
-        duplicate_warning: input.duplicateWarning ?? false,
-        kind: "initial",
-      })
+      .update(row)
       .eq("id", existing.id)
       .select()
       .single();

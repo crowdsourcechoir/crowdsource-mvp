@@ -6,6 +6,7 @@ import { createOrUpdateQueueItem } from "@/lib/sales/db/queue";
 import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
 import { looksLikePersonName, hasVerifiedEmail } from "@/lib/sales/dedupe";
+import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { computeTotalScore } from "@/lib/sales/scoring/score";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { SCORE_COMPONENT_KEYS, type Contact, type Organization, type OutreachDraft, type ScoreComponentKey } from "@/lib/sales/types";
@@ -21,7 +22,13 @@ export type ManualEnqueueResult = {
 };
 
 function readyContacts(contacts: Contact[]): Contact[] {
-  return contacts.filter((c) => looksLikePersonName(c.fullName) && hasVerifiedEmail(c) && c.email);
+  return contacts.filter(
+    (c) =>
+      looksLikePersonName(c.fullName) &&
+      hasVerifiedEmail(c) &&
+      c.email &&
+      !isOutboundEmailBlocked(c.email)
+  );
 }
 
 /** Prefer game-entertainment / marketing doorway contacts for NFL team outreach. */
@@ -126,11 +133,15 @@ export async function enqueueOrgManually(input: {
   eventOrInitiativeName?: string | null;
   opportunityTypeKey?: string;
   totalScoreHint?: number;
+  /** Reopen a previously rejected/deferred initial queue row (manual operator action only). */
+  reopenDecided?: boolean;
 }): Promise<ManualEnqueueResult> {
   const contacts = await listContactsForOrganization(input.organization.id);
   const primary = pickPrimaryContact(contacts);
   if (!primary) {
-    throw new Error("No named contact with a verified-format email — cannot enqueue.");
+    throw new Error(
+      "No named contact with a verified-format email (excluding hard-blocked addresses) — cannot enqueue."
+    );
   }
 
   const oppType = await findOpportunityTypeByKey(input.opportunityTypeKey ?? "fan_engagement_initiative");
@@ -190,6 +201,7 @@ export async function enqueueOrgManually(input: {
     outreachDraftId: primaryDraft.id,
     prospectScoreId: score.id,
     duplicateWarning: false,
+    reopenDecided: Boolean(input.reopenDecided),
   });
 
   await updatePipelineRun(pipelineRun.id, {

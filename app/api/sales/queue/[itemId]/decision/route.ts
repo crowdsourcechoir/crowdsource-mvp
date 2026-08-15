@@ -123,19 +123,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       if (gmailStatus.connected) {
         try {
           const activities = await listActivitiesForOpportunity(opportunity.id);
-          const priorSent = [...activities].reverse().find((a) => a.activityType === "sent");
-          // Never blast the same opportunity twice as "initial" cold outreach (duplicate drafts /
-          // accidental multi-approve). Nudges still send in-thread under their own caps.
-          if (item.kind === "initial" && (opportunity.lastOutboundAt || priorSent)) {
-            return NextResponse.json(
-              {
-                error:
-                  "Gmail send blocked — this opportunity already has an outbound send. Reject/defer this draft; do not re-send cold outreach.",
-                gmailConnected: true,
-                alreadySent: true,
-              },
-              { status: 409 }
+          // Per-contact guard: never re-send initial cold outreach to the same person (Tyler
+          // multi-send). Other doorway contacts on the same org/opportunity may still send.
+          // Nudges still send in-thread under their own caps.
+          if (item.kind === "initial" && draft.contactId) {
+            const priorSentToContact = activities.some(
+              (a) => a.activityType === "sent" && a.contactId === draft.contactId
             );
+            const draftsForOpp = await listDraftsForOpportunity(opportunity.id);
+            const alreadyApprovedForContact = draftsForOpp.some(
+              (d) =>
+                d.kind === "initial" &&
+                d.contactId === draft.contactId &&
+                d.id !== draft.id &&
+                (d.status === "approved" || d.status === "approved_with_edits")
+            );
+            if (priorSentToContact || alreadyApprovedForContact || draft.status === "approved" || draft.status === "approved_with_edits") {
+              return NextResponse.json(
+                {
+                  error:
+                    "Gmail send blocked — this contact already has outbound / approved initial outreach. Pick another contact; do not re-send to the same person.",
+                  gmailConnected: true,
+                  alreadySent: true,
+                },
+                { status: 409 }
+              );
+            }
           }
 
           let inReplyTo: string | null = null;
@@ -185,7 +198,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       const orgContacts = await listContactsForOrganization(opportunity.organizationId);
       const readyIds = new Set(
         orgContacts
-          .filter((c) => looksLikePersonName(c.fullName) && c.email && hasVerifiedEmail(c))
+          .filter(
+            (c) =>
+              looksLikePersonName(c.fullName) &&
+              c.email &&
+              hasVerifiedEmail(c) &&
+              !isOutboundEmailBlocked(c.email)
+          )
           .map((c) => c.id)
       );
       const drafts = await listDraftsForOpportunity(opportunity.id);

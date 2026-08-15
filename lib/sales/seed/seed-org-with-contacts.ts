@@ -33,6 +33,8 @@ export type SeedOrgWithContactsInput = {
   contacts: SeedContactInput[];
   runPipeline?: boolean;
   forceManualQueue?: boolean;
+  /** Reopen a rejected/deferred queue row when force-manual enqueue runs. */
+  reopenDecided?: boolean;
   manualQueueTitle?: string;
   manualQueueDescription?: string;
   manualEventName?: string;
@@ -123,7 +125,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     }
   }
 
-  const runPipeline = input.runPipeline !== false;
+  const runPipeline = input.runPipeline !== false && !input.reopenDecided;
   let pipeline: Awaited<ReturnType<typeof runPipelineForOrganization>> | null = null;
   if (runPipeline && !input.forceManualQueue) {
     pipeline = await runPipelineForOrganization(organization.id, created ? "manual" : "reprocess_request");
@@ -136,7 +138,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     !(pipeline.stagesRun ?? []).some((s) => s.stage === "queue" && s.status === "succeeded");
 
   let manualEnqueue: ManualEnqueueResult | null = null;
-  if (input.forceManualQueue || (runPipeline && pipelineFailed)) {
+  if (input.forceManualQueue || input.reopenDecided || (runPipeline && pipelineFailed)) {
     manualEnqueue = await enqueueOrgManually({
       organization,
       title:
@@ -148,6 +150,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
       eventOrInitiativeName: input.manualEventName ?? "Training camp / game entertainment ritual",
       opportunityTypeKey: "fan_engagement_initiative",
       totalScoreHint: 82,
+      reopenDecided: Boolean(input.reopenDecided),
     });
   }
 

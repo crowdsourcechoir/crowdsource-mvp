@@ -29,6 +29,7 @@ export async function POST(request: Request) {
             ...SEAHAWKS_SEED,
             runPipeline: body.runPipeline !== false,
             forceManualQueue: Boolean(body.forceManualQueue),
+            reopenDecided: Boolean(body.reopenDecided),
             manualQueueTitle: body.manualQueueTitle,
             manualQueueDescription: body.manualQueueDescription,
             manualEventName: body.manualEventName,

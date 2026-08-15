@@ -6,6 +6,7 @@ import { getContact } from "@/lib/sales/db/contacts";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     }
     if (!looksLikePersonName(contact.fullName) || !contact.email || !hasVerifiedEmail(contact)) {
       return NextResponse.json({ error: "Contact needs a name and verified-format email" }, { status: 400 });
+    }
+    if (isOutboundEmailBlocked(contact.email)) {
+      return NextResponse.json(
+        { error: `Hard block: ${contact.email} cannot be selected for outbound.`, blocked: true },
+        { status: 403 }
+      );
     }
 
     const { drafts } = await ensureContactDrafts({
