@@ -172,7 +172,7 @@ export default function SoundMomentPad({
         audio: prepared.blob,
         filename,
         contributorName: credit,
-        label: activeSlot.label,
+        label: promptText.trim().slice(0, 180) || activeSlot.label,
         durationMs: prepared.durationMs,
         originalAudio: prepared.originalBlob,
         trimLeadMs: prepared.trimLeadMs,
@@ -196,6 +196,7 @@ export default function SoundMomentPad({
     onSubmitted,
     pendingClip,
     progressSlotId,
+    promptText,
     slot,
     stopPlayback,
   ]);

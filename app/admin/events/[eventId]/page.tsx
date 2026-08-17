@@ -39,7 +39,7 @@ import {
   type SonggardenClip,
 } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
-import SoundPadTile from "@/components/songgarden/SoundPadTile";
+import SoundClipRow from "@/components/songgarden/SoundClipRow";
 import {
   buildSoundPackLayout,
   soundPackReadme,
@@ -284,8 +284,12 @@ export default function EventDetailPage() {
         });
       });
       card.clips.forEach((clip, idx) => {
-        const label = clip.label?.trim() || songgardenCategoryLabel(clip.category);
-        parts.push(`Sound ${idx + 1}: ${label} (${songgardenCategoryLabel(clip.category)})`);
+        const prompt = clip.label?.trim() || songgardenCategoryLabel(clip.category);
+        const dur =
+          clip.durationMs != null && Number.isFinite(clip.durationMs)
+            ? ` ${Math.round(clip.durationMs / 1000)}s`
+            : "";
+        parts.push(`Sound ${idx + 1}: ${prompt} (${songgardenCategoryLabel(clip.category)}${dur})`);
       });
       parts.push("");
     });
@@ -1241,13 +1245,7 @@ export default function EventDetailPage() {
                         ) : null}
                       </div>
 
-                      <div
-                        className={`grid gap-4 ${
-                          card.clips.length > 0 && answers.length > 0
-                            ? "lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
-                            : "grid-cols-1"
-                        }`}
-                      >
+                      <div className="grid grid-cols-1 gap-4">
                         {answers.length > 0 || card.conversations.length > 0 ? (
                           <div className="min-w-0">
                             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
@@ -1306,14 +1304,16 @@ export default function EventDetailPage() {
                               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
                                 Sounds
                               </p>
-                              <p className="text-[10px] text-gray-600">Click play · drag to DAW</p>
+                              <p className="text-[10px] text-gray-600">Play · scrub · drag to DAW</p>
                             </div>
-                            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
+                            <div className="space-y-2">
                               {card.clips.map((clip) => (
-                                <SoundPadTile
+                                <SoundClipRow
                                   key={clip.id}
                                   eventId={clip.eventId || event.id}
+                                  event={event}
                                   clip={clip}
+                                  siblings={card.clips}
                                   activePadId={activeSoundPadId}
                                   onActivate={setActiveSoundPadId}
                                 />
