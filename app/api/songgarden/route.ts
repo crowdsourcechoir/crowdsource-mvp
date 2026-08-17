@@ -18,6 +18,7 @@ import {
   recordGardenContribution,
 } from "@/lib/song-garden-v2/garden/store";
 import { effectCelebrationLine } from "@/lib/song-garden-v2/garden/types";
+import { applySilenceTrimToWav } from "@/lib/songgarden/trim-wav";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -231,8 +232,8 @@ export async function POST(request: Request) {
       ? `${label.trim().replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 48)}.${ext}`
       : file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 64) || `sound.${ext}`;
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const durationMs =
+  let buffer = Buffer.from(await file.arrayBuffer());
+  let durationMs =
     typeof durationMsRaw === "string" && durationMsRaw.trim()
       ? Number(durationMsRaw)
       : null;
@@ -246,13 +247,29 @@ export async function POST(request: Request) {
     originalBuffer = Buffer.from(await originalFile.arrayBuffer());
   }
 
-  const trimStatus = parseTrimStatus(form.get("trimStatus"));
+  let trimStatus = parseTrimStatus(form.get("trimStatus"));
   const trimLeadRaw = form.get("trimLeadMs");
   const trimTrailRaw = form.get("trimTrailMs");
-  const trimLeadMs =
+  let trimLeadMs =
     typeof trimLeadRaw === "string" && trimLeadRaw.trim() ? Number(trimLeadRaw) : null;
-  const trimTrailMs =
+  let trimTrailMs =
     typeof trimTrailRaw === "string" && trimTrailRaw.trim() ? Number(trimTrailRaw) : null;
+
+  // Gate playable audio on the server. Client trim used to skip on room noise
+  // (peak-abs treated hiss as content). Prefer the untrimmed original when present.
+  const trimSource = originalBuffer ?? buffer;
+  const applied = applySilenceTrimToWav(trimSource);
+  if (applied) {
+    if (applied.trimStatus === "trimmed" && !originalBuffer) {
+      originalBuffer = Buffer.from(applied.original);
+    }
+    buffer = Buffer.from(applied.playable);
+    durationMs = applied.durationMs;
+    trimLeadMs = applied.trimLeadMs;
+    trimTrailMs = applied.trimTrailMs;
+    trimStatus = applied.trimStatus;
+  }
+
   const hasOriginal = Boolean(originalBuffer && originalBuffer.length > 0);
 
   if (USE_LOCAL_EVENTS) {

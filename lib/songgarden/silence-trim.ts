@@ -1,24 +1,23 @@
 /**
- * Silence detection for Song Garden pad samples.
- * Pure PCM helpers — usable from browser (AudioBuffer channels) and Node tests.
+ * Leading/trailing silence detection for Song Garden clips.
+ *
+ * Uses RMS + a noise-floor gate so room hiss (~0.02–0.05) is not treated as
+ * content. Peak-only gating used to skip trim on every real-mic take.
  */
 
 export type SilenceTrimSettings = {
-  /** Peak absolute amplitude below this counts as silence (linear 0–1). */
+  /** Absolute floor; adaptive gate is usually higher. */
   threshold: number;
-  /** Analysis hop / window in samples. */
   windowSamples: number;
-  /** Never return a clip shorter than this (ms). */
-  minContentMs: number;
-  /** Keep this much audio before first / after last non-silent window (ms). */
   paddingMs: number;
+  minContentMs: number;
 };
 
 export const DEFAULT_SILENCE_TRIM: SilenceTrimSettings = {
-  threshold: 0.012,
-  windowSamples: 256,
+  threshold: 0.008,
+  windowSamples: 512,
+  paddingMs: 20,
   minContentMs: 80,
-  paddingMs: 12,
 };
 
 export type SilenceBounds = {
@@ -29,30 +28,30 @@ export type SilenceBounds = {
   trimmed: boolean;
 };
 
-/** Peak absolute sample in a channel region. */
-export function peakAbs(channel: Float32Array, from: number, to: number): number {
-  let peak = 0;
-  const end = Math.min(to, channel.length);
-  for (let i = Math.max(0, from); i < end; i++) {
-    const v = Math.abs(channel[i] ?? 0);
-    if (v > peak) peak = v;
+function windowRms(channels: Float32Array[], from: number, to: number): number {
+  let sum = 0;
+  let n = 0;
+  for (const ch of channels) {
+    const end = Math.min(to, ch.length);
+    for (let i = Math.max(0, from); i < end; i += 1) {
+      const v = ch[i] ?? 0;
+      sum += v * v;
+      n += 1;
+    }
   }
-  return peak;
+  return n === 0 ? 0 : Math.sqrt(sum / n);
 }
 
-/** Peak across all channels for a window. */
-export function peakAbsMulti(channels: Float32Array[], from: number, to: number): number {
-  let peak = 0;
-  for (const ch of channels) {
-    const p = peakAbs(ch, from, to);
-    if (p > peak) peak = p;
-  }
-  return peak;
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * p)));
+  return sorted[i] ?? 0;
 }
 
 /**
  * Find first/last non-silent windows. Trims leading and trailing silence.
- * If content would be too short or signal never rises, returns full range (trimmed=false).
+ * If content would be too short or signal never rises above the noise floor,
+ * returns full range (trimmed=false).
  */
 export function detectSilenceBounds(
   channels: Float32Array[],
@@ -74,14 +73,37 @@ export function detectSilenceBounds(
   const padSamples = Math.round((settings.paddingMs / 1000) * sampleRate);
   const minSamples = Math.round((settings.minContentMs / 1000) * sampleRate);
 
+  const rms: number[] = [];
+  let peak = 0;
+  for (let i = 0; i < length; i += win) {
+    const r = windowRms(channels, i, Math.min(i + win, length));
+    rms.push(r);
+    if (r > peak) peak = r;
+  }
+
+  const sorted = [...rms].sort((a, b) => a - b);
+  const floor = Math.max(percentile(sorted, 0.12), 1e-5);
+  const contrast = peak >= Math.max(floor * 3.4, settings.threshold * 2.5);
+
+  if (!contrast) {
+    return {
+      startSample: 0,
+      endSample: length,
+      leadSilentSamples: 0,
+      trailSilentSamples: 0,
+      trimmed: false,
+    };
+  }
+
+  let gate = Math.max(floor * 3.2, peak * 0.07, settings.threshold);
+  gate = Math.min(gate, peak * 0.28);
+
   let firstLoud = -1;
   let lastLoud = -1;
-
-  for (let i = 0; i < length; i += win) {
-    const to = Math.min(i + win, length);
-    if (peakAbsMulti(channels, i, to) >= settings.threshold) {
-      if (firstLoud < 0) firstLoud = i;
-      lastLoud = to;
+  for (let w = 0; w < rms.length; w += 1) {
+    if ((rms[w] ?? 0) >= gate) {
+      if (firstLoud < 0) firstLoud = w * win;
+      lastLoud = Math.min(length, (w + 1) * win);
     }
   }
 
@@ -113,6 +135,27 @@ export function detectSilenceBounds(
     trailSilentSamples: length - end,
     trimmed,
   };
+}
+
+/** Peak absolute sample in a channel region. */
+export function peakAbs(channel: Float32Array, from: number, to: number): number {
+  let peak = 0;
+  const end = Math.min(to, channel.length);
+  for (let i = Math.max(0, from); i < end; i++) {
+    const v = Math.abs(channel[i] ?? 0);
+    if (v > peak) peak = v;
+  }
+  return peak;
+}
+
+/** Peak across all channels for a window. */
+export function peakAbsMulti(channels: Float32Array[], from: number, to: number): number {
+  let peak = 0;
+  for (const ch of channels) {
+    const p = peakAbs(ch, from, to);
+    if (p > peak) peak = p;
+  }
+  return peak;
 }
 
 export function samplesToMs(samples: number, sampleRate: number): number {

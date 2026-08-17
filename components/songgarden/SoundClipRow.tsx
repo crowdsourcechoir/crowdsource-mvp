@@ -47,6 +47,12 @@ export default function SoundClipRow({
     : songgardenCategoryLabel(clip.category)
   ).toUpperCase();
   const durationLabel = formatClipDuration(clip.durationMs, audioDuration);
+  const trimLabel =
+    clip.trimStatus === "trimmed"
+      ? `Trimmed −${clip.trimLeadMs ?? 0}ms / −${clip.trimTrailMs ?? 0}ms`
+      : clip.trimStatus === "skipped"
+        ? "Silence kept"
+        : null;
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -190,6 +196,12 @@ export default function SoundClipRow({
             {padName}
             <span className="text-gray-600"> · {durationLabel}</span>
             <span className="text-gray-600"> · {songgardenCategoryLabel(clip.category)}</span>
+            {trimLabel ? (
+              <span className={clip.trimStatus === "trimmed" ? "text-[#CFFF81]/70" : "text-gray-600"}>
+                {" "}
+                · {trimLabel}
+              </span>
+            ) : null}
           </p>
           <p className="mt-0.5 text-sm leading-snug text-gray-100">{prompt}</p>
         </div>

@@ -35,6 +35,7 @@ function channelsFromBuffer(audioBuffer: AudioBuffer): Float32Array[] {
 
 /**
  * Decode → 16-bit WAV, keep original, trim leading+trailing silence for pads.
+ * Adaptive RMS gate (see silence-trim.ts). The upload API re-trims as a backup.
  */
 export async function prepareWavFromBlob(
   source: Blob,
