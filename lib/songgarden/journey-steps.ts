@@ -655,6 +655,9 @@ export function syncLegacyFromJourneySteps(
     ...(typeof prevGarden?.completionButtonText === "string"
       ? { completionButtonText: prevGarden.completionButtonText }
       : {}),
+    ...(typeof prevGarden?.showCompletionButton === "boolean"
+      ? { showCompletionButton: prevGarden.showCompletionButton }
+      : {}),
   };
 
   return { agentBrief, songGardenConfig };

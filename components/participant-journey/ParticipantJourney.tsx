@@ -42,7 +42,7 @@ import {
   soundTransitionMessage,
   type JourneyPosition,
 } from "@/lib/participant-journey/steps";
-import { compositionStripSlotOrder } from "@/lib/songgarden/config";
+import { compositionStripSlotOrder, isCompletionButtonVisible } from "@/lib/songgarden/config";
 import { DEFAULT_COMPLETION_BUTTON_TEXT } from "@/lib/song-garden-v2/moment-labels";
 import { isNameQuestionPrompt } from "@/lib/agent-name-question";
 import {
@@ -533,6 +533,7 @@ export default function ParticipantJourney({
     event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
   const completionButtonText =
     event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
+  const completionButtonOn = isCompletionButtonVisible(event.songGardenConfig);
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-lg min-h-0 flex-1 flex-col text-left">
@@ -793,14 +794,16 @@ export default function ParticipantJourney({
           <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-200 sm:text-lg">
             <TypewriterText key="journey-final" text={finalMessage} speed={9} className="inline" />
           </p>
-          <button
-            type="button"
-            onClick={handleParticipateAgain}
-            disabled={sending}
-            className="crowdsource-btn-primary"
-          >
-            {completionButtonText}
-          </button>
+          {completionButtonOn && (
+            <button
+              type="button"
+              onClick={handleParticipateAgain}
+              disabled={sending}
+              className="crowdsource-btn-primary"
+            >
+              {completionButtonText}
+            </button>
+          )}
         </div>
       )}
     </div>

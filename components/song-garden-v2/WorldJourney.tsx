@@ -26,6 +26,7 @@ import {
   resolveTiedStoryboardFrameIndex,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
+import { isCompletionButtonVisible } from "@/lib/songgarden/config";
 import {
   blobToDataUrl,
   conversationIdKey,
@@ -626,6 +627,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const finalMessage = event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
   const completionButtonText =
     event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
+  const completionButtonOn = isCompletionButtonVisible(event.songGardenConfig);
   const momentKey = needsNameGate
     ? "name-gate"
     : `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
@@ -868,14 +870,16 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           {position.phase === "final" && (
             <div className="space-y-6 text-center">
               <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-100 sm:text-lg">{finalMessage}</p>
-              <button
-                type="button"
-                onClick={handleParticipateAgain}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
-                style={{ borderColor: world.accentColor, color: world.accentColor }}
-              >
-                {completionButtonText}
-              </button>
+              {completionButtonOn && (
+                <button
+                  type="button"
+                  onClick={handleParticipateAgain}
+                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
+                  style={{ borderColor: world.accentColor, color: world.accentColor }}
+                >
+                  {completionButtonText}
+                </button>
+              )}
             </div>
           )}
         </MomentOverlay>

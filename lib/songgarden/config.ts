@@ -32,6 +32,8 @@ export type SongGardenConfig = {
   completionEyebrow?: string;
   /** Final-screen button (defaults to "Let's do it again"). */
   completionButtonText?: string;
+  /** When false, the closing screen has no button. Default true. */
+  showCompletionButton?: boolean;
 };
 
 export type ResolvedGardenStep = SongGardenStepConfig & {
@@ -132,7 +134,7 @@ export function defaultSongGardenConfig(): SongGardenConfig {
 
 function pickCompletionCopy(input: Partial<SongGardenConfig> | null | undefined): Pick<
   SongGardenConfig,
-  "completionEyebrow" | "completionButtonText"
+  "completionEyebrow" | "completionButtonText" | "showCompletionButton"
 > {
   return {
     ...(typeof input?.completionEyebrow === "string"
@@ -141,7 +143,15 @@ function pickCompletionCopy(input: Partial<SongGardenConfig> | null | undefined)
     ...(typeof input?.completionButtonText === "string"
       ? { completionButtonText: input.completionButtonText }
       : {}),
+    ...(typeof input?.showCompletionButton === "boolean"
+      ? { showCompletionButton: input.showCompletionButton }
+      : {}),
   };
+}
+
+/** Closing-screen CTA is on unless explicitly turned off. */
+export function isCompletionButtonVisible(config: SongGardenConfig | null | undefined): boolean {
+  return config?.showCompletionButton !== false;
 }
 
 export function normalizeSongGardenConfig(

@@ -491,6 +491,7 @@ export default function EventForm({
         ...(values.songGardenConfig ?? defaultSongGardenConfig()),
         completionEyebrow: values.songGardenConfig?.completionEyebrow,
         completionButtonText: values.songGardenConfig?.completionButtonText,
+        showCompletionButton: values.songGardenConfig?.showCompletionButton,
       }
     );
     const brief: AgentBrief = {
@@ -1400,9 +1401,27 @@ export default function EventForm({
                   },
                 }))
               }
+              disabled={values.songGardenConfig?.showCompletionButton === false}
               className={inputClass}
               placeholder={DEFAULT_COMPLETION_BUTTON_TEXT}
             />
+            <label className="mt-2 flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={values.songGardenConfig?.showCompletionButton !== false}
+                onChange={(e) =>
+                  setValues((v) => ({
+                    ...v,
+                    songGardenConfig: {
+                      ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                      showCompletionButton: e.target.checked,
+                    },
+                  }))
+                }
+                className="mt-0.5 h-4 w-4 rounded border-gray-600 bg-[#1f1f1f]"
+              />
+              <span className="text-sm text-gray-300">Show button on closing screen</span>
+            </label>
           </div>
           <label className="flex cursor-pointer items-start gap-2.5">
             <input
