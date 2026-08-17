@@ -30,6 +30,8 @@ export type SongGardenConfig = {
   journeySteps?: unknown[];
   /** Final-screen eyebrow (defaults to "You're Part Of It"). */
   completionEyebrow?: string;
+  /** Final-screen button (defaults to "Let's do it again"). */
+  completionButtonText?: string;
 };
 
 export type ResolvedGardenStep = SongGardenStepConfig & {
@@ -128,6 +130,20 @@ export function defaultSongGardenConfig(): SongGardenConfig {
   };
 }
 
+function pickCompletionCopy(input: Partial<SongGardenConfig> | null | undefined): Pick<
+  SongGardenConfig,
+  "completionEyebrow" | "completionButtonText"
+> {
+  return {
+    ...(typeof input?.completionEyebrow === "string"
+      ? { completionEyebrow: input.completionEyebrow }
+      : {}),
+    ...(typeof input?.completionButtonText === "string"
+      ? { completionButtonText: input.completionButtonText }
+      : {}),
+  };
+}
+
 export function normalizeSongGardenConfig(
   input: Partial<SongGardenConfig> | null | undefined
 ): SongGardenConfig {
@@ -138,9 +154,7 @@ export function normalizeSongGardenConfig(
       ...(Array.isArray(input?.journeySteps) ? { journeySteps: input.journeySteps } : {}),
       soundTransitionMessage:
         input?.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
-      ...(typeof input?.completionEyebrow === "string"
-        ? { completionEyebrow: input.completionEyebrow }
-        : {}),
+      ...pickCompletionCopy(input),
     };
   }
 
@@ -172,9 +186,7 @@ export function normalizeSongGardenConfig(
       ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
       soundTransitionMessage:
         input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
-      ...(typeof input.completionEyebrow === "string"
-        ? { completionEyebrow: input.completionEyebrow }
-        : {}),
+      ...pickCompletionCopy(input),
     };
   }
 
@@ -182,9 +194,7 @@ export function normalizeSongGardenConfig(
     soundTransitionMessage: input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
     steps,
     ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
-    ...(typeof input.completionEyebrow === "string"
-      ? { completionEyebrow: input.completionEyebrow }
-      : {}),
+    ...pickCompletionCopy(input),
   };
 }
 

@@ -652,6 +652,9 @@ export function syncLegacyFromJourneySteps(
     ...(typeof prevGarden?.completionEyebrow === "string"
       ? { completionEyebrow: prevGarden.completionEyebrow }
       : {}),
+    ...(typeof prevGarden?.completionButtonText === "string"
+      ? { completionButtonText: prevGarden.completionButtonText }
+      : {}),
   };
 
   return { agentBrief, songGardenConfig };

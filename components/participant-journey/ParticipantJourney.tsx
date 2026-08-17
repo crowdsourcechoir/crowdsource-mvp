@@ -43,6 +43,7 @@ import {
   type JourneyPosition,
 } from "@/lib/participant-journey/steps";
 import { compositionStripSlotOrder } from "@/lib/songgarden/config";
+import { DEFAULT_COMPLETION_BUTTON_TEXT } from "@/lib/song-garden-v2/moment-labels";
 import { isNameQuestionPrompt } from "@/lib/agent-name-question";
 import {
   contributionConsentText,
@@ -530,6 +531,8 @@ export default function ParticipantJourney({
 
   const finalMessage =
     event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
+  const completionButtonText =
+    event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-lg min-h-0 flex-1 flex-col text-left">
@@ -796,7 +799,7 @@ export default function ParticipantJourney({
             disabled={sending}
             className="crowdsource-btn-primary"
           >
-            Let&apos;s do it again
+            {completionButtonText}
           </button>
         </div>
       )}

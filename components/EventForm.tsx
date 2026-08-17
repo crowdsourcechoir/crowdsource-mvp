@@ -31,7 +31,7 @@ import {
   type JourneyPromptStep,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
-import { COMPLETION_MOMENT_LABEL } from "@/lib/song-garden-v2/moment-labels";
+import { COMPLETION_MOMENT_LABEL, DEFAULT_COMPLETION_BUTTON_TEXT } from "@/lib/song-garden-v2/moment-labels";
 import { JOURNEY_GARDEN_SLOT_IDS, type GardenSlotId } from "@/lib/songgarden/garden-slots";
 import { canonicalEventSlug, publicEventPath } from "@/lib/event-slug-aliases";
 import {
@@ -490,6 +490,7 @@ export default function EventForm({
       {
         ...(values.songGardenConfig ?? defaultSongGardenConfig()),
         completionEyebrow: values.songGardenConfig?.completionEyebrow,
+        completionButtonText: values.songGardenConfig?.completionButtonText,
       }
     );
     const brief: AgentBrief = {
@@ -1380,6 +1381,27 @@ export default function EventForm({
               value={values.anthemCompletionMessage}
               onChange={(e) => setValues((v) => ({ ...v, anthemCompletionMessage: e.target.value }))}
               className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="completionButtonText" className={labelClass}>
+              Completion button text
+            </label>
+            <input
+              id="completionButtonText"
+              type="text"
+              value={values.songGardenConfig?.completionButtonText ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                    completionButtonText: e.target.value,
+                  },
+                }))
+              }
+              className={inputClass}
+              placeholder={DEFAULT_COMPLETION_BUTTON_TEXT}
             />
           </div>
           <label className="flex cursor-pointer items-start gap-2.5">

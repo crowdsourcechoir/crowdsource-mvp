@@ -67,6 +67,7 @@ import {
 } from "@/lib/song-garden-v2/growth-nodes";
 import {
   COMPLETION_MOMENT_LABEL,
+  DEFAULT_COMPLETION_BUTTON_TEXT,
   NAME_MOMENT_LABEL,
   WELCOME_MOMENT_LABEL,
 } from "@/lib/song-garden-v2/moment-labels";
@@ -623,6 +624,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   }
 
   const finalMessage = event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
+  const completionButtonText =
+    event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
   const momentKey = needsNameGate
     ? "name-gate"
     : `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
@@ -871,7 +874,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
                 style={{ borderColor: world.accentColor, color: world.accentColor }}
               >
-                Let&apos;s do it again
+                {completionButtonText}
               </button>
             </div>
           )}

@@ -31,4 +31,5 @@ export const NAME_MOMENT_LABEL = "Your Name";
 export const LYRIC_MOMENT_LABEL = "Your Words";
 export const TRANSITION_MOMENT_LABEL = "Your World Is Ready";
 export const COMPLETION_MOMENT_LABEL = "You're Part Of It";
+export const DEFAULT_COMPLETION_BUTTON_TEXT = "Let's do it again";
 export const WELCOME_MOMENT_LABEL = "Welcome to the Song Garden";
