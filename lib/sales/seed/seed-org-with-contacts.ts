@@ -40,6 +40,8 @@ export type SeedOrgWithContactsInput = {
   manualQueueTitle?: string;
   manualQueueDescription?: string;
   manualEventName?: string;
+  /** Opportunity type for manual enqueue (default fan_engagement_initiative). */
+  opportunityTypeKey?: string;
 };
 
 export type SeedOrgWithContactsResult = {
@@ -156,7 +158,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         input.manualQueueDescription ??
         "Participatory anthem / belonging ritual for training camp and in-stadium moments. Doorway contacts (COO, game entertainment, marketing) verified via Hunter Email Finder.",
       eventOrInitiativeName: input.manualEventName ?? "Training camp / game entertainment ritual",
-      opportunityTypeKey: "fan_engagement_initiative",
+      opportunityTypeKey: input.opportunityTypeKey ?? "fan_engagement_initiative",
       totalScoreHint: 82,
       reopenDecided: Boolean(input.reopenDecided),
       remintApprovedEmails: input.remintApprovedEmails,

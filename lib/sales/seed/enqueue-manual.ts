@@ -34,12 +34,26 @@ function readyContacts(contacts: Contact[]): Contact[] {
   );
 }
 
-/** Prefer game-entertainment / marketing doorway contacts for NFL team outreach. */
-function pickPrimaryContact(contacts: Contact[]): Contact | null {
+function isConferenceType(opportunityTypeKey?: string | null): boolean {
+  return opportunityTypeKey === "annual_conference" || opportunityTypeKey === "association_convention";
+}
+
+/** Prefer programming/events contacts for conferences; entertainment/marketing for sports. */
+function pickPrimaryContact(
+  contacts: Contact[],
+  opportunityTypeKey?: string | null
+): Contact | null {
   const ready = readyContacts(contacts);
   if (ready.length === 0) return null;
   const rank = (c: Contact) => {
     const title = `${c.roleTitle ?? ""} ${c.roleCategory ?? ""}`.toLowerCase();
+    if (isConferenceType(opportunityTypeKey)) {
+      if (/show director|conference programming|event programming|content and programming|event strategy/.test(title))
+        return 0;
+      if (/events?|conference|meetings|programming|experience/.test(title)) return 1;
+      if (/marketing|content/.test(title)) return 2;
+      return 5;
+    }
     if (/game entertainment|special events|entertainment experience/.test(title)) return 0;
     if (/marketing/.test(title)) return 1;
     if (/coo|chief operating/.test(title)) return 2;
@@ -48,11 +62,24 @@ function pickPrimaryContact(contacts: Contact[]): Contact | null {
   return [...ready].sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
-function draftCopyForContact(orgName: string, contact: Contact): { subject: string; body: string } {
+function draftCopyForContact(
+  orgName: string,
+  contact: Contact,
+  opts?: { opportunityTypeKey?: string | null; eventName?: string | null }
+): { subject: string; body: string } {
   const firstName = (contact.fullName ?? "there").split(/\s+/)[0];
   if (/seahawk/i.test(orgName)) {
     return buildSeahawksEmail({ firstName, roleTitle: contact.roleTitle });
   }
+
+  if (isConferenceType(opts?.opportunityTypeKey)) {
+    const event = (opts?.eventName ?? "").trim() || `${orgName} annual conference`;
+    return {
+      subject: `Crowdsource Choir for ${event}`,
+      body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir.\n\nI thought it might be a unique fit for ${event}. Together, attendees co-create and sing an original anthem inspired by the gathering, so instead of simply hearing the conference message, they become the message. The format can work as an opening session, closing experience, or interactive general session.\n\nI'd love to connect, share what we're building, and explore whether there's a fit — or be pointed to the right person.\n\nThere's a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book\n\nBest,\nJoel`,
+    };
+  }
+
   // Non-Seahawks sports manual drafts stay short until we have Joel-finals for that club.
   const title = (contact.roleTitle ?? "").toLowerCase();
   let angle =
@@ -78,6 +105,8 @@ export async function ensureContactDrafts(input: {
   organization: Organization;
   opportunityId: string;
   pipelineRunId?: string | null;
+  opportunityTypeKey?: string | null;
+  eventName?: string | null;
   /**
    * Mint a fresh open draft even if this contact already has an approved/rejected initial
    * (explicit operator remint — e.g. re-add Tyler after a hard-block).
@@ -91,7 +120,7 @@ export async function ensureContactDrafts(input: {
   if (contacts.length === 0) {
     throw new Error("No named contact with a verified-format email — cannot enqueue.");
   }
-  const primary = pickPrimaryContact(contacts) ?? contacts[0];
+  const primary = pickPrimaryContact(contacts, input.opportunityTypeKey) ?? contacts[0];
   const existing = await listDraftsForOpportunity(input.opportunityId);
   const drafts: OutreachDraft[] = [];
 
@@ -105,7 +134,10 @@ export async function ensureContactDrafts(input: {
         CONTACT_CONTEXT_IN_EMAIL.test(open.aiBody) ||
         (open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody));
       if (bodyHasContext) {
-        const copy = draftCopyForContact(input.organization.name, contact);
+        const copy = draftCopyForContact(input.organization.name, contact, {
+          opportunityTypeKey: input.opportunityTypeKey,
+          eventName: input.eventName,
+        });
         const clearedEdited = open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody);
         drafts.push(
           await updateDraftAiCopy(open.id, {
@@ -131,7 +163,10 @@ export async function ensureContactDrafts(input: {
       drafts.push(alreadyHandled);
       continue;
     }
-    const copy = draftCopyForContact(input.organization.name, contact);
+    const copy = draftCopyForContact(input.organization.name, contact, {
+      opportunityTypeKey: input.opportunityTypeKey,
+      eventName: input.eventName,
+    });
     const created = await createOutreachDraft({
       opportunityId: input.opportunityId,
       contactId: contact.id,
@@ -177,7 +212,7 @@ export async function enqueueOrgManually(input: {
   remintApprovedEmails?: string[];
 }): Promise<ManualEnqueueResult> {
   const contacts = await listContactsForOrganization(input.organization.id);
-  const primary = pickPrimaryContact(contacts);
+  const primary = pickPrimaryContact(contacts, input.opportunityTypeKey);
   if (!primary) {
     throw new Error(
       "No named contact with a verified-format email (excluding hard-blocked addresses) — cannot enqueue."
@@ -234,6 +269,8 @@ export async function enqueueOrgManually(input: {
     organization: input.organization,
     opportunityId: opportunity.id,
     pipelineRunId: pipelineRun.id,
+    opportunityTypeKey: input.opportunityTypeKey,
+    eventName: input.eventOrInitiativeName,
     remintApprovedEmails: input.remintApprovedEmails,
   });
 
