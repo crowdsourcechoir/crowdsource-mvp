@@ -1402,7 +1402,7 @@ export default function EventForm({
                 }))
               }
               disabled={values.songGardenConfig?.showCompletionButton === false}
-              className={inputClass}
+              className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-40`}
               placeholder={DEFAULT_COMPLETION_BUTTON_TEXT}
             />
             <label className="mt-2 flex cursor-pointer items-start gap-2.5">
