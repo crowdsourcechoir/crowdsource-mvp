@@ -30,10 +30,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const opportunity = await getOpportunity(item.opportunityId);
     if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
 
-    const [contact, existingDrafts] = await Promise.all([
+    const [contact, existingDraftsRaw] = await Promise.all([
       getContact(contactId),
       listDraftsForOpportunity(opportunity.id),
     ]);
+    const existingDrafts = existingDraftsRaw ?? [];
     if (!contact || contact.organizationId !== opportunity.organizationId) {
       return NextResponse.json({ error: "Contact not on this organization" }, { status: 400 });
     }
@@ -60,7 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
         opportunityId: opportunity.id,
         pipelineRunId: null,
       });
-      draft = created.drafts.find((d) => d.contactId === contactId) ?? null;
+      draft = (created?.drafts ?? []).find((d) => d.contactId === contactId) ?? created?.primaryDraft ?? null;
     }
     if (!draft) return NextResponse.json({ error: "Could not create draft for contact" }, { status: 500 });
 

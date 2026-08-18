@@ -9,6 +9,14 @@ import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/con
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
+import {
+  applySelectContactResponse,
+  applySelectedContact,
+  applySentDraft,
+  draftFromMutationPayload,
+  isOpenDraftStatus,
+  isSentDraftStatus,
+} from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -32,37 +40,11 @@ function findingForContact(
   );
 }
 
-function applySentDraft(item: QueueItemDetail, contactId: string): QueueItemDetail {
-  return {
-    ...item,
-    contactDrafts: (item.contactDrafts ?? []).map((d) =>
-      d.contactId === contactId && (d.status === "draft" || d.status === "qa_flagged" || d.status === "qa_passed")
-        ? { ...d, status: "approved" as const }
-        : d
-    ),
-    opportunity: {
-      ...item.opportunity,
-      relationshipStage: item.opportunity.relationshipStage ?? "awareness",
-    },
-  };
-}
-
-function applySelectedContact(item: QueueItemDetail, contactId: string): QueueItemDetail | null {
-  const contact = item.contacts.find((c) => c.id === contactId) ?? null;
-  const draft = (item.contactDrafts ?? []).find((d) => d.contactId === contactId) ?? null;
-  if (!contact || !draft) return null;
-  return {
-    ...item,
-    contact,
-    draft,
-    queueItem: { ...item.queueItem, outreachDraftId: draft.id },
-  };
-}
-
 export default function ApprovalQueueClient() {
   const [items, setItems] = useState<QueueItemDetail[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [editedSubject, setEditedSubject] = useState("");
@@ -99,11 +81,12 @@ export default function ApprovalQueueClient() {
       setGmailConnected(Boolean(data.gmail?.connected));
       setGmailEmail(data.gmail?.email ?? null);
       setGmailSendEnabled(Boolean(data.gmail?.sendsEnabled ?? data.gmail?.sendEnabled));
-      setError(null);
+      setLoadError(null);
+      setActionError(null);
       setSelectedIndex(0);
       setMobileDetailOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load queue");
+      setLoadError(err instanceof Error ? err.message : "Failed to load queue");
     } finally {
       setLoading(false);
     }
@@ -151,7 +134,7 @@ export default function ApprovalQueueClient() {
       if (!current || current.contact?.id === contactId) return;
       setSendConfirmOpen(false);
       setMenuOpenId(null);
-      setError(null);
+      setActionError(null);
       const itemId = current.queueItem.id;
       const prevSubject = editedSubject;
       const prevBody = editedBody;
@@ -174,8 +157,16 @@ export default function ApprovalQueueClient() {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error ?? "Could not switch contact");
+          setItems((prev) =>
+            prev.map((item) => (item.queueItem.id === itemId ? applySelectContactResponse(item, data, contactId) : item))
+          );
+          const d = draftFromMutationPayload(data);
+          if (d) {
+            setEditedSubject(d.editedSubject ?? d.aiSubject);
+            setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+          }
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Could not switch contact");
+          setActionError(err instanceof Error ? err.message : "Could not switch contact");
         }
       })();
     },
@@ -210,13 +201,14 @@ export default function ApprovalQueueClient() {
         copyEmailToClipboard(to, finalSubject, finalBody).catch(() => undefined);
       }
       if (isApprove && current.contact?.email && isOutboundEmailBlocked(current.contact.email)) {
-        setError(`Hard block: will not send to ${current.contact.email}.`);
+        setActionError(`Hard block: will not send to ${current.contact.email}.`);
         setSendConfirmOpen(false);
         return;
       }
 
       setBusy(true);
       setSendConfirmOpen(false);
+      setActionError(null);
       try {
         const res = await fetch(`/api/sales/queue/${current.queueItem.id}/decision`, {
           method: "POST",
@@ -236,9 +228,10 @@ export default function ApprovalQueueClient() {
         if (data.remaining && data.detail) {
           const detail = data.detail as QueueItemDetail;
           setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
-          if (detail.draft) {
-            setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
-            setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
+          const nextDraft = draftFromMutationPayload(data);
+          if (nextDraft) {
+            setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
+            setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
           }
         } else {
           setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
@@ -246,7 +239,7 @@ export default function ApprovalQueueClient() {
           setMobileDetailOpen(false);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Decision failed");
+        setActionError(err instanceof Error ? err.message : "Decision failed");
       } finally {
         setBusy(false);
       }
@@ -263,7 +256,7 @@ export default function ApprovalQueueClient() {
     if (!current || busy) return;
     setBusy(true);
     setMenuOpenId(null);
-    setError(null);
+    setActionError(null);
     try {
       const res = await fetch(`/api/sales/queue/${current.queueItem.id}/more-research`, { method: "POST" });
       const data = await res.json();
@@ -273,7 +266,7 @@ export default function ApprovalQueueClient() {
       }
       showCopyStatus("Research re-run finished — review updated contacts and draft.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Research failed");
+      setActionError(err instanceof Error ? err.message : "Research failed");
     } finally {
       setBusy(false);
     }
@@ -303,7 +296,7 @@ export default function ApprovalQueueClient() {
         }
         showCopyStatus("Contact hidden from this list.");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not hide contact");
+        setActionError(err instanceof Error ? err.message : "Could not hide contact");
       } finally {
         setBusy(false);
       }
@@ -342,7 +335,7 @@ export default function ApprovalQueueClient() {
                 : item
             )
           );
-          setError(err instanceof Error ? err.message : "Could not move funnel");
+          setActionError(err instanceof Error ? err.message : "Could not move funnel");
         }
       })();
     },
@@ -353,7 +346,7 @@ export default function ApprovalQueueClient() {
     (contactId: string) => {
       if (!current) return;
       setMenuOpenId(null);
-      setError(null);
+      setActionError(null);
       const itemId = current.queueItem.id;
       const snapshot = current;
       setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? applySentDraft(item, contactId) : item)));
@@ -381,23 +374,24 @@ export default function ApprovalQueueClient() {
               return next;
             });
             setMobileDetailOpen(false);
-          } else if (data.nextContactId) {
+          } else if (data.nextContactId || data.detail || data.draft) {
             setItems((prev) =>
               prev.map((item) => {
                 if (item.queueItem.id !== itemId) return item;
                 const sent = applySentDraft(item, contactId);
-                const next = applySelectedContact(sent, data.nextContactId as string);
-                if (next?.draft) {
-                  setEditedSubject(next.draft.editedSubject ?? next.draft.aiSubject);
-                  setEditedBody(stripEmailSignature(next.draft.editedBody ?? next.draft.aiBody));
+                const next = applySelectContactResponse(sent, data, (data.nextContactId as string) || contactId);
+                const nextDraft = next.draft;
+                if (nextDraft) {
+                  setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
+                  setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
                 }
-                return next ?? sent;
+                return next;
               })
             );
           }
         } catch (err) {
           setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? snapshot : item)));
-          setError(err instanceof Error ? err.message : "Could not mark sent");
+          setActionError(err instanceof Error ? err.message : "Could not mark sent");
         }
       })();
     },
@@ -407,7 +401,7 @@ export default function ApprovalQueueClient() {
   const improveDraft = useCallback(async () => {
     if (!current?.draft || busy || improving) return;
     setImproving(true);
-    setError(null);
+    setActionError(null);
     try {
       const res = await fetch(`/api/sales/queue/${current.queueItem.id}/improve-draft`, {
         method: "POST",
@@ -416,7 +410,8 @@ export default function ApprovalQueueClient() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Improve failed");
-      const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
+      const saved = draftFromMutationPayload(data);
+      if (!saved) throw new Error("Improve failed — no draft returned");
       setItems((prev) =>
         prev.map((item) => (item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item))
       );
@@ -424,7 +419,7 @@ export default function ApprovalQueueClient() {
       setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
       showCopyStatus("AI rewrite saved as a draft — not sent. Edit further if you want.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Improve failed");
+      setActionError(err instanceof Error ? err.message : "Improve failed");
     } finally {
       setImproving(false);
     }
@@ -461,7 +456,7 @@ export default function ApprovalQueueClient() {
   const pendingCount = items.length;
 
   if (loading) return <p className="text-gray-400">Loading queue…</p>;
-  if (error) return <p className="text-red-400">{error}</p>;
+  if (loadError) return <p className="text-red-400">{loadError}</p>;
 
   if (items.length === 0) {
     return (
@@ -472,6 +467,10 @@ export default function ApprovalQueueClient() {
   }
 
   return (
+    <div>
+      {actionError && (
+        <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
+      )}
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">{pendingCount} pending</div>
@@ -565,18 +564,18 @@ export default function ApprovalQueueClient() {
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Contacts{(current.contacts?.length ?? 0) > 1 ? ` (${current.contacts.length})` : ""}
             </h3>
-            {(current.contacts?.length ?? 0) > 0 ? (
+            {(current.contacts ?? []).length > 0 ? (
               <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-                {current.contacts.map((c) => {
+                {(current.contacts ?? []).map((c) => {
                   const selected = current.contact?.id === c.id;
                   const sent = (current.contactDrafts ?? []).some(
-                    (d) => d.contactId === c.id && (d.status === "approved" || d.status === "approved_with_edits")
+                    (d) => d.contactId === c.id && isSentDraftStatus(d.status)
                   );
                   const hasDraft = !sent && (current.contactDrafts ?? []).some(
-                    (d) => d.contactId === c.id && (d.status === "draft" || d.status === "qa_flagged" || d.status === "qa_passed")
+                    (d) => d.contactId === c.id && isOpenDraftStatus(d.status)
                   );
                   const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
-                  const source = findingForContact(current.findings, c);
+                  const source = findingForContact(current.findings ?? [], c);
                   return (
                     <li key={c.id} className="relative">
                       <div
@@ -817,6 +816,7 @@ export default function ApprovalQueueClient() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

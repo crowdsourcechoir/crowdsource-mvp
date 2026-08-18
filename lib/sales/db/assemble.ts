@@ -137,14 +137,16 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     ? await db.from("organization_types").select("label").eq("id", organization.organizationTypeId).maybeSingle()
     : { data: null as { label: string } | null };
 
-  const contacts = orgContacts.filter((c) => looksLikeSelectableContact(c));
+  const contactsList = orgContacts ?? [];
+  const draftsList = allDrafts ?? [];
+  const contacts = contactsList.filter((c) => looksLikeSelectableContact(c));
   const contact =
-    (draft?.contactId ? orgContacts.find((c) => c.id === draft.contactId) ?? null : null) ??
-    pickBestContact(orgContacts);
+    (draft?.contactId ? contactsList.find((c) => c.id === draft.contactId) ?? null : null) ??
+    pickBestContact(contactsList);
 
-  const latestByContact = new Map<string, (typeof allDrafts)[number]>();
+  const latestByContact = new Map<string, (typeof draftsList)[number]>();
   const selectableIds = new Set(contacts.map((c) => c.id));
-  for (const d of allDrafts) {
+  for (const d of draftsList) {
     if (d.kind !== "initial" || !d.contactId) continue;
     if (!selectableIds.has(d.contactId)) continue;
     const prev = latestByContact.get(d.contactId);
@@ -153,12 +155,12 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     }
   }
 
-  const scoreRow = (scoreRes.data as Record<string, unknown> | null) ?? null;
+  const scoreRow = (scoreRes?.data as Record<string, unknown> | null) ?? null;
 
   return {
     queueItem: queueItem ?? emptyQueueItem(opportunity.id, opportunity.createdAt),
     opportunity,
-    opportunityTypeLabel: oppTypeRes.data?.label ?? null,
+    opportunityTypeLabel: oppTypeRes?.data?.label ?? null,
     organization,
     organizationTypeLabel: orgTypeRes.data?.label ?? null,
     contact,

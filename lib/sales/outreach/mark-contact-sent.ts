@@ -65,12 +65,15 @@ export async function markContactSent(input: {
     throw err;
   }
 
-  const [contact, drafts, activities, orgContacts] = await Promise.all([
+  const [contact, draftsRaw, activitiesRaw, orgContactsRaw] = await Promise.all([
     getContact(input.contactId),
     listDraftsForOpportunity(opportunity.id),
     listActivitiesForOpportunity(opportunity.id),
     listContactsForOrganization(opportunity.organizationId),
   ]);
+  const drafts = draftsRaw ?? [];
+  const activities = activitiesRaw ?? [];
+  const orgContacts = orgContactsRaw ?? [];
 
   if (!contact) {
     const err = new Error("Contact not found");
