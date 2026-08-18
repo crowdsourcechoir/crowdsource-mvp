@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { OpportunityPageDetail, ScoreComponentKey } from "@/lib/sales/types";
 import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
+import { FOLLOW_UP_PRESETS, type FollowUpPreset } from "@/lib/sales/outreach/extractFollowUp";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 
@@ -50,6 +51,9 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   const [showScoreDetails, setShowScoreDetails] = useState(false);
   const [showEmailBody, setShowEmailBody] = useState(false);
   const [showFindings, setShowFindings] = useState(false);
+  const [followUpBusy, setFollowUpBusy] = useState(false);
+  const [customFollowUpDate, setCustomFollowUpDate] = useState("");
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +70,26 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   useEffect(() => {
     load();
   }, [load]);
+
+  async function scheduleFollowUp(body: { preset?: FollowUpPreset; followUpAt?: string; clear?: boolean }) {
+    setFollowUpBusy(true);
+    setFollowUpError(null);
+    try {
+      const res = await fetch(`/api/sales/opportunities/${opportunityId}/follow-up`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to schedule follow-up");
+      setCustomFollowUpDate("");
+      await load();
+    } catch (err) {
+      setFollowUpError(err instanceof Error ? err.message : "Failed to schedule follow-up");
+    } finally {
+      setFollowUpBusy(false);
+    }
+  }
 
   const findingsByType = useMemo(() => {
     if (!detail) return [];
@@ -187,6 +211,70 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             )}
           </div>
         )}
+      </section>
+
+      {/* Follow-up */}
+      <section className="rounded-xl border border-gray-800 bg-gray-900/30 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow-up</h2>
+        <p className="mt-2 text-sm text-gray-300">
+          {opportunity.nextFollowUpAt ? (
+            <>
+              Scheduled for{" "}
+              <span className="text-amber-300">
+                {new Date(opportunity.nextFollowUpAt).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </span>
+              {new Date(opportunity.nextFollowUpAt).getTime() <= Date.now() ? (
+                <span className="ml-2 text-amber-400">· due — daily cron will draft a reconnect into the queue</span>
+              ) : null}
+            </>
+          ) : (
+            "No follow-up scheduled. Replies that say “in a few months” auto-set this; you can also set it manually."
+          )}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {FOLLOW_UP_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              disabled={followUpBusy}
+              onClick={() => scheduleFollowUp({ preset: p.id })}
+              className="rounded-md border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:border-gray-500 disabled:opacity-50"
+            >
+              {p.label}
+            </button>
+          ))}
+          {opportunity.nextFollowUpAt && (
+            <button
+              type="button"
+              disabled={followUpBusy}
+              onClick={() => scheduleFollowUp({ clear: true })}
+              className="rounded-md border border-gray-800 px-2 py-1 text-xs text-gray-500 hover:text-gray-300 disabled:opacity-50"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={customFollowUpDate}
+            onChange={(e) => setCustomFollowUpDate(e.target.value)}
+            className="rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-sm text-gray-200"
+          />
+          <button
+            type="button"
+            disabled={followUpBusy || !customFollowUpDate}
+            onClick={() => scheduleFollowUp({ followUpAt: `${customFollowUpDate}T12:00:00.000Z` })}
+            className="rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900 disabled:opacity-50"
+          >
+            Set date
+          </button>
+        </div>
+        {followUpError && <p className="mt-2 text-sm text-red-400">{followUpError}</p>}
       </section>
 
       {/* Contact */}

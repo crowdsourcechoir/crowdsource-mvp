@@ -241,12 +241,10 @@ function needsNudge(opportunity: {
   lastInboundAt: string | null;
   relationshipStage: string | null;
 }): boolean {
+  // Due follow-up date — covers no-reply nudges and scheduled reconnects after a reply.
   if (!opportunity.nextFollowUpAt) return false;
   if (opportunity.relationshipStage === "lost" || opportunity.relationshipStage === "purchase") return false;
-  if (new Date(opportunity.nextFollowUpAt).getTime() > Date.now()) return false;
-  if (!opportunity.lastOutboundAt) return false;
-  if (!opportunity.lastInboundAt) return true;
-  return new Date(opportunity.lastInboundAt).getTime() < new Date(opportunity.lastOutboundAt).getTime();
+  return new Date(opportunity.nextFollowUpAt).getTime() <= Date.now();
 }
 
 /** Everything /admin/sales/funnel needs, for every opportunity with a non-null relationship_stage. */

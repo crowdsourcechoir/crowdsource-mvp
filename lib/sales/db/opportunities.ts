@@ -151,7 +151,11 @@ export async function updateOpportunityTouchTimestamps(
   return rowToOpportunity(data);
 }
 
-/** Opportunities due for an AI nudge draft (no pending nudge yet — enforced by caller). */
+/**
+ * Opportunities due for an AI follow-up draft (no pending nudge yet — enforced by caller).
+ * Includes both classic no-reply nudges and scheduled reconnects after a reply
+ * (when next_follow_up_at was set manually or parsed from "follow up in a few months").
+ */
 export async function listOpportunitiesDueForNudge(nowIso: string = new Date().toISOString()): Promise<Opportunity[]> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db
@@ -166,9 +170,19 @@ export async function listOpportunitiesDueForNudge(nowIso: string = new Date().t
   return (data ?? [])
     .map(rowToOpportunity)
     .filter((opp) => {
-      // No inbound since last outbound (or never inbound).
       if (!opp.lastOutboundAt) return false;
+      // Scheduled reconnect after they replied — always eligible when the date is due.
+      if (opp.lastInboundAt && new Date(opp.lastInboundAt).getTime() >= new Date(opp.lastOutboundAt).getTime()) {
+        return true;
+      }
+      // Classic no-reply nudge.
       if (!opp.lastInboundAt) return true;
       return new Date(opp.lastInboundAt).getTime() < new Date(opp.lastOutboundAt).getTime();
     });
+}
+
+/** True when the due follow-up is a post-reply reconnect (vs a no-reply bump). */
+export function isScheduledReconnect(opportunity: Opportunity): boolean {
+  if (!opportunity.lastOutboundAt || !opportunity.lastInboundAt) return false;
+  return new Date(opportunity.lastInboundAt).getTime() >= new Date(opportunity.lastOutboundAt).getTime();
 }

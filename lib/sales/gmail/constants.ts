@@ -22,3 +22,10 @@ export function addDaysIso(fromIso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString();
 }
+
+/** Add N calendar months to an ISO timestamp (UTC). Used for "follow up in a few months" scheduling. */
+export function addMonthsIso(fromIso: string, months: number): string {
+  const d = new Date(fromIso);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString();
+}
