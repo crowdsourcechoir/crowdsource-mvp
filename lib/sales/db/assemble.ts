@@ -11,6 +11,7 @@ import { hasVerifiedEmail, looksLikePersonName } from "../dedupe";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, QueueItemDetail } from "../types";
 
 function looksLikeSelectableContact(c: Contact): boolean {
+  if (c.duplicateOfContactId) return false;
   return Boolean(looksLikePersonName(c.fullName) && c.email);
 }
 

@@ -12,6 +12,7 @@ export default function DigestClient() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFailed, setShowFailed] = useState(false);
 
   function loadRuns() {
     setLoading(true);
@@ -41,19 +42,19 @@ export default function DigestClient() {
     }
   }
 
+  const succeeded = runs.filter((r) => r.status === "succeeded");
+  const failedCount = runs.filter((r) => r.status === "failed").length;
   const latest = runs[0];
   const noProviderConfigured = latest && latest.status === "skipped_no_provider";
+  const visibleRuns = showFailed ? runs : succeeded;
 
   return (
     <div className="mb-6 rounded-xl border border-gray-800 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Morning digest email</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Morning digest</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Cron emails new review-queue leads scoring 70+ once at least 10 are ready (tunable via{" "}
-            <span className="font-mono">SALES_DIGEST_MIN_SCORE</span> /{" "}
-            <span className="font-mono">SALES_DIGEST_TARGET_COUNT</span>), topping up the pipeline until then. Test send
-            below bypasses the count wait and sends whatever currently qualifies.
+            Internal email of new 70+ queue leads (Resend). Test send uses whatever currently qualifies.
           </p>
         </div>
         <button
@@ -61,45 +62,47 @@ export default function DigestClient() {
           disabled={sending}
           className="shrink-0 rounded-lg bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-900 disabled:opacity-50"
         >
-          {sending ? "Sending…" : "Send test digest now"}
+          {sending ? "Sending…" : "Send test digest"}
         </button>
       </div>
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
       {noProviderConfigured && (
-        <p className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-          No email provider configured — this was a no-op. Add <span className="font-mono">RESEND_API_KEY</span> and{" "}
-          <span className="font-mono">SALES_DIGEST_TO_EMAIL</span> to activate the digest.
+        <p className="mt-3 text-xs text-gray-500">
+          Digest provider not fully configured (Resend domain / from address). Outreach itself uses Gmail, not this list.
         </p>
       )}
 
       <div className="mt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600">Recent sends</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600">Recent successful sends</h3>
+          {failedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowFailed((v) => !v)}
+              className="text-xs text-gray-500 underline"
+            >
+              {showFailed ? "Hide setup errors" : `${failedCount} setup error${failedCount === 1 ? "" : "s"} (hidden)`}
+            </button>
+          )}
+        </div>
         {loading ? (
           <p className="mt-2 text-sm text-gray-500">Loading…</p>
-        ) : runs.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">No digest sends yet.</p>
+        ) : visibleRuns.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-500">
+            {failedCount > 0 && !showFailed ? "No successful digest yet." : "No digest sends yet."}
+          </p>
         ) : (
           <ul className="mt-2 space-y-2 text-sm">
-            {runs.map((run) => (
+            {visibleRuns.map((run) => (
               <li key={run.id} className="rounded-lg border border-gray-900 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-gray-300">
                     {formatWhen(run.startedAt)} · <span className="text-gray-500">{run.trigger}</span>
                   </span>
-                  <span
-                    className={
-                      run.status === "succeeded"
-                        ? "text-emerald-400"
-                        : run.status === "failed"
-                          ? "text-red-400"
-                          : run.status === "skipped_no_provider"
-                            ? "text-gray-500"
-                            : "text-sky-400"
-                    }
-                  >
-                    {run.status === "skipped_no_provider" ? "no provider configured" : run.status}
+                  <span className={run.status === "succeeded" ? "text-emerald-400" : "text-gray-500"}>
+                    {run.status === "skipped_no_provider" ? "not configured" : run.status}
                   </span>
                 </div>
                 {run.status === "succeeded" && (
@@ -107,7 +110,7 @@ export default function DigestClient() {
                     {run.itemCount} new lead(s) · sent to {run.recipient}
                   </p>
                 )}
-                {run.error && <p className="mt-1 text-xs text-red-400">{run.error}</p>}
+                {showFailed && run.error && <p className="mt-1 text-xs text-gray-500">{run.error}</p>}
               </li>
             ))}
           </ul>

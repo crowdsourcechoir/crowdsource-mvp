@@ -2,19 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 
-const STAGES: { key: RelationshipStage; label: string; accent: string }[] = [
-  { key: "awareness", label: "Awareness", accent: "border-sky-800" },
-  { key: "interest", label: "Interest", accent: "border-amber-800" },
-  { key: "purchase", label: "Purchase", accent: "border-emerald-800" },
-  { key: "lost", label: "Lost", accent: "border-gray-700" },
-];
+const STAGES = FUNNEL_STAGES.map((s) => ({
+  ...s,
+  accent:
+    s.key === "awareness"
+      ? "border-sky-800"
+      : s.key === "interest"
+        ? "border-amber-800"
+        : s.key === "purchase"
+          ? "border-emerald-800"
+          : "border-gray-700",
+}));
 
-// The one forward-progressing shortcut button shown per stage, matching the funnel Joel
-// described (Awareness → Interest → Purchase). Backward moves and jumping straight to Lost are
-// still possible via the "Move to…" select on every card — this is just the common-case shortcut.
 const ADVANCE_ACTION: Partial<Record<RelationshipStage, { to: RelationshipStage; label: string }>> = {
   awareness: { to: "interest", label: "Mark replied →" },
   interest: { to: "purchase", label: "Mark won →" },

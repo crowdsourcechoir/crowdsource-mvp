@@ -115,7 +115,7 @@ export async function listOpportunitiesInFunnel(): Promise<Opportunity[]> {
 
 /**
  * Moves an opportunity to a new funnel stage (or into the terminal `lost` bucket), bumping
- * `stage_updated_at` to now. Backward moves (e.g. Purchase → Interest) are allowed on purpose —
+ * `stage_updated_at` to now. Backward moves (e.g. Won → Interest) are allowed on purpose —
  * this is a human correcting the record, not a one-way pipeline stage.
  */
 export async function updateOpportunityRelationshipStage(id: string, stage: RelationshipStage): Promise<Opportunity> {
