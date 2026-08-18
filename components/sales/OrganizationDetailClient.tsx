@@ -185,9 +185,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           <ul className="space-y-1 text-sm text-gray-300">
             {findings.map((f) => (
               <li key={f.id}>
-                <span className={f.origin === "human_provided" ? "text-amber-400" : "text-sky-400"}>
-                  [{f.origin === "human_provided" ? "unverified" : "researched"} · {f.claimType}]
-                </span>{" "}
+                <span className="text-gray-500">[{f.claimType}]</span>{" "}
                 {f.claimText}{" "}
                 {f.sourceUrl && (
                   <a href={f.sourceUrl} target="_blank" rel="noreferrer" className="text-gray-500 underline">

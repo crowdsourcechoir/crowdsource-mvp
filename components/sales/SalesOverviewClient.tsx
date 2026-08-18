@@ -38,7 +38,7 @@ export default function SalesOverviewClient() {
       <Link href="/admin/sales/funnel" className="rounded-xl border border-gray-800 p-6 hover:border-gray-600">
         <p className="text-sm text-gray-500">In the funnel</p>
         <p className="mt-1 text-3xl font-bold text-white">{funnelCount ?? "—"}</p>
-        <p className="mt-2 text-sm text-gray-400">Track Awareness → Interest → Purchase →</p>
+        <p className="mt-2 text-sm text-gray-400">Track Awareness → Interest → Won →</p>
       </Link>
     </div>
   );

@@ -7,6 +7,7 @@ import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { funnelStageLabel } from "@/lib/sales/funnel-labels";
 
 const FINDING_LABELS: Record<string, string> = {
   audience_size: "Audience",
@@ -26,11 +27,6 @@ function formatWhen(iso: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-function stageLabel(stage: string | null): string {
-  if (!stage) return "Not in funnel";
-  return stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -104,7 +100,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
         </p>
         <h1 className="mt-1 text-2xl font-bold text-white">{opportunity.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-md border border-gray-700 px-2 py-0.5 text-gray-300">{stageLabel(opportunity.relationshipStage)}</span>
+          <span className="rounded-md border border-gray-700 px-2 py-0.5 text-gray-300">{funnelStageLabel(opportunity.relationshipStage)}</span>
           {detail.opportunityTypeLabel && (
             <span className="rounded-md border border-gray-800 px-2 py-0.5 text-gray-400">{detail.opportunityTypeLabel}</span>
           )}

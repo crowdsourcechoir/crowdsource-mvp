@@ -80,23 +80,20 @@ function draftCopyForContact(
     };
   }
 
-  // Non-Seahawks sports manual drafts stay short until we have Joel-finals for that club.
+  // Non-Seahawks sports: same belonging structure as Joel’s Seahawks emails, club-specific.
   const title = (contact.roleTitle ?? "").toLowerCase();
-  let angle =
-    "a natural doorway is game-day ritual and fan belonging: supporters helping create an anthem they then own together.";
+  let ask =
+    `I’d love to connect, share what we’re building, and explore whether there’s a fit with ${orgName} — or be pointed to the right person if that’s someone else.`;
   if (/entertainment|special events|programming|presentation/.test(title)) {
-    angle =
-      "a natural doorway is live entertainment and in-venue ritual — participation fans help create, not only consume.";
+    ask = `Given your work in live entertainment and experience, I’d love to connect and explore how this kind of participation could become part of the ${orgName} experience—not just something fans watch, but something they help create.`;
   } else if (/marketing|fan engagement|brand/.test(title)) {
-    angle =
-      "a natural doorway is brand and belonging: a shared-creation story fans help author across the season.";
+    ask = `Given your work in marketing, I’m especially interested in how this could become a season-long fan participation story—something supporters help create with the team, rather than another campaign directed at them.\n\nI’d love to connect, share what we’re building, and explore whether there’s a fit.`;
   } else if (/coo|chief operating|operations|athletics director|athletic director/.test(title)) {
-    angle =
-      "this is an org-wide belonging play — operations often helps route the right owners across entertainment and marketing.";
+    ask = `I’d love to connect, share what we’re building, and see whether there’s a place to explore this with ${orgName}. If someone else is the right person, I’d really appreciate being pointed in their direction.`;
   }
   return {
     subject: `Crowdsourcing a ${orgName} choir`,
-    body: `Hi ${firstName},\n\nI’m Joel DeJong, founder of Crowdsource Choir here in Seattle. We design and deliver participatory music experiences, custom anthems, and crowdsourced chants to create energy, resonance, and cohesion within groups.\n\nFor ${orgName}, ${angle}\n\nI’d love to connect, share what we’re building, and explore whether there’s a fit — or be pointed to the right person.\n\nThere’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book\n\nBest,\nJoel`,
+    body: `Hi ${firstName},\n\nI’m Joel DeJong, founder of Crowdsource Choir here in Seattle. We design and deliver participatory music experiences, custom anthems, and crowdsourced chants to create energy, resonance, and cohesion within groups.\n\nWith ${orgName}, I see a few connected possibilities:\n\nA participatory music experience with the team (or student-athletes) to create energy and cohesion\nAn original anthem created with fans and brought to life as a game-day moment\nA season-long pipeline of crowdsourced chants and sounds that gives people new ways to contribute\n\nThe throughline is simple: there’s already enormous collective energy in this community. We help harness it into super fun, engaging musical experiences.\n\n${ask}\n\nThere’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book\n\nBest,\nJoel`,
   };
 }
 

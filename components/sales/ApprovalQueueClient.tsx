@@ -2,28 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { QueueItemDetail } from "@/lib/sales/types";
-import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
+import type { QueueItemDetail, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
+import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
-const ACTIONS: { key: ActionKey; label: string; shortcut: string; tone: string }[] = [
-  { key: "approve", label: "Approve & send", shortcut: "A", tone: "bg-emerald-600 hover:bg-emerald-500" },
-  { key: "approve_with_edits", label: "Approve edits & send", shortcut: "E", tone: "bg-emerald-800 hover:bg-emerald-700" },
-  { key: "reject", label: "Reject", shortcut: "R", tone: "bg-red-700 hover:bg-red-600" },
-  { key: "defer", label: "Defer", shortcut: "D", tone: "bg-amber-700 hover:bg-amber-600" },
-  { key: "request_more_research", label: "More research", shortcut: "M", tone: "bg-sky-700 hover:bg-sky-600" },
-  { key: "mark_duplicate", label: "Mark duplicate", shortcut: "U", tone: "bg-gray-700 hover:bg-gray-600" },
-];
-
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 70 ? "text-emerald-400 border-emerald-700" : score >= 45 ? "text-amber-400 border-amber-700" : "text-gray-400 border-gray-700";
   return <span className={`rounded-md border px-2 py-0.5 text-sm font-semibold ${color}`}>{score.toFixed(0)}</span>;
+}
+
+function findingForContact(
+  findings: (ResearchFinding & { sourceUrl: string })[],
+  contact: { fullName: string | null }
+): (ResearchFinding & { sourceUrl: string }) | null {
+  const name = (contact.fullName ?? "").trim();
+  if (!name) return null;
+  const first = name.split(/\s+/)[0];
+  return (
+    findings.find((f) => f.claimText.toLowerCase().includes(name.toLowerCase())) ??
+    findings.find((f) => first.length > 2 && f.claimText.toLowerCase().includes(first.toLowerCase())) ??
+    null
+  );
 }
 
 export default function ApprovalQueueClient() {
@@ -31,19 +36,17 @@ export default function ApprovalQueueClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  /** On phones, list and detail swap full-screen — tap a row to open detail, back to return. */
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [editedSubject, setEditedSubject] = useState("");
   const [editedBody, setEditedBody] = useState("");
-  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [improving, setImproving] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
-  /** Approve/send never runs until Joel confirms in this dialog. Contact browsing never opens it. */
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showCopyStatus = useCallback((message: string) => {
@@ -85,9 +88,8 @@ export default function ApprovalQueueClient() {
   const current = items[selectedIndex] ?? null;
 
   useEffect(() => {
-    setEditing(false);
-    setNotes("");
     setSendConfirmOpen(false);
+    setMenuOpenId(null);
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
       setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
@@ -100,14 +102,31 @@ export default function ApprovalQueueClient() {
     setMobileDetailOpen(true);
   }, []);
 
+  const persistDraft = useCallback(async () => {
+    if (!current?.draft) return;
+    const cleanedEditedBody = stripEmailSignature(editedBody);
+    const res = await fetch(`/api/sales/queue/${current.queueItem.id}/save-draft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ editedSubject, editedBody: cleanedEditedBody }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Save failed");
+    const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
+    setItems((prev) =>
+      prev.map((item) => (item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item))
+    );
+  }, [current, editedSubject, editedBody]);
+
   const selectContact = useCallback(
     async (contactId: string) => {
       if (!current || busy || current.contact?.id === contactId) return;
-      // Browse-only: switching contacts never sends and dismisses any send confirm.
       setSendConfirmOpen(false);
+      setMenuOpenId(null);
       setBusy(true);
       setError(null);
       try {
+        if (current.draft) await persistDraft().catch(() => undefined);
         const res = await fetch(`/api/sales/queue/${current.queueItem.id}/select-contact`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -117,60 +136,19 @@ export default function ApprovalQueueClient() {
         if (!res.ok) throw new Error(data.error ?? "Could not switch contact");
         const detail = data.detail as QueueItemDetail;
         setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
-        setEditing(false);
         if (detail.draft) {
           setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
           setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
         }
-        showCopyStatus(`Viewing ${detail.contact?.fullName ?? "contact"} — nothing sent.`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not switch contact");
       } finally {
         setBusy(false);
       }
     },
-    [current, busy, showCopyStatus]
+    [current, busy, persistDraft]
   );
 
-  const saveDraft = useCallback(async () => {
-    if (!current?.draft || busy) return;
-    // Only persist from the editor so we don't rewrite stored bodies with display-only stripping.
-    if (!editing) {
-      setEditing(true);
-      showCopyStatus("Edit the draft, then Save draft (or ⌘S). Nothing sent.");
-      return;
-    }
-    const cleanedEditedBody = stripEmailSignature(editedBody);
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/save-draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          editedSubject,
-          editedBody: cleanedEditedBody,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-      const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
-      setItems((prev) =>
-        prev.map((item) =>
-          item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item
-        )
-      );
-      setEditedSubject(saved.editedSubject ?? saved.aiSubject);
-      setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
-      setEditing(false);
-      showCopyStatus("Draft saved — still in queue, not sent.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setBusy(false);
-    }
-  }, [current, busy, editing, editedSubject, editedBody, showCopyStatus]);
-
-  /** Runs only after explicit confirm for approve, or immediately for non-send decisions. */
   const executeDecision = useCallback(
     async (action: ActionKey) => {
       if (!current || busy) return;
@@ -187,8 +165,6 @@ export default function ApprovalQueueClient() {
       const effectiveAction: ActionKey =
         isApprove && differedFromAi ? "approve_with_edits" : action;
 
-      // Mailto only after confirm click (this function), never on contact browse / Approve hover.
-      // Never mailto a hard-blocked address (Tyler / Seahawks incident).
       if (
         !gmailConnected &&
         isApprove &&
@@ -198,13 +174,7 @@ export default function ApprovalQueueClient() {
       ) {
         const to = current.contact.email;
         launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
-        copyEmailToClipboard(to, finalSubject, finalBody)
-          .then(() =>
-            showCopyStatus(
-              `Gmail not connected — draft copied for ${to}. Connect Gmail on Sales overview for tracked send.`
-            )
-          )
-          .catch(() => showCopyStatus("Couldn't copy the draft to your clipboard automatically."));
+        copyEmailToClipboard(to, finalSubject, finalBody).catch(() => undefined);
       }
       if (isApprove && current.contact?.email && isOutboundEmailBlocked(current.contact.email)) {
         setError(`Hard block: will not send to ${current.contact.email}.`);
@@ -220,8 +190,7 @@ export default function ApprovalQueueClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: effectiveAction,
-            notes: notes || null,
-            // Server refuses approve/send unless confirmed is true.
+            notes: null,
             ...(isApprove ? { confirmed: true } : {}),
             ...(isApprove && current.draft
               ? { editedSubject: finalSubject, editedBody: finalBody }
@@ -230,29 +199,14 @@ export default function ApprovalQueueClient() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Decision failed");
-        const parts: string[] = [];
-        if (data.gmail?.sent) {
-          parts.push(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}`);
-        }
-        if (data.learned) {
-          parts.push("learned from your edits for future drafts");
-        } else if (data.learningError) {
-          parts.push(`send ok, but learning failed: ${data.learningError}`);
-        } else if (isApprove && differedFromAi) {
-          parts.push("edits sent (learning may not have recorded)");
-        }
-        if (parts.length) showCopyStatus(`${parts.join(" — ")}.`);
+        if (data.gmail?.sent) showCopyStatus(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}`);
         if (data.remaining && data.detail) {
           const detail = data.detail as QueueItemDetail;
           setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
-          setEditing(false);
           if (detail.draft) {
             setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
             setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
           }
-          showCopyStatus(
-            `${parts.length ? `${parts.join(" — ")}. ` : ""}Sent — next contact: ${detail.contact?.fullName ?? "ready"}.`
-          );
         } else {
           setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
           setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
@@ -264,85 +218,149 @@ export default function ApprovalQueueClient() {
         setBusy(false);
       }
     },
-    [current, busy, notes, editedSubject, editedBody, items.length, showCopyStatus, gmailConnected]
+    [current, busy, editedSubject, editedBody, items.length, showCopyStatus, gmailConnected]
   );
 
-  /** Skip/reject/defer run now. Approve only opens “Do you really want to send?” */
-  const requestDecision = useCallback(
-    (action: ActionKey) => {
-      if (!current || busy) return;
-      if (action === "approve" || action === "approve_with_edits") {
-        setSendConfirmOpen(true);
-        return;
+  const requestSend = useCallback(() => {
+    if (!current || busy || !current.draft) return;
+    setSendConfirmOpen(true);
+  }, [current, busy]);
+
+  const runMoreResearch = useCallback(async () => {
+    if (!current || busy) return;
+    setBusy(true);
+    setMenuOpenId(null);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/more-research`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Research failed");
+      if (data.detail) {
+        setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? data.detail : item)));
       }
-      void executeDecision(action);
+      showCopyStatus("Research re-run finished — review updated contacts and draft.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Research failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [current, busy, showCopyStatus]);
+
+  const hideContact = useCallback(
+    async (contactId: string) => {
+      if (!current || busy) return;
+      setBusy(true);
+      setMenuOpenId(null);
+      try {
+        const res = await fetch(`/api/sales/contacts/${contactId}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not hide contact");
+        const remaining = (current.contacts ?? []).filter((c) => c.id !== contactId);
+        const next = remaining[0];
+        if (next && next.id !== current.contact?.id) {
+          await selectContact(next.id);
+        } else {
+          setItems((prev) =>
+            prev.map((item) =>
+              item.queueItem.id === current.queueItem.id
+                ? { ...item, contacts: remaining }
+                : item
+            )
+          );
+        }
+        showCopyStatus("Contact hidden from this list.");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not hide contact");
+      } finally {
+        setBusy(false);
+      }
     },
-    [current, busy, executeDecision]
+    [current, busy, selectContact, showCopyStatus]
   );
+
+  const moveFunnel = useCallback(
+    async (stage: RelationshipStage) => {
+      if (!current || busy) return;
+      setBusy(true);
+      setMenuOpenId(null);
+      try {
+        const res = await fetch(`/api/sales/opportunities/${current.opportunity.id}/stage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not move funnel");
+        setItems((prev) =>
+          prev.map((item) =>
+            item.queueItem.id === current.queueItem.id
+              ? { ...item, opportunity: { ...item.opportunity, relationshipStage: stage } }
+              : item
+          )
+        );
+        showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not move funnel");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [current, busy, showCopyStatus]
+  );
+
+  const improveDraft = useCallback(async () => {
+    if (!current?.draft || busy || improving) return;
+    setImproving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/improve-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: editedSubject, body: editedBody }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Improve failed");
+      const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
+      setItems((prev) =>
+        prev.map((item) => (item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item))
+      );
+      setEditedSubject(saved.editedSubject ?? saved.aiSubject);
+      setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
+      showCopyStatus("AI rewrite saved as a draft — not sent. Edit further if you want.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Improve failed");
+    } finally {
+      setImproving(false);
+    }
+  }, [current, busy, improving, editedSubject, editedBody, showCopyStatus]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && current?.draft) {
-        e.preventDefault();
-        void saveDraft();
-        return;
-      }
       if (sendConfirmOpen) {
         if (e.key === "Escape") {
           e.preventDefault();
           setSendConfirmOpen(false);
         }
-        // Block A/R/etc while the confirm dialog is open — only the Yes button sends.
         return;
       }
-      if (editing) return;
       const target = e.target as HTMLElement;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
-        setSendConfirmOpen(false);
         setSelectedIndex((i) => Math.min(items.length - 1, i + 1));
         setMobileDetailOpen(true);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
-        setSendConfirmOpen(false);
         setSelectedIndex((i) => Math.max(0, i - 1));
         setMobileDetailOpen(true);
       } else if (e.key === "Escape" && mobileDetailOpen) {
         e.preventDefault();
         setMobileDetailOpen(false);
-      } else if (e.key.toLowerCase() === "s" && current?.draft) {
-        e.preventDefault();
-        void saveDraft();
-      } else {
-        const action = ACTIONS.find((a) => a.shortcut.toLowerCase() === e.key.toLowerCase());
-        if (action?.key === "approve" || action?.key === "approve_with_edits") {
-          // Never one-keystroke send. A/E open edit or the confirm dialog — never POST send.
-          e.preventDefault();
-          if (action.key === "approve_with_edits" || !current?.draft) {
-            setEditing(true);
-            return;
-          }
-          setSendConfirmOpen(true);
-          return;
-        }
-        if (action) {
-          e.preventDefault();
-          requestDecision(action.key);
-        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    items.length,
-    requestDecision,
-    saveDraft,
-    editing,
-    mobileDetailOpen,
-    current?.draft,
-    sendConfirmOpen,
-  ]);
+  }, [items.length, mobileDetailOpen, sendConfirmOpen]);
 
   const pendingCount = items.length;
 
@@ -358,7 +376,7 @@ export default function ApprovalQueueClient() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">{pendingCount} pending</div>
         <ul className="max-h-[75vh] overflow-y-auto overscroll-contain">
@@ -415,9 +433,25 @@ export default function ApprovalQueueClient() {
                 {current.organizationTypeLabel ?? "Type unknown"} · {current.opportunity.title}
                 {current.opportunityTypeLabel ? ` (${current.opportunityTypeLabel})` : ""}
               </p>
-              {current.queueItem.duplicateWarning && (
-                <p className="mt-1 text-sm font-medium text-amber-400">⚠ Possible duplicate organization</p>
-              )}
+              <p className="mt-1 text-xs text-gray-500">
+                {gmailConnected ? (
+                  <>
+                    Gmail {gmailEmail ? `(${gmailEmail})` : "connected"}
+                    {!gmailSendEnabled ? " · sends paused" : ""}
+                    {" · "}
+                    <Link href="/admin/sales" className="underline">
+                      settings
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    Gmail not connected ·{" "}
+                    <Link href="/admin/sales" className="underline">
+                      Connect
+                    </Link>
+                  </>
+                )}
+              </p>
             </div>
             <div className="text-right">
               {current.score ? (
@@ -431,52 +465,38 @@ export default function ApprovalQueueClient() {
             </div>
           </div>
 
-          {current.brief && (
-            <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Gut check</h3>
-              <p className="mt-2 text-sm text-gray-100">{current.brief.summary}</p>
-              <p className="mt-2 text-sm text-gray-300">
-                <span className="text-gray-500">Angle: </span>
-                {current.brief.recommendedAngle}
-              </p>
-              {current.brief.risks.length > 0 && (
-                <p className="mt-2 text-sm text-amber-300/90">
-                  <span className="text-amber-500/80">Risks: </span>
-                  {current.brief.risks.join(" · ")}
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Contacts{(current.contacts?.length ?? 0) > 1 ? ` (${current.contacts.length})` : ""}
-              </h3>
-              {(current.contacts?.length ?? 0) > 0 ? (
-                <ul className="mt-2 space-y-2">
-                  {current.contacts.map((c) => {
-                    const selected = current.contact?.id === c.id;
-                    const hasDraft = (current.contactDrafts ?? []).some(
-                      (d) => d.contactId === c.id && (d.status === "draft" || d.status === "qa_flagged")
-                    );
-                    const sent = (current.contactDrafts ?? []).some(
-                      (d) => d.contactId === c.id && (d.status === "approved" || d.status === "approved_with_edits")
-                    );
-                    const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
-                    return (
-                      <li key={c.id}>
-                        <button
-                          type="button"
-                          disabled={busy || selected}
-                          onClick={() => void selectContact(c.id)}
-                          className={`w-full rounded-lg border px-3 py-2 text-left text-sm touch-manipulation disabled:opacity-100 ${
-                            selected
-                              ? "border-sky-600 bg-sky-950/40 text-white"
-                              : "border-gray-800 bg-gray-900/40 text-gray-200 hover:border-gray-600"
-                          }`}
-                        >
-                          <span className="flex items-start justify-between gap-2">
+          <div className="mt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Contacts{(current.contacts?.length ?? 0) > 1 ? ` (${current.contacts.length})` : ""}
+            </h3>
+            {(current.contacts?.length ?? 0) > 0 ? (
+              <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {current.contacts.map((c) => {
+                  const selected = current.contact?.id === c.id;
+                  const hasDraft = (current.contactDrafts ?? []).some(
+                    (d) => d.contactId === c.id && (d.status === "draft" || d.status === "qa_flagged")
+                  );
+                  const sent = (current.contactDrafts ?? []).some(
+                    (d) => d.contactId === c.id && (d.status === "approved" || d.status === "approved_with_edits")
+                  );
+                  const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
+                  const source = findingForContact(current.findings, c);
+                  return (
+                    <li key={c.id} className="relative">
+                      <div
+                        className={`rounded-lg border px-3 py-2 text-sm ${
+                          selected
+                            ? "border-sky-600 bg-sky-950/40 text-white"
+                            : "border-gray-800 bg-gray-900/40 text-gray-200"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <button
+                            type="button"
+                            disabled={busy || selected}
+                            onClick={() => void selectContact(c.id)}
+                            className="min-w-0 flex-1 text-left touch-manipulation disabled:opacity-100"
+                          >
                             <span className="font-medium">
                               {c.fullName ?? "Unnamed"}
                               {hasDraft ? (
@@ -485,202 +505,162 @@ export default function ApprovalQueueClient() {
                                 <span className="ml-2 text-xs text-emerald-400">sent</span>
                               ) : null}
                             </span>
-                          </span>
-                          <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
-                          <span className="mt-1 block text-xs leading-snug text-gray-500">{blurb}</span>
-                          <span className="mt-1 block text-xs text-gray-400">{c.email}</span>
+                            <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Contact actions"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuOpenId((id) => (id === c.id ? null : c.id));
+                            }}
+                            className="rounded px-1.5 py-0.5 text-gray-400 hover:bg-gray-800 hover:text-white"
+                          >
+                            ⋯
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={busy || selected}
+                          onClick={() => void selectContact(c.id)}
+                          className="mt-1 w-full text-left text-xs leading-snug text-gray-500 disabled:opacity-100"
+                        >
+                          {blurb}
+                          <span className="mt-1 block text-gray-400">{c.email}</span>
+                          {source?.sourceUrl && (
+                            <a
+                              href={source.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-1 inline-block text-gray-500 underline"
+                            >
+                              source
+                            </a>
+                          )}
                         </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : current.contact ? (
-                <p className="mt-1 text-sm text-gray-200">
-                  {current.contact.fullName ?? "Unnamed"} — {current.contact.roleTitle ?? "unknown role"}
-                  <br />
-                  <span className="text-gray-400">
-                    {current.contact.email ?? "no email"} · {current.contact.emailVerificationStatus}
-                  </span>
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
-              )}
-              {current.contact && (
-                <p className="mt-2 text-xs text-sky-400">
-                  Active persona: {PERSONA_STRATEGIES[current.contact.outreachPersona].label} → goal:{" "}
-                  {PERSONA_STRATEGIES[current.contact.outreachPersona].primaryGoal}
-                </p>
-              )}
-            </div>
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Gmail status</h3>
-              {gmailConnected ? (
-                <p className="mt-1 text-sm text-emerald-400">
-                  Connected{gmailEmail ? ` · ${gmailEmail}` : ""}
-                  {gmailSendEnabled
-                    ? " — send only after you confirm"
-                    : " — sending PAUSED (SALES_GMAIL_SENDS_ENABLED off)"}
-                  {gmailSendEnabled &&
-                  current.queueItem.kind === "nudge" &&
-                  current.opportunity.gmailThreadId
-                    ? " (in-thread)"
-                    : ""}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-amber-300">
-                  Not connected — confirm uses mailto/clipboard.{" "}
-                  <Link href="/admin/sales" className="underline">
-                    Connect Gmail
-                  </Link>
-                </p>
-              )}
-              {!gmailSendEnabled && (
-                <p className="mt-1 text-xs text-amber-400">
-                  Outreach send kill switch is off. Nothing will email via Gmail until you set{" "}
-                  <code className="text-amber-200">SALES_GMAIL_SENDS_ENABLED=true</code> in Vercel and
-                  redeploy.
-                </p>
-              )}
-              {current.opportunity.gmailThreadId && (
-                <a
-                  href={`https://mail.google.com/mail/u/0/#inbox/${current.opportunity.gmailThreadId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 block text-xs text-sky-400 underline"
-                >
-                  Open Gmail thread
-                </a>
-              )}
-              {(current.contacts?.length ?? 0) > 1 && (
-                <p className="mt-3 text-xs text-gray-500">
-                  Click contacts freely to read drafts — browsing never sends. Approve opens a “really send?” check;
-                  each send goes to the selected person only.
-                </p>
-              )}
-            </div>
+                      </div>
+                      {menuOpenId === c.id && (
+                        <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-xl">
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              void executeDecision("reject");
+                            }}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              void executeDecision("defer");
+                            }}
+                          >
+                            Defer
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
+                            onClick={() => void runMoreResearch()}
+                          >
+                            More research
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
+                            onClick={() => void hideContact(c.id)}
+                          >
+                            Delete
+                          </button>
+                          <div className="my-1 border-t border-gray-800" />
+                          <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">Move to</p>
+                          {FUNNEL_STAGES.map((s) => (
+                            <button
+                              key={s.key}
+                              type="button"
+                              className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
+                              onClick={() => void moveFunnel(s.key)}
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
+            )}
           </div>
 
-          {current.score && (
-            <div className="mt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Score rationale</h3>
-              <p className="mt-1 text-sm text-gray-300">{current.score.rationale}</p>
-              {current.score.missingInformation.length > 0 && (
-                <p className="mt-1 text-sm text-amber-400">Missing: {current.score.missingInformation.join("; ")}</p>
-              )}
-            </div>
-          )}
-
-          {current.findings.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Key sources</h3>
-              <ul className="mt-1 space-y-1 text-sm text-gray-300">
-                {current.findings.slice(0, 6).map((f) => (
-                  <li key={f.id} className="truncate">
-                    <span className={f.origin === "human_provided" ? "text-amber-400" : "text-sky-400"}>
-                      [{f.origin === "human_provided" ? "unverified" : "researched"}]
-                    </span>{" "}
-                    {f.claimText}{" "}
-                    {f.sourceUrl && (
-                      <a href={f.sourceUrl} target="_blank" rel="noreferrer" className="text-gray-500 underline">
-                        source
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
+          {current.brief && (
+            <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+              <p className="text-sm text-gray-100">{current.brief.summary}</p>
             </div>
           )}
 
           <div className="mt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
-              {current.draft && current.contact?.email && !editing && (
-                <EmailLaunchLink
-                  to={current.contact.email}
-                  subject={current.draft.editedSubject ?? current.draft.aiSubject}
-                  body={stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
-                />
-              )}
+              <div className="flex items-center gap-2">
+                {current.draft && current.contact?.email && (
+                  <EmailLaunchLink
+                    to={current.contact.email}
+                    subject={editedSubject || current.draft.aiSubject}
+                    body={editedBody || current.draft.aiBody}
+                  />
+                )}
+                <button
+                  type="button"
+                  disabled={busy || improving || !current.draft}
+                  onClick={() => void improveDraft()}
+                  className="rounded-md border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {improving ? "Improving…" : "Improve with AI"}
+                </button>
+              </div>
             </div>
             {current.draft ? (
-              editing ? (
-                <div className="mt-2 space-y-2">
-                  <input
-                    value={editedSubject}
-                    onChange={(e) => setEditedSubject(e.target.value)}
-                    className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
-                  />
-                  <textarea
-                    value={editedBody}
-                    onChange={(e) => setEditedBody(e.target.value)}
-                    rows={10}
-                    className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
-                  />
-                </div>
-              ) : (
-                <div className="mt-2 rounded-md border border-gray-800 bg-gray-900/60 p-3 text-sm text-gray-200">
-                  <p className="font-medium">{current.draft.editedSubject ?? current.draft.aiSubject}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-gray-300">
-                    {stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody)}
-                  </p>
-                  {current.draft.status === "qa_flagged" && current.draft.qaFlags && (
-                    <div className="mt-3 rounded-md border border-red-800 bg-red-950/40 p-2 text-xs text-red-300">
-                      QA flagged: {current.draft.qaFlags.map((f) => f.detail).join(" · ")}
-                    </div>
-                  )}
-                </div>
-              )
+              <div className="mt-2 space-y-2">
+                <input
+                  value={editedSubject}
+                  onChange={(e) => setEditedSubject(e.target.value)}
+                  onBlur={() => void persistDraft().catch(() => undefined)}
+                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+                />
+                <textarea
+                  value={editedBody}
+                  onChange={(e) => setEditedBody(e.target.value)}
+                  onBlur={() => void persistDraft().catch(() => undefined)}
+                  rows={12}
+                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
+                />
+              </div>
             ) : (
-              <p className="mt-1 text-sm text-gray-500">No draft yet (no verified contact, or template missing).</p>
+              <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
             )}
           </div>
 
-          <div className="mt-4">
-            <input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Decision notes (optional)"
-              className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
-            />
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {ACTIONS.map((action) => (
-              <button
-                key={action.key}
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  action.key === "approve_with_edits" && !editing
-                    ? setEditing(true)
-                    : requestDecision(action.key)
-                }
-                className={`rounded-lg px-3 py-2 text-sm font-medium text-white touch-manipulation disabled:opacity-50 ${action.tone}`}
-              >
-                {action.key === "approve_with_edits" && !editing ? "Edit draft" : action.label}{" "}
-                <span className="ml-1 text-xs opacity-70">({action.shortcut})</span>
-              </button>
-            ))}
-            {current.draft && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void saveDraft()}
-                className="rounded-lg bg-gray-600 px-3 py-2 text-sm font-medium text-white touch-manipulation hover:bg-gray-500 disabled:opacity-50"
-              >
-                Save draft <span className="ml-1 text-xs opacity-70">(S)</span>
-              </button>
-            )}
-          </div>
-          {copyStatus && <p className="mt-3 text-xs text-emerald-400">{copyStatus}</p>}
-          <p className="mt-3 text-xs text-gray-500">
-            Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>a</kbd> asks “really send?”, <kbd>s</kbd> / <kbd>⌘S</kbd>{" "}
-            save draft (no send), <kbd>r</kbd> reject, <kbd>d</kbd> defer, <kbd>m</kbd> more research, <kbd>u</kbd>{" "}
-            duplicate. Nothing emails until you confirm Yes.{" "}
-            <Link href={`/admin/sales/organizations/${current.organization.id}`} className="underline">
-              View organization
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={busy || !current.draft || !current.contact?.email}
+              onClick={requestSend}
+              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Send
+            </button>
+            {copyStatus && <span className="text-xs text-emerald-400">{copyStatus}</span>}
+            <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
+              Organization
             </Link>
-          </p>
+          </div>
         </div>
       )}
 
@@ -697,28 +677,20 @@ export default function ApprovalQueueClient() {
             </h2>
             <p className="mt-2 text-sm text-gray-300">
               This will email{" "}
-              <span className="font-medium text-white">
-                {current.contact?.fullName ?? "the selected contact"}
-              </span>
+              <span className="font-medium text-white">{current.contact?.fullName ?? "the selected contact"}</span>
               {current.contact?.email ? (
                 <>
                   {" "}
                   at <span className="text-sky-300">{current.contact.email}</span>
                 </>
               ) : null}
-              {gmailConnected ? (
-                gmailSendEnabled ? (
-                  <> from your connected Gmail.</>
-                ) : (
-                  <> — but Gmail sending is PAUSED, so this will fail closed (nothing emailed).</>
-                )
-              ) : (
-                <> (mailto / clipboard — Gmail not connected).</>
-              )}
+              {gmailConnected && gmailSendEnabled
+                ? " from your connected Gmail."
+                : gmailConnected
+                  ? " — Gmail sends are paused, so this will not go out via Gmail."
+                  : " (opens your mail app / copies the draft — Gmail not connected)."}
             </p>
-            <p className="mt-2 text-xs text-gray-500">
-              Cancel keeps you browsing. Contact clicks never send.
-            </p>
+            <p className="mt-2 text-xs text-gray-500">Cancel keeps you browsing. Nothing sends until you confirm.</p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 type="button"

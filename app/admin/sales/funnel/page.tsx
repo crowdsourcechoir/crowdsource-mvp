@@ -6,7 +6,7 @@ export default function SalesFunnelPage() {
     <div>
       <h1 className="mb-2 text-2xl font-bold text-white">Funnel</h1>
       <p className="mb-4 text-sm text-gray-400">
-        Everything approved out of the queue, tracked Awareness → Interest → Purchase (or Lost) after the email is launched.
+        Everything approved out of the queue, tracked Awareness → Interest → Won (or Lost) after the email is launched.
       </p>
       <SalesSubNav />
       <FunnelClient />

@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       return NextResponse.json(
         {
           error:
-            "Send requires explicit confirmation. Click Approve, then Yes, send now — browsing contacts never sends.",
+            "Send requires explicit confirmation. Click Send, then Yes, send now — browsing contacts never sends.",
         },
         { status: 400 }
       );
