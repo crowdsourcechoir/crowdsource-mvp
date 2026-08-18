@@ -12,6 +12,7 @@ import {
   applySentDraft,
   draftFromMutationPayload,
 } from "../../lib/sales/queue/optimistic.ts";
+import { EXTERNAL_SENT_SUBJECT } from "../../lib/sales/outreach/external-sent.ts";
 
 function oldClientReadDraft(data) {
   const detail = data.detail;
@@ -109,6 +110,16 @@ function main() {
   const sent = applySentDraft(item, "c-a");
   assert.equal(sent.contactDrafts.find((d) => d.contactId === "c-a").status, "approved");
   assert.equal(sent.opportunity.relationshipStage, "awareness");
+
+  const onlyB = item.contactDrafts.filter((d) => d.contactId === "c-b");
+  const noDraftItem = sampleItem({ contactDrafts: onlyB, draft: onlyB[0] });
+  const gmailSent = applySentDraft(noDraftItem, "c-a");
+  const recorded = gmailSent.contactDrafts.find((d) => d.contactId === "c-a");
+  assert.ok(recorded, "Gmail-sent contact with no in-app draft still gets a sent record");
+  assert.equal(recorded.status, "approved");
+  assert.equal(recorded.aiSubject, EXTERNAL_SENT_SUBJECT);
+  assert.equal(gmailSent.contactDrafts.filter((d) => d.contactId === "c-a").length, 1);
+  console.log("ok: mark sent without an in-app draft still records Gmail sent");
 
   const missingContacts = applySelectedContact(sampleItem({ contacts: undefined }), "c-a");
   assert.equal(missingContacts, null);

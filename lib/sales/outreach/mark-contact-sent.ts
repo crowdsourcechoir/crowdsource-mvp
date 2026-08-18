@@ -6,7 +6,7 @@ import {
   updateOpportunityStatus,
   updateOpportunityTouchTimestamps,
 } from "@/lib/sales/db/opportunities";
-import { listDraftsForOpportunity, updateDraftDecision } from "@/lib/sales/db/outreach";
+import { listDraftsForOpportunity, updateDraftDecision, createOutreachDraft } from "@/lib/sales/db/outreach";
 import {
   decideQueueItem,
   getQueueItem,
@@ -15,6 +15,7 @@ import {
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
+import { EXTERNAL_SENT_BODY, EXTERNAL_SENT_SUBJECT } from "@/lib/sales/outreach/external-sent";
 import { soonestFollowUpIso } from "@/lib/sales/outreach/nudge-due";
 import type { OutreachDraft } from "@/lib/sales/types";
 
@@ -37,7 +38,8 @@ export type MarkContactSentResult = {
 
 /**
  * Record that Joel already emailed this contact (Gmail UI, mailto, etc.).
- * Does not send. Stays in Awareness. Schedules a 7-day no-reply nudge.
+ * Does not send. A missing in-app draft is fine — Gmail-sent mail still counts.
+ * Stays in Awareness. Schedules a 7-day no-reply nudge.
  * Returns a slim payload — callers should not wait on a full queue reassemble.
  */
 export async function markContactSent(input: {
@@ -87,20 +89,27 @@ export async function markContactSent(input: {
   }
 
   const contactDrafts = drafts.filter((d) => d.kind === "initial" && d.contactId === input.contactId);
-  const draft =
+  let draft =
     [...contactDrafts].reverse().find((d) => isOpenDraft(d)) ??
     [...contactDrafts].reverse().find((d) => isSentDraft(d)) ??
     null;
-  if (!draft) {
-    const err = new Error("No draft for this contact to mark sent.");
-    (err as Error & { status: number }).status = 400;
-    throw err;
-  }
 
   const alreadySent = activities.some((a) => a.activityType === "sent" && a.contactId === input.contactId);
 
   const writes: Promise<unknown>[] = [];
-  if (isOpenDraft(draft)) {
+  if (!draft) {
+    // Gmail / other client already sent — persist a non-sendable approved stub so the card
+    // stays green after reload and the 7-day nudge still has a contact to follow.
+    draft = await createOutreachDraft({
+      opportunityId: opportunity.id,
+      contactId: input.contactId,
+      kind: "initial",
+      status: "approved",
+      aiSubject: EXTERNAL_SENT_SUBJECT,
+      aiBody: EXTERNAL_SENT_BODY,
+      confidenceScore: null,
+    });
+  } else if (isOpenDraft(draft)) {
     const contentDiffers = Boolean(
       input.editedSubject != null &&
         input.editedBody != null &&
@@ -114,6 +123,11 @@ export async function markContactSent(input: {
       })
     );
     draft.status = contentDiffers ? "approved_with_edits" : "approved";
+  }
+  if (!draft) {
+    const err = new Error("Could not record sent contact.");
+    (err as Error & { status: number }).status = 500;
+    throw err;
   }
 
   const now = new Date().toISOString();

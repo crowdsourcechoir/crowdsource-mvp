@@ -1,4 +1,5 @@
 import type { OutreachDraft, QueueItemDetail } from "@/lib/sales/types";
+import { placeholderSentDraft } from "@/lib/sales/outreach/external-sent";
 
 const SENT_STATUSES = new Set(["approved", "approved_with_edits"]);
 const OPEN_STATUSES = new Set(["draft", "qa_flagged", "qa_passed"]);
@@ -24,11 +25,24 @@ export function draftFromMutationPayload(data: QueueMutationPayload | null | und
 }
 
 export function applySentDraft(item: QueueItemDetail, contactId: string): QueueItemDetail {
+  const existing = item.contactDrafts ?? [];
+  let found = false;
+  const contactDrafts = existing.map((d) => {
+    if (d.contactId !== contactId) return d;
+    found = true;
+    return OPEN_STATUSES.has(d.status) ? { ...d, status: "approved" as const } : d;
+  });
+  if (!found) {
+    contactDrafts.push(
+      placeholderSentDraft({
+        opportunityId: item.opportunity?.id ?? item.queueItem?.opportunityId ?? "",
+        contactId,
+      })
+    );
+  }
   return {
     ...item,
-    contactDrafts: (item.contactDrafts ?? []).map((d) =>
-      d.contactId === contactId && OPEN_STATUSES.has(d.status) ? { ...d, status: "approved" as const } : d
-    ),
+    contactDrafts,
     opportunity: item.opportunity
       ? {
           ...item.opportunity,

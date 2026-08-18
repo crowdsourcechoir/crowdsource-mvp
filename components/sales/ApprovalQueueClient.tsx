@@ -249,6 +249,10 @@ export default function ApprovalQueueClient() {
 
   const requestSend = useCallback(() => {
     if (!current || busy || !current.draft) return;
+    const alreadySent = (current.contactDrafts ?? []).some(
+      (d) => d.contactId === current.contact?.id && isSentDraftStatus(d.status)
+    );
+    if (alreadySent) return;
     setSendConfirmOpen(true);
   }, [current, busy]);
 
@@ -454,6 +458,12 @@ export default function ApprovalQueueClient() {
   }, [items.length, mobileDetailOpen, sendConfirmOpen]);
 
   const pendingCount = items.length;
+  const selectedAlreadySent = Boolean(
+    current &&
+      (current.contactDrafts ?? []).some(
+        (d) => d.contactId === current.contact?.id && isSentDraftStatus(d.status)
+      )
+  );
 
   if (loading) return <p className="text-gray-400">Loading queue…</p>;
   if (loadError) return <p className="text-red-400">{loadError}</p>;
@@ -754,7 +764,7 @@ export default function ApprovalQueueClient() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={busy || !current.draft || !current.contact?.email}
+              disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
               onClick={requestSend}
               className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
@@ -806,7 +816,7 @@ export default function ApprovalQueueClient() {
               </button>
               <button
                 type="button"
-                disabled={busy || !current.draft || !current.contact?.email}
+                disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
                 onClick={() => void executeDecision("approve")}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
               >

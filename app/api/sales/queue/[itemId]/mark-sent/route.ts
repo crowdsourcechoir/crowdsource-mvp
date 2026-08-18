@@ -4,8 +4,8 @@ import { markContactSent } from "@/lib/sales/outreach/mark-contact-sent";
 export const dynamic = "force-dynamic";
 
 /**
- * Record that this contact was already emailed. Does not send.
- * Stays in Awareness and schedules a 7-day no-reply nudge.
+ * Record that this contact was already emailed (including from Gmail with no in-app draft).
+ * Does not send. Stays in Awareness and schedules a 7-day no-reply nudge.
  * Slim JSON — no full queue reassemble.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
