@@ -37,6 +37,7 @@ export async function improveOutreachDraft(input: {
   organizationName: string;
   opportunityTitle: string;
   initiativeHint?: "sports" | "conference" | "unknown";
+  instruction?: string;
 }): Promise<{ subject: string; body: string }> {
   const hint =
     input.initiativeHint === "sports"
@@ -70,7 +71,12 @@ ${CONFERENCE_VOICE}`,
       `Contact role: ${input.contactRoleTitle ?? "unknown"}`,
       `Current subject:\n${input.subject}`,
       `Current body:\n${stripEmailSignature(input.body)}`,
-    ].join("\n\n"),
+      input.instruction?.trim()
+        ? `Operator instruction (follow this rewrite request):\n${input.instruction.trim()}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   });
 
   return {

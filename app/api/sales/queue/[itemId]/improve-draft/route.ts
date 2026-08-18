@@ -52,6 +52,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           ? "conference"
           : "unknown";
 
+    const instruction =
+      typeof body?.instruction === "string" && body.instruction.trim() ? body.instruction.trim() : undefined;
+
     const improved = await improveOutreachDraft({
       subject: currentSubject,
       body: currentBody,
@@ -60,6 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       organizationName: organization.name,
       opportunityTitle: opportunity.title,
       initiativeHint,
+      instruction,
     });
 
     const saved = await updateDraftEdits(draft.id, {
