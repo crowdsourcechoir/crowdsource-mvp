@@ -24,12 +24,12 @@ export function contactIdsDueForNudge(
 
   const dueMs = dueAfterDays * DAY_MS;
   const due: string[] = [];
-  for (const [contactId, cur] of byContact) {
-    if (!cur.lastSent) continue;
-    if (cur.lastReply >= cur.lastSent) continue;
-    if (nowMs - cur.lastSent < dueMs) continue;
+  Array.from(byContact.entries()).forEach(([contactId, cur]) => {
+    if (!cur.lastSent) return;
+    if (cur.lastReply >= cur.lastSent) return;
+    if (nowMs - cur.lastSent < dueMs) return;
     due.push(contactId);
-  }
+  });
   return due;
 }
 
@@ -52,14 +52,14 @@ export function nextPendingFollowUpIso(
   }
   let soonest: number | null = null;
   const dueMs = dueAfterDays * DAY_MS;
-  for (const [contactId, cur] of byContact) {
-    if (!cur.lastSent) continue;
-    if (cur.lastReply >= cur.lastSent) continue;
-    if (dueIds.has(contactId)) continue;
+  Array.from(byContact.entries()).forEach(([contactId, cur]) => {
+    if (!cur.lastSent) return;
+    if (cur.lastReply >= cur.lastSent) return;
+    if (dueIds.has(contactId)) return;
     const followUp = cur.lastSent + dueMs;
-    if (followUp <= nowMs) continue;
+    if (followUp <= nowMs) return;
     if (soonest == null || followUp < soonest) soonest = followUp;
-  }
+  });
   return soonest == null ? null : new Date(soonest).toISOString();
 }
 
