@@ -3,7 +3,7 @@ import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { getOpportunity } from "@/lib/sales/db/opportunities";
 import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
-import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
+import { listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Switch the active queue draft to a specific org contact (creates a draft if missing).
- * Body: { contactId: string }
+ * Returns a slim payload so the queue UI can stay snappy.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
   try {
@@ -29,11 +29,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
     const opportunity = await getOpportunity(item.opportunityId);
     if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
-    const organization = await getOrganization(opportunity.organizationId);
-    if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
 
-    const contact = await getContact(contactId);
-    if (!contact || contact.organizationId !== organization.id) {
+    const [contact, existingDrafts] = await Promise.all([
+      getContact(contactId),
+      listDraftsForOpportunity(opportunity.id),
+    ]);
+    if (!contact || contact.organizationId !== opportunity.organizationId) {
       return NextResponse.json({ error: "Contact not on this organization" }, { status: 400 });
     }
     if (!looksLikePersonName(contact.fullName) || !contact.email || !hasVerifiedEmail(contact)) {
@@ -46,17 +47,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       );
     }
 
-    const { drafts } = await ensureContactDrafts({
-      organization,
-      opportunityId: opportunity.id,
-      pipelineRunId: null,
-    });
-    const draft = drafts.find((d) => d.contactId === contactId);
+    let draft =
+      [...existingDrafts]
+        .reverse()
+        .find((d) => d.kind === "initial" && d.contactId === contactId) ?? null;
+
+    if (!draft) {
+      const organization = await getOrganization(opportunity.organizationId);
+      if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+      const created = await ensureContactDrafts({
+        organization,
+        opportunityId: opportunity.id,
+        pipelineRunId: null,
+      });
+      draft = created.drafts.find((d) => d.contactId === contactId) ?? null;
+    }
     if (!draft) return NextResponse.json({ error: "Could not create draft for contact" }, { status: 500 });
 
     await setQueueItemOutreachDraft(itemId, draft.id);
-    const detail = await assembleQueueItemDetailFromQueueItem((await getQueueItem(itemId))!);
-    return NextResponse.json({ detail, draftId: draft.id });
+    return NextResponse.json({ draftId: draft.id, contactId, draft });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
   }

@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * Record that this contact was already emailed. Does not send.
  * Stays in Awareness and schedules a 7-day no-reply nudge.
+ * Slim JSON — no full queue reassemble.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
   try {

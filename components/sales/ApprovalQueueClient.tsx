@@ -32,6 +32,33 @@ function findingForContact(
   );
 }
 
+function applySentDraft(item: QueueItemDetail, contactId: string): QueueItemDetail {
+  return {
+    ...item,
+    contactDrafts: (item.contactDrafts ?? []).map((d) =>
+      d.contactId === contactId && (d.status === "draft" || d.status === "qa_flagged" || d.status === "qa_passed")
+        ? { ...d, status: "approved" as const }
+        : d
+    ),
+    opportunity: {
+      ...item.opportunity,
+      relationshipStage: item.opportunity.relationshipStage ?? "awareness",
+    },
+  };
+}
+
+function applySelectedContact(item: QueueItemDetail, contactId: string): QueueItemDetail | null {
+  const contact = item.contacts.find((c) => c.id === contactId) ?? null;
+  const draft = (item.contactDrafts ?? []).find((d) => d.contactId === contactId) ?? null;
+  if (!contact || !draft) return null;
+  return {
+    ...item,
+    contact,
+    draft,
+    queueItem: { ...item.queueItem, outreachDraftId: draft.id },
+  };
+}
+
 export default function ApprovalQueueClient() {
   const [items, setItems] = useState<QueueItemDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,51 +130,56 @@ export default function ApprovalQueueClient() {
     setMobileDetailOpen(true);
   }, []);
 
-  const persistDraft = useCallback(async () => {
-    if (!current?.draft) return;
-    const cleanedEditedBody = stripEmailSignature(editedBody);
-    const res = await fetch(`/api/sales/queue/${current.queueItem.id}/save-draft`, {
+  const persistDraftSnapshot = useCallback(async (itemId: string, subject: string, body: string) => {
+    const cleanedEditedBody = stripEmailSignature(body);
+    const res = await fetch(`/api/sales/queue/${itemId}/save-draft`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ editedSubject, editedBody: cleanedEditedBody }),
+      body: JSON.stringify({ editedSubject: subject, editedBody: cleanedEditedBody }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Save failed");
-    const saved = data.draft as NonNullable<QueueItemDetail["draft"]>;
-    setItems((prev) =>
-      prev.map((item) => (item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item))
-    );
-  }, [current, editedSubject, editedBody]);
+  }, []);
+
+  const persistDraft = useCallback(async () => {
+    if (!current?.draft) return;
+    await persistDraftSnapshot(current.queueItem.id, editedSubject, editedBody);
+  }, [current, editedSubject, editedBody, persistDraftSnapshot]);
 
   const selectContact = useCallback(
-    async (contactId: string) => {
-      if (!current || busy || current.contact?.id === contactId) return;
+    (contactId: string) => {
+      if (!current || current.contact?.id === contactId) return;
       setSendConfirmOpen(false);
       setMenuOpenId(null);
-      setBusy(true);
       setError(null);
-      try {
-        if (current.draft) await persistDraft().catch(() => undefined);
-        const res = await fetch(`/api/sales/queue/${current.queueItem.id}/select-contact`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contactId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not switch contact");
-        const detail = data.detail as QueueItemDetail;
-        setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
-        if (detail.draft) {
-          setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
-          setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
+      const itemId = current.queueItem.id;
+      const prevSubject = editedSubject;
+      const prevBody = editedBody;
+      const switched = applySelectedContact(current, contactId);
+      if (switched) {
+        setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? switched : item)));
+        const d = switched.draft;
+        if (d) {
+          setEditedSubject(d.editedSubject ?? d.aiSubject);
+          setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not switch contact");
-      } finally {
-        setBusy(false);
       }
+      void (async () => {
+        try {
+          await persistDraftSnapshot(itemId, prevSubject, prevBody).catch(() => undefined);
+          const res = await fetch(`/api/sales/queue/${itemId}/select-contact`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contactId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Could not switch contact");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Could not switch contact");
+        }
+      })();
     },
-    [current, busy, persistDraft]
+    [current, editedSubject, editedBody, persistDraftSnapshot]
   );
 
   const executeDecision = useCallback(
@@ -280,81 +312,96 @@ export default function ApprovalQueueClient() {
   );
 
   const moveFunnel = useCallback(
-    async (stage: RelationshipStage) => {
-      if (!current || busy) return;
-      setBusy(true);
+    (stage: RelationshipStage) => {
+      if (!current) return;
       setMenuOpenId(null);
-      try {
-        const res = await fetch(`/api/sales/opportunities/${current.opportunity.id}/stage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not move funnel");
-        setItems((prev) =>
-          prev.map((item) =>
-            item.queueItem.id === current.queueItem.id
-              ? { ...item, opportunity: { ...item.opportunity, relationshipStage: stage } }
-              : item
-          )
-        );
-        showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not move funnel");
-      } finally {
-        setBusy(false);
-      }
+      const itemId = current.queueItem.id;
+      const previous = current.opportunity.relationshipStage;
+      setItems((prev) =>
+        prev.map((item) =>
+          item.queueItem.id === itemId
+            ? { ...item, opportunity: { ...item.opportunity, relationshipStage: stage } }
+            : item
+        )
+      );
+      showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/sales/opportunities/${current.opportunity.id}/stage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ stage }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Could not move funnel");
+        } catch (err) {
+          setItems((prev) =>
+            prev.map((item) =>
+              item.queueItem.id === itemId
+                ? { ...item, opportunity: { ...item.opportunity, relationshipStage: previous } }
+                : item
+            )
+          );
+          setError(err instanceof Error ? err.message : "Could not move funnel");
+        }
+      })();
     },
-    [current, busy, showCopyStatus]
+    [current, showCopyStatus]
   );
 
   const markContactSent = useCallback(
-    async (contactId: string) => {
-      if (!current || busy) return;
+    (contactId: string) => {
+      if (!current) return;
       setMenuOpenId(null);
-      setBusy(true);
       setError(null);
-      try {
-        if (current.draft && current.contact?.id === contactId) {
-          await persistDraft().catch(() => undefined);
-        }
-        const res = await fetch(`/api/sales/queue/${current.queueItem.id}/mark-sent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contactId,
-            ...(current.contact?.id === contactId && current.draft
-              ? { editedSubject, editedBody: stripEmailSignature(editedBody) }
-              : {}),
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not mark sent");
-        if (data.remaining && data.detail) {
-          const detail = data.detail as QueueItemDetail;
-          setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
-          if (detail.draft) {
-            setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
-            setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
+      const itemId = current.queueItem.id;
+      const snapshot = current;
+      setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? applySentDraft(item, contactId) : item)));
+      showCopyStatus(`Marked sent — stays in Awareness. Nudge in ${NUDGE_DUE_AFTER_DAYS} days if no reply.`);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/sales/queue/${itemId}/mark-sent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contactId,
+              ...(snapshot.contact?.id === contactId && snapshot.draft
+                ? { editedSubject, editedBody: stripEmailSignature(editedBody) }
+                : {}),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Could not mark sent");
+          if (!data.remaining) {
+            setItems((prev) => {
+              const idx = prev.findIndex((i) => i.queueItem.id === itemId);
+              const next = prev.filter((i) => i.queueItem.id !== itemId);
+              const nextIndex = Math.min(idx < 0 ? 0 : idx, Math.max(0, next.length - 1));
+              setTimeout(() => setSelectedIndex(nextIndex), 0);
+              return next;
+            });
+            setMobileDetailOpen(false);
+          } else if (data.nextContactId) {
+            setItems((prev) =>
+              prev.map((item) => {
+                if (item.queueItem.id !== itemId) return item;
+                const sent = applySentDraft(item, contactId);
+                const next = applySelectedContact(sent, data.nextContactId as string);
+                if (next?.draft) {
+                  setEditedSubject(next.draft.editedSubject ?? next.draft.aiSubject);
+                  setEditedBody(stripEmailSignature(next.draft.editedBody ?? next.draft.aiBody));
+                }
+                return next ?? sent;
+              })
+            );
           }
-        } else {
-          setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
-          setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
-          setMobileDetailOpen(false);
+        } catch (err) {
+          setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? snapshot : item)));
+          setError(err instanceof Error ? err.message : "Could not mark sent");
         }
-        showCopyStatus(
-          data.alreadySent
-            ? "Already marked sent — still in Awareness until they reply."
-            : `Marked sent — stays in Awareness. Nudge in ${NUDGE_DUE_AFTER_DAYS} days if no reply.`
-        );
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not mark sent");
-      } finally {
-        setBusy(false);
-      }
+      })();
     },
-    [current, busy, persistDraft, editedSubject, editedBody, items.length, showCopyStatus]
+    [current, editedSubject, editedBody, showCopyStatus]
   );
 
   const improveDraft = useCallback(async () => {

@@ -8,7 +8,7 @@ import { getQueueItemByOpportunity, getInitialQueueItemByOpportunity } from "./q
 import { getLatestBriefForOpportunity } from "./pipeline";
 import { listActivitiesForOpportunity } from "./activities";
 import { hasVerifiedEmail, looksLikePersonName } from "../dedupe";
-import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, QueueItemDetail } from "../types";
+import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
 
 function looksLikeSelectableContact(c: Contact): boolean {
   if (c.duplicateOfContactId) return false;
@@ -89,103 +89,82 @@ function buildSourceLinks(
   return links;
 }
 
+function scoreFromRow(data: Record<string, unknown>): ProspectScore {
+  return {
+    id: data.id as string,
+    opportunityId: data.opportunity_id as string,
+    pipelineRunId: data.pipeline_run_id as string,
+    totalScore: Number(data.total_score),
+    componentScores: data.component_scores as ProspectScore["componentScores"],
+    rationale: (data.rationale as string) ?? "",
+    confidence: data.confidence as ProspectScore["confidence"],
+    missingInformation: (data.missing_information as string[] | null) ?? [],
+    model: (data.model as string | null) ?? null,
+    createdAt: data.created_at as string,
+  };
+}
+
 async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem | null): Promise<QueueItemDetail | null> {
   const db = requireSupabaseAdmin();
   const opportunity = await getOpportunity(opportunityId);
   if (!opportunity) return null;
 
-  const [organization, findings, brief] = await Promise.all([
+  const scoreQuery = queueItem?.prospectScoreId
+    ? db.from("prospect_scores").select("*").eq("id", queueItem.prospectScoreId).maybeSingle()
+    : db
+        .from("prospect_scores")
+        .select("*")
+        .eq("opportunity_id", opportunity.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+  const [organization, findings, brief, orgContacts, draft, allDrafts, scoreRes, oppTypeRes] = await Promise.all([
     getOrganization(opportunity.organizationId),
     listFindingsWithSourcesForOpportunity(opportunity.organizationId, opportunity.id),
     getLatestBriefForOpportunity(opportunityId),
+    listContactsForOrganization(opportunity.organizationId),
+    queueItem?.outreachDraftId ? getDraft(queueItem.outreachDraftId) : Promise.resolve(null),
+    listDraftsForOpportunity(opportunity.id),
+    scoreQuery,
+    opportunity.opportunityTypeId
+      ? db.from("opportunity_types").select("label").eq("id", opportunity.opportunityTypeId).maybeSingle()
+      : Promise.resolve({ data: null as { label: string } | null }),
   ]);
   if (!organization) return null;
 
-  const orgContacts = await listContactsForOrganization(opportunity.organizationId);
-  const draft = queueItem?.outreachDraftId ? await getDraft(queueItem.outreachDraftId) : null;
-  let contact = draft?.contactId ? await getContact(draft.contactId) : null;
-  if (!contact) {
-    contact = pickBestContact(orgContacts);
-  }
+  const orgTypeRes = organization.organizationTypeId
+    ? await db.from("organization_types").select("label").eq("id", organization.organizationTypeId).maybeSingle()
+    : { data: null as { label: string } | null };
 
-  // Email-ready named people for the queue picker (verified format or any email).
   const contacts = orgContacts.filter((c) => looksLikeSelectableContact(c));
-  const allDrafts = await listDraftsForOpportunity(opportunity.id);
-  // One initial draft per contact (prefer newest) so re-seeds don't spam the picker.
+  const contact =
+    (draft?.contactId ? orgContacts.find((c) => c.id === draft.contactId) ?? null : null) ??
+    pickBestContact(orgContacts);
+
   const latestByContact = new Map<string, (typeof allDrafts)[number]>();
+  const selectableIds = new Set(contacts.map((c) => c.id));
   for (const d of allDrafts) {
     if (d.kind !== "initial" || !d.contactId) continue;
-    if (!contacts.some((c) => c.id === d.contactId)) continue;
+    if (!selectableIds.has(d.contactId)) continue;
     const prev = latestByContact.get(d.contactId);
     if (!prev || new Date(d.createdAt).getTime() >= new Date(prev.createdAt).getTime()) {
       latestByContact.set(d.contactId, d);
     }
   }
-  const contactDrafts = Array.from(latestByContact.values());
 
-  let score = null;
-  if (queueItem?.prospectScoreId) {
-    const { data } = await db.from("prospect_scores").select("*").eq("id", queueItem.prospectScoreId).maybeSingle();
-    if (data) {
-      score = {
-        id: data.id,
-        opportunityId: data.opportunity_id,
-        pipelineRunId: data.pipeline_run_id,
-        totalScore: Number(data.total_score),
-        componentScores: data.component_scores,
-        rationale: data.rationale,
-        confidence: data.confidence,
-        missingInformation: data.missing_information ?? [],
-        model: data.model,
-        createdAt: data.created_at,
-      };
-    }
-  }
-  if (!score) {
-    const { data } = await db
-      .from("prospect_scores")
-      .select("*")
-      .eq("opportunity_id", opportunity.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) {
-      score = {
-        id: data.id,
-        opportunityId: data.opportunity_id,
-        pipelineRunId: data.pipeline_run_id,
-        totalScore: Number(data.total_score),
-        componentScores: data.component_scores,
-        rationale: data.rationale,
-        confidence: data.confidence,
-        missingInformation: data.missing_information ?? [],
-        model: data.model,
-        createdAt: data.created_at,
-      };
-    }
-  }
-
-  let opportunityTypeLabel: string | null = null;
-  if (opportunity.opportunityTypeId) {
-    const { data } = await db.from("opportunity_types").select("label").eq("id", opportunity.opportunityTypeId).maybeSingle();
-    opportunityTypeLabel = data?.label ?? null;
-  }
-  let organizationTypeLabel: string | null = null;
-  if (organization.organizationTypeId) {
-    const { data } = await db.from("organization_types").select("label").eq("id", organization.organizationTypeId).maybeSingle();
-    organizationTypeLabel = data?.label ?? null;
-  }
+  const scoreRow = (scoreRes.data as Record<string, unknown> | null) ?? null;
 
   return {
     queueItem: queueItem ?? emptyQueueItem(opportunity.id, opportunity.createdAt),
     opportunity,
-    opportunityTypeLabel,
+    opportunityTypeLabel: oppTypeRes.data?.label ?? null,
     organization,
-    organizationTypeLabel,
+    organizationTypeLabel: orgTypeRes.data?.label ?? null,
     contact,
     contacts,
-    contactDrafts,
-    score,
+    contactDrafts: Array.from(latestByContact.values()),
+    score: scoreRow ? scoreFromRow(scoreRow) : null,
     brief,
     draft,
     findings,
