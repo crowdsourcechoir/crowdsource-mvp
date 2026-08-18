@@ -11,12 +11,45 @@ Joel’s sole sales contact-enrichment provider is **Hunter.io** (`HUNTER_API_KE
 - Email Finder: 1 credit **only when an email is found**; misses are free.
 - Account balance check (`GET /api/sales/enrichment/credits` or Hunter `/v2/account`) is free.
 
-Without `HUNTER_API_KEY`, named contacts stay `awaiting_contact` and the approval queue stays empty.
+Without `HUNTER_API_KEY` **on the process that runs enrichment**, named contacts stay `awaiting_contact` and the approval queue stays empty.
+
+This Cloud Agent **cannot write Cursor secrets**. If `HUNTER_API_KEY` is missing here, tell Joel explicitly. Do not guess emails or pretend enrichment worked.
 
 ## Where the key must live
 
-1. **Vercel Production** — so `app.crowdsourcechoir.com` works.
-2. **Cursor Cloud Agent secrets** — [environment](https://cursor.com/dashboard/cloud-agents/environments/e/7f9121d7-2fd3-4dc7-9c5e-dc02e5ee8fa4) (new agents only pick up new secrets).
+1. **Vercel Production** — so `app.crowdsourcechoir.com` works (`GET /api/sales/enrichment/status` should be `{ provider: hunter, ready: true }`).
+2. **Cursor Cloud Agent secrets** — [environment dashboard](https://cursor.com/dashboard/cloud-agents/environments/e/7f9121d7-2fd3-4dc7-9c5e-dc02e5ee8fa4). **New agents only pick up new secrets.** A running sales agent stays empty until Joel starts a new one.
+
+## Sales-agent secrets (paste into that environment)
+
+Hunter is required. The rest are needed for this agent to run the sales stack locally instead of only via production APIs.
+
+**Required**
+
+- `HUNTER_API_KEY` — primary contact sourcing (Hunter Email Finder)
+- `OPENAI_API_KEY` — drafts, improve-draft, learning
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_APP_URL` — `https://app.crowdsourcechoir.com`
+
+**Outreach / digest (keep Gmail send kill switch off until Joel is ready)**
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GMAIL_TOKEN_ENCRYPTION_KEY`
+- `SALES_GMAIL_SENDS_ENABLED` — leave unset or `false` unless Joel explicitly enables sending
+- `RESEND_API_KEY` — internal digest only, not 1:1 outreach
+- `SALES_DIGEST_TO_EMAIL`
+
+**Optional**
+
+- `TAVILY_API_KEY` / `SERPER_API_KEY` — Stage 0 discovery
+- `CRON_SECRET` — only if triggering cron routes from the agent
+- `SALES_SENDER_NAME`
+
+**Do not add**
+
+- `APOLLO_API_KEY` — unused; Hunter is the sole enrichment provider
 
 ## Agent duty — always tell Joel if Hunter is missing
 
@@ -26,6 +59,8 @@ node -e "console.log(process.env.HUNTER_API_KEY?.trim() ? 'ok' : 'MISSING: HUNTE
 
 Or `GET /api/sales/enrichment/status` / `GET /api/sales/enrichment/credits` on production.
 
-If missing: say so explicitly. Do not guess emails or pretend enrichment worked.
+Until this agent’s own `HUNTER_API_KEY` is present, enrich via production:
+
+`GET https://app.crowdsourcechoir.com/api/sales/enrichment/find?firstName=&lastName=&domain=`
 
 When running finders, report credit delta (credits used before vs after) from `/api/sales/enrichment/credits`.
