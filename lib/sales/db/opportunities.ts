@@ -159,7 +159,6 @@ export async function listOpportunitiesDueForNudge(nowIso: string = new Date().t
     .select("*")
     .lte("next_follow_up_at", nowIso)
     .in("relationship_stage", ["awareness", "interest"])
-    .not("gmail_thread_id", "is", null)
     .order("next_follow_up_at", { ascending: true })
     .limit(25);
   if (error) throw new Error(error.message);

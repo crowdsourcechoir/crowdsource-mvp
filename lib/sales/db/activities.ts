@@ -77,6 +77,21 @@ export async function countSentNudgesForOpportunity(opportunityId: string): Prom
   }).length;
 }
 
+export async function countSentNudgesForContact(opportunityId: string, contactId: string): Promise<number> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("outreach_activities")
+    .select("id, metadata, contact_id")
+    .eq("opportunity_id", opportunityId)
+    .eq("contact_id", contactId)
+    .eq("activity_type", "sent");
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter((row) => {
+    const meta = row.metadata as Record<string, unknown> | null;
+    return meta?.kind === "nudge";
+  }).length;
+}
+
 export async function findOpportunityIdByGmailThreadId(threadId: string): Promise<string | null> {
   const db = requireSupabaseAdmin();
   const { data: opp, error: oppErr } = await db

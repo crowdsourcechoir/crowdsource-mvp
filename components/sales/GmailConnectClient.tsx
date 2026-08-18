@@ -90,8 +90,9 @@ export default function GmailConnectClient() {
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Gmail (1:1 outreach)</h2>
           <p className="mt-1 text-xs text-gray-500">
-            Approve in the queue sends from your inbox. Replies are detected automatically; nudges are drafted for your
-            approval — never auto-sent.
+            Approve in the queue sends from your inbox. Or mark <span className="text-gray-300">Sent</span> on a
+            contact card if you already emailed them. Replies move Awareness → Interest; Lost is manual. A nudge
+            draft appears after 7 days with no reply — never auto-sent.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -1,15 +1,16 @@
 import { z } from "zod";
 import { callStructured } from "../openai/client";
-import { createOutreachActivity, countSentNudgesForOpportunity } from "../db/activities";
+import { createOutreachActivity, countSentNudgesForContact, listActivitiesForOpportunity } from "../db/activities";
 import { getContact } from "../db/contacts";
 import { estimateDraftConfidence, formatFeedbackFewShots, listRecentAcceptedEditFeedback } from "../db/feedback";
 import { resolveIndustrySegmentIdForOrganization } from "../db/lookups";
 import { getOrganization } from "../db/organizations";
 import { listOpportunitiesDueForNudge, updateOpportunityTouchTimestamps } from "../db/opportunities";
 import { createOutreachDraft, listDraftsForOpportunity } from "../db/outreach";
-import { createNudgeQueueItem, hasPendingNudgeQueueItem } from "../db/queue";
+import { createNudgeQueueItem, hasPendingNudgeForContact } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
-import { MAX_NUDGES_PER_OPPORTUNITY } from "./constants";
+import { MAX_NUDGES_PER_OPPORTUNITY, NUDGE_DUE_AFTER_DAYS } from "./constants";
+import { contactIdsDueForNudge, nextPendingFollowUpIso } from "../outreach/nudge-due";
 
 const NudgeDraftSchema = z.object({
   subject: z.string(),
@@ -19,30 +20,30 @@ const NudgeDraftSchema = z.object({
 export type NudgeRunResult = {
   considered: number;
   created: number;
-  skipped: { opportunityId: string; reason: string }[];
+  skipped: { opportunityId: string; contactId?: string; reason: string }[];
   errors: string[];
 };
 
 /**
- * For each due opportunity, generate a follow-up draft and enqueue it for human approval.
- * Never sends — approve in the queue triggers Gmail send in-thread.
+ * For each due sent email, generate a follow-up draft and enqueue it for human approval.
+ * Never sends — approve in the queue triggers send (Gmail if connected).
  */
 export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
-  const due = await listOpportunitiesDueForNudge();
-  const skipped: { opportunityId: string; reason: string }[] = [];
+  const dueOpps = await listOpportunitiesDueForNudge();
+  const skipped: NudgeRunResult["skipped"] = [];
   const errors: string[] = [];
   let created = 0;
+  const nowMs = Date.now();
 
-  for (const opportunity of due) {
+  for (const opportunity of dueOpps) {
     try {
-      if (await hasPendingNudgeQueueItem(opportunity.id)) {
-        skipped.push({ opportunityId: opportunity.id, reason: "pending nudge already in queue" });
-        continue;
-      }
-      const sentNudges = await countSentNudgesForOpportunity(opportunity.id);
-      if (sentNudges >= MAX_NUDGES_PER_OPPORTUNITY) {
-        skipped.push({ opportunityId: opportunity.id, reason: `already sent ${sentNudges} nudges` });
-        await updateOpportunityTouchTimestamps(opportunity.id, { nextFollowUpAt: null });
+      const activities = await listActivitiesForOpportunity(opportunity.id);
+      const dueContactIds = contactIdsDueForNudge(activities, nowMs, NUDGE_DUE_AFTER_DAYS);
+      if (dueContactIds.length === 0) {
+        skipped.push({ opportunityId: opportunity.id, reason: "no contact past 7-day window" });
+        await updateOpportunityTouchTimestamps(opportunity.id, {
+          nextFollowUpAt: nextPendingFollowUpIso(activities, nowMs, NUDGE_DUE_AFTER_DAYS),
+        });
         continue;
       }
 
@@ -53,82 +54,110 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
       }
 
       const drafts = await listDraftsForOpportunity(opportunity.id);
-      const prior = [...drafts].reverse().find((d) => d.status === "approved" || d.status === "approved_with_edits") ?? drafts[0];
-      if (!prior?.contactId) {
-        skipped.push({ opportunityId: opportunity.id, reason: "no prior draft/contact" });
-        continue;
-      }
-      const contact = await getContact(prior.contactId);
-      if (!contact?.email) {
-        skipped.push({ opportunityId: opportunity.id, reason: "contact has no email" });
-        continue;
-      }
-
       const brief = await getLatestBriefForOpportunity(opportunity.id);
-      const segmentId = await resolveIndustrySegmentIdForOrganization(organization);
-      const feedback = await listRecentAcceptedEditFeedback({
-        outreachPersona: contact.outreachPersona,
-        industrySegmentId: segmentId,
-        limit: 5,
+
+      for (const contactId of dueContactIds) {
+        if (await hasPendingNudgeForContact(opportunity.id, contactId)) {
+          skipped.push({ opportunityId: opportunity.id, contactId, reason: "pending nudge already in queue" });
+          continue;
+        }
+        const sentNudges = await countSentNudgesForContact(opportunity.id, contactId);
+        if (sentNudges >= MAX_NUDGES_PER_OPPORTUNITY) {
+          skipped.push({
+            opportunityId: opportunity.id,
+            contactId,
+            reason: `already sent ${sentNudges} nudges`,
+          });
+          continue;
+        }
+
+        const contact = await getContact(contactId);
+        if (!contact?.email) {
+          skipped.push({ opportunityId: opportunity.id, contactId, reason: "contact has no email" });
+          continue;
+        }
+
+        const prior =
+          [...drafts]
+            .reverse()
+            .find(
+              (d) =>
+                d.contactId === contactId &&
+                (d.status === "approved" || d.status === "approved_with_edits")
+            ) ??
+          [...drafts].reverse().find((d) => d.contactId === contactId && d.kind === "initial") ??
+          null;
+        if (!prior) {
+          skipped.push({ opportunityId: opportunity.id, contactId, reason: "no prior draft/contact" });
+          continue;
+        }
+
+        const segmentId = await resolveIndustrySegmentIdForOrganization(organization);
+        const feedback = await listRecentAcceptedEditFeedback({
+          outreachPersona: contact.outreachPersona,
+          industrySegmentId: segmentId,
+          limit: 5,
+        });
+        const fewShots = formatFeedbackFewShots(feedback);
+        const confidence = estimateDraftConfidence(feedback);
+        const priorSubject = prior.editedSubject ?? prior.aiSubject;
+        const priorBody = prior.editedBody ?? prior.aiBody;
+        const firstName = (contact.fullName ?? "").trim().split(/\s+/)[0] || "there";
+
+        const result = await callStructured({
+          schema: NudgeDraftSchema,
+          schemaName: "nudge_draft",
+          systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`,
+          userContent: JSON.stringify({
+            contactFirstName: firstName,
+            organizationName: organization.name,
+            opportunityTitle: opportunity.title,
+            eventOrInitiativeName: opportunity.eventOrInitiativeName,
+            brief,
+            originalSubject: priorSubject,
+            originalBody: priorBody,
+            nudgeNumber: sentNudges + 1,
+          }),
+        });
+
+        const subject = result.parsed.subject.startsWith("Re:")
+          ? result.parsed.subject
+          : `Re: ${priorSubject.replace(/^Re:\s*/i, "")}`;
+
+        const draft = await createOutreachDraft({
+          opportunityId: opportunity.id,
+          contactId: contact.id,
+          pipelineRunId: null,
+          kind: "nudge",
+          aiSubject: subject,
+          aiBody: result.parsed.body,
+          status: "qa_passed",
+          confidenceScore: confidence,
+        });
+
+        await createNudgeQueueItem({
+          opportunityId: opportunity.id,
+          outreachDraftId: draft.id,
+        });
+
+        await createOutreachActivity({
+          opportunityId: opportunity.id,
+          contactId: contact.id,
+          activityType: "follow_up_due",
+          metadata: { draftId: draft.id, nudgeNumber: sentNudges + 1 },
+          gmailThreadId: opportunity.gmailThreadId,
+        });
+        created += 1;
+      }
+
+      const refreshed = await listActivitiesForOpportunity(opportunity.id);
+      await updateOpportunityTouchTimestamps(opportunity.id, {
+        nextFollowUpAt: nextPendingFollowUpIso(refreshed, Date.now(), NUDGE_DUE_AFTER_DAYS),
       });
-      const fewShots = formatFeedbackFewShots(feedback);
-      const confidence = estimateDraftConfidence(feedback);
-
-      const priorSubject = prior.editedSubject ?? prior.aiSubject;
-      const priorBody = prior.editedBody ?? prior.aiBody;
-      const firstName = (contact.fullName ?? "").trim().split(/\s+/)[0] || "there";
-
-      const result = await callStructured({
-        schema: NudgeDraftSchema,
-        schemaName: "nudge_draft",
-        systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`,
-        userContent: JSON.stringify({
-          contactFirstName: firstName,
-          organizationName: organization.name,
-          opportunityTitle: opportunity.title,
-          eventOrInitiativeName: opportunity.eventOrInitiativeName,
-          brief,
-          originalSubject: priorSubject,
-          originalBody: priorBody,
-          nudgeNumber: sentNudges + 1,
-        }),
-      });
-
-      const subject = result.parsed.subject.startsWith("Re:")
-        ? result.parsed.subject
-        : `Re: ${priorSubject.replace(/^Re:\s*/i, "")}`;
-
-      const draft = await createOutreachDraft({
-        opportunityId: opportunity.id,
-        contactId: contact.id,
-        pipelineRunId: null,
-        kind: "nudge",
-        aiSubject: subject,
-        aiBody: result.parsed.body,
-        status: "qa_passed",
-        confidenceScore: confidence,
-      });
-
-      await createNudgeQueueItem({
-        opportunityId: opportunity.id,
-        outreachDraftId: draft.id,
-      });
-
-      await createOutreachActivity({
-        opportunityId: opportunity.id,
-        contactId: contact.id,
-        activityType: "follow_up_due",
-        metadata: { draftId: draft.id, nudgeNumber: sentNudges + 1 },
-        gmailThreadId: opportunity.gmailThreadId,
-      });
-
-      // Clear due date until this nudge is sent (or rejected); send path will set the next one.
-      await updateOpportunityTouchTimestamps(opportunity.id, { nextFollowUpAt: null });
-      created += 1;
     } catch (err) {
       errors.push(`${opportunity.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  return { considered: due.length, created, skipped, errors };
+  return { considered: dueOpps.length, created, skipped, errors };
 }

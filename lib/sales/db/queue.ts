@@ -108,6 +108,22 @@ export async function hasPendingNudgeQueueItem(opportunityId: string): Promise<b
   return (count ?? 0) > 0;
 }
 
+export async function hasPendingNudgeForContact(opportunityId: string, contactId: string): Promise<boolean> {
+  const db = requireSupabaseAdmin();
+  const { data: items, error } = await db
+    .from("approval_queue_items")
+    .select("outreach_draft_id")
+    .eq("opportunity_id", opportunityId)
+    .eq("kind", "nudge")
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+  const draftIds = (items ?? []).map((row) => row.outreach_draft_id as string | null).filter((id): id is string => Boolean(id));
+  if (draftIds.length === 0) return false;
+  const { data: drafts, error: draftErr } = await db.from("outreach_drafts").select("id, contact_id").in("id", draftIds);
+  if (draftErr) throw new Error(draftErr.message);
+  return (drafts ?? []).some((row) => row.contact_id === contactId);
+}
+
 export async function listQueueItems(status?: ApprovalQueueItemStatus): Promise<ApprovalQueueItem[]> {
   const db = requireSupabaseAdmin();
   let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });

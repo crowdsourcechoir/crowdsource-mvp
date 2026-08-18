@@ -46,7 +46,12 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
       <p className="mt-1 text-xs text-gray-600">{days === null ? "—" : days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`}</p>
       {item.needsNudge && <p className="mt-1 text-xs font-medium text-amber-400">Needs nudge</p>}
       {item.opportunity.lastOutboundAt && !item.opportunity.lastInboundAt && item.opportunity.relationshipStage === "awareness" && (
-        <p className="mt-1 text-xs text-sky-400">Awaiting reply</p>
+        <p className="mt-1 text-xs text-sky-400">
+          Awaiting reply
+          {item.opportunity.nextFollowUpAt
+            ? ` · nudge ${new Date(item.opportunity.nextFollowUpAt).toLocaleDateString()}`
+            : ""}
+        </p>
       )}
       {item.opportunity.gmailThreadId && (
         <a

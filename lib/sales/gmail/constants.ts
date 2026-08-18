@@ -1,5 +1,5 @@
 /** First nudge is due this many calendar days after last outbound with no reply. */
-export const NUDGE_DUE_AFTER_DAYS = 5;
+export const NUDGE_DUE_AFTER_DAYS = 7;
 
 /** Cap on AI-generated nudges sent per opportunity (approved + sent). */
 export const MAX_NUDGES_PER_OPPORTUNITY = 2;

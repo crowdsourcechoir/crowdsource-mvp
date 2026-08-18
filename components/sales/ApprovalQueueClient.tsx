@@ -8,6 +8,7 @@ import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
+import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -308,6 +309,54 @@ export default function ApprovalQueueClient() {
     [current, busy, showCopyStatus]
   );
 
+  const markContactSent = useCallback(
+    async (contactId: string) => {
+      if (!current || busy) return;
+      setMenuOpenId(null);
+      setBusy(true);
+      setError(null);
+      try {
+        if (current.draft && current.contact?.id === contactId) {
+          await persistDraft().catch(() => undefined);
+        }
+        const res = await fetch(`/api/sales/queue/${current.queueItem.id}/mark-sent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contactId,
+            ...(current.contact?.id === contactId && current.draft
+              ? { editedSubject, editedBody: stripEmailSignature(editedBody) }
+              : {}),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not mark sent");
+        if (data.remaining && data.detail) {
+          const detail = data.detail as QueueItemDetail;
+          setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
+          if (detail.draft) {
+            setEditedSubject(detail.draft.editedSubject ?? detail.draft.aiSubject);
+            setEditedBody(stripEmailSignature(detail.draft.editedBody ?? detail.draft.aiBody));
+          }
+        } else {
+          setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
+          setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
+          setMobileDetailOpen(false);
+        }
+        showCopyStatus(
+          data.alreadySent
+            ? "Already marked sent — still in Awareness until they reply."
+            : `Marked sent — stays in Awareness. Nudge in ${NUDGE_DUE_AFTER_DAYS} days if no reply.`
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not mark sent");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [current, busy, persistDraft, editedSubject, editedBody, items.length, showCopyStatus]
+  );
+
   const improveDraft = useCallback(async () => {
     if (!current?.draft || busy || improving) return;
     setImproving(true);
@@ -473,11 +522,11 @@ export default function ApprovalQueueClient() {
               <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                 {current.contacts.map((c) => {
                   const selected = current.contact?.id === c.id;
-                  const hasDraft = (current.contactDrafts ?? []).some(
-                    (d) => d.contactId === c.id && (d.status === "draft" || d.status === "qa_flagged")
-                  );
                   const sent = (current.contactDrafts ?? []).some(
                     (d) => d.contactId === c.id && (d.status === "approved" || d.status === "approved_with_edits")
+                  );
+                  const hasDraft = !sent && (current.contactDrafts ?? []).some(
+                    (d) => d.contactId === c.id && (d.status === "draft" || d.status === "qa_flagged" || d.status === "qa_passed")
                   );
                   const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
                   const source = findingForContact(current.findings, c);
@@ -499,10 +548,10 @@ export default function ApprovalQueueClient() {
                           >
                             <span className="font-medium">
                               {c.fullName ?? "Unnamed"}
-                              {hasDraft ? (
+                              {sent ? (
+                                <span className="ml-2 text-xs font-medium text-emerald-400">sent</span>
+                              ) : hasDraft ? (
                                 <span className="ml-2 text-xs text-gray-500">draft</span>
-                              ) : sent ? (
-                                <span className="ml-2 text-xs text-emerald-400">sent</span>
                               ) : null}
                             </span>
                             <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
@@ -542,6 +591,15 @@ export default function ApprovalQueueClient() {
                       </div>
                       {menuOpenId === c.id && (
                         <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-xl">
+                          {!sent && (
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-1.5 text-left text-sm font-medium text-emerald-400 hover:bg-gray-800"
+                              onClick={() => void markContactSent(c.id)}
+                            >
+                              Sent
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
