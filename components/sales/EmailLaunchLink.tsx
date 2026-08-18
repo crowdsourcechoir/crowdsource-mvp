@@ -9,6 +9,7 @@ export default function EmailLaunchLink({
   to,
   subject,
   body,
+  className,
 }: {
   to: string;
   subject: string;
@@ -41,7 +42,7 @@ export default function EmailLaunchLink({
         onClick={handleClick}
         title="Copy draft (does not send)"
         aria-label="Copy draft"
-        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white"
+        className={className ?? "rounded-md p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-900"}
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
           <rect x="9" y="9" width="11" height="11" rx="2" />

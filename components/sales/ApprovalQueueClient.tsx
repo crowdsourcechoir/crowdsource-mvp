@@ -8,7 +8,7 @@ import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
-import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
+import GmailComposeWindow from "@/components/sales/GmailComposeWindow";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -308,7 +308,7 @@ export default function ApprovalQueueClient() {
     [current, busy, showCopyStatus]
   );
 
-  const improveDraft = useCallback(async () => {
+  const improveDraft = useCallback(async (instruction?: string) => {
     if (!current?.draft || busy || improving) return;
     setImproving(true);
     setError(null);
@@ -316,7 +316,7 @@ export default function ApprovalQueueClient() {
       const res = await fetch(`/api/sales/queue/${current.queueItem.id}/improve-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: editedSubject, body: editedBody }),
+        body: JSON.stringify({ subject: editedSubject, body: editedBody, instruction }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Improve failed");
@@ -606,58 +606,30 @@ export default function ApprovalQueueClient() {
           )}
 
           <div className="mt-4">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
-              <div className="flex items-center gap-2">
-                {current.draft && current.contact?.email && (
-                  <EmailLaunchLink
-                    to={current.contact.email}
-                    subject={editedSubject || current.draft.aiSubject}
-                    body={editedBody || current.draft.aiBody}
-                  />
-                )}
-                <button
-                  type="button"
-                  disabled={busy || improving || !current.draft}
-                  onClick={() => void improveDraft()}
-                  className="rounded-md border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {improving ? "Improving…" : "Improve with AI"}
-                </button>
-              </div>
-            </div>
             {current.draft ? (
-              <div className="mt-2 space-y-2">
-                <input
-                  value={editedSubject}
-                  onChange={(e) => setEditedSubject(e.target.value)}
-                  onBlur={() => void persistDraft().catch(() => undefined)}
-                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-white"
-                />
-                <textarea
-                  value={editedBody}
-                  onChange={(e) => setEditedBody(e.target.value)}
-                  onBlur={() => void persistDraft().catch(() => undefined)}
-                  rows={12}
-                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
-                />
-              </div>
+              <GmailComposeWindow
+                toName={current.contact?.fullName}
+                toEmail={current.contact?.email ?? ""}
+                fromEmail={gmailEmail}
+                subject={editedSubject}
+                body={editedBody}
+                onSubjectChange={setEditedSubject}
+                onBodyChange={setEditedBody}
+                onBlurSave={() => void persistDraft().catch(() => undefined)}
+                onSend={requestSend}
+                onImprove={(instruction) => void improveDraft(instruction)}
+                improving={improving}
+                busy={busy}
+                sendDisabled={!current.contact?.email}
+                copyStatus={copyStatus}
+              />
             ) : (
               <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
             )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={busy || !current.draft || !current.contact?.email}
-              onClick={requestSend}
-              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            <Link
+              href={`/admin/sales/organizations/${current.organization.id}`}
+              className="mt-3 inline-block text-xs text-gray-500 underline"
             >
-              Send
-            </button>
-            {copyStatus && <span className="text-xs text-emerald-400">{copyStatus}</span>}
-            <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
               Organization
             </Link>
           </div>
