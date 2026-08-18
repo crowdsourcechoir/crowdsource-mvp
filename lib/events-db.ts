@@ -8,6 +8,7 @@ const BUCKET = process.env.SONG_GARDEN_MEDIA_BUCKET || "song-garden-world-media"
 /**
  * List/admin payloads must stay small. Selecting * pulled multi-MB data-URI
  * heroes and world JSON and tripped Postgres `statement timeout`.
+ * Hosted hero URLs are merged separately via attachHostedHeroes().
  */
 export const EVENT_LIST_SELECT =
   "id,slug,title,description,date,time,venue,address,prompt,hero_image_mode,landing_headline,landing_copy,cta_text,anthem_completion_message,allow_audio_video_prompt,agent_theme_id";
@@ -15,6 +16,15 @@ export const EVENT_LIST_SELECT =
 /** Detail fetch — omit hero_image (data-URI bombs) but keep world_config for edit/journey. */
 export const EVENT_DETAIL_SELECT =
   "id,slug,title,description,date,time,venue,address,prompt,hero_image_mode,landing_headline,landing_copy,cta_text,anthem_completion_message,allow_audio_video_prompt,agent_theme_id,agent_brief,song_garden_config,world_config";
+
+/** Keep http(s) / relative heroes; never return inline data-URIs. */
+export function hostedHeroUrl(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const v = value.trim();
+  if (!v || v.startsWith("data:")) return "";
+  if (/^https?:\/\//i.test(v) || v.startsWith("/")) return v;
+  return "";
+}
 
 export function rowToEvent(row: Record<string, unknown>) {
   return {
@@ -27,7 +37,7 @@ export function rowToEvent(row: Record<string, unknown>) {
     venue: row.venue,
     address: row.address,
     prompt: row.prompt,
-    heroImage: typeof row.hero_image === "string" && !row.hero_image.startsWith("data:") ? row.hero_image : "",
+    heroImage: hostedHeroUrl(row.hero_image),
     heroImageMode: row.hero_image_mode === "color" ? "color" : "bw",
     landingHeadline:
       (row.landing_headline as string) ??
@@ -50,15 +60,17 @@ export function rowToEvent(row: Record<string, unknown>) {
 
 const SCENE_RE = /^(.+)-scene-(\d+)-\d+\.(jpe?g|png|webp|gif)$/i;
 const VIDEO_RE = /^(.+)-frame-(\d+)-\d+\.(mp4|webm)$/i;
+/** persistDataUrlMedia: `{id}-hero.jpg`; signed upload: `{id}-hero-{timestamp}.jpg` */
+const HERO_FILE_RE = /^(.+)-hero(?:-\d+)?\.(jpe?g|png|webp|gif|heic|heif|avif)$/i;
 
 type StorageFile = { name: string; created_at?: string };
 
-async function listStoryboardFiles(): Promise<StorageFile[]> {
+async function listStorageFolder(folder: "storyboards" | "heroes"): Promise<StorageFile[]> {
   if (!supabaseAdmin) return [];
   const out: StorageFile[] = [];
   const pageSize = 100;
   for (let offset = 0; offset < 2000; offset += pageSize) {
-    const { data, error } = await supabaseAdmin.storage.from(BUCKET).list("storyboards", {
+    const { data, error } = await supabaseAdmin.storage.from(BUCKET).list(folder, {
       limit: pageSize,
       offset,
       sortBy: { column: "created_at", order: "desc" },
@@ -70,16 +82,157 @@ async function listStoryboardFiles(): Promise<StorageFile[]> {
   return out;
 }
 
-function publicStoryboardUrl(filename: string): string {
+async function listStoryboardFiles(): Promise<StorageFile[]> {
+  return listStorageFolder("storyboards");
+}
+
+async function listHeroFiles(): Promise<StorageFile[]> {
+  return listStorageFolder("heroes");
+}
+
+function publicMediaUrl(folder: "storyboards" | "heroes", filename: string): string {
   if (supabaseAdmin) {
-    const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(`storyboards/${filename}`);
+    const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(`${folder}/${filename}`);
     return data.publicUrl;
   }
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   if (base) {
-    return `${base}/storage/v1/object/public/${BUCKET}/storyboards/${filename}`;
+    return `${base}/storage/v1/object/public/${BUCKET}/${folder}/${filename}`;
   }
-  return `/song-garden-v2/world-scenes/generated/${filename}`;
+  return folder === "heroes"
+    ? `/song-garden-v2/heroes/${filename}`
+    : `/song-garden-v2/world-scenes/generated/${filename}`;
+}
+
+export function heroStoragePrefixes(eventId: string, slug?: string | null): string[] {
+  const prefixes: string[] = [];
+  const push = (value: string) => {
+    const key = value.trim().toLowerCase();
+    if (key && !prefixes.includes(key)) prefixes.push(key);
+  };
+  push(eventId);
+  push(slug ?? "");
+  push(eventId.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64));
+  return prefixes;
+}
+
+export function newestHeroUrlByPrefix(
+  files: StorageFile[],
+  toUrl: (filename: string) => string = (name) => publicMediaUrl("heroes", name)
+): Map<string, string> {
+  const newest = new Map<string, { name: string; created: string }>();
+  for (const file of files) {
+    const match = HERO_FILE_RE.exec(file.name);
+    if (!match) continue;
+    const prefix = match[1].toLowerCase();
+    const created = file.created_at ?? "";
+    const prev = newest.get(prefix);
+    if (!prev || created > prev.created || (created === prev.created && file.name > prev.name)) {
+      newest.set(prefix, { name: file.name, created });
+    }
+  }
+  const out = new Map<string, string>();
+  for (const [prefix, file] of Array.from(newest.entries())) {
+    out.set(prefix, toUrl(file.name));
+  }
+  return out;
+}
+
+export function resolveHeroFromStorageFilenames(
+  event: { id: string; slug?: string | null },
+  urlByPrefix: Map<string, string>
+): string {
+  for (const prefix of heroStoragePrefixes(event.id, event.slug)) {
+    const url = urlByPrefix.get(prefix);
+    if (url) return url;
+  }
+  return "";
+}
+
+export type HeroAttachable = { id: unknown; slug?: unknown; heroImage?: string };
+
+/** Apply DB + storage hero URLs onto events. Returns rows to persist (storage recoveries). */
+export function applyHeroAttachments(
+  events: HeroAttachable[],
+  dbHeroById: Map<string, string>,
+  urlByPrefix: Map<string, string>
+): Array<{ id: string; url: string }> {
+  const persist: Array<{ id: string; url: string }> = [];
+  for (const event of events) {
+    const id = String(event.id);
+    const fromDb = hostedHeroUrl(dbHeroById.get(id) ?? event.heroImage);
+    if (fromDb) {
+      event.heroImage = fromDb;
+      continue;
+    }
+    const fromStorage = resolveHeroFromStorageFilenames(
+      { id, slug: typeof event.slug === "string" ? event.slug : null },
+      urlByPrefix
+    );
+    event.heroImage = fromStorage;
+    if (fromStorage) persist.push({ id, url: fromStorage });
+  }
+  return persist;
+}
+
+/**
+ * Fill heroImage from hosted DB URLs (never data-URIs) and, if still empty,
+ * from storage `heroes/{id}-hero*`. Writes recovered URLs back so the next
+ * list load stays a cheap SQL filter.
+ */
+export async function attachHostedHeroes(events: HeroAttachable[]): Promise<void> {
+  if (!events.length) return;
+
+  const dbHeroById = new Map<string, string>();
+  if (supabaseAdmin) {
+    try {
+      const ids = events.map((e) => String(e.id)).filter(Boolean);
+      if (ids.length) {
+        const { data, error } = await supabaseAdmin
+          .from("events")
+          .select("id, hero_image")
+          .in("id", ids)
+          .not("hero_image", "is", null)
+          .neq("hero_image", "")
+          .not("hero_image", "like", "data:%");
+        if (!error && data) {
+          for (const row of data) {
+            const url = hostedHeroUrl((row as { hero_image?: unknown }).hero_image);
+            if (url) dbHeroById.set(String((row as { id: unknown }).id), url);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[events] hosted hero lookup failed:", err);
+    }
+  }
+
+  const missing = events.filter(
+    (e) => !hostedHeroUrl(dbHeroById.get(String(e.id)) ?? e.heroImage)
+  );
+  let urlByPrefix = new Map<string, string>();
+  if (missing.length) {
+    try {
+      const files = await listHeroFiles();
+      urlByPrefix = newestHeroUrlByPrefix(files);
+    } catch (err) {
+      console.error("[events] hero storage listing failed:", err);
+    }
+  }
+
+  const persist = applyHeroAttachments(events, dbHeroById, urlByPrefix);
+  const db = supabaseAdmin;
+  if (persist.length && db) {
+    await Promise.all(
+      persist.map(({ id, url }) =>
+        db.from("events").update({ hero_image: url }).eq("id", id)
+      )
+    );
+  }
+}
+
+function publicStoryboardUrl(filename: string): string {
+  return publicMediaUrl("storyboards", filename);
 }
 
 export type RecoveredStoryboard = {

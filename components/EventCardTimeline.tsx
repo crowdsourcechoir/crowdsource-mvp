@@ -6,6 +6,7 @@ import type { Event } from "@/data/mockEvents";
 import { canonicalEventSlug, publicEventPath, publicEventUrl } from "@/lib/event-slug-aliases";
 import { formatTimelineDate, formatTime } from "@/lib/formatDate";
 import { googleMapsSearchUrl } from "./AddressMap";
+import EventHeroThumb from "./EventHeroThumb";
 import QRCodeDisplay from "./QRCodeDisplay";
 
 type EventCardTimelineProps = {
@@ -84,12 +85,7 @@ export default function EventCardTimeline({ event, baseUrl = "http://localhost:3
           downloadFilename={`${publicSlug}-qr.png`}
         />
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-800 sm:h-28 sm:w-28">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={event.heroImage}
-            alt=""
-            className="h-full w-full object-cover"
-          />
+          <EventHeroThumb src={event.heroImage} title={event.title} />
         </div>
       </div>
     </article>

@@ -6,6 +6,7 @@ import type { Event } from "@/data/mockEvents";
 import { canonicalEventSlug, publicEventUrl } from "@/lib/event-slug-aliases";
 import { formatDateLong, formatTime } from "@/lib/formatDate";
 import { googleMapsSearchUrl } from "./AddressMap";
+import EventHeroThumb from "./EventHeroThumb";
 import QRCodeDisplay from "./QRCodeDisplay";
 
 type AdminEventCardProps = {
@@ -29,8 +30,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
     <article className="overflow-hidden rounded-2xl border border-gray-700/60 bg-[#111216]">
       <div className="flex gap-4 border-b border-gray-700/60 p-4 sm:p-5">
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-gray-700/60 bg-[#1a1c22] sm:h-28 sm:w-28">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={event.heroImage} alt="" className="h-full w-full object-cover" />
+          <EventHeroThumb src={event.heroImage} title={event.title} />
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-2xl font-semibold text-white">{event.title}</h3>

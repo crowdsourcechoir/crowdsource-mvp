@@ -11,6 +11,7 @@ import {
 } from "@/lib/song-garden-v2/persist-generated-media";
 import {
   EVENT_DETAIL_SELECT,
+  attachHostedHeroes,
   recoverStoryboardForEvent,
   rowToEvent,
   storyboardNeedsRecovery,
@@ -69,7 +70,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       if (error.code === "PGRST116") return NextResponse.json(null, { status: 404 });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-      const event = rowToEvent(data as unknown as Record<string, unknown>);
+    const event = rowToEvent(data as unknown as Record<string, unknown>);
+    await attachHostedHeroes([event]);
+    if (!event.heroImage) scheduleHeroMigration(id);
     if (storyboardNeedsRecovery(event.worldConfig)) {
       const recovered = await recoverStoryboardForEvent({
         eventId: String(event.id),
@@ -194,17 +197,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-    const responseRow: Record<string, unknown> = {
+    const event = rowToEvent({
       ...(data as Record<string, unknown>),
-      hero_image: typeof row.hero_image === "string" ? row.hero_image : "",
-    };
+      ...(typeof row.hero_image === "string" ? { hero_image: row.hero_image } : {}),
+    });
+    if (!event.heroImage) {
+      await attachHostedHeroes([event]);
+    }
 
     // Migrate any leftover data-URI hero in the background (does not block save).
-    if (body.heroImage === undefined) {
+    if (body.heroImage === undefined && !event.heroImage) {
       scheduleHeroMigration(id);
     }
 
-    return NextResponse.json(rowToEvent(responseRow));
+    return NextResponse.json(event);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

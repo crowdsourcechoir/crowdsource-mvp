@@ -10,6 +10,7 @@ import {
 import {
   EVENT_DETAIL_SELECT,
   EVENT_LIST_SELECT,
+  attachHostedHeroes,
   recoverStoryboardForEvent,
   rowToEvent,
   storyboardNeedsRecovery,
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       const event = rowToEvent(data as unknown as Record<string, unknown>);
+      await attachHostedHeroes([event]);
       if (storyboardNeedsRecovery(event.worldConfig)) {
         const recovered = await recoverStoryboardForEvent({
           eventId: String(event.id),
@@ -84,6 +86,11 @@ export async function GET(request: Request) {
       const e = rowToEvent(row as Record<string, unknown>);
       return { ...e, agentBrief: null, worldConfig: null };
     });
+    try {
+      await attachHostedHeroes(list);
+    } catch (err) {
+      console.error("[events] attach hosted heroes failed:", err);
+    }
     return NextResponse.json(list, NO_STORE);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
@@ -160,7 +167,10 @@ export async function POST(request: Request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-    const created = rowToEvent(data as Record<string, unknown>);
+    const created = rowToEvent({
+      ...(data as Record<string, unknown>),
+      ...(typeof row.hero_image === "string" ? { hero_image: row.hero_image } : {}),
+    });
     const hasHeavyWorld = Boolean(worldConfig?.worldStoryboard?.length);
     if (worldConfig && hasHeavyWorld) {
       const { data: withWorld, error: worldError } = await supabaseAdmin
@@ -170,7 +180,12 @@ export async function POST(request: Request) {
         .select(EVENT_DETAIL_SELECT)
         .single();
       if (!worldError && withWorld) {
-        return NextResponse.json(rowToEvent(withWorld as Record<string, unknown>));
+        return NextResponse.json(
+          rowToEvent({
+            ...(withWorld as Record<string, unknown>),
+            ...(typeof row.hero_image === "string" ? { hero_image: row.hero_image } : {}),
+          })
+        );
       }
       // Vibe (+ lean world) already saved — return that even if frames did not attach.
       return NextResponse.json({

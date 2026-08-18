@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Event } from "@/data/mockEvents";
 import { publicEventPath, publicEventUrl } from "@/lib/event-slug-aliases";
 import { googleMapsSearchUrl } from "./AddressMap";
+import EventHeroThumb from "./EventHeroThumb";
 import QRCodeDisplay from "./QRCodeDisplay";
 
 type EventCardProps = {
@@ -16,12 +17,7 @@ export default function EventCard({ event, baseUrl = "http://localhost:3000" }: 
   return (
     <article className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="relative aspect-video w-full bg-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={event.heroImage}
-          alt={event.title}
-          className="h-full w-full object-cover"
-        />
+        <EventHeroThumb src={event.heroImage} title={event.title} />
       </div>
       <div className="p-4">
         <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
