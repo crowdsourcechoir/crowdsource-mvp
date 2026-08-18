@@ -246,7 +246,7 @@ export default function GmailComposeWindow({
         <button
           type="button"
           onClick={() => setMinimized(false)}
-          className="fixed bottom-4 right-4 z-40 flex w-72 items-center justify-between rounded-t-lg bg-[#404040] px-3 py-2 text-left text-sm font-medium text-white shadow-xl"
+          className="fixed bottom-20 right-4 z-50 flex w-80 items-center justify-between rounded-lg border border-gray-500 bg-[#2d2d2d] px-4 py-3 text-left text-sm font-medium text-white shadow-2xl"
         >
           <span>New Message</span>
           <span className="text-xs text-gray-300">Restore</span>
