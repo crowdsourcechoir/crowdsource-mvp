@@ -28,6 +28,8 @@ export type SongGardenConfig = {
   steps: SongGardenStepConfig[];
   /** Unified ordered journey (V2). When present, source of truth for WorldJourney. */
   journeySteps?: unknown[];
+  /** Landing-screen eyebrow (defaults to "Welcome to the Song Garden"). */
+  welcomeEyebrow?: string;
   /** Final-screen eyebrow (defaults to "You're Part Of It"). */
   completionEyebrow?: string;
   /** Final-screen button (defaults to "Let's do it again"). */
@@ -132,11 +134,12 @@ export function defaultSongGardenConfig(): SongGardenConfig {
   };
 }
 
-function pickCompletionCopy(input: Partial<SongGardenConfig> | null | undefined): Pick<
+function pickScreenCopy(input: Partial<SongGardenConfig> | null | undefined): Pick<
   SongGardenConfig,
-  "completionEyebrow" | "completionButtonText" | "showCompletionButton"
+  "welcomeEyebrow" | "completionEyebrow" | "completionButtonText" | "showCompletionButton"
 > {
   return {
+    ...(typeof input?.welcomeEyebrow === "string" ? { welcomeEyebrow: input.welcomeEyebrow } : {}),
     ...(typeof input?.completionEyebrow === "string"
       ? { completionEyebrow: input.completionEyebrow }
       : {}),
@@ -164,7 +167,7 @@ export function normalizeSongGardenConfig(
       ...(Array.isArray(input?.journeySteps) ? { journeySteps: input.journeySteps } : {}),
       soundTransitionMessage:
         input?.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
-      ...pickCompletionCopy(input),
+      ...pickScreenCopy(input),
     };
   }
 
@@ -196,7 +199,7 @@ export function normalizeSongGardenConfig(
       ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
       soundTransitionMessage:
         input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
-      ...pickCompletionCopy(input),
+      ...pickScreenCopy(input),
     };
   }
 
@@ -204,7 +207,7 @@ export function normalizeSongGardenConfig(
     soundTransitionMessage: input.soundTransitionMessage?.trim() || defaults.soundTransitionMessage,
     steps,
     ...(Array.isArray(input.journeySteps) ? { journeySteps: input.journeySteps } : {}),
-    ...pickCompletionCopy(input),
+    ...pickScreenCopy(input),
   };
 }
 

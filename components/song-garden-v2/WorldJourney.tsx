@@ -626,6 +626,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   }
 
   const finalMessage = event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
+  const welcomeEyebrow =
+    event.songGardenConfig?.welcomeEyebrow?.trim() || WELCOME_MOMENT_LABEL;
+  const completionEyebrow =
+    event.songGardenConfig?.completionEyebrow?.trim() || COMPLETION_MOMENT_LABEL;
   const completionButtonText =
     event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
   const completionButtonOn = isCompletionButtonVisible(event.songGardenConfig);
@@ -633,11 +637,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     ? "name-gate"
     : `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
 
-  const completionEyebrow =
-    event.songGardenConfig?.completionEyebrow?.trim() || COMPLETION_MOMENT_LABEL;
-
   let eyebrow: string | undefined;
-  if (position.phase === "landing") eyebrow = WELCOME_MOMENT_LABEL;
+  if (position.phase === "landing") eyebrow = welcomeEyebrow;
   else if (needsNameGate) eyebrow = NAME_MOMENT_LABEL;
   else if (activeStep) eyebrow = resolveCategoryLabel(activeStep);
   else if (position.phase === "final") eyebrow = completionEyebrow;

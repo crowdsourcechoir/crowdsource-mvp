@@ -31,7 +31,7 @@ import {
   type JourneyPromptStep,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
-import { COMPLETION_MOMENT_LABEL, DEFAULT_COMPLETION_BUTTON_TEXT } from "@/lib/song-garden-v2/moment-labels";
+import { COMPLETION_MOMENT_LABEL, DEFAULT_COMPLETION_BUTTON_TEXT, WELCOME_MOMENT_LABEL } from "@/lib/song-garden-v2/moment-labels";
 import { JOURNEY_GARDEN_SLOT_IDS, type GardenSlotId } from "@/lib/songgarden/garden-slots";
 import { canonicalEventSlug, publicEventPath } from "@/lib/event-slug-aliases";
 import {
@@ -489,6 +489,7 @@ export default function EventForm({
       values.agentBrief,
       {
         ...(values.songGardenConfig ?? defaultSongGardenConfig()),
+        welcomeEyebrow: values.songGardenConfig?.welcomeEyebrow,
         completionEyebrow: values.songGardenConfig?.completionEyebrow,
         completionButtonText: values.songGardenConfig?.completionButtonText,
         showCompletionButton: values.songGardenConfig?.showCompletionButton,
@@ -1314,6 +1315,30 @@ export default function EventForm({
       <section className={sectionClass}>
         <h3 className={sectionTitleClass}>Event details</h3>
         <div className="space-y-3">
+          <div>
+            <label htmlFor="welcomeEyebrow" className={labelClass}>
+              Welcome eyebrow
+            </label>
+            <input
+              id="welcomeEyebrow"
+              type="text"
+              value={values.songGardenConfig?.welcomeEyebrow ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                    welcomeEyebrow: e.target.value,
+                  },
+                }))
+              }
+              className={inputClass}
+              placeholder={WELCOME_MOMENT_LABEL}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Small label above the landing headline (e.g. “Welcome to the Zag Song Garden”).
+            </p>
+          </div>
           <div>
             <label htmlFor="landingHeadline" className={labelClass}>
               Landing headline

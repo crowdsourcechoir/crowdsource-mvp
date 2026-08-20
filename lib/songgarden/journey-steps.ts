@@ -649,6 +649,9 @@ export function syncLegacyFromJourneySteps(
       "Now let's build the sounds of the experience.",
     steps,
     journeySteps: normalized,
+    ...(typeof prevGarden?.welcomeEyebrow === "string"
+      ? { welcomeEyebrow: prevGarden.welcomeEyebrow }
+      : {}),
     ...(typeof prevGarden?.completionEyebrow === "string"
       ? { completionEyebrow: prevGarden.completionEyebrow }
       : {}),
