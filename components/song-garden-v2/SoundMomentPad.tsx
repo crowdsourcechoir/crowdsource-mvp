@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import TypewriterText from "@/components/TypewriterText";
 import { submitSonggardenClip, getSonggardenContributorName } from "@/data/songgardenClient";
 import type { GardenSlotDef, GardenSlotId } from "@/lib/songgarden/garden-slots";
 import { prepareWavFromBlob } from "@/lib/songgarden/prepare-audio";
@@ -207,7 +208,7 @@ export default function SoundMomentPad({
   return (
     <div className="space-y-6 text-center">
       <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-        {promptText}
+        <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
       </p>
 
       {phase === "choose" && (

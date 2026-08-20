@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import TypewriterText from "@/components/TypewriterText";
 
 type MomentOverlayProps = {
   /** Unique per creative moment — changing this cross-fades content without navigating. */
@@ -57,7 +58,7 @@ export default function MomentOverlay({
                 textShadow: "0 1px 2px rgba(0,0,0,0.75), 0 0 16px rgba(0,0,0,0.4)",
               }}
             >
-              {eyebrow}
+              <TypewriterText key={eyebrow} text={eyebrow} speed={9} className="inline" />
             </p>
           )}
           <div style={{ textShadow: "0 1px 2px rgba(0,0,0,0.7), 0 2px 14px rgba(0,0,0,0.4)" }}>

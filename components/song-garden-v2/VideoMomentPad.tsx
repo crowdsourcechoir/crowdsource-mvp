@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import TypewriterText from "@/components/TypewriterText";
 import { runPadCountdown } from "@/lib/songgarden/pad-countdown";
 
 type PadPhase = "idle" | "countdown" | "recording" | "review" | "uploading" | "done" | "error";
@@ -300,7 +301,7 @@ export default function VideoMomentPad({
   return (
     <div className="space-y-6 text-center">
       <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-        {promptText}
+        <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
       </p>
 
       <div className="relative mx-auto flex h-40 w-40 items-center justify-center">

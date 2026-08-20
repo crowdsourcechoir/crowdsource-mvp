@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Event } from "@/data/mockEvents";
 import TurnstileWidget from "@/components/TurnstileWidget";
+import TypewriterText from "@/components/TypewriterText";
 import {
   startAgentInterview,
   getConversation,
@@ -683,7 +684,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           {position.phase === "landing" && (
             <div className="space-y-5 text-center">
               <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-                {event.landingHeadline || DEFAULT_OPENING_PROMPT}
+                <TypewriterText
+                  key={event.landingHeadline || DEFAULT_OPENING_PROMPT}
+                  text={event.landingHeadline || DEFAULT_OPENING_PROMPT}
+                  speed={9}
+                  className="inline"
+                />
               </p>
               {!!event.landingCopy && (
                 <p className="mx-auto max-w-xl font-mono text-sm text-gray-300">{event.landingCopy}</p>
@@ -726,7 +732,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 </p>
               )}
               <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-                {displayPrompt(promptText)}
+                <TypewriterText
+                  key={displayPrompt(promptText)}
+                  text={displayPrompt(promptText)}
+                  speed={9}
+                  className="inline"
+                />
               </p>
               <div className="mx-auto flex max-w-xs flex-wrap items-center justify-center gap-4">
                 {availableChannels.map((channel) => (
@@ -869,7 +880,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
           {position.phase === "final" && (
             <div className="space-y-6 text-center">
-              <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-100 sm:text-lg">{finalMessage}</p>
+              <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-100 sm:text-lg">
+                <TypewriterText key={finalMessage} text={finalMessage} speed={9} className="inline" />
+              </p>
               {completionButtonOn && (
                 <button
                   type="button"
