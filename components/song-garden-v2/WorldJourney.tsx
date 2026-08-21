@@ -70,7 +70,6 @@ import {
 import {
   COMPLETION_MOMENT_LABEL,
   DEFAULT_COMPLETION_BUTTON_TEXT,
-  NAME_MOMENT_LABEL,
   WELCOME_MOMENT_LABEL,
 } from "@/lib/song-garden-v2/moment-labels";
 import WorldStage from "./WorldStage";
@@ -609,22 +608,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     setSending(false);
   }
 
-  // Audio recording without contributor name — brief name gate
-  const needsNameGate =
-    position.phase === "step" && useAudioPad && !contributorName.trim();
-
-  const [nameGateValue, setNameGateValue] = useState("");
-  function handleNameGateContinue() {
-    const trimmed = nameGateValue.trim();
-    if (!trimmed) {
-      setChatError("Please add your name so we can credit your sounds.");
-      return;
-    }
-    setSonggardenContributorName(event.id, trimmed);
-    setContributorName(trimmed);
-    setChatError(null);
-  }
-
+  // Name is only asked when Joel adds an explicit name step to the journey.
   const finalMessage = event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
   const welcomeEyebrow =
     event.songGardenConfig?.welcomeEyebrow?.trim() || WELCOME_MOMENT_LABEL;
@@ -633,13 +617,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const completionButtonText =
     event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
   const completionButtonOn = isCompletionButtonVisible(event.songGardenConfig);
-  const momentKey = needsNameGate
-    ? "name-gate"
-    : `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
+  const momentKey = `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
 
   let eyebrow: string | undefined;
   if (position.phase === "landing") eyebrow = welcomeEyebrow;
-  else if (needsNameGate) eyebrow = NAME_MOMENT_LABEL;
   else if (activeStep) eyebrow = resolveCategoryLabel(activeStep);
   else if (position.phase === "final") eyebrow = completionEyebrow;
 
@@ -725,7 +706,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && showChannelChooser && !needsNameGate && (
+          {position.phase === "step" && showChannelChooser && (
             <div className="space-y-6 text-center">
               {chatError && (
                 <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
@@ -761,7 +742,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && showMomentPad && !needsNameGate && (
+          {position.phase === "step" && showMomentPad && (
             <div className="space-y-4">
               {chatError && (
                 <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
@@ -835,24 +816,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && useAudioPad && needsNameGate && (
-            <div className="space-y-4">
-              <TextMomentPad
-                promptText="What name should we credit on your sounds?"
-                value={nameGateValue}
-                onChange={setNameGateValue}
-                onSubmit={handleNameGateContinue}
-                placeholder="First name"
-                autoComplete="given-name"
-                submitLabel="✓ Continue"
-                accentColor={world.accentColor}
-                hint="Your first name is fine."
-              />
-              {chatError && <p className="text-center text-sm text-red-300">{chatError}</p>}
-            </div>
-          )}
-
-          {position.phase === "step" && useAudioPad && activeSound && !needsNameGate && (
+          {position.phase === "step" && useAudioPad && activeSound && (
             <div className="space-y-4">
               <SoundMomentPad
                 key={activeSound.isFree ? `free-${activeSound.id}` : activeSound.slot.id}

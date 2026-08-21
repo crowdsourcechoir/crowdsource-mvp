@@ -142,9 +142,6 @@ export default function ParticipantJourney({
   const [contributionConsentAgreed, setContributionConsentAgreed] = useState(false);
   const requireContributionConsent = requiresContributionConsent(event);
   const contributionConsentLabel = contributionConsentText(event);
-  const [nameGate, setNameGate] = useState(
-    () => startAtGarden && !getSonggardenContributorName(event.id)?.trim()
-  );
 
   const firstMessageRequested = useRef(false);
   const responseInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -456,22 +453,6 @@ export default function ParticipantJourney({
     }
   }
 
-  function saveContributorName(): boolean {
-    const trimmedName = contributorName.trim();
-    if (!trimmedName) {
-      setChatError("Please add your name so we can credit your sounds.");
-      return false;
-    }
-    setSonggardenContributorName(event.id, trimmedName);
-    setChatError(null);
-    return true;
-  }
-
-  function handleNameGateContinue() {
-    if (!saveContributorName()) return;
-    setNameGate(false);
-  }
-
   function handleSoundTransitionContinue() {
     const done = loadDoneSlots(event.id);
     setDoneSlots(done);
@@ -752,29 +733,7 @@ export default function ParticipantJourney({
         </div>
       )}
 
-      {nameGate && position.phase === "garden" && (
-        <div className="space-y-4 text-center">
-          <p className="font-mono text-base text-gray-200">What name should we credit on your sounds?</p>
-          <input
-            type="text"
-            value={contributorName}
-            onChange={(e) => setContributorName(e.target.value)}
-            placeholder="First name"
-            autoComplete="given-name"
-            className="crowdsource-field px-4 py-3 font-mono text-base"
-          />
-          <button
-            type="button"
-            onClick={handleNameGateContinue}
-            className="crowdsource-btn-primary"
-          >
-            Continue
-          </button>
-          {chatError && <p className="text-sm text-red-300">{chatError}</p>}
-        </div>
-      )}
-
-      {position.phase === "garden" && !nameGate && activeGardenStep && (
+      {position.phase === "garden" && activeGardenStep && (
         <SoundGardenExperience
           key={activeGardenStep.slot.id}
           eventId={event.id}
