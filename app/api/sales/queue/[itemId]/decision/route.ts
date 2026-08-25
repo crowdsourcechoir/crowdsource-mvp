@@ -17,8 +17,8 @@ import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
-import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
+import { findNextOpenDraft } from "@/lib/sales/outreach/remaining-contacts";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -180,57 +180,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     }
 
     // Multi-contact queue: after sending one contact, keep the item pending if OTHER
-    // email-ready contacts still have unsent initial drafts. Never re-pick a contact who
-    // already has an approved/sent draft (duplicate drafts caused same-person spam).
+    // email-ready contacts still have unsent initial drafts. Hidden / skipped contacts
+    // must not keep the org stuck. Never re-pick a contact who already has an approved/sent draft.
     let remaining = false;
     let nextDetail = null;
     if (isApprove && item.kind === "initial") {
-      const orgContacts = await listContactsForOrganization(opportunity.organizationId);
-      const readyIds = new Set(
-        orgContacts
-          .filter(
-            (c) =>
-              looksLikePersonName(c.fullName) &&
-              c.email &&
-              hasVerifiedEmail(c) &&
-              !isOutboundEmailBlocked(c.email)
-          )
-          .map((c) => c.id)
-      );
-      const drafts = await listDraftsForOpportunity(opportunity.id);
-      const openContactIds = new Set(
-        drafts
-          .filter(
-            (d) =>
-              d.kind === "initial" &&
-              d.contactId &&
-              (d.status === "draft" || d.status === "qa_flagged")
-          )
-          .map((d) => d.contactId as string)
-      );
-      // Contact is handled only when there's no open draft left (remints stay eligible).
-      const handledContactIds = new Set(
-        drafts
-          .filter(
-            (d) =>
-              d.kind === "initial" &&
-              d.contactId &&
-              !openContactIds.has(d.contactId) &&
-              (d.status === "approved" ||
-                d.status === "approved_with_edits" ||
-                d.status === "rejected")
-          )
-          .map((d) => d.contactId as string)
-      );
-      const nextDraft = drafts.find(
-        (d) =>
-          d.kind === "initial" &&
-          d.contactId &&
-          readyIds.has(d.contactId) &&
-          d.id !== draft?.id &&
-          !handledContactIds.has(d.contactId) &&
-          (d.status === "draft" || d.status === "qa_flagged")
-      );
+      const [orgContacts, drafts] = await Promise.all([
+        listContactsForOrganization(opportunity.organizationId),
+        listDraftsForOpportunity(opportunity.id),
+      ]);
+      const nextDraft = findNextOpenDraft({
+        contacts: orgContacts,
+        drafts,
+        excludeDraftId: draft?.id ?? null,
+        excludeContactId: draft?.contactId ?? null,
+      });
       if (nextDraft) {
         remaining = true;
         await setQueueItemOutreachDraft(itemId, nextDraft.id);

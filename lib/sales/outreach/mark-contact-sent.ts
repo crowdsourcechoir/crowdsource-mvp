@@ -12,11 +12,11 @@ import {
   getQueueItem,
   setQueueItemOutreachDraft,
 } from "@/lib/sales/db/queue";
-import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { EXTERNAL_SENT_BODY, EXTERNAL_SENT_SUBJECT } from "@/lib/sales/outreach/external-sent";
 import { soonestFollowUpIso } from "@/lib/sales/outreach/nudge-due";
+import { findNextOpenDraft } from "@/lib/sales/outreach/remaining-contacts";
 import type { OutreachDraft } from "@/lib/sales/types";
 
 function isOpenDraft(draft: OutreachDraft): boolean {
@@ -157,42 +157,18 @@ export async function markContactSent(input: {
   );
   await Promise.all(writes);
 
-  const readyIds = new Set(
-    orgContacts
-      .filter(
-        (c) =>
-          looksLikePersonName(c.fullName) &&
-          c.email &&
-          hasVerifiedEmail(c) &&
-          !isOutboundEmailBlocked(c.email)
-      )
-      .map((c) => c.id)
-  );
-  const openContactIds = new Set(
-    drafts
-      .filter(
-        (d) =>
-          d.kind === "initial" &&
-          d.contactId &&
-          d.contactId !== input.contactId &&
-          (d.status === "draft" || d.status === "qa_flagged" || d.status === "qa_passed")
-      )
-      .map((d) => d.contactId as string)
-  );
-  const nextDraft = drafts.find(
-    (d) =>
-      d.kind === "initial" &&
-      d.contactId &&
-      readyIds.has(d.contactId) &&
-      d.id !== draft.id &&
-      openContactIds.has(d.contactId)
-  );
+  const nextDraft = findNextOpenDraft({
+    contacts: orgContacts,
+    drafts,
+    excludeContactId: input.contactId,
+    excludeDraftId: draft.id,
+  });
 
   const markedCurrent = item.outreachDraftId === draft.id;
-  let remaining = item.kind !== "initial" || Boolean(nextDraft) || openContactIds.size > 0;
+  let remaining = item.kind !== "initial" || Boolean(nextDraft);
   if (item.kind === "initial" && nextDraft && markedCurrent) {
     await setQueueItemOutreachDraft(input.itemId, nextDraft.id);
-  } else if (item.kind === "initial" && !nextDraft && openContactIds.size === 0) {
+  } else if (item.kind === "initial" && !nextDraft) {
     remaining = false;
     await decideQueueItem(input.itemId, {
       status: "approved",

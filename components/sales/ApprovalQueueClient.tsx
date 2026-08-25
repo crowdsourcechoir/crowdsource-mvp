@@ -281,69 +281,93 @@ export default function ApprovalQueueClient() {
       if (!current || busy) return;
       setBusy(true);
       setMenuOpenId(null);
+      const itemId = current.queueItem.id;
       try {
-        const res = await fetch(`/api/sales/contacts/${contactId}`, { method: "DELETE" });
+        const res = await fetch(`/api/sales/queue/${itemId}/skip-contact`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contactId }),
+        });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not hide contact");
-        const remaining = (current.contacts ?? []).filter((c) => c.id !== contactId);
-        const next = remaining[0];
-        if (next && next.id !== current.contact?.id) {
-          await selectContact(next.id);
-        } else {
-          setItems((prev) =>
-            prev.map((item) =>
-              item.queueItem.id === current.queueItem.id
-                ? { ...item, contacts: remaining }
-                : item
-            )
-          );
+        if (!res.ok) throw new Error(data.error ?? "Could not skip contact");
+        if (!data.remaining) {
+          setItems((prev) => {
+            const idx = prev.findIndex((i) => i.queueItem.id === itemId);
+            const next = prev.filter((i) => i.queueItem.id !== itemId);
+            const nextIndex = Math.min(idx < 0 ? 0 : idx, Math.max(0, next.length - 1));
+            setTimeout(() => setSelectedIndex(nextIndex), 0);
+            return next;
+          });
+          setMobileDetailOpen(false);
+          showCopyStatus("Last leftover contact skipped — org left the queue.");
+          return;
         }
-        showCopyStatus("Contact hidden from this list.");
+        const remainingContacts = (current.contacts ?? []).filter((c) => c.id !== contactId);
+        setItems((prev) =>
+          prev.map((item) => {
+            if (item.queueItem.id !== itemId) return item;
+            const without = { ...item, contacts: remainingContacts };
+            return applySelectContactResponse(without, data, (data.nextContactId as string) || contactId);
+          })
+        );
+        const nextDraft = draftFromMutationPayload(data);
+        if (nextDraft) {
+          setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
+          setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
+        }
+        showCopyStatus("Skipped — they stay on the org, not emailed.");
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : "Could not hide contact");
+        setActionError(err instanceof Error ? err.message : "Could not skip contact");
       } finally {
         setBusy(false);
       }
     },
-    [current, busy, selectContact, showCopyStatus]
+    [current, busy, showCopyStatus]
+  );
+
+  const graduateOrg = useCallback(
+    async (funnelStage?: RelationshipStage | null) => {
+      if (!current || busy) return;
+      setBusy(true);
+      setMenuOpenId(null);
+      setActionError(null);
+      const itemId = current.queueItem.id;
+      try {
+        const res = await fetch(`/api/sales/queue/${itemId}/graduate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(funnelStage ? { funnelStage } : {}),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not move out of queue");
+        setItems((prev) => {
+          const idx = prev.findIndex((i) => i.queueItem.id === itemId);
+          const next = prev.filter((i) => i.queueItem.id !== itemId);
+          const nextIndex = Math.min(idx < 0 ? 0 : idx, Math.max(0, next.length - 1));
+          setTimeout(() => setSelectedIndex(nextIndex), 0);
+          return next;
+        });
+        setMobileDetailOpen(false);
+        const stageLabel = funnelStage
+          ? FUNNEL_STAGES.find((s) => s.key === funnelStage)?.label ?? funnelStage
+          : data.anySent
+            ? "Funnel"
+            : "Organizations";
+        showCopyStatus(`Moved out of queue → ${stageLabel}. Remaining contacts were not emailed.`);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Could not move out of queue");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [current, busy, showCopyStatus]
   );
 
   const moveFunnel = useCallback(
     (stage: RelationshipStage) => {
-      if (!current) return;
-      setMenuOpenId(null);
-      const itemId = current.queueItem.id;
-      const previous = current.opportunity.relationshipStage;
-      setItems((prev) =>
-        prev.map((item) =>
-          item.queueItem.id === itemId
-            ? { ...item, opportunity: { ...item.opportunity, relationshipStage: stage } }
-            : item
-        )
-      );
-      showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
-      void (async () => {
-        try {
-          const res = await fetch(`/api/sales/opportunities/${current.opportunity.id}/stage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stage }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Could not move funnel");
-        } catch (err) {
-          setItems((prev) =>
-            prev.map((item) =>
-              item.queueItem.id === itemId
-                ? { ...item, opportunity: { ...item.opportunity, relationshipStage: previous } }
-                : item
-            )
-          );
-          setActionError(err instanceof Error ? err.message : "Could not move funnel");
-        }
-      })();
+      void graduateOrg(stage);
     },
-    [current, showCopyStatus]
+    [graduateOrg]
   );
 
   const markContactSent = useCallback(
@@ -688,10 +712,10 @@ export default function ApprovalQueueClient() {
                             className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
                             onClick={() => void hideContact(c.id)}
                           >
-                            Delete
+                            Skip — don’t email
                           </button>
                           <div className="my-1 border-t border-gray-800" />
-                          <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">Move to</p>
+                          <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">Move org out of queue</p>
                           {FUNNEL_STAGES.map((s) => (
                             <button
                               key={s.key}
@@ -770,10 +794,21 @@ export default function ApprovalQueueClient() {
             >
               Send
             </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void graduateOrg()}
+              className="rounded-lg border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+            >
+              Done — skip remaining
+            </button>
             {copyStatus && <span className="text-xs text-emerald-400">{copyStatus}</span>}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
               Organization
             </Link>
+            <p className="basis-full text-xs text-gray-500">
+              Done leaves the queue without emailing leftover people. They stay on the org.
+            </p>
           </div>
         </div>
       )}
