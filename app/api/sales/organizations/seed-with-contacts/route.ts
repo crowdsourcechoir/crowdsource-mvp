@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import {
+  LEARFIELD_SEED,
   SEAHAWKS_SEED,
   seedOrgWithContacts,
   type SeedOrgWithContactsInput,
@@ -12,7 +13,7 @@ export const maxDuration = 300;
 /**
  * Upsert org + contacts (verified-format emails) and run pipeline into the approval queue.
  *
- * Body: full SeedOrgWithContactsInput, or `{ preset: "seahawks" }` for the Hunter-sourced list.
+ * Body: full SeedOrgWithContactsInput, or `{ preset: "seahawks" | "learfield" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -42,11 +43,18 @@ export async function POST(request: Request) {
             manualQueueDescription: body.manualQueueDescription,
             manualEventName: body.manualEventName,
           }
-        : body;
+        : body?.preset === "learfield"
+          ? {
+              ...LEARFIELD_SEED,
+              runPipeline: body.runPipeline !== false,
+              forceManualQueue: body.forceManualQueue !== false,
+              reopenDecided: Boolean(body.reopenDecided),
+            }
+          : body;
 
     if (!input?.name || !input?.websiteUrl || !Array.isArray(input.contacts)) {
       return NextResponse.json(
-        { error: "Provide { preset: 'seahawks' } or { name, websiteUrl, contacts[] }" },
+        { error: "Provide { preset: 'seahawks' | 'learfield' } or { name, websiteUrl, contacts[] }" },
         { status: 400 }
       );
     }

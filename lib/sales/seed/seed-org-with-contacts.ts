@@ -12,6 +12,8 @@ import {
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { runPipelineForOrganization } from "@/lib/sales/pipeline/run-pipeline";
 import { enqueueOrgManually, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
+import { isLearfieldOrgName } from "@/lib/sales/outreach/learfield-voice";
+import { withSalesInitiative } from "@/lib/sales/initiatives";
 import type { Contact, Organization } from "@/lib/sales/types";
 
 export type SeedContactInput = {
@@ -76,7 +78,12 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
       organizationTypeId: orgType?.id ?? null,
       source: "manual",
       isExistingClient: false,
-      importMetadata: { seededWithContacts: true },
+      importMetadata: withSalesInitiative(
+        { seededWithContacts: true, hunterSourced: true },
+        isLearfieldOrgName(input.name) || typeKey === "sports_league" || typeKey === "sports_team"
+          ? "sports_fan_culture"
+          : "conferences_associations"
+      ),
     });
     created = true;
   } else {
@@ -153,11 +160,19 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
       organization,
       title:
         input.manualQueueTitle ??
-        `${organization.name} — Song Garden / shared-creation anthem (training camp & game ritual)`,
+        (isLearfieldOrgName(organization.name)
+          ? `${organization.name} — game-day participation + Chant Garden for campuses`
+          : `${organization.name} — Song Garden / shared-creation anthem (training camp & game ritual)`),
       description:
         input.manualQueueDescription ??
-        "Participatory anthem / belonging ritual for training camp and in-stadium moments. Doorway contacts (COO, game entertainment, marketing) verified via Hunter Email Finder.",
-      eventOrInitiativeName: input.manualEventName ?? "Training camp / game entertainment ritual",
+        (isLearfieldOrgName(organization.name)
+          ? "Learfield sells into universities. Pitch: participatory game-day moments plus a Chant Garden sponsors can buy. Hunter-verified doorway contacts (sports properties, partnerships, brand, strategy)."
+          : "Participatory anthem / belonging ritual for training camp and in-stadium moments. Doorway contacts (COO, game entertainment, marketing) verified via Hunter Email Finder."),
+      eventOrInitiativeName:
+        input.manualEventName ??
+        (isLearfieldOrgName(organization.name)
+          ? "Campus game-day participation + sponsor Chant Garden"
+          : "Training camp / game entertainment ritual"),
       opportunityTypeKey: input.opportunityTypeKey ?? "fan_engagement_initiative",
       totalScoreHint: 82,
       reopenDecided: Boolean(input.reopenDecided),
@@ -251,3 +266,79 @@ export const SEAHAWKS_SEED: SeedOrgWithContactsInput = {
     },
   ],
 };
+
+/** Learfield doorway contacts from Hunter (2026-08-25). Email Finder + domain search.
+ * Tight set: people who can package this for universities / sponsors — not a BD blast. */
+export const LEARFIELD_SEED: SeedOrgWithContactsInput = {
+  name: "Learfield",
+  websiteUrl: "https://www.learfield.com",
+  locationCity: "Plano",
+  locationRegion: "TX",
+  locationCountry: "US",
+  organizationTypeKey: "sports_league",
+  forceManualQueue: true,
+  opportunityTypeKey: "fan_engagement_initiative",
+  manualQueueTitle: "Learfield — game-day participation + Chant Garden for campuses",
+  manualQueueDescription:
+    "Learfield sells multimedia rights and sponsor activations into universities. Pitch a participatory game-day moment they can take to campuses, plus a Chant Garden sponsors can buy. Hunter-verified 2026-08-25.",
+  manualEventName: "Campus game-day participation + sponsor Chant Garden",
+  contacts: [
+    {
+      fullName: "Kim Damron",
+      email: "kim.damron@learfield.com",
+      roleTitle: "President, Sports Properties",
+      roleCategory: "executive",
+      roleDescription:
+        "Owns sports properties — multimedia rights, university relationships, and fan-engagement revenue. Best first door for Learfield taking a game-day participation product into campuses.",
+    },
+    {
+      fullName: "Page Sanders",
+      email: "page.sanders@learfield.com",
+      roleTitle: "Vice President of Partnership Management",
+      roleCategory: "partnerships",
+      roleDescription:
+        "Owns partnership management — the seat that packages sponsor activations for campus deals. Strong fit for selling a Chant Garden as a living sponsor product.",
+    },
+    {
+      fullName: "Jonathan Sharp",
+      email: "jonathan.sharp@learfield.com",
+      roleTitle: "Director of Partnership Strategy",
+      roleCategory: "partnerships",
+      roleDescription:
+        "Partnership strategy — how new offerings get packaged for universities and sponsors. Good door for 'here's a product Learfield can sell in,' not a one-off booking.",
+    },
+    {
+      fullName: "Mike Weaver",
+      email: "mike.weaver@learfield.com",
+      roleTitle: "Director, Corporate Partnership Management",
+      roleCategory: "partnerships",
+      roleDescription:
+        "Corporate partnership management — sponsor-side owner. Pitch the Chant Garden as an activation fans help create instead of another static read.",
+    },
+    {
+      fullName: "Cory Moss",
+      email: "cory.moss@learfield.com",
+      roleTitle: "President, Brand Management & Marketing",
+      roleCategory: "marketing",
+      roleDescription:
+        "Leads brand management and marketing / licensing — connecting collegiate brands with fans. Strong fit for a season-long participation story universities and sponsors can share.",
+    },
+    {
+      fullName: "Nicole Armentrout",
+      email: "nicole.armentrout@learfield.com",
+      roleTitle: "Senior Vice President, Marketing",
+      roleCategory: "marketing",
+      roleDescription:
+        "SVP Marketing — can champion a fan-participation product in Learfield's marketing story to campuses and sponsors.",
+    },
+    {
+      fullName: "Ben Mathan",
+      email: "ben.mathan@learfield.com",
+      roleTitle: "Chief Strategy Officer",
+      roleCategory: "executive",
+      roleDescription:
+        "Owns company strategy and new-product bets. Useful if this needs to become a Learfield campus offering rather than a one-school experiment.",
+    },
+  ],
+};
+

@@ -8,6 +8,7 @@ import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
 import { looksLikePersonName, hasVerifiedEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { buildSeahawksEmail } from "@/lib/sales/outreach/sports-voice";
+import { buildLearfieldEmail, isLearfieldOrgName } from "@/lib/sales/outreach/learfield-voice";
 import { computeTotalScore } from "@/lib/sales/scoring/score";
 import { SCORE_COMPONENT_KEYS, type Contact, type Organization, type OutreachDraft, type ScoreComponentKey } from "@/lib/sales/types";
 
@@ -55,8 +56,11 @@ function pickPrimaryContact(
       return 5;
     }
     if (/game entertainment|special events|entertainment experience/.test(title)) return 0;
-    if (/marketing/.test(title)) return 1;
-    if (/coo|chief operating/.test(title)) return 2;
+    if (/sports properties|multimedia/.test(title)) return 0;
+    if (/partnership strategy|partnership management|corporate partnership/.test(title)) return 1;
+    if (/marketing|brand/.test(title)) return 2;
+    if (/strategy officer|chief strategy/.test(title)) return 3;
+    if (/coo|chief operating/.test(title)) return 4;
     return 5;
   };
   return [...ready].sort((a, b) => rank(a) - rank(b))[0] ?? null;
@@ -70,6 +74,9 @@ function draftCopyForContact(
   const firstName = (contact.fullName ?? "there").split(/\s+/)[0];
   if (/seahawk/i.test(orgName)) {
     return buildSeahawksEmail({ firstName, roleTitle: contact.roleTitle });
+  }
+  if (isLearfieldOrgName(orgName)) {
+    return buildLearfieldEmail({ firstName, roleTitle: contact.roleTitle });
   }
 
   if (isConferenceType(opts?.opportunityTypeKey)) {
@@ -127,15 +134,19 @@ export async function ensureContactDrafts(input: {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const open = candidates.find((d) => d.status === "draft" || d.status === "qa_flagged");
     if (open) {
+      const copy = draftCopyForContact(input.organization.name, contact, {
+        opportunityTypeKey: input.opportunityTypeKey,
+        eventName: input.eventName,
+      });
       const bodyHasContext =
         CONTACT_CONTEXT_IN_EMAIL.test(open.aiBody) ||
         (open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody));
-      if (bodyHasContext) {
-        const copy = draftCopyForContact(input.organization.name, contact, {
-          opportunityTypeKey: input.opportunityTypeKey,
-          eventName: input.eventName,
-        });
-        const clearedEdited = open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody);
+      const learfieldNeedsRewrite =
+        isLearfieldOrgName(input.organization.name) && !/Chant Garden/i.test(open.aiBody);
+      if (bodyHasContext || learfieldNeedsRewrite) {
+        const clearedEdited =
+          (open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody)) ||
+          learfieldNeedsRewrite;
         drafts.push(
           await updateDraftAiCopy(open.id, {
             aiSubject: copy.subject,
