@@ -134,15 +134,19 @@ export async function ensureContactDrafts(input: {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const open = candidates.find((d) => d.status === "draft" || d.status === "qa_flagged");
     if (open) {
+      const copy = draftCopyForContact(input.organization.name, contact, {
+        opportunityTypeKey: input.opportunityTypeKey,
+        eventName: input.eventName,
+      });
       const bodyHasContext =
         CONTACT_CONTEXT_IN_EMAIL.test(open.aiBody) ||
         (open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody));
-      if (bodyHasContext) {
-        const copy = draftCopyForContact(input.organization.name, contact, {
-          opportunityTypeKey: input.opportunityTypeKey,
-          eventName: input.eventName,
-        });
-        const clearedEdited = open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody);
+      const learfieldNeedsRewrite =
+        isLearfieldOrgName(input.organization.name) && !/Chant Garden/i.test(open.aiBody);
+      if (bodyHasContext || learfieldNeedsRewrite) {
+        const clearedEdited =
+          (open.editedBody != null && CONTACT_CONTEXT_IN_EMAIL.test(open.editedBody)) ||
+          learfieldNeedsRewrite;
         drafts.push(
           await updateDraftAiCopy(open.id, {
             aiSubject: copy.subject,
