@@ -115,6 +115,13 @@ def split_name(full: str) -> tuple[str, str]:
 
 
 def extract_people(html: str) -> list[dict]:
+    try:
+        return _extract_people(html)
+    except Exception:
+        return []
+
+
+def _extract_people(html: str) -> list[dict]:
     people: list[dict] = []
     seen: set[str] = set()
 
@@ -162,21 +169,24 @@ def extract_people(html: str) -> list[dict]:
     for m in re.finditer(
         r">\s*([A-Z][A-Za-z''.\-]+(?:\s+[A-Z][A-Za-z''.\-]+){1,3})\s*(?:<!--[\s\S]*?-->)?\s*</a>"
         r"[\s\S]{0,280}?staff-directory-table-member-position__position"
-        r"[\s\S]{0,160}?<p>([^<]{3,140})</p>"
+        r"[\s\S]{0,160}?<p[^>]*>([^<]{3,140})</p>"
         r"[\s\S]{0,900}?mailto:([^\"'?]+)",
         html,
         re.I,
     ):
         add(m.group(1), m.group(2), m.group(3))
 
-    # Legacy Sidearm staff list (emails often split: firstHalf + '@' + secondHalf)
-    for block in re.split(r'sidearm-staff-member', html)[1:]:
-        name_m = re.search(r'sidearm-staff-member-name[^>]*>\s*<a[^>]*>\s*([^<]{3,80})\s*<', block, re.I) or re.search(
-            r"<h[1-6][^>]*>\s*<a[^>]*>\s*([^<]{3,80})\s*<", block, re.I
-        )
-        title_m = re.search(r'sidearm-staff-member-title[^>]*>([^<]{3,140})<', block, re.I) or re.search(
-            r'class="[^"]*title[^"]*"[^>]*>([^<]{3,140})<', block, re.I
-        )
+    # Legacy Sidearm staff table rows
+    for m in re.finditer(
+        r"<tr[^>]*sidearm-staff-member[\s\S]{0,2500}?</tr>",
+        html,
+        re.I,
+    ):
+        block = m.group(0)
+        name_m = re.search(r"<a[^>]*>\s*([A-Z][A-Za-z''.\-]+(?:\s+[A-Z][A-Za-z''.\-]+){1,3})\s*</a>", block)
+        title_m = re.search(r"col-staff_title[^>]*>\s*([^<]{3,140})\s*<", block, re.I)
+        if not title_m:
+            title_m = re.search(r'sidearm-staff-member-title[^>]*>([^<]{3,140})<', block, re.I)
         email = None
         mail_m = re.search(r"mailto:([^\"'?]+)", block, re.I)
         if mail_m:
@@ -185,7 +195,7 @@ def extract_people(html: str) -> list[dict]:
             fh = re.search(r'firstHalf\s*=\s*"([^"]+)"', block)
             sh = re.search(r'secondHalf\s*=\s*"([^"]+)"', block)
             if fh and sh:
-                email = f"{fh.group(1)}@{sh.group(2)}"
+                email = f"{fh.group(1)}@{sh.group(1)}"
         if name_m and title_m:
             add(name_m.group(1), title_m.group(1), email)
 
@@ -204,16 +214,20 @@ def is_hoob_comparable(title: str) -> bool:
 
 def fetch_staff(site: str) -> tuple[str, list[dict]]:
     site = site.rstrip("/")
-    paths = ["/staff-directory", "/staff-directory/", "/sports/staff-directory", "/staff.aspx"]
-    last_url = site
+    paths = ["/staff-directory", "/staff-directory/", "/sports/staff-directory"]
+    last_url = site + "/staff-directory"
+    last_html = ""
     for path in paths:
         url = site + path
         last_url = url
         status, html = http_get(url)
         if status == 200 and len(html) > 5000:
+            last_html = html
             people = extract_people(html)
             if people:
                 return url, people
+    if last_html:
+        return last_url, extract_people(last_html)
     return last_url, []
 
 
