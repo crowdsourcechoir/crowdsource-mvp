@@ -112,6 +112,16 @@ export type BrandKit = {
    * drives WorldStage behind prompts when not in map chrome.
    */
   atmosphere: GardenAtmosphere;
+  /**
+   * Fan-facing eyebrow on `/g` (defaults to brand title when null/empty).
+   * Editable in live edit by hovering/tapping the eyebrow.
+   */
+  presenceEyebrow: string | null;
+  /**
+   * Supporting line under the eyebrow on `/g` (defaults to contribution window
+   * message / season label when null/empty).
+   */
+  presenceMessage: string | null;
 };
 
 /** How the living background presents (pluggable — not video-only). */
@@ -573,6 +583,14 @@ export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
           heroArtworkUrl: partial?.heroArtworkUrl ?? null,
           mapPlate,
         }),
+    presenceEyebrow:
+      typeof partial?.presenceEyebrow === "string" && partial.presenceEyebrow.trim()
+        ? partial.presenceEyebrow.trim()
+        : null,
+    presenceMessage:
+      typeof partial?.presenceMessage === "string" && partial.presenceMessage.trim()
+        ? partial.presenceMessage.trim()
+        : null,
   };
 }
 

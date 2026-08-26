@@ -296,6 +296,33 @@ export async function assertCanParticipate(
   return { ok: true, settings, identity };
 }
 
+export async function getContributionNode(
+  gardenId: string,
+  sourceType: ContributionNode["sourceType"],
+  sourceId: string
+): Promise<ContributionNode | null> {
+  if (USE_LOCAL()) {
+    return (
+      loadDb().nodes.find(
+        (n) =>
+          n.gardenId === gardenId &&
+          n.sourceType === sourceType &&
+          n.sourceId === sourceId
+      ) ?? null
+    );
+  }
+  if (!supabaseAdmin) return null;
+  const { data, error } = await supabaseAdmin
+    .from("garden_contribution_nodes")
+    .select("*")
+    .eq("garden_id", gardenId)
+    .eq("source_type", sourceType)
+    .eq("source_id", sourceId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToNode(data as Record<string, unknown>);
+}
+
 export async function upsertContributionNode(args: {
   gardenId: string;
   chapterId?: string | null;
@@ -324,6 +351,9 @@ export async function upsertContributionNode(args: {
       if (args.creditName !== undefined) existing.creditName = args.creditName;
       if (args.excerpt !== undefined) existing.excerpt = args.excerpt;
       if (args.kind) existing.kind = args.kind;
+      if (args.bloomEventId !== undefined) existing.bloomEventId = args.bloomEventId;
+      if (args.chapterId !== undefined) existing.chapterId = args.chapterId;
+      if (args.deviceId !== undefined) existing.deviceId = args.deviceId;
       existing.updatedAt = ts;
       persistDb();
       return existing;

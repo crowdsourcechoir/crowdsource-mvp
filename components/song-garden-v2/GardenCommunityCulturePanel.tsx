@@ -97,6 +97,34 @@ export default function GardenCommunityCulturePanel({ gardenId, accentColor }: P
     }
   }
 
+  async function handleGrowBloom(node: ContributionNode) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/blooms/from-seed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceType: node.sourceType,
+          sourceId: node.sourceId,
+          excerpt: node.excerpt,
+          creditName: node.creditName,
+          attachChapter: true,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Could not grow Bloom");
+      await load();
+      if (body.bloom?.publicPath) {
+        window.open(body.bloom.publicPath, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not grow Bloom");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!settings) return null;
 
   return (
@@ -194,15 +222,34 @@ export default function GardenCommunityCulturePanel({ gardenId, accentColor }: P
                     {n.performed ? " · performed" : ""} · ♥ {n.reactCount}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy || needsClaim}
-                  onClick={() => void handleReact(n)}
-                  className="shrink-0 rounded-full border px-3 py-1.5 font-mono text-xs disabled:opacity-40"
-                  style={{ borderColor: accentColor, color: accentColor }}
-                >
-                  ♥ React
-                </button>
+                <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={busy || needsClaim}
+                    onClick={() => void handleReact(n)}
+                    className="rounded-full border px-3 py-1.5 font-mono text-xs disabled:opacity-40"
+                    style={{ borderColor: accentColor, color: accentColor }}
+                  >
+                    ♥ React
+                  </button>
+                  {n.bloomEventId ? (
+                    <a
+                      href={`/admin/events/${n.bloomEventId}`}
+                      className="rounded-full border border-white/25 px-3 py-1.5 text-center font-mono text-[10px] text-white/70"
+                    >
+                      Open Bloom
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleGrowBloom(n)}
+                      className="rounded-full border border-white/25 px-3 py-1.5 font-mono text-[10px] text-white/80 disabled:opacity-40"
+                    >
+                      Grow Bloom
+                    </button>
+                  )}
+                </div>
               </li>
             ))
           )}

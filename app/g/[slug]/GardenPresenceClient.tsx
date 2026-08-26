@@ -26,6 +26,7 @@ import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
 import CelebrationBurst from "@/components/song-garden-v2/CelebrationBurst";
 import GardenCommunityCulturePanel from "@/components/song-garden-v2/GardenCommunityCulturePanel";
 import GardenEditChrome from "@/components/song-garden-v2/GardenEditChrome";
+import EditableWorldCopy from "@/components/song-garden-v2/EditableWorldCopy";
 import { useCelebration } from "@/components/song-garden-v2/engine/useCelebration";
 import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -66,6 +67,11 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     scale: OVERVIEW_SCALE,
   });
   const [viewport, setViewport] = useState({ w: 390, h: 844 });
+  const [pinning, setPinning] = useState(false);
+  const [copyOverride, setCopyOverride] = useState<{
+    eyebrow: string | null;
+    message: string | null;
+  } | null>(null);
   const celebration = useCelebration();
 
   const surfaceRef = useRef<HTMLDivElement | null>(null);
@@ -350,13 +356,45 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       /* ignore */
     }
 
-    // Tap the painted zone (not the bubble) to enter it.
-    // Horizontal swipe no longer jumps zones — that fought pan-to-explore on phones.
+    // Tap: enter zone, or in edit mode pin a new place on empty ground.
     if (!d.moved) {
       const p = clientToMapPoint(d.lastX, d.lastY);
       if (p) {
         const hit = zoneAtPoint(p.x, p.y);
-        if (hit) selectZone(hit.key);
+        if (hit) {
+          selectZone(hit.key);
+        } else if (editMode && snapshot?.garden.id && !pinning) {
+          const label =
+            typeof window !== "undefined"
+              ? window.prompt("Name this place", `Place ${(zones.length || 0) + 1}`)
+              : null;
+          if (label && label.trim()) {
+            setPinning(true);
+            void (async () => {
+              try {
+                const res = await fetch(`/api/gardens/${snapshot.garden.id}/zones`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "pin",
+                    x: p.x,
+                    y: p.y,
+                    label: label.trim(),
+                  }),
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(body.error || "Could not pin place");
+                setBurstMessage(`Pinned “${label.trim()}”`);
+                celebration.celebrate(() => undefined);
+                await refresh();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Could not pin place");
+              } finally {
+                setPinning(false);
+              }
+            })();
+          }
+        }
       }
     }
 
@@ -378,6 +416,25 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     (selectedMeta ? `Plant a seed in ${selectedMeta.label}` : "Plant a seed");
   const placeholder =
     selectedMeta?.inputPlaceholder?.trim() || "Type your response…";
+
+  const displayEyebrow =
+    copyOverride?.eyebrow?.trim() ||
+    snapshot?.brand.presenceEyebrow?.trim() ||
+    snapshot?.brand.title ||
+    gardenTitle;
+  const displayMessage =
+    copyOverride?.message?.trim() ||
+    snapshot?.brand.presenceMessage?.trim() ||
+    (zoomed && selectedMeta
+      ? selectedMeta.label
+      : snapshot?.brand.mapPlate?.seasonLabel?.trim() ||
+        snapshot?.window.message ||
+        (editMode ? "Tap empty map to pin a place" : "Tap a zone to engage"));
+  const centerMessage =
+    copyOverride?.message?.trim() ||
+    snapshot?.brand.presenceMessage?.trim() ||
+    snapshot?.window.message ||
+    "Loading the living world…";
 
   // Translate so focus point sits at viewport center.
   const translateX = (0.5 - camera.focusX) * mapSize.w * camera.scale;
@@ -621,18 +678,23 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 </p>
               )}
             </div>
-            <div className="pointer-events-none max-w-[11rem] justify-self-center px-1 text-center sm:max-w-[14rem]">
-              <p
-                className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] drop-shadow sm:text-[11px]"
-                style={{ color: world.accentColor }}
-              >
-                {snapshot?.brand.title || gardenTitle}
-              </p>
-              <p className="mt-0.5 truncate text-[10px] font-medium text-white/80 drop-shadow">
-                {zoomed && selectedMeta
-                  ? selectedMeta.label
-                  : snapshot?.brand.mapPlate?.seasonLabel?.trim() || "Tap a zone to engage"}
-              </p>
+            <div className="pointer-events-auto max-w-[12rem] justify-self-center px-1 text-center sm:max-w-[15rem]">
+              <EditableWorldCopy
+                gardenId={snapshot?.garden.id || ""}
+                editMode={editMode && Boolean(snapshot?.garden.id)}
+                eyebrow={displayEyebrow}
+                message={
+                  zoomed && selectedMeta && !copyOverride?.message
+                    ? selectedMeta.label
+                    : displayMessage
+                }
+                accentColor={world.accentColor}
+                variant="map"
+                onSaved={(next) => {
+                  setCopyOverride(next);
+                  void refresh();
+                }}
+              />
             </div>
             <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 justify-self-end">
               {zoomed ? (
@@ -670,7 +732,11 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                 exit={{ opacity: 0 }}
                 className="pointer-events-none absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-20 px-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-white/75 sm:text-[11px]"
               >
-                Drag to explore · tap a zone to engage
+                {editMode
+                  ? pinning
+                    ? "Pinning…"
+                    : "Drag to explore · tap empty ground to pin a place"
+                  : "Drag to explore · tap a zone to engage"}
               </motion.p>
             ) : null}
           </AnimatePresence>
@@ -775,15 +841,30 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
               // eslint-disable-next-line @next/next/no-img-element
               <img src={world.logoUrl} alt="" className="mx-auto mb-2 h-8 w-auto opacity-90" />
             ) : null}
-            <p
-              className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"
-              style={{ color: world.accentColor, opacity: 0.85 }}
-            >
-              {snapshot?.brand.title || gardenTitle}
-            </p>
-            <p className="mt-3 text-sm text-white/70">
-              {snapshot?.window.message ?? "Loading the living world…"}
-            </p>
+            {snapshot?.garden.id ? (
+              <EditableWorldCopy
+                gardenId={snapshot.garden.id}
+                editMode={editMode}
+                eyebrow={displayEyebrow}
+                message={centerMessage}
+                accentColor={world.accentColor}
+                variant="center"
+                onSaved={(next) => {
+                  setCopyOverride(next);
+                  void refresh();
+                }}
+              />
+            ) : (
+              <>
+                <p
+                  className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"
+                  style={{ color: world.accentColor, opacity: 0.85 }}
+                >
+                  {displayEyebrow}
+                </p>
+                <p className="mt-3 text-sm text-white/70">{centerMessage}</p>
+              </>
+            )}
           </header>
           {snapshot?.window.canContribute ? (
             <button

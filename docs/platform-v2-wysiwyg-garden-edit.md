@@ -80,9 +80,14 @@ The long admin form (Fan map / commerce / debugger) is tooling — not the prima
 3. `GET/PATCH /api/gardens/[id]/atmosphere`  
 4. Live edit ⋮ → **Atmosphere** sheet  
 
-Next: seed → Grow a Bloom journey; in-editor vibe generate; tap-to-pin zones.
+## Cut: Grow Bloom + vibe generate + pin zones + editable copy (shipped)
 
-Non-goals this cut: full zone drag on map, Creation Engine, reply/remix, Sales CRM.
+1. **Grow a Bloom** from a seed → creates event journey + attaches chapter (`POST …/blooms/from-seed`)
+2. **In-editor vibe generate** → `POST …/atmosphere/generate` (Runway still + loop)
+3. **Tap-to-pin zones** on `/g?edit=1` map → `POST …/zones`
+4. **Hover/tap eyebrow + supporting line** to edit (`brandKit.presenceEyebrow` / `presenceMessage`)
+
+Next: evergreen vs time-bound Bloom UI; gaussian env assets; drag-move pins.
 
 ---
 

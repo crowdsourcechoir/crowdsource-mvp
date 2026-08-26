@@ -134,6 +134,43 @@ export default function GardenEditChrome({
     }
   }
 
+  async function generateVibe() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      // Persist prompt + mode first so generate reads it.
+      await fetch(`/api/gardens/${gardenId}/atmosphere`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "vibe_video",
+          stillUrl: stillUrl.trim() || null,
+          videoUrl: videoUrl.trim() || null,
+          posterUrl: stillUrl.trim() || null,
+          vibePrompt: vibePrompt.trim(),
+        }),
+      });
+      const res = await fetch(`/api/gardens/${gardenId}/atmosphere/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vibePrompt: vibePrompt.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Generate failed");
+      const atm = body.atmosphere as GardenAtmosphere;
+      setAtmosphere(atm);
+      setAtmMode("vibe_video");
+      setStillUrl(atm.stillUrl ?? "");
+      setVideoUrl(atm.videoUrl ?? "");
+      setVibePrompt(atm.vibePrompt ?? vibePrompt);
+      setNotice("Vibe loop ready — reload the garden to see it full-bleed.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Generate failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadImpact() {
     setBusy(true);
     setNotice(null);
@@ -324,7 +361,7 @@ export default function GardenEditChrome({
                     />
                   </label>
                   <label className="block text-xs text-white/60">
-                    Vibe prompt (for generate later)
+                    Vibe prompt
                     <textarea
                       value={vibePrompt}
                       onChange={(e) => setVibePrompt(e.target.value)}
@@ -333,9 +370,17 @@ export default function GardenEditChrome({
                       className="mt-1 w-full resize-none rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white"
                     />
                   </label>
+                  <button
+                    type="button"
+                    disabled={busy || !vibePrompt.trim()}
+                    onClick={() => void generateVibe()}
+                    className="w-full rounded-xl border border-white/25 px-4 py-2.5 text-sm text-white disabled:opacity-40"
+                  >
+                    {busy ? "Generating…" : "Generate vibe loop"}
+                  </button>
                   <p className="text-[11px] text-white/40">
-                    Paste a loop URL now, or generate from Advanced admin → Fan map ambient loop. In-editor
-                    generate lands next.
+                    Creates a still + looping video from the vibe prompt (same engine as Bloom
+                    storyboards). Takes a minute.
                   </p>
                 </>
               ) : null}
@@ -425,7 +470,8 @@ export default function GardenEditChrome({
               </button>
               <p className="text-[11px] text-white/40">
                 Tip: blank gardens use center <strong className="font-semibold text-white/60">Plant a
-                seed</strong>. Pin places on the map later — live map pins come next.
+                seed</strong>. On a map, tap empty ground to pin a place. Hover the eyebrow / line
+                under it to rename the world.
               </p>
             </div>
           ) : null}

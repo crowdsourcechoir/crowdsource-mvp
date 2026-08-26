@@ -213,6 +213,39 @@ export default function GardenCommunityAdminPanel({ gardenId, gardenSlug }: Prop
     }
   }
 
+  async function handleGrowBloom(node: ContributionNode) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/blooms/from-seed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceType: node.sourceType,
+          sourceId: node.sourceId,
+          excerpt: node.excerpt,
+          creditName: node.creditName,
+          attachChapter: true,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Could not grow Bloom");
+      await load();
+      setNotice(
+        body.bloom?.title
+          ? `Grew Bloom “${body.bloom.title}” — attached as a show.`
+          : "Bloom grown."
+      );
+      if (body.bloom?.adminPath) {
+        window.open(body.bloom.adminPath, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not grow Bloom");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const editHref = gardenSlug ? `/g/${gardenSlug}?edit=1` : null;
 
   return (
@@ -469,6 +502,23 @@ export default function GardenCommunityAdminPanel({ gardenId, gardenSlug }: Prop
                   >
                     Performed
                   </button>
+                  {n.bloomEventId ? (
+                    <a
+                      href={`/admin/events/${n.bloomEventId}`}
+                      className="rounded border border-gray-600 px-2 py-1 text-[10px] text-[#CFFF81]"
+                    >
+                      Bloom
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleGrowBloom(n)}
+                      className="rounded border border-[#CFFF81]/40 px-2 py-1 text-[10px] text-[#CFFF81] hover:bg-white/5"
+                    >
+                      Grow Bloom
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
