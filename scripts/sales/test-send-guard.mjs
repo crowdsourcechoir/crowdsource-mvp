@@ -123,6 +123,8 @@ function main() {
 
   assert.equal(hasSendsEnabledMarker(["https://www.googleapis.com/auth/gmail.send"]), false);
   assert.equal(hasSendsEnabledMarker(["https://www.googleapis.com/auth/gmail.send", GMAIL_SENDS_ENABLED_MARKER]), true);
+  assert.equal(hasSendsEnabledMarker(null), false);
+  assert.equal(hasSendsEnabledMarker(undefined), false);
   assert.deepEqual(withSendsEnabledMarker(["gmail.send"], true), ["gmail.send", GMAIL_SENDS_ENABLED_MARKER]);
   assert.deepEqual(withSendsEnabledMarker(["gmail.send", GMAIL_SENDS_ENABLED_MARKER], false), ["gmail.send"]);
   assert.equal(withSendsEnabledMarker(["gmail.send", GMAIL_SENDS_ENABLED_MARKER], true).filter((s) => s === GMAIL_SENDS_ENABLED_MARKER).length, 1);
