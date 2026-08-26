@@ -28,10 +28,16 @@ export default function GmailConnectClient() {
   function load() {
     setLoading(true);
     fetch("/api/sales/gmail/status", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) throw new Error(d.error);
-        applyStatus(d);
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (typeof d.configured === "boolean") applyStatus(d);
+        if (!r.ok || d.error) {
+          throw new Error(
+            typeof d.error === "string" && d.error.trim()
+              ? d.error
+              : `Gmail status failed (${r.status}). OAuth may still work — try Connect Gmail.`
+          );
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load Gmail status"))
       .finally(() => setLoading(false));
@@ -205,12 +211,15 @@ export default function GmailConnectClient() {
           Not connected. Click Connect Gmail, finish Google consent, then Resume sending. Approve will use clipboard
           until then.
         </p>
-      ) : (
+      ) : status ? (
         <p className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
           OAuth env not set. Add <span className="font-mono">GOOGLE_CLIENT_ID</span>,{" "}
           <span className="font-mono">GOOGLE_CLIENT_SECRET</span>, and{" "}
-          <span className="font-mono">GMAIL_TOKEN_ENCRYPTION_KEY</span>, then run{" "}
-          <span className="font-mono">supabase/sales-platform-add-gmail.sql</span>.
+          <span className="font-mono">GMAIL_TOKEN_ENCRYPTION_KEY</span> in Vercel Production.
+        </p>
+      ) : (
+        <p className="mt-3 text-sm text-amber-300">
+          Couldn’t load Gmail status. Connect Gmail still starts Google consent if OAuth is configured.
         </p>
       )}
 

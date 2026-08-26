@@ -20,11 +20,11 @@ export const GMAIL_OWNER_KEY = "default";
 export const GMAIL_SENDS_ENABLED_MARKER = "csc:gmail-sends-enabled";
 
 export function hasSendsEnabledMarker(scopes: string[] | null | undefined): boolean {
-  return (scopes ?? []).includes(GMAIL_SENDS_ENABLED_MARKER);
+  return Array.isArray(scopes) && scopes.includes(GMAIL_SENDS_ENABLED_MARKER);
 }
 
 export function withSendsEnabledMarker(scopes: string[] | null | undefined, enabled: boolean): string[] {
-  const next = (scopes ?? []).filter((scope) => scope !== GMAIL_SENDS_ENABLED_MARKER);
+  const next = (Array.isArray(scopes) ? scopes : []).filter((scope) => scope !== GMAIL_SENDS_ENABLED_MARKER);
   if (enabled) next.push(GMAIL_SENDS_ENABLED_MARKER);
   return next;
 }

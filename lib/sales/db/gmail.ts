@@ -3,6 +3,11 @@ import type { GmailConnection } from "../types";
 import { GMAIL_OWNER_KEY, hasSendsEnabledMarker, withSendsEnabledMarker } from "../gmail/constants";
 import { gmailSendsAllowed } from "../outreach/send-guard";
 
+function supabaseErrorMessage(error: { message?: string; details?: string; hint?: string; code?: string } | null): string {
+  if (!error) return "Database error";
+  return error.message || error.details || error.hint || error.code || "Database error";
+}
+
 function rowToConnection(row: Record<string, unknown>): GmailConnection {
   return {
     id: row.id as string,
@@ -20,7 +25,7 @@ function rowToConnection(row: Record<string, unknown>): GmailConnection {
 export async function getGmailConnection(ownerKey: string = GMAIL_OWNER_KEY): Promise<GmailConnection | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db.from("gmail_connections").select("*").eq("owner_key", ownerKey).maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(supabaseErrorMessage(error));
   return data ? rowToConnection(data) : null;
 }
 
@@ -30,6 +35,7 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
   email: string | null;
   configured: boolean;
   sendsEnabled: boolean;
+  error?: string | null;
 }> {
   const configured = Boolean(
     process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim() && process.env.GMAIL_TOKEN_ENCRYPTION_KEY?.trim()
@@ -45,12 +51,26 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
       }),
     };
   }
-  const connection = await getGmailConnection(ownerKey);
-  const sendsEnabled = gmailSendsAllowed({
-    envFlag: process.env.SALES_GMAIL_SENDS_ENABLED,
-    connectionSendsEnabled: connection?.sendsEnabled ?? false,
-  });
-  return { connected: Boolean(connection), email: connection?.email ?? null, configured: true, sendsEnabled };
+  try {
+    const connection = await getGmailConnection(ownerKey);
+    const sendsEnabled = gmailSendsAllowed({
+      envFlag: process.env.SALES_GMAIL_SENDS_ENABLED,
+      connectionSendsEnabled: connection?.sendsEnabled ?? false,
+    });
+    return { connected: Boolean(connection), email: connection?.email ?? null, configured: true, sendsEnabled };
+  } catch (err) {
+    const detail = err instanceof Error && err.message.trim() ? err.message.trim() : "connection timed out";
+    return {
+      connected: false,
+      email: null,
+      configured: true,
+      sendsEnabled: gmailSendsAllowed({
+        envFlag: process.env.SALES_GMAIL_SENDS_ENABLED,
+        connectionSendsEnabled: false,
+      }),
+      error: `Can't reach the database (${detail}). OAuth is configured — wait a minute and click Connect Gmail again.`,
+    };
+  }
 }
 
 export async function upsertGmailConnection(input: {
@@ -79,7 +99,7 @@ export async function upsertGmailConnection(input: {
     )
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(supabaseErrorMessage(error));
   return rowToConnection(data);
 }
 
@@ -89,13 +109,13 @@ export async function updateGmailHistoryId(connectionId: string, historyId: stri
     .from("gmail_connections")
     .update({ history_id: historyId, updated_at: new Date().toISOString() })
     .eq("id", connectionId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(supabaseErrorMessage(error));
 }
 
 export async function deleteGmailConnection(ownerKey: string = GMAIL_OWNER_KEY): Promise<void> {
   const db = requireSupabaseAdmin();
   const { error } = await db.from("gmail_connections").delete().eq("owner_key", ownerKey);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(supabaseErrorMessage(error));
 }
 
 /** Pause or resume outbound Gmail without disconnecting OAuth. */
@@ -118,21 +138,21 @@ export async function setGmailSendsEnabled(
     .select("id")
     .maybeSingle();
 
-  if (withColumn.error && /sends_enabled/i.test(withColumn.error.message)) {
+  if (withColumn.error && /sends_enabled/i.test(supabaseErrorMessage(withColumn.error))) {
     const withoutColumn = await db
       .from("gmail_connections")
       .update({ scopes, updated_at: now })
       .eq("owner_key", ownerKey)
       .select("id")
       .maybeSingle();
-    if (withoutColumn.error) throw new Error(withoutColumn.error.message);
+    if (withoutColumn.error) throw new Error(supabaseErrorMessage(withoutColumn.error));
     if (!withoutColumn.data) {
       throw new Error("Gmail is not connected. Connect Gmail first, then Resume sending.");
     }
     return getGmailConnectionStatus(ownerKey);
   }
 
-  if (withColumn.error) throw new Error(withColumn.error.message);
+  if (withColumn.error) throw new Error(supabaseErrorMessage(withColumn.error));
   if (!withColumn.data) {
     throw new Error("Gmail is not connected. Connect Gmail first, then Resume sending.");
   }
