@@ -59,10 +59,10 @@ The company has five layers. They map cleanly onto OCTO — do not invent a para
 
 | Layer | Job | OCTO home | Partner laboratory |
 | --- | --- | --- | --- |
-| **SOURCE** | Gather creative material | Garden (+ modality UX) | Gonzaga contributions; destination guests |
-| **CREATE** | Turn contributions into entertainment | **Composer** (+ Roots methodology) | Gonzaga chant pipeline; production bottleneck |
-| **ACTIVATE** | Live dramaturgy & collective effect | **Live** + Bloom + Roots | Gonzaga gameday; show design discipline |
-| **PERSIST** | Between-event life; world evolves | **Garden** (persistent world) | Gonzaga season; Falcon’s Beyond duration |
+| **SOURCE** | Gather creative material | Garden (+ modality UX) | Populus R&D; Gonzaga; destination guests |
+| **CREATE** | Turn contributions into entertainment | **Composer** (+ Roots methodology) | Populus / Gonzaga production pipelines |
+| **ACTIVATE** | Live dramaturgy & collective effect | **Live** + Bloom + Roots | Populus shows; Gonzaga gameday |
+| **PERSIST** | Between-event life; world evolves | **Garden** (persistent world) | Populus series; Gonzaga season; Falcon’s Beyond |
 | **AMPLIFY** | Media, sponsors, cultural spread | Sales + capture/export | **Learfield** inventory; social flywheel |
 
 Business flywheel (commercial rhythm):
@@ -101,11 +101,11 @@ V1 is largely present (journey, clips, consent seeds). Persistent Garden (A–D)
 
 A participant can:
 
-1. Return to the same Garden across Blooms/chapters.
+1. Return to the same Garden across Blooms/chapters (when open-claim or account mode allows).
 2. Discover prompts and selected contributions (hear/see what the community made).
-3. Respond to contributions (reply / remix / react — start minimal).
-4. Carry a **persistent identity** (not necessarily a full social profile).
-5. Receive **recognition** when their material is selected, performed, or amplified (“I helped make that”).
+3. **React** to contributions (reply/remix deferred).
+4. Participate under the Garden’s identity mode: **open** (anonymous-first + claim) or **account-required**.
+5. Receive **recognition** in-Garden and in post-performance / social credit when material is selected, performed, or amplified.
 
 Non-goals for V2:
 
@@ -120,26 +120,26 @@ Non-goals for V2:
 
 ### Principle
 
-Plan **one spine**, ship **modality-thin**, prove **with Gonzaga**, instrument **for Learfield**, leave **hooks for Falcon’s Beyond**.
+Plan **one spine**, ship **modality-thin**, prove **with Populus R&D shows**, instrument **for Learfield**, leave **hooks for Gonzaga season and Falcon’s Beyond**.
 
 ### Phase order
 
 ```text
-A. Spine contracts     → identity, contribution graph, recognition events, rights envelope
+A. Spine contracts     → identity modes, contribution graph, recognition events, rights envelope
 B. Garden as place     → community surfaces on existing persistent Garden
-C. Recognition loop    → credit when CREATE/ACTIVATE/AMPLIFY uses a contribution
-D. Measure             → Participation Index v0 (enough for Learfield conversations)
-E. Modality template   → prove Chant (or second modality) shares the spine without a rewrite
+C. Recognition loop    → credit in-Garden + post-performance / social pack
+D. Measure             → Participation Index v0 (sponsor-sellable for Learfield)
+E. Modality template   → second modality shares the spine without a rewrite
 ```
 
-Song Garden stays the first modality. Chant Garden (Gonzaga) is the best second instance to force the spine to be real.
+Song Garden stays the first modality. Populus Blooms are the near-term R&D laboratory. Gonzaga remains a season-scale laboratory when ready — not a required V2 gate.
 
 ### Slice ownership (route work, don’t fork the organism)
 
 | Slice | Primary agent | Must not do |
 | --- | --- | --- |
-| Identity + recognition events | Garden Agent | Build a separate “social network” product |
-| Community discovery / respond UX | Garden Agent | Bypass consent / rights |
+| Identity modes + recognition events | Garden Agent | Build a separate “social network” product |
+| Community discovery + react UX | Garden Agent | Bypass consent / rights |
 | Producer select → credit back | Composer Agent | Invent lyrics that erase attribution |
 | Live performance → capture → credit | Live + Bloom | Treat participation as a disposable activation |
 | Sponsor / media inventory story | Sales Agent | Sell Amplify without SOURCE→CREATE integrity |
@@ -149,10 +149,11 @@ Song Garden stays the first modality. Chant Garden (Gonzaga) is the best second 
 
 | Laboratory | Pressure it reveals | V2 implication |
 | --- | --- | --- |
-| **Gonzaga** | Season persistence + chant dramaturgy + Hype Team | Community return + recognition + catalogue growth |
-| **Learfield** | Sponsor-enabled participation → media inventory | Capture + attribution + measurement |
+| **Populus shows** | Fast R&D across multiple Blooms | Primary V2 pilot surface; iterate identity + react + recognition |
+| **Gonzaga** | Season persistence + chant dramaturgy + Hype Team | Catalogue growth; season Persist (when scheduled) |
+| **Learfield** | Sponsor-enabled participation → media inventory | Capture + dual recognition + Participation Index |
 | **Falcon’s Beyond** | Place as instrument; long-duration world | Spatial contribution hooks; persist across visits |
-| Conferences / enterprise | High volume + brand safety | Moderation + rights (prep for V4; don’t block V2) |
+| Conferences / enterprise | High volume + brand safety | Moderation + account-required mode (prep for V4) |
 
 ---
 
@@ -160,38 +161,53 @@ Song Garden stays the first modality. Chant Garden (Gonzaga) is the best second 
 
 These were under-explicit. V2 should **introduce contracts**, not necessarily full systems.
 
-### Identity
+### Identity (both modes)
 
-Persistent participant identity across contributions and Blooms.
+Identity is **configurable per Garden / Bloom / campaign**, not a global either/or:
 
-Minimum: stable id + display credit name + device/account link path.  
-Success signal: “Joel’s chant was performed; Joel sees it and contributes again.”
+| Mode | When | Behavior |
+| --- | --- | --- |
+| **Open** | Populus-style / low-friction public | Anonymous-first contribution; optional later **claim** to attach credit and return identity |
+| **Account-required** | Enterprise, brand-safety, rights-heavy, some sponsor campaigns | Must sign in / register before contributing or reacting |
+
+Spine must support both from day one. Do not ship two separate products.
 
 ### Recognition + reputation
 
-Selection and performance create status without gamified XP theater.
+Recognition is **dual-surface**:
 
-Minimum: credit lines on selected/performed artifacts; “created by the community” with individual credits when known.
+1. **In-Garden** — credit on selected contributions, community presence, “I helped make that” inside the world
+2. **Post-performance / social** — credit packs for capture, Learfield-shaped sponsor moments, and outbound media
+
+Selection and performance create status without gamified XP theater.
 
 ### Rights infrastructure
 
-Machine-readable permissions on every contribution (voice, likeness, derivative, commercial, sponsor, AI transform, social, DSP). Seeds exist; V2 must treat rights as **required fields on the contribution graph**, not footnotes.
+Machine-readable permissions on every contribution (voice, likeness, derivative, commercial, sponsor, AI transform, social, DSP). Seeds exist; V2 must treat rights as **required fields on the contribution graph**, not footnotes. Account-required mode may demand stronger consent upfront; open mode still records a rights envelope per contribution.
 
 ### Moderation
 
-Manual is fine for Gonzaga-scale V2. Design approval workflows so CES-scale doesn’t require a rewrite.
+Manual is fine for Populus-scale V2. Design approval workflows so CES-scale doesn’t require a rewrite. Account-required mode can attach clearer moderation / brand-safety gates.
+
+### Respond primitive (V2)
+
+**React only.** Reply and remix wait. Reactions feed recognition and Participation Index without opening a full social graph.
 
 ### Measurement — Participation Index (v0)
 
-Move beyond submissions/views. First metrics:
+Learfield sells this property to sponsors. Index must be **participation metrics**, not vanity views.
 
-- participation rate
-- repeat participation
-- selection → performance rate
-- organic reuse / social propagation (manual OK at first)
-- sponsor-enabled moment completion (Learfield-shaped)
+Three sponsor-sellable metrics (v0):
 
-Refine the named Index once two laboratories produce comparable data.
+| Metric | Definition (plain) | Why sponsors buy it |
+| --- | --- | --- |
+| **Participation rate** | Contributors ÷ reachable audience (or attendees for that Bloom) | “What % of the room/community actually created?” |
+| **Sponsored participation volume** | Contributions + reacts inside a sponsor-enabled moment / campaign window | “How much creative activity did the brand enable?” |
+| **Activation reach** | People who performed / encountered the resulting piece live or in captured media (with credit path back to contributors) | “Did participation become entertainment that others experienced?” |
+
+Supporting counters (instrument now, name later): repeat participation, selection→performance rate, social credit-pack reach.
+
+Refine the branded Index once Populus + one rights partner produce comparable data.
 
 ---
 
@@ -231,17 +247,23 @@ Platform V2 strengthens the Platform and Media engines without abandoning Experi
 
 ---
 
-## 8. Immediate next planning decisions (for Joel)
+## 8. Locked decisions (Joel — 2026-08-26)
 
-Resolve these before large implementation:
+| Decision | Lock |
+| --- | --- |
+| **Identity** | **Both** — open (anonymous-first + claim) and account-required; configurable per Garden/Bloom/campaign |
+| **V2 pilot laboratory** | **Populus shows** for R&D — not gated on Gonzaga. Gonzaga remains a season-scale lab when ready |
+| **Recognition** | **Both** — in-Garden credit and post-performance / social credit packs (Learfield-ready) |
+| **Respond primitive** | **React** for V2; reply/remix deferred |
+| **Participation Index v0** | Three sponsor-sellable participation metrics: **participation rate**, **sponsored participation volume**, **activation reach** |
 
-1. **Identity model** — anonymous-first with optional claim, vs account-required for community features?
-2. **Gonzaga as V2 pilot Garden** — one persistent Garden for the season; Song/Chant as modalities inside it?
-3. **Recognition surface** — in-Garden only first, or also post-performance / social credit pack for Learfield?
-4. **Respond primitive** — react, reply-in-kind, or remix? Pick one for V2.
-5. **Participation Index v0** — which 3 metrics are contractually enough for Learfield conversations?
+### Next implementation cut (after merge)
 
-After those five, implementation can start with spine contracts (identity + contribution graph + recognition events) without boiling the ocean.
+1. Identity mode flag on Garden/Bloom + anonymous id / claim / account paths  
+2. Contribution graph events that emit recognition (select, perform, amplify)  
+3. React primitive on discoverable contributions  
+4. Dual credit surfaces (Garden + exportable social/performance pack)  
+5. Instrument the three Index metrics on Populus Blooms  
 
 ---
 
