@@ -9,6 +9,7 @@ import type {
   GardenSnapshot,
   ParticipantMark,
 } from "./types";
+import { resolveAtmosphere } from "./types";
 
 export function buildGardenSnapshot(args: {
   garden: Garden;
@@ -115,24 +116,98 @@ export function resolveContributionWindow(args: {
   return {
     mode: "between",
     canContribute: true,
-    message: "Between shows — leave a mark and keep the garden alive.",
+    message: "Between shows — plant a seed and keep the garden alive.",
   };
 }
 
-/** Merge brand bloom storyboard into a WorldConfig for WorldStage when garden-linked. */
+/** Merge brand into WorldConfig for WorldStage — atmosphere drives the living background. */
 export function worldConfigFromBrand(brand: BrandKit, fallback: WorldConfig): WorldConfig {
-  return {
+  const atm = resolveAtmosphere(brand);
+  const base: WorldConfig = {
     ...fallback,
     title: brand.title || fallback.title,
     logoUrl: brand.logoUrl ?? fallback.logoUrl,
     primaryColor: brand.primaryColor || fallback.primaryColor,
     accentColor: brand.accentColor || fallback.accentColor,
-    heroArtworkUrl: brand.heroArtworkUrl ?? fallback.heroArtworkUrl,
     animationPreset: brand.animationPreset || fallback.animationPreset,
     ambientSoundtrackUrl: brand.ambientSoundtrackUrl ?? fallback.ambientSoundtrackUrl,
-    // Prefer garden bloom storyboard for shared energy; keep event storyboard if garden has none.
     worldStoryboard: brand.bloomStoryboard.length
       ? brand.bloomStoryboard
       : fallback.worldStoryboard,
+    heroArtworkUrl: brand.heroArtworkUrl ?? fallback.heroArtworkUrl,
+  };
+
+  if (atm.mode === "brand_wash") {
+    return {
+      ...base,
+      heroArtworkUrl: null,
+      worldStoryboard: [],
+    };
+  }
+
+  if (atm.mode === "gaussian") {
+    // Soft immersive placeholder until gaussian assets ship — aurora field, no hard photo.
+    return {
+      ...base,
+      heroArtworkUrl: null,
+      worldStoryboard: [],
+      animationPreset: "aurora",
+    };
+  }
+
+  if (atm.mode === "vibe_video") {
+    const videoUrl = atm.videoUrl || brand.mapPlate.ambientVideoUrl?.trim() || null;
+    const poster =
+      atm.posterUrl || atm.stillUrl || brand.heroArtworkUrl || fallback.heroArtworkUrl;
+    if (videoUrl) {
+      return {
+        ...base,
+        heroArtworkUrl: poster,
+        worldStoryboard: [
+          {
+            sceneUrl: poster,
+            videoUrl,
+            energy: 0,
+          },
+        ],
+      };
+    }
+    return {
+      ...base,
+      heroArtworkUrl: poster,
+      worldStoryboard: brand.bloomStoryboard.length ? brand.bloomStoryboard : [],
+    };
+  }
+
+  if (atm.mode === "static_photo") {
+    const still = atm.stillUrl || brand.heroArtworkUrl || fallback.heroArtworkUrl;
+    return {
+      ...base,
+      heroArtworkUrl: still,
+      worldStoryboard: [],
+    };
+  }
+
+  // map_plate — prefer pinned/live map still; ambient video if present
+  const mapStill =
+    atm.stillUrl || brand.heroArtworkUrl || fallback.heroArtworkUrl;
+  const mapVideo = atm.videoUrl || brand.mapPlate.ambientVideoUrl?.trim() || null;
+  if (mapVideo) {
+    return {
+      ...base,
+      heroArtworkUrl: mapStill,
+      worldStoryboard: [
+        {
+          sceneUrl: mapStill,
+          videoUrl: mapVideo,
+          energy: 0,
+        },
+      ],
+    };
+  }
+  return {
+    ...base,
+    heroArtworkUrl: mapStill,
+    worldStoryboard: brand.bloomStoryboard.length ? brand.bloomStoryboard : [],
   };
 }

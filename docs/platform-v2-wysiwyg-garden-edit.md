@@ -33,7 +33,7 @@ The long admin form (Fan map / commerce / debugger) is tooling — not the prima
 
 ### Primary chrome (live garden)
 
-- Full-bleed garden (map if pinned; otherwise **default center** — same as Song Garden journey / “Leave a mark”)
+- Full-bleed garden (map if pinned; otherwise **default center** — same as Song Garden journey / “Plant a seed”)
 - **⋮ menu** (top-right): Who can join · Show size · Campaign name · Impact · Share credits · Exit edit
 - Tap map to **pin / move zones** (or “Add place”) — no need to scroll a 2000px form
 - Culture strip: selected pieces as cards; heart = amplify; long-press/admin = Feature / Performed
@@ -41,7 +41,7 @@ The long admin form (Fan map / commerce / debugger) is tooling — not the prima
 
 ### Defaults for a blank Garden
 
-1. No map required → center pulse (“Leave a mark”) works immediately  
+1. No map required → center pulse (“Plant a seed”) works immediately  
 2. Identity default: **Open** (anonymous + optional claim)  
 3. Audience empty → Impact shows counts, not a fake %  
 4. Zones optional → add later by tapping the map in edit mode  
@@ -73,6 +73,15 @@ The long admin form (Fan map / commerce / debugger) is tooling — not the prima
 3. Edit shell on public garden: ⋮ → Who can join / Show size / Impact / Share credits  
 4. Document that map pin-on-garden lands next (Composer/Live seams stay API-ready)
 
+## Cut: Plant a seed + atmosphere (shipped)
+
+1. Fan CTA renamed **Plant a seed** (center + zone)  
+2. `brandKit.atmosphere` chooser: vibe_video · static_photo · map_plate · gaussian (aurora stub) · brand_wash  
+3. `GET/PATCH /api/gardens/[id]/atmosphere`  
+4. Live edit ⋮ → **Atmosphere** sheet  
+
+Next: seed → Grow a Bloom journey; in-editor vibe generate; tap-to-pin zones.
+
 Non-goals this cut: full zone drag on map, Creation Engine, reply/remix, Sales CRM.
 
 ---
@@ -81,7 +90,7 @@ Non-goals this cut: full zone drag on map, Creation Engine, reply/remix, Sales C
 
 | Concept | Fan-facing | Behavior |
 |---|---|---|
-| **Plant a seed** | Replaces “Leave a mark” | First living act in the Garden |
+| **Plant a seed** | Replaces “Plant a seed” | First living act in the Garden |
 | **Seed → Bloom** | “Grow a journey” from a seed | Each seed *can* become a Bloom (same family as today’s Blooms) |
 | **Bloom lifetime** | Evergreen or time-bound | Open forever, or closes after an event / window |
 | **Bloom stage** | Center or map | **Center:** full-bleed atmosphere + prompts in the middle (current live Bloom / Song Garden). **Map:** prompts unlock and sit on places |

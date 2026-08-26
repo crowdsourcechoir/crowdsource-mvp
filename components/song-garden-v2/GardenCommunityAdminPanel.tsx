@@ -235,6 +235,12 @@ export default function GardenCommunityAdminPanel({ gardenId, gardenSlug }: Prop
         ) : null}
       </div>
 
+      <p className="rounded-lg border border-gray-800 bg-black/30 px-3 py-2 text-[11px] text-gray-400">
+        Fans plant a <span className="text-gray-200">seed</span> (not “leave a mark”). In live edit,
+        open ⋮ → <span className="text-gray-200">Atmosphere</span> to pick vibe video, static photo,
+        map plate, brand wash, or gaussian (soft placeholder for now).
+      </p>
+
       <div className="rounded-lg border border-gray-800 bg-black/30 p-3 text-xs text-gray-300">
         <p className="font-medium text-white">Quick start</p>
         <ol className="mt-2 list-decimal space-y-1 pl-4 text-gray-400">
@@ -432,7 +438,7 @@ export default function GardenCommunityAdminPanel({ gardenId, gardenSlug }: Prop
         </p>
         {contributions.length === 0 ? (
           <p className="mt-2 text-xs text-gray-600">
-            Empty for now — open the public garden and leave a mark, or attach a show.
+            Empty for now — open the public garden and plant a seed, or attach a show.
           </p>
         ) : (
           <ul className="mt-2 space-y-2">

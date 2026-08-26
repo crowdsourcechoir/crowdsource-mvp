@@ -250,9 +250,9 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
         error?: string;
         gardenCelebrationLine?: string | null;
       };
-      if (!res.ok) throw new Error(body.error || "Could not leave a mark");
+      if (!res.ok) throw new Error(body.error || "Could not plant a seed");
       pulseHaptic();
-      setBurstMessage(body.gardenCelebrationLine?.trim() || "You left a mark");
+      setBurstMessage(body.gardenCelebrationLine?.trim() || "Your seed took root");
       setResponse("");
       celebration.celebrate(() => {
         setSelectedZone(null);
@@ -372,10 +372,10 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
   const prompt =
     selectedMeta?.prompt?.trim() ||
     selectedMeta?.blurb?.trim() ||
-    "Leave a mark in this zone.";
+    "Plant a seed in this zone.";
   const cta =
     selectedMeta?.ctaLabel?.trim() ||
-    (selectedMeta ? `Leave a mark in ${selectedMeta.label}` : "Leave a mark");
+    (selectedMeta ? `Plant a seed in ${selectedMeta.label}` : "Plant a seed");
   const placeholder =
     selectedMeta?.inputPlaceholder?.trim() || "Type your response…";
 
@@ -793,7 +793,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
               className="mt-8 min-h-[48px] rounded-xl px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
               style={{ background: world.accentColor }}
             >
-              {pulsing ? "Leaving a mark…" : "Leave a mark"}
+              {pulsing ? "Planting…" : "Plant a seed"}
             </button>
           ) : null}
           {error ? <p className="mt-4 text-center text-sm text-red-300">{error}</p> : null}

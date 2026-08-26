@@ -1167,7 +1167,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <summary className="cursor-pointer">
             <span className="text-sm font-medium text-gray-200">Fan map (optional)</span>
             <span className="mt-1 block text-xs font-normal text-gray-500">
-              Skip for a blank garden — fans still get a center “Leave a mark.” Open only when you have
+              Skip for a blank garden — fans still get a center “Plant a seed.” Open only when you have
               venue art to pin.
             </span>
           </summary>

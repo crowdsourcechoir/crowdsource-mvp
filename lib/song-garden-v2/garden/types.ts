@@ -106,7 +106,97 @@ export type BrandKit = {
   sponsors: SponsorDef[];
   /** Generate + pin workflow for the season map plate. */
   mapPlate: MapPlateMeta;
+  /**
+   * Center-stage atmosphere for the Garden / Bloom presentation.
+   * Map-stage still uses mapPlate for the interactive plate; atmosphere
+   * drives WorldStage behind prompts when not in map chrome.
+   */
+  atmosphere: GardenAtmosphere;
 };
+
+/** How the living background presents (pluggable — not video-only). */
+export type AtmosphereMode =
+  | "vibe_video"
+  | "static_photo"
+  | "map_plate"
+  | "gaussian"
+  | "brand_wash";
+
+export type GardenAtmosphere = {
+  mode: AtmosphereMode;
+  /** Still image (static_photo / poster). */
+  stillUrl: string | null;
+  /** Looping video (vibe_video). */
+  videoUrl: string | null;
+  /** Poster frame while video loads. */
+  posterUrl: string | null;
+  /** Prompt used (or to use) for vibe video generation. */
+  vibePrompt: string;
+};
+
+export const ATMOSPHERE_MODE_LABELS: Record<AtmosphereMode, string> = {
+  vibe_video: "Vibe video loop",
+  static_photo: "Static photo",
+  map_plate: "Map / season plate",
+  gaussian: "Gaussian environment",
+  brand_wash: "Brand wash",
+};
+
+export function defaultAtmosphere(partial?: Partial<GardenAtmosphere> | null): GardenAtmosphere {
+  const mode = partial?.mode;
+  const valid: AtmosphereMode =
+    mode === "vibe_video" ||
+    mode === "static_photo" ||
+    mode === "map_plate" ||
+    mode === "gaussian" ||
+    mode === "brand_wash"
+      ? mode
+      : "brand_wash";
+  return {
+    mode: valid,
+    stillUrl: partial?.stillUrl?.trim() || null,
+    videoUrl: partial?.videoUrl?.trim() || null,
+    posterUrl: partial?.posterUrl?.trim() || null,
+    vibePrompt: typeof partial?.vibePrompt === "string" ? partial.vibePrompt : "",
+  };
+}
+
+/**
+ * Prefer explicit atmosphere; for legacy gardens without one, infer from map/hero
+ * so existing art keeps showing.
+ */
+export function resolveAtmosphere(brand: {
+  atmosphere?: GardenAtmosphere | null;
+  heroArtworkUrl?: string | null;
+  mapPlate?: MapPlateMeta | null;
+}): GardenAtmosphere {
+  if (brand.atmosphere?.mode) {
+    return defaultAtmosphere(brand.atmosphere);
+  }
+  const video = brand.mapPlate?.ambientVideoUrl?.trim() || null;
+  const still =
+    brand.heroArtworkUrl?.trim() ||
+    brand.mapPlate?.draftUrl?.trim() ||
+    null;
+  if (video) {
+    return defaultAtmosphere({
+      mode: "vibe_video",
+      videoUrl: video,
+      posterUrl: still,
+      stillUrl: still,
+      vibePrompt: brand.mapPlate?.vibePrompt ?? "",
+    });
+  }
+  if (still) {
+    return defaultAtmosphere({
+      mode: brand.mapPlate?.pinnedAt ? "map_plate" : "static_photo",
+      stillUrl: still,
+      posterUrl: still,
+      vibePrompt: brand.mapPlate?.vibePrompt ?? "",
+    });
+  }
+  return defaultAtmosphere({ mode: "brand_wash" });
+}
 
 export type ZoneHitPoint = { x: number; y: number };
 
@@ -139,7 +229,7 @@ export type ZoneDef = {
    * The map interaction surface shows this when the zone is selected.
    */
   prompt?: string | null;
-  /** Primary CTA label, e.g. "Leave a mark" / "Share your chant" */
+  /** Primary CTA label, e.g. "Plant a seed" / "Share your chant" */
   ctaLabel?: string | null;
   /** Placeholder for the inline response field */
   inputPlaceholder?: string | null;
@@ -464,6 +554,7 @@ export function resolveMapPlateVideoUrl(brand: Pick<BrandKit, "mapPlate">): stri
 }
 
 export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
+  const mapPlate = defaultMapPlate(partial?.mapPlate);
   return {
     title: partial?.title?.trim() || "Song Garden",
     logoUrl: partial?.logoUrl?.trim() || null,
@@ -475,11 +566,17 @@ export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
     bloomStoryboard: Array.isArray(partial?.bloomStoryboard) ? partial!.bloomStoryboard! : [],
     zones: normalizeZones(partial?.zones),
     sponsors: normalizeSponsors(partial?.sponsors),
-    mapPlate: defaultMapPlate(partial?.mapPlate),
+    mapPlate,
+    atmosphere: partial?.atmosphere
+      ? defaultAtmosphere(partial.atmosphere)
+      : resolveAtmosphere({
+          heroArtworkUrl: partial?.heroArtworkUrl ?? null,
+          mapPlate,
+        }),
   };
 }
 
-/** Shallow brand patch with deep-merge for `mapPlate` (keeps refs/draft when pinning). */
+/** Shallow brand patch with deep-merge for `mapPlate` + `atmosphere`. */
 export function mergeBrandKit(existing: BrandKit, patch: Partial<BrandKit>): BrandKit {
   return defaultBrandKit({
     ...existing,
@@ -488,6 +585,9 @@ export function mergeBrandKit(existing: BrandKit, patch: Partial<BrandKit>): Bra
       ...existing.mapPlate,
       ...(patch.mapPlate ?? {}),
     },
+    atmosphere: patch.atmosphere
+      ? defaultAtmosphere({ ...existing.atmosphere, ...patch.atmosphere })
+      : existing.atmosphere,
   });
 }
 
