@@ -63,6 +63,11 @@ Platform V2 is the **community spine** under Song Garden (and future modalities)
 
 Defaults come from contribution consent at write time; nodes without rights are not discoverable.
 
+## Roots (out of band)
+
+Invitation / risk / belonging rules stay with Roots methodology — not encoded here.
+If Platform V2 needs invitation or belonging gates beyond identity mode, document requirements for Roots review rather than shipping them as product logic.
+
 ## Definition of done
 
 On a Populus-style Garden/Bloom a participant can: contribute under the configured identity mode; discover selected contributions; react; see in-Garden credit; and we can export a credit pack + the three Index metrics for a sponsor conversation.
