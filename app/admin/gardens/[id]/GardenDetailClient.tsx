@@ -25,6 +25,7 @@ import {
   MAP_PLATE_VARIANT_LABELS,
 } from "@/lib/song-garden-v2/garden/types";
 import FileDropZone from "@/components/ui/FileDropZone";
+import GardenCommunityAdminPanel from "@/components/song-garden-v2/GardenCommunityAdminPanel";
 
 type Props = { gardenId: string };
 
@@ -1049,6 +1050,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </button>
         </div>
       </section>
+
+      {garden ? <GardenCommunityAdminPanel gardenId={garden.id} /> : null}
 
       <section className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">
         <h2 className="text-sm font-medium text-gray-200">Shows (chapters)</h2>

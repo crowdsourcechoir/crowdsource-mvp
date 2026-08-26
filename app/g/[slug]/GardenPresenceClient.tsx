@@ -24,6 +24,7 @@ import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
 import WorldStage from "@/components/song-garden-v2/WorldStage";
 import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
 import CelebrationBurst from "@/components/song-garden-v2/CelebrationBurst";
+import GardenCommunityCulturePanel from "@/components/song-garden-v2/GardenCommunityCulturePanel";
 import { useCelebration } from "@/components/song-garden-v2/engine/useCelebration";
 import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
 
@@ -791,8 +792,25 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
             </button>
           ) : null}
           {error ? <p className="mt-4 text-center text-sm text-red-300">{error}</p> : null}
+          {snapshot?.garden.id ? (
+            <div className="mt-8">
+              <GardenCommunityCulturePanel
+                gardenId={snapshot.garden.id}
+                accentColor={world.accentColor}
+              />
+            </div>
+          ) : null}
         </div>
       )}
+
+      {unlocked && snapshot?.garden.id && snapshot.zones.length > 0 ? (
+        <div className="relative z-20 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <GardenCommunityCulturePanel
+            gardenId={snapshot.garden.id}
+            accentColor={world.accentColor}
+          />
+        </div>
+      ) : null}
 
       <CelebrationBurst
         active={celebration.active}
