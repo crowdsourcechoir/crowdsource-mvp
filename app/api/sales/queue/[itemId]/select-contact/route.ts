@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { getOpportunity } from "@/lib/sales/db/opportunities";
 import { getOrganization } from "@/lib/sales/db/organizations";
-import { getContact } from "@/lib/sales/db/contacts";
+import { getContact, updateContactVerification } from "@/lib/sales/db/contacts";
 import { listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
-import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { hasSelectableOutreachEmail, hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 
 export const dynamic = "force-dynamic";
@@ -30,22 +30,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const opportunity = await getOpportunity(item.opportunityId);
     if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
 
-    const [contact, existingDraftsRaw] = await Promise.all([
+    const [loadedContact, existingDraftsRaw] = await Promise.all([
       getContact(contactId),
       listDraftsForOpportunity(opportunity.id),
     ]);
     const existingDrafts = existingDraftsRaw ?? [];
-    if (!contact || contact.organizationId !== opportunity.organizationId) {
+    if (!loadedContact || loadedContact.organizationId !== opportunity.organizationId) {
       return NextResponse.json({ error: "Contact not on this organization" }, { status: 400 });
     }
-    if (!looksLikePersonName(contact.fullName) || !contact.email || !hasVerifiedEmail(contact)) {
+    if (loadedContact.duplicateOfContactId) {
+      return NextResponse.json({ error: "Contact is hidden from this queue item" }, { status: 400 });
+    }
+    // The picker already showed anyone with a name + email. Domain-mismatch `risky`
+    // (e.g. @uw.edu on gohuskies.com) must still be clickable — that's the human override.
+    if (!looksLikePersonName(loadedContact.fullName) || !hasSelectableOutreachEmail(loadedContact)) {
       return NextResponse.json({ error: "Contact needs a name and verified-format email" }, { status: 400 });
     }
-    if (isOutboundEmailBlocked(contact.email)) {
+    const email = loadedContact.email;
+    if (!email || isOutboundEmailBlocked(email)) {
       return NextResponse.json(
-        { error: `Hard block: ${contact.email} cannot be selected for outbound.`, blocked: true },
+        { error: `Hard block: ${email ?? "this address"} cannot be selected for outbound.`, blocked: true },
         { status: 403 }
       );
+    }
+    if (!hasVerifiedEmail(loadedContact)) {
+      await updateContactVerification(loadedContact.id, "valid_format");
     }
 
     let draft =
@@ -60,6 +69,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
         organization,
         opportunityId: opportunity.id,
         pipelineRunId: null,
+        contactIds: [contactId],
       });
       draft = (created?.drafts ?? []).find((d) => d.contactId === contactId) ?? created?.primaryDraft ?? null;
     }

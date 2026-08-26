@@ -65,8 +65,23 @@ export function looksLikePersonName(name: string | null | undefined): boolean {
  * accepted here so this gate doesn't need a code change once that lands). `risky` and
  * `unverified` don't clear the bar: a human shouldn't be asked to approve outreach to an address
  * the pipeline itself isn't confident is real.
+ *
+ * Clicking a contact already shown in the approval queue is a different bar — see
+ * `hasSelectableOutreachEmail`. That click is the human override this gate describes.
  */
 export function hasVerifiedEmail(contact: Contact | null | undefined): boolean {
   if (!contact) return false;
   return contact.emailVerificationStatus === "valid_format" || contact.emailVerificationStatus === "verified_deliverable";
+}
+
+/**
+ * Bar for switching the active queue draft to a contact the picker already showed.
+ * Format-valid emails still count when stage 5 marked them `risky` (typical for NCAA
+ * athletics: staff mail is @university.edu while the org domain is a Sidearm host like
+ * gohuskies.com). `invalid` does not count.
+ */
+export function hasSelectableOutreachEmail(contact: Contact | null | undefined): boolean {
+  if (!contact?.email) return false;
+  if (contact.emailVerificationStatus === "invalid") return false;
+  return isPlausibleEmail(contact.email);
 }

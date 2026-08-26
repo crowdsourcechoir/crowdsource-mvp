@@ -109,11 +109,16 @@ export async function ensureContactDrafts(input: {
    * (explicit operator remint — e.g. re-add Tyler after a hard-block).
    */
   remintApprovedEmails?: string[];
+  /** If set, only consider these contacts (still must pass the ready-contact bar). */
+  contactIds?: string[];
 }): Promise<{ drafts: OutreachDraft[]; primaryDraft: OutreachDraft; primaryContact: Contact }> {
   const remint = new Set(
     (input.remintApprovedEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean)
   );
-  const contacts = readyContacts(await listContactsForOrganization(input.organization.id));
+  const allow = input.contactIds?.length ? new Set(input.contactIds) : null;
+  const contacts = readyContacts(await listContactsForOrganization(input.organization.id)).filter((c) =>
+    allow ? allow.has(c.id) : true
+  );
   if (contacts.length === 0) {
     throw new Error("No named contact with a verified-format email — cannot enqueue.");
   }
