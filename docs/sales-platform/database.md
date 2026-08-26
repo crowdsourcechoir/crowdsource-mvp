@@ -136,7 +136,7 @@ Same lookup pattern as `organization_types`. Seed rows: `annual_conference`, `em
 | `created_at` / `updated_at` | timestamptz | |
 
 ### `gmail_connections` / `outreach_feedback`
-Added in `supabase/sales-platform-add-gmail.sql`. Single-operator OAuth row (`owner_key = 'default'`) with encrypted refresh token; feedback rows capture approve-with-edits / reject pairs for draft few-shots. See `ai-workflow.md` §10.5.
+Added in `supabase/sales-platform-add-gmail.sql`. Single-operator OAuth row (`owner_key = 'default'`) with encrypted refresh token; `sends_enabled` (default false, added in `sales-platform-add-gmail-send-safety.sql`) is the Resume sending toggle so reconnecting OAuth does not auto-send. Feedback rows capture approve-with-edits / reject pairs for draft few-shots. See `ai-workflow.md` §10.5.
 
 ### `discovery_runs`
 Stage 0 (see `ai-workflow.md`). One row per nightly/manual organization-discovery run. A sibling of `pipeline_runs`, not a child — there's no organization row yet when discovery runs, so this isn't an `agent_runs` stage either. Added in `supabase/sales-platform-add-discovery.sql`, a later additive migration (not in the original schema below).

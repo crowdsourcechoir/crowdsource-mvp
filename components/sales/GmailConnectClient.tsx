@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-type Status = { connected: boolean; email: string | null; configured: boolean };
+type Status = {
+  connected: boolean;
+  email: string | null;
+  configured: boolean;
+  sendsEnabled: boolean;
+};
 
 export default function GmailConnectClient() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -11,13 +16,22 @@ export default function GmailConnectClient() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function applyStatus(d: Record<string, unknown>) {
+    setStatus({
+      connected: Boolean(d.connected),
+      email: (d.email as string | null) ?? null,
+      configured: Boolean(d.configured),
+      sendsEnabled: Boolean(d.sendsEnabled ?? d.sendEnabled),
+    });
+  }
+
   function load() {
     setLoading(true);
     fetch("/api/sales/gmail/status", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (d.error) throw new Error(d.error);
-        setStatus({ connected: Boolean(d.connected), email: d.email ?? null, configured: Boolean(d.configured) });
+        applyStatus(d);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load Gmail status"))
       .finally(() => setLoading(false));
@@ -28,7 +42,9 @@ export default function GmailConnectClient() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const gmail = params.get("gmail");
-    if (gmail === "connected") setMessage("Gmail connected.");
+    if (gmail === "connected") {
+      setMessage("Gmail connected. Sending stays paused until you click Resume sending.");
+    }
     if (gmail === "error") setError(params.get("message") || "Gmail connect failed.");
   }, []);
 
@@ -39,10 +55,34 @@ export default function GmailConnectClient() {
       const res = await fetch("/api/sales/gmail/disconnect", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Disconnect failed");
-      setMessage("Gmail disconnected.");
+      setMessage("Gmail disconnected. Nothing will send from the app.");
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setSendsEnabled(enabled: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sales/gmail/sends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not update send pause");
+      applyStatus(data);
+      setMessage(
+        enabled
+          ? "Sending resumed. Each email still needs Send → Yes, send now. The same person cannot be emailed twice from duplicate drafts."
+          : "Sending paused. Gmail stays connected; nothing will go out until you resume."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update send pause");
     } finally {
       setBusy(false);
     }
@@ -92,12 +132,30 @@ export default function GmailConnectClient() {
           <p className="mt-1 text-xs text-gray-500">
             Approve in the queue sends from your inbox. Or mark <span className="text-gray-300">Sent</span> on a
             contact card if you already emailed them. Replies move Awareness → Interest; Lost is manual. A nudge
-            draft appears after 7 days with no reply — never auto-sent.
+            draft appears after 7 days with no reply — never auto-sent. Same contact cannot be emailed twice from
+            leftover duplicate drafts.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {status?.connected ? (
             <>
+              {status.sendsEnabled ? (
+                <button
+                  onClick={() => void setSendsEnabled(false)}
+                  disabled={busy}
+                  className="rounded-lg border border-amber-700 px-3 py-1.5 text-sm text-amber-200 disabled:opacity-50"
+                >
+                  Pause sending
+                </button>
+              ) : (
+                <button
+                  onClick={() => void setSendsEnabled(true)}
+                  disabled={busy}
+                  className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  Resume sending
+                </button>
+              )}
               <button
                 onClick={syncNow}
                 disabled={busy}
@@ -134,9 +192,19 @@ export default function GmailConnectClient() {
       {loading ? (
         <p className="mt-3 text-sm text-gray-500">Loading…</p>
       ) : status?.connected ? (
-        <p className="mt-3 text-sm text-emerald-400">Connected as {status.email}</p>
+        status.sendsEnabled ? (
+          <p className="mt-3 text-sm text-emerald-400">Connected as {status.email} — sending on. Each send still asks for confirmation.</p>
+        ) : (
+          <p className="mt-3 text-sm text-amber-300">
+            Connected as {status.email} — sending paused. Click Resume sending when you are ready. One confirm still
+            emails only that one contact.
+          </p>
+        )
       ) : status?.configured ? (
-        <p className="mt-3 text-sm text-amber-300">Not connected — approve will fall back to clipboard until you connect.</p>
+        <p className="mt-3 text-sm text-amber-300">
+          Not connected. Click Connect Gmail, finish Google consent, then Resume sending. Approve will use clipboard
+          until then.
+        </p>
       ) : (
         <p className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
           OAuth env not set. Add <span className="font-mono">GOOGLE_CLIENT_ID</span>,{" "}

@@ -322,6 +322,8 @@ export type GmailConnection = {
   refreshTokenEncrypted: string;
   historyId: string | null;
   scopes: string[];
+  /** Operator toggle. Reconnect leaves this false until Resume sending. */
+  sendsEnabled: boolean;
   connectedAt: string;
   updatedAt: string;
 };

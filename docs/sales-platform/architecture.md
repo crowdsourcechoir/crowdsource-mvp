@@ -185,12 +185,12 @@ All times are early-morning UTC (well before 7am US Pacific) specifically so dis
 HubSpot and Mailchimp are **not** used for prospect outreach. Gmail is the sender of record and the reply source.
 
 - **Auth:** Google OAuth (offline access) for a single operator — connect UI on `/admin/sales`. Refresh token encrypted at rest (`GMAIL_TOKEN_ENCRYPTION_KEY`) in `gmail_connections`.
-- **Send:** on queue approve / approve-with-edits, server sends via Gmail API (`lib/sales/gmail/`). Fail-closed when connected (send error → item stays pending).
+- **Send:** on queue approve / approve-with-edits, server claims the draft then sends via Gmail API (`lib/sales/gmail/`). Fail-closed when connected (send error → draft reverted, item stays pending). Same-contact initial duplicates cannot send; remaining-queue never auto-advances to the person just emailed. Outbound stays paused after Connect until **Resume sending**.
 - **Reply sync:** Vercel Cron `/api/sales/cron/gmail-sync` hourly 09:00–22:00 UTC (Hobby-safe once-per-day expressions; upgrade to Pro for true every-15-min). Uses `users.history.list` + inbox fallback.
 - **Nudges:** Cron `/api/sales/cron/nudges` drafts follow-ups into the approval queue; human approve sends in-thread. Never auto-send.
 - **Activities:** `outreach_activities` + opportunity touch columns (`last_outbound_at`, `last_inbound_at`, `next_follow_up_at`, `gmail_thread_id`).
 - **Learning:** `outreach_feedback` from edits/rejects feeds draft/nudge few-shots.
-- **Setup:** `supabase/sales-platform-add-gmail.sql` + `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_TOKEN_ENCRYPTION_KEY` (see `.env.example`).
+- **Setup:** `supabase/sales-platform-add-gmail.sql` + `supabase/sales-platform-add-gmail-send-safety.sql` + `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_TOKEN_ENCRYPTION_KEY` (see `.env.example`). Connect Gmail then **Resume sending** on `/admin/sales`.
 
 ## 8. Security and reliability considerations
 
