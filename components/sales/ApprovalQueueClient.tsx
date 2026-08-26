@@ -58,6 +58,7 @@ export default function ApprovalQueueClient() {
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendInFlight = useRef(false);
 
   const showCopyStatus = useCallback((message: string) => {
     if (copyStatusTimer.current) clearTimeout(copyStatusTimer.current);
@@ -175,7 +176,7 @@ export default function ApprovalQueueClient() {
 
   const executeDecision = useCallback(
     async (action: ActionKey) => {
-      if (!current || busy) return;
+      if (!current || busy || sendInFlight.current) return;
 
       const aiSubject = current.draft?.aiSubject ?? "";
       const aiBody = stripEmailSignature(current.draft?.aiBody ?? "");
@@ -206,6 +207,7 @@ export default function ApprovalQueueClient() {
         return;
       }
 
+      if (isApprove) sendInFlight.current = true;
       setBusy(true);
       setSendConfirmOpen(false);
       setActionError(null);
@@ -241,6 +243,7 @@ export default function ApprovalQueueClient() {
       } catch (err) {
         setActionError(err instanceof Error ? err.message : "Decision failed");
       } finally {
+        sendInFlight.current = false;
         setBusy(false);
       }
     },

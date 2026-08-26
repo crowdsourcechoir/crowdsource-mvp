@@ -1,4 +1,5 @@
 import { getGmailClient } from "./client";
+import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { assertOutboundEmailAllowed } from "@/lib/sales/outreach/send-blocklist";
 
 export type GmailSendResult = {
@@ -7,14 +8,15 @@ export type GmailSendResult = {
 };
 
 /**
- * Emergency kill switch (2026-08-15 multi-send incident). Outbound Gmail stays blocked until
- * Vercel has `SALES_GMAIL_SENDS_ENABLED=true`. Disconnecting Gmail is the immediate stop;
- * this keeps sends dead even after someone reconnects by mistake.
+ * Outbound Gmail stays paused until Resume sending (gmail_connections.sends_enabled) or
+ * SALES_GMAIL_SENDS_ENABLED=true. SALES_GMAIL_SENDS_ENABLED=false is an emergency kill
+ * that wins over the UI toggle. Reconnect OAuth alone does not send.
  */
-export function assertGmailSendsEnabled(): void {
-  if (process.env.SALES_GMAIL_SENDS_ENABLED?.trim() !== "true") {
+export async function assertGmailSendsEnabled(): Promise<void> {
+  const status = await getGmailConnectionStatus();
+  if (!status.sendsEnabled) {
     throw new Error(
-      "Gmail outbound sends are paused (SALES_GMAIL_SENDS_ENABLED is not true). Reconnect alone will not send."
+      "Gmail outbound sends are paused. Connect Gmail, then click Resume sending on /admin/sales."
     );
   }
 }
@@ -65,7 +67,7 @@ export async function sendGmailMessage(input: {
   inReplyTo?: string | null;
   references?: string | null;
 }): Promise<GmailSendResult> {
-  assertGmailSendsEnabled();
+  await assertGmailSendsEnabled();
   assertOutboundEmailAllowed(input.to);
 
   const bundle = await getGmailClient();

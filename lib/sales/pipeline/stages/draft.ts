@@ -1,7 +1,7 @@
 import { callStructured } from "../../openai/client";
 import { DraftFillSchema } from "../../openai/schemas";
 import { listFindingsWithSourcesForOpportunity } from "../../db/research";
-import { findApprovedTemplate, createOutreachDraft } from "../../db/outreach";
+import { findApprovedTemplate, createOutreachDraft, listDraftsForOpportunity } from "../../db/outreach";
 import { resolveIndustrySegmentIdForOrganization } from "../../db/lookups";
 import { estimateDraftConfidence, formatFeedbackFewShots, listRecentAcceptedEditFeedback } from "../../db/feedback";
 import { indexFindingsForPrompt, resolveFindingIds } from "../context";
@@ -110,6 +110,33 @@ export async function runDraftStage(
       output: {
         draftId: null,
         skippedReason: `Contact "${contact.fullName ?? "unnamed"}" has no verified email yet (status: ${contact.emailVerificationStatus}) — drafting skipped until verified.`,
+      },
+    };
+  }
+
+  const existingDrafts = await listDraftsForOpportunity(opportunity.id);
+  const openForContact = existingDrafts.find(
+    (d) =>
+      d.kind === "initial" &&
+      d.contactId === contact.id &&
+      (d.status === "draft" || d.status === "qa_flagged" || d.status === "qa_passed")
+  );
+  if (openForContact) {
+    return {
+      output: { draftId: openForContact.id, skippedReason: "Open initial draft already exists for this contact." },
+    };
+  }
+  const alreadySent = existingDrafts.find(
+    (d) =>
+      d.kind === "initial" &&
+      d.contactId === contact.id &&
+      (d.status === "approved" || d.status === "approved_with_edits")
+  );
+  if (alreadySent) {
+    return {
+      output: {
+        draftId: alreadySent.id,
+        skippedReason: "Initial outreach already approved for this contact — not reminting a duplicate draft.",
       },
     };
   }

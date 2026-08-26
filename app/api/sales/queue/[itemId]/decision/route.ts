@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { decideQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
-import { updateDraftDecision, getDraft, listDraftsForOpportunity } from "@/lib/sales/db/outreach";
+import { updateDraftDecision, getDraft, listDraftsForOpportunity, claimOpenDraftForSend, revertDraftClaim } from "@/lib/sales/db/outreach";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { getContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
 import {
@@ -19,6 +19,7 @@ import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
+import { pickNextRemainingInitialDraft, shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const isApprove = effectiveAction === "approve" || effectiveAction === "approve_with_edits";
 
     let gmailSend: { messageId: string; threadId: string } | null = null;
+    let draftClaimedForSend = false;
     let gmailStatus = await getGmailConnectionStatus();
 
     // Fail-closed: if Gmail is connected, send before marking approved. If not connected, approve
@@ -121,42 +123,91 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       }
 
       if (gmailStatus.connected) {
+        if (!gmailStatus.sendsEnabled) {
+          return NextResponse.json(
+            {
+              error:
+                "Gmail sends are paused. Resume sending on the Sales overview page — reconnecting Gmail alone will not send.",
+              gmailConnected: true,
+              sendsPaused: true,
+            },
+            { status: 409 }
+          );
+        }
         try {
           const activities = await listActivitiesForOpportunity(opportunity.id);
-          // Block re-approving the same draft. A deliberately reminted new draft for the same
-          // contact may send after confirm (Joel re-adding Tyler). Nudges stay in-thread.
-          if (
-            item.kind === "initial" &&
-            draft.contactId &&
-            (draft.status === "approved" || draft.status === "approved_with_edits")
-          ) {
+          const siblingDrafts = await listDraftsForOpportunity(opportunity.id);
+          const blocked = shouldBlockInitialGmailSend({
+            itemKind: item.kind,
+            draft,
+            activities,
+            siblingDrafts,
+          });
+          if (blocked.blocked) {
+            return NextResponse.json(
+              { error: blocked.reason, gmailConnected: true, alreadySent: true },
+              { status: 409 }
+            );
+          }
+
+          const claimed = await claimOpenDraftForSend(draft.id, {
+            status: contentDiffersFromAi ? "approved_with_edits" : "approved",
+            editedSubject: contentDiffersFromAi ? finalSubject : undefined,
+            editedBody: contentDiffersFromAi ? finalBody : undefined,
+          });
+          if (!claimed) {
             return NextResponse.json(
               {
                 error:
-                  "Gmail send blocked — this draft was already approved. Pick another contact or remint a fresh draft.",
+                  "Gmail send blocked — this draft was already claimed. Refresh the queue; nothing extra was emailed.",
                 gmailConnected: true,
                 alreadySent: true,
               },
               { status: 409 }
             );
           }
+          draftClaimedForSend = true;
+
+          const afterClaimDrafts = await listDraftsForOpportunity(opportunity.id);
+          const afterClaimActivities = await listActivitiesForOpportunity(opportunity.id);
+          const blockedAfterClaim = shouldBlockInitialGmailSend({
+            itemKind: item.kind,
+            // Keep this draft "open" for the guard so we only reject *sibling* duplicates.
+            draft: { ...claimed, status: "draft" },
+            activities: afterClaimActivities,
+            siblingDrafts: afterClaimDrafts,
+          });
+          if (blockedAfterClaim.blocked) {
+            await revertDraftClaim(draft.id, draft.status);
+            draftClaimedForSend = false;
+            return NextResponse.json(
+              { error: blockedAfterClaim.reason, gmailConnected: true, alreadySent: true },
+              { status: 409 }
+            );
+          }
 
           let inReplyTo: string | null = null;
-          let threadId = opportunity.gmailThreadId;
+          const threadId = opportunity.gmailThreadId;
           if (item.kind === "nudge" && threadId) {
             const lastSent = [...activities].reverse().find((a) => a.activityType === "sent" && a.gmailMessageId);
             if (lastSent?.gmailMessageId) {
               inReplyTo = await getGmailRfcMessageId(lastSent.gmailMessageId);
             }
           }
-          gmailSend = await sendGmailMessage({
-            to: contact.email,
-            subject: finalSubject,
-            body: finalBody,
-            threadId: item.kind === "nudge" ? threadId : null,
-            inReplyTo,
-            references: inReplyTo,
-          });
+          try {
+            gmailSend = await sendGmailMessage({
+              to: contact.email,
+              subject: finalSubject,
+              body: finalBody,
+              threadId: item.kind === "nudge" ? threadId : null,
+              inReplyTo,
+              references: inReplyTo,
+            });
+          } catch (sendErr) {
+            await revertDraftClaim(draft.id, draft.status);
+            draftClaimedForSend = false;
+            throw sendErr;
+          }
         } catch (err) {
           return NextResponse.json(
             {
@@ -169,7 +220,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       }
     }
 
-    if (draft && isApprove) {
+    if (draft && isApprove && !draftClaimedForSend) {
       await updateDraftDecision(draft.id, {
         status: contentDiffersFromAi ? "approved_with_edits" : "approved",
         editedSubject: contentDiffersFromAi ? finalSubject : undefined,
@@ -180,8 +231,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     }
 
     // Multi-contact queue: after sending one contact, keep the item pending if OTHER
-    // email-ready contacts still have unsent initial drafts. Never re-pick a contact who
-    // already has an approved/sent draft (duplicate drafts caused same-person spam).
+    // people still have unsent initial drafts. Never auto-advance to the person just
+    // emailed, even if a duplicate open draft remains.
     let remaining = false;
     let nextDetail = null;
     if (isApprove && item.kind === "initial") {
@@ -198,43 +249,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           .map((c) => c.id)
       );
       const drafts = await listDraftsForOpportunity(opportunity.id);
-      const openContactIds = new Set(
-        drafts
-          .filter(
-            (d) =>
-              d.kind === "initial" &&
-              d.contactId &&
-              (d.status === "draft" || d.status === "qa_flagged")
-          )
-          .map((d) => d.contactId as string)
-      );
-      // Contact is handled only when there's no open draft left (remints stay eligible).
-      const handledContactIds = new Set(
-        drafts
-          .filter(
-            (d) =>
-              d.kind === "initial" &&
-              d.contactId &&
-              !openContactIds.has(d.contactId) &&
-              (d.status === "approved" ||
-                d.status === "approved_with_edits" ||
-                d.status === "rejected")
-          )
-          .map((d) => d.contactId as string)
-      );
-      const nextDraft = drafts.find(
-        (d) =>
-          d.kind === "initial" &&
-          d.contactId &&
-          readyIds.has(d.contactId) &&
-          d.id !== draft?.id &&
-          !handledContactIds.has(d.contactId) &&
-          (d.status === "draft" || d.status === "qa_flagged")
-      );
+      const nextDraft = pickNextRemainingInitialDraft({
+        drafts,
+        readyContactIds: readyIds,
+        justSentDraftId: draft?.id ?? null,
+        justSentContactId: draft?.contactId ?? null,
+      });
       if (nextDraft) {
         remaining = true;
         await setQueueItemOutreachDraft(itemId, nextDraft.id);
-        // Stay pending / ready_for_review so Joel can send the next contact.
         nextDetail = await assembleQueueItemDetailFromQueueItem((await getQueueItem(itemId))!);
       }
     }

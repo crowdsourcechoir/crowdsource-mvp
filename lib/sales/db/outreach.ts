@@ -149,6 +149,40 @@ export async function updateDraftDecision(
   return rowToDraft(data);
 }
 
+const OPEN_STATUSES_FOR_CLAIM: OutreachDraftStatus[] = ["draft", "qa_flagged", "qa_passed"];
+
+/**
+ * Compare-and-swap: mark an open draft approved so a concurrent Approve cannot also send it.
+ * Returns null when another request already claimed this draft.
+ */
+export async function claimOpenDraftForSend(
+  id: string,
+  input: { status: "approved" | "approved_with_edits"; editedSubject?: string | null; editedBody?: string | null }
+): Promise<OutreachDraft | null> {
+  const db = requireSupabaseAdmin();
+  const row: Record<string, unknown> = { status: input.status, updated_at: new Date().toISOString() };
+  if (input.editedSubject !== undefined) row.edited_subject = input.editedSubject;
+  if (input.editedBody !== undefined) row.edited_body = input.editedBody;
+  const { data, error } = await db
+    .from("outreach_drafts")
+    .update(row)
+    .eq("id", id)
+    .in("status", OPEN_STATUSES_FOR_CLAIM)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? rowToDraft(data) : null;
+}
+
+export async function revertDraftClaim(id: string, status: OutreachDraftStatus): Promise<void> {
+  const db = requireSupabaseAdmin();
+  const { error } = await db
+    .from("outreach_drafts")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 /** Persist human edits without approving or changing draft status. */
 export async function updateDraftEdits(
   id: string,
