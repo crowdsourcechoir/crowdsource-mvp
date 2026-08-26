@@ -1051,7 +1051,9 @@ export default function GardenDetailClient({ gardenId }: Props) {
         </div>
       </section>
 
-      {garden ? <GardenCommunityAdminPanel gardenId={garden.id} /> : null}
+      {garden ? (
+        <GardenCommunityAdminPanel gardenId={garden.id} gardenSlug={garden.slug} />
+      ) : null}
 
       <section className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">
         <h2 className="text-sm font-medium text-gray-200">Shows (chapters)</h2>
@@ -1161,9 +1163,17 @@ export default function GardenDetailClient({ gardenId }: Props) {
       ) : null}
 
       <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+        <details>
+          <summary className="cursor-pointer">
+            <span className="text-sm font-medium text-gray-200">Fan map (optional)</span>
+            <span className="mt-1 block text-xs font-normal text-gray-500">
+              Skip for a blank garden — fans still get a center “Leave a mark.” Open only when you have
+              venue art to pin.
+            </span>
+          </summary>
+          <div className="mt-4 space-y-4 border-t border-gray-800 pt-4">
         <div>
-          <h2 className="text-sm font-medium text-gray-200">Fan map</h2>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-xs text-gray-500">
             Generate a season map plate, pin it once, then place named sponsored zones fans can tap.
             Regenerating a draft does not move hit regions.
           </p>
@@ -1865,6 +1875,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
             </ul>
           </div>
         ) : null}
+          </div>
+        </details>
       </section>
 
       <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">

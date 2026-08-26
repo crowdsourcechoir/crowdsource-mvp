@@ -25,8 +25,10 @@ import WorldStage from "@/components/song-garden-v2/WorldStage";
 import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
 import CelebrationBurst from "@/components/song-garden-v2/CelebrationBurst";
 import GardenCommunityCulturePanel from "@/components/song-garden-v2/GardenCommunityCulturePanel";
+import GardenEditChrome from "@/components/song-garden-v2/GardenEditChrome";
 import { useCelebration } from "@/components/song-garden-v2/engine/useCelebration";
 import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Props = {
   gardenSlug: string;
@@ -47,6 +49,9 @@ function clamp(n: number, min: number, max: number) {
 }
 
 export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editMode = searchParams.get("edit") === "1";
   const [snapshot, setSnapshot] = useState<GardenSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [burstMessage, setBurstMessage] = useState("The garden stirred");
@@ -810,6 +815,15 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
             accentColor={world.accentColor}
           />
         </div>
+      ) : null}
+
+      {editMode && snapshot?.garden.id ? (
+        <GardenEditChrome
+          gardenId={snapshot.garden.id}
+          gardenSlug={gardenSlug}
+          accentColor={world.accentColor}
+          onExit={() => router.replace(`/g/${gardenSlug}`)}
+        />
       ) : null}
 
       <CelebrationBurst

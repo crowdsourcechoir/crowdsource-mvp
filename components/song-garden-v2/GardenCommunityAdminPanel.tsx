@@ -1,26 +1,44 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { CommunitySettings, ContributionNode, IdentityMode } from "@/lib/platform-v2/types";
+import Link from "next/link";
+import type {
+  CommunitySettings,
+  ContributionNode,
+  CreditPack,
+  IdentityMode,
+  ParticipationIndex,
+} from "@/lib/platform-v2/types";
 
-type Props = { gardenId: string };
+type Props = {
+  gardenId: string;
+  /** Public slug for “Edit garden” deep link */
+  gardenSlug?: string | null;
+};
+
+function pct(rate: number | null): string {
+  if (rate == null || !Number.isFinite(rate)) return "—";
+  return `${(rate * 100).toFixed(rate < 0.01 ? 2 : 1)}%`;
+}
 
 /**
- * Admin: Platform V2 community spine settings + Index / credit-pack peek.
+ * Human Community admin — no JSON dumps. Scoreboard + credits + feature list.
  */
-export default function GardenCommunityAdminPanel({ gardenId }: Props) {
+export default function GardenCommunityAdminPanel({ gardenId, gardenSlug }: Props) {
   const [settings, setSettings] = useState<CommunitySettings | null>(null);
   const [identityMode, setIdentityMode] = useState<IdentityMode>("open");
   const [reachableAudience, setReachableAudience] = useState("");
   const [campaignLabel, setCampaignLabel] = useState("");
   const [populusPilot, setPopulusPilot] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [indexJson, setIndexJson] = useState<string | null>(null);
+  const [index, setIndex] = useState<ParticipationIndex | null>(null);
+  const [pack, setPack] = useState<CreditPack | null>(null);
   const [credits, setCredits] = useState<
     Array<{ creditName: string; kind: string; selected: boolean; reactCount: number }>
   >([]);
   const [contributions, setContributions] = useState<ContributionNode[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   const load = useCallback(async () => {
     const [sRes, cRes] = await Promise.all([
@@ -55,9 +73,7 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
     setBusy(true);
     setNotice(null);
     try {
-      const audience = reachableAudience.trim()
-        ? Number(reachableAudience)
-        : null;
+      const audience = reachableAudience.trim() ? Number(reachableAudience) : null;
       const res = await fetch(`/api/gardens/${gardenId}/community`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -74,7 +90,7 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
       };
       if (!res.ok) throw new Error(body.error || "Save failed");
       setSettings(body.settings ?? null);
-      setNotice("Community settings saved.");
+      setNotice("Saved.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -82,17 +98,71 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
     }
   }
 
-  async function handleIndex() {
+  async function handleImpact() {
     setBusy(true);
+    setNotice(null);
     try {
       const res = await fetch(`/api/gardens/${gardenId}/community/index`, { cache: "no-store" });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Index failed");
-      setIndexJson(JSON.stringify(body.index, null, 2));
+      if (!res.ok) throw new Error(body.error || "Could not load impact");
+      setIndex(body.index as ParticipationIndex);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Index failed");
+      setNotice(err instanceof Error ? err.message : "Could not load impact");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleCredits() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${gardenId}/community/credit-pack`, {
+        cache: "no-store",
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Could not load credits");
+      setPack(body.pack as CreditPack);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not load credits");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyCreditsShare() {
+    if (!pack) await handleCredits();
+    const current = pack;
+    const res = await fetch(`/api/gardens/${gardenId}/community/credit-pack`, {
+      cache: "no-store",
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      setNotice(body.error || "Could not load credits");
+      return;
+    }
+    const next = body.pack as CreditPack;
+    setPack(next);
+    const lines = [
+      next.campaignLabel || next.gardenTitle,
+      "People who helped make this:",
+      ...next.entries.map((e) => {
+        const tags = [
+          e.selected ? "featured" : null,
+          e.performed ? "performed" : null,
+          e.reactCount > 0 ? `${e.reactCount}♥` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        return `• ${e.creditName}${tags ? ` (${tags})` : ""}`;
+      }),
+    ];
+    const text = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice("Credits copied — paste into a post, email, or deck.");
+    } catch {
+      setNotice("Could not copy — scroll to Share credits below.");
     }
   }
 
@@ -110,11 +180,11 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
         }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Select failed");
+      if (!res.ok) throw new Error(body.error || "Could not update");
       await load();
-      setNotice(node.selected ? "Unselected." : "Selected — recognition emitted.");
+      setNotice(node.selected ? "Removed from Culture." : "Featured in Culture.");
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Select failed");
+      setNotice(err instanceof Error ? err.message : "Could not update");
     } finally {
       setBusy(false);
     }
@@ -133,69 +203,104 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
         }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Perform failed");
+      if (!res.ok) throw new Error(body.error || "Could not mark performed");
       await load();
-      setNotice("Marked performed — recognition emitted (Live seam).");
+      setNotice("Marked as performed live.");
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Perform failed");
+      setNotice(err instanceof Error ? err.message : "Could not mark performed");
     } finally {
       setBusy(false);
     }
   }
 
+  const editHref = gardenSlug ? `/g/${gardenSlug}?edit=1` : null;
+
   return (
-    <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
-      <div>
-        <h2 className="text-sm font-semibold tracking-wide text-white">Community spine (Platform V2)</h2>
-        <p className="mt-1 text-xs text-gray-500">
-          Identity mode, discoverable contributions, reacts, credit pack, and Participation Index.
-          Song Garden journeys stay modality UX — this is the shared platform layer.
-        </p>
+    <section className="space-y-4 rounded-xl border border-[#CFFF81]/25 bg-[#121214] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold tracking-wide text-white">Community</h2>
+          <p className="mt-1 text-xs text-gray-400">
+            Who can join, what gets featured, who gets credit, and how the show landed — in plain
+            language.
+          </p>
+        </div>
+        {editHref ? (
+          <Link
+            href={editHref}
+            className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-black"
+          >
+            Edit garden live
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg border border-gray-800 bg-black/30 p-3 text-xs text-gray-300">
+        <p className="font-medium text-white">Quick start</p>
+        <ol className="mt-2 list-decimal space-y-1 pl-4 text-gray-400">
+          <li>Tap <span className="text-gray-200">Edit garden live</span> to see what fans see.</li>
+          <li>Optional: set “about how many people could join” if you want a % for sponsors.</li>
+          <li>When people leave marks, feature them here — they show up under Culture.</li>
+        </ol>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs text-gray-400">
-          Identity mode
+          Who can join
           <select
             value={identityMode}
             onChange={(e) => setIdentityMode(e.target.value as IdentityMode)}
             className="mt-1 w-full rounded-lg border border-gray-700 bg-[#0c0c0e] px-3 py-2 text-sm text-white"
           >
-            <option value="open">Open — anonymous-first + optional claim</option>
-            <option value="account_required">Account required — claim before contribute/react</option>
+            <option value="open">Anyone (name optional)</option>
+            <option value="account_required">Must share name + email first</option>
           </select>
         </label>
         <label className="block text-xs text-gray-400">
-          Reachable audience (Index denominator)
+          About how many people could join?
           <input
             type="number"
             min={1}
             value={reachableAudience}
             onChange={(e) => setReachableAudience(e.target.value)}
-            placeholder="e.g. 400 for Populus"
+            placeholder="Optional — e.g. 400 in the room"
             className="mt-1 w-full rounded-lg border border-gray-700 bg-[#0c0c0e] px-3 py-2 text-sm text-white"
           />
+          <span className="mt-1 block text-[11px] leading-snug text-gray-500">
+            Only needed for a participation %. Leave blank if you just want counts of people, marks,
+            and hearts.
+          </span>
         </label>
         <label className="block text-xs text-gray-400 sm:col-span-2">
-          Campaign label
+          Campaign / show name
           <input
             type="text"
             value={campaignLabel}
             onChange={(e) => setCampaignLabel(e.target.value)}
-            placeholder="Populus Thresholds R&D"
+            placeholder="e.g. Populus Thresholds"
             className="mt-1 w-full rounded-lg border border-gray-700 bg-[#0c0c0e] px-3 py-2 text-sm text-white"
           />
         </label>
-        <label className="flex items-center gap-2 text-xs text-gray-300 sm:col-span-2">
+      </div>
+
+      <button
+        type="button"
+        className="text-[11px] text-gray-500 underline"
+        onClick={() => setShowAdvancedSettings((v) => !v)}
+      >
+        {showAdvancedSettings ? "Hide more options" : "More options"}
+      </button>
+      {showAdvancedSettings ? (
+        <label className="flex items-center gap-2 text-xs text-gray-300">
           <input
             type="checkbox"
             checked={populusPilot}
             onChange={(e) => setPopulusPilot(e.target.checked)}
             className="h-4 w-4"
           />
-          Populus pilot garden
+          Mark as Populus pilot garden
         </label>
-      </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -204,52 +309,114 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
           onClick={() => void handleSave()}
           className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-black disabled:opacity-50"
         >
-          Save community
+          Save
         </button>
         <button
           type="button"
           disabled={busy}
-          onClick={() => void handleIndex()}
+          onClick={() => void handleImpact()}
           className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-gray-200 disabled:opacity-50"
         >
-          Compute Index
+          Show impact
         </button>
-        <a
-          href={`/api/gardens/${gardenId}/community/credit-pack`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-gray-200"
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void copyCreditsShare()}
+          className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-gray-200 disabled:opacity-50"
         >
-          Open credit pack JSON
-        </a>
+          Share credits
+        </button>
       </div>
 
       {notice ? <p className="text-xs text-amber-200">{notice}</p> : null}
       {settings ? (
-        <p className="font-mono text-[10px] text-gray-500">
-          mode={settings.identityMode} · audience={settings.reachableAudience ?? "—"} · populus=
-          {settings.populusPilot ? "yes" : "no"}
+        <p className="text-[11px] text-gray-500">
+          {settings.identityMode === "open" ? "Anyone can join" : "Name + email required"}
+          {settings.reachableAudience != null
+            ? ` · room size ~${settings.reachableAudience}`
+            : " · no room size set"}
+          {settings.populusPilot ? " · Populus pilot" : ""}
         </p>
       ) : null}
 
-      {indexJson ? (
-        <pre className="max-h-48 overflow-auto rounded-lg border border-gray-800 bg-black/40 p-3 font-mono text-[10px] text-gray-300">
-          {indexJson}
-        </pre>
+      {index ? (
+        <div className="space-y-2 rounded-lg border border-gray-800 bg-black/40 p-3">
+          <p className="text-xs font-semibold text-white">Impact (for this campaign)</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-gray-800 bg-[#0c0c0e] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Who showed up</p>
+              <p className="mt-1 text-lg font-semibold text-white">
+                {index.participationRate != null
+                  ? pct(index.participationRate)
+                  : `${index.contributors}`}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-500">
+                {index.participationRate != null
+                  ? `${index.contributors} of ~${index.reachableAudience}`
+                  : "people who contributed (set room size for a %)"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-800 bg-[#0c0c0e] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Activity</p>
+              <p className="mt-1 text-lg font-semibold text-white">
+                {index.sponsoredParticipationVolume}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-500">
+                {index.contributionsInWindow} marks + {index.reactsInWindow} hearts
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-800 bg-[#0c0c0e] p-3">
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Heard it live</p>
+              <p className="mt-1 text-lg font-semibold text-white">{index.activationReach}</p>
+              <p className="mt-1 text-[11px] text-gray-500">
+                credited people on performed pieces
+              </p>
+            </div>
+          </div>
+          {index.notes.length > 0 ? (
+            <ul className="space-y-1 text-[11px] text-gray-500">
+              {index.notes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {pack && pack.entries.length > 0 ? (
+        <div className="rounded-lg border border-gray-800 bg-black/40 p-3">
+          <p className="text-xs font-semibold text-white">Share credits</p>
+          <p className="mt-1 text-[11px] text-gray-500">
+            People who helped make this — for posts, programs, or sponsor decks.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-gray-200">
+            {pack.entries.slice(0, 16).map((e) => (
+              <li key={`${e.sourceType}-${e.sourceId}`}>
+                {e.creditName}
+                {e.selected ? " · featured" : ""}
+                {e.performed ? " · performed" : ""}
+                {e.reactCount > 0 ? ` · ♥ ${e.reactCount}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-          In-Garden credits ({credits.length})
+          Credits in the garden ({credits.length})
         </h3>
         {credits.length === 0 ? (
-          <p className="mt-1 text-xs text-gray-600">No credited contributions yet.</p>
+          <p className="mt-1 text-xs text-gray-600">
+            No names yet — they appear when people leave marks with a name (or claim identity).
+          </p>
         ) : (
           <ul className="mt-2 space-y-1 text-xs text-gray-300">
             {credits.slice(0, 12).map((c, i) => (
               <li key={`${c.creditName}-${i}`}>
-                {c.creditName} · {c.kind}
-                {c.selected ? " · selected" : ""} · ♥ {c.reactCount}
+                {c.creditName}
+                {c.selected ? " · featured" : ""} · ♥ {c.reactCount}
               </li>
             ))}
           </ul>
@@ -258,41 +425,49 @@ export default function GardenCommunityAdminPanel({ gardenId }: Props) {
 
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Contribution graph ({contributions.length})
+          Marks & culture ({contributions.length})
         </h3>
-        <ul className="mt-2 space-y-2">
-          {contributions.slice(0, 20).map((n) => (
-            <li
-              key={n.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 bg-black/30 px-3 py-2 text-xs text-gray-300"
-            >
-              <span className="min-w-0 truncate">
-                {n.creditName || "Anonymous"} · {n.sourceType}/{n.sourceId.slice(0, 8)} · ♥{" "}
-                {n.reactCount}
-                {n.selected ? " · selected" : ""}
-                {n.performed ? " · performed" : ""}
-              </span>
-              <span className="flex gap-1">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleSelect(n)}
-                  className="rounded border border-gray-600 px-2 py-1 text-[10px] hover:bg-white/5"
-                >
-                  {n.selected ? "Unselect" : "Select"}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || n.performed}
-                  onClick={() => void handlePerform(n)}
-                  className="rounded border border-gray-600 px-2 py-1 text-[10px] hover:bg-white/5 disabled:opacity-40"
-                >
-                  Perform
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <p className="mt-1 text-[11px] text-gray-500">
+          Feature a mark to show it under Culture. Mark performed when it lands in a live show.
+        </p>
+        {contributions.length === 0 ? (
+          <p className="mt-2 text-xs text-gray-600">
+            Empty for now — open the public garden and leave a mark, or attach a show.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {contributions.slice(0, 20).map((n) => (
+              <li
+                key={n.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 bg-black/30 px-3 py-2 text-xs text-gray-300"
+              >
+                <span className="min-w-0 truncate">
+                  {n.excerpt || n.kind} · {n.creditName || "Anonymous"} · ♥ {n.reactCount}
+                  {n.selected ? " · featured" : ""}
+                  {n.performed ? " · performed" : ""}
+                </span>
+                <span className="flex gap-1">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleSelect(n)}
+                    className="rounded border border-gray-600 px-2 py-1 text-[10px] hover:bg-white/5"
+                  >
+                    {n.selected ? "Unfeature" : "Feature"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || n.performed}
+                    onClick={() => void handlePerform(n)}
+                    className="rounded border border-gray-600 px-2 py-1 text-[10px] hover:bg-white/5 disabled:opacity-40"
+                  >
+                    Performed
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );

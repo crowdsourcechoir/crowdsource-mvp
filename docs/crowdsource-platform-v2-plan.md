@@ -71,3 +71,7 @@ If Platform V2 needs invitation or belonging gates beyond identity mode, documen
 ## Definition of done
 
 On a Populus-style Garden/Bloom a participant can: contribute under the configured identity mode; discover selected contributions; react; see in-Garden credit; and we can export a credit pack + the three Index metrics for a sponsor conversation.
+
+## Human UI (follow-on)
+
+See `docs/platform-v2-wysiwyg-garden-edit.md` — Community admin is plain language (no JSON); primary edit is `/g/[slug]?edit=1` with ⋮ settings.
