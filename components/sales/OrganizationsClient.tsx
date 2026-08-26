@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Organization, OrganizationType } from "@/lib/sales/types";
+import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 
 export default function OrganizationsClient() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -20,13 +21,14 @@ export default function OrganizationsClient() {
     setLoading(true);
     try {
       const res = await fetch(`/api/sales/organizations${q ? `?search=${encodeURIComponent(q)}` : ""}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load organizations");
-      setOrganizations(data.organizations ?? []);
-      setTypes(data.organizationTypes ?? []);
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load organizations"));
+      const body = data as { organizations?: Organization[]; organizationTypes?: OrganizationType[] };
+      setOrganizations(body.organizations ?? []);
+      setTypes(body.organizationTypes ?? []);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load organizations");
+      setError(publicErrorMessage(err, "Failed to load organizations"));
     } finally {
       setLoading(false);
     }

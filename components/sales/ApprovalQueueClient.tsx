@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { QueueItemDetail, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
+import type { QueueItemDetail, QueueSidebarItem, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
+import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import {
   applySelectContactResponse,
   applySelectedContact,
@@ -16,6 +17,7 @@ import {
   draftFromMutationPayload,
   isOpenDraftStatus,
   isSentDraftStatus,
+  type QueueMutationPayload,
 } from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 
@@ -41,9 +43,13 @@ function findingForContact(
 }
 
 export default function ApprovalQueueClient() {
-  const [items, setItems] = useState<QueueItemDetail[]>([]);
+  const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
+  const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<{ id: string; message: string } | null>(null);
+  const [detailNonce, setDetailNonce] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
@@ -76,18 +82,21 @@ export default function ApprovalQueueClient() {
     setLoading(true);
     try {
       const res = await fetch("/api/sales/queue", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load queue");
-      setItems(data.items ?? []);
-      setGmailConnected(Boolean(data.gmail?.connected));
-      setGmailEmail(data.gmail?.email ?? null);
-      setGmailSendEnabled(Boolean(data.gmail?.sendsEnabled ?? data.gmail?.sendEnabled));
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load queue"));
+      const body = data as { items?: QueueSidebarItem[]; gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean } };
+      setSidebar(body.items ?? []);
+      setDetailsById({});
+      setGmailConnected(Boolean(body.gmail?.connected));
+      setGmailEmail(body.gmail?.email ?? null);
+      setGmailSendEnabled(Boolean(body.gmail?.sendsEnabled ?? body.gmail?.sendEnabled));
       setLoadError(null);
       setActionError(null);
+      setDetailError(null);
       setSelectedIndex(0);
       setMobileDetailOpen(false);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load queue");
+      setLoadError(publicErrorMessage(err, "Failed to load queue"));
     } finally {
       setLoading(false);
     }
@@ -97,7 +106,61 @@ export default function ApprovalQueueClient() {
     load();
   }, [load]);
 
-  const current = items[selectedIndex] ?? null;
+  const selected = sidebar[selectedIndex] ?? null;
+  const selectedId = selected?.queueItem.id ?? null;
+  const current = selectedId ? detailsById[selectedId] ?? null : null;
+
+  const replaceDetail = useCallback((itemId: string, next: QueueItemDetail) => {
+    setDetailsById((prev) => ({ ...prev, [itemId]: next }));
+  }, []);
+
+  const dropQueueRow = useCallback((itemId: string) => {
+    setSidebar((prev) => prev.filter((row) => row.queueItem.id !== itemId));
+    setDetailsById((prev) => {
+      const { [itemId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (selectedIndex >= sidebar.length) {
+      setSelectedIndex(Math.max(0, sidebar.length - 1));
+    }
+  }, [sidebar.length, selectedIndex]);
+
+  useEffect(() => {
+    if (!selectedId || current) {
+      setDetailLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError(null);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/sales/queue/${selectedId}`, { cache: "no-store" });
+        const data = await readApiJson(res);
+        if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load this organization"));
+        if (cancelled) return;
+        const detail = (data as { detail?: QueueItemDetail }).detail;
+        if (!detail?.queueItem) throw new Error("Failed to load this organization");
+        replaceDetail(selectedId, detail);
+        setDetailError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setDetailError({
+            id: selectedId,
+            message: publicErrorMessage(err, "Failed to load this organization"),
+          });
+        }
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, current, replaceDetail, detailNonce]);
 
   useEffect(() => {
     setSendConfirmOpen(false);
@@ -121,8 +184,8 @@ export default function ApprovalQueueClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ editedSubject: subject, editedBody: cleanedEditedBody }),
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Save failed");
+    const data = await readApiJson(res);
+    if (!res.ok) throw new Error(apiErrorFromBody(data, "Save failed"));
   }, []);
 
   const persistDraft = useCallback(async () => {
@@ -141,7 +204,7 @@ export default function ApprovalQueueClient() {
       const prevBody = editedBody;
       const switched = applySelectedContact(current, contactId);
       if (switched) {
-        setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? switched : item)));
+        replaceDetail(itemId, switched);
         const d = switched.draft;
         if (d) {
           setEditedSubject(d.editedSubject ?? d.aiSubject);
@@ -156,22 +219,24 @@ export default function ApprovalQueueClient() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ contactId }),
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Could not switch contact");
-          setItems((prev) =>
-            prev.map((item) => (item.queueItem.id === itemId ? applySelectContactResponse(item, data, contactId) : item))
-          );
+          const data = (await readApiJson(res)) as QueueMutationPayload;
+          if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not switch contact"));
+          setDetailsById((prev) => {
+            const item = prev[itemId];
+            if (!item) return prev;
+            return { ...prev, [itemId]: applySelectContactResponse(item, data, contactId) };
+          });
           const d = draftFromMutationPayload(data);
           if (d) {
             setEditedSubject(d.editedSubject ?? d.aiSubject);
             setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
           }
         } catch (err) {
-          setActionError(err instanceof Error ? err.message : "Could not switch contact");
+          setActionError(publicErrorMessage(err, "Could not switch contact"));
         }
       })();
     },
-    [current, editedSubject, editedBody, persistDraftSnapshot]
+    [current, editedSubject, editedBody, persistDraftSnapshot, replaceDetail]
   );
 
   const executeDecision = useCallback(
@@ -224,30 +289,29 @@ export default function ApprovalQueueClient() {
               : {}),
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Decision failed");
-        if (data.gmail?.sent) showCopyStatus(`Sent via Gmail${data.gmail.email ? ` (${data.gmail.email})` : ""}`);
-        if (data.remaining && data.detail) {
-          const detail = data.detail as QueueItemDetail;
-          setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? detail : item)));
-          const nextDraft = draftFromMutationPayload(data);
+        const data = await readApiJson(res);
+        if (!res.ok) throw new Error(apiErrorFromBody(data, "Decision failed"));
+        const body = data as { remaining?: boolean; detail?: QueueItemDetail; gmail?: { sent?: boolean; email?: string } };
+        if (body.gmail?.sent) showCopyStatus(`Sent via Gmail${body.gmail.email ? ` (${body.gmail.email})` : ""}`);
+        if (body.remaining && body.detail) {
+          replaceDetail(current.queueItem.id, body.detail);
+          const nextDraft = draftFromMutationPayload(body);
           if (nextDraft) {
             setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
             setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
           }
         } else {
-          setItems((prev) => prev.filter((i) => i.queueItem.id !== current.queueItem.id));
-          setSelectedIndex((i) => Math.min(i, Math.max(0, items.length - 2)));
+          dropQueueRow(current.queueItem.id);
           setMobileDetailOpen(false);
         }
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : "Decision failed");
+        setActionError(publicErrorMessage(err, "Decision failed"));
       } finally {
         sendInFlight.current = false;
         setBusy(false);
       }
     },
-    [current, busy, editedSubject, editedBody, items.length, showCopyStatus, gmailConnected]
+    [current, busy, editedSubject, editedBody, showCopyStatus, gmailConnected, replaceDetail, dropQueueRow]
   );
 
   const requestSend = useCallback(() => {
@@ -266,18 +330,17 @@ export default function ApprovalQueueClient() {
     setActionError(null);
     try {
       const res = await fetch(`/api/sales/queue/${current.queueItem.id}/more-research`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Research failed");
-      if (data.detail) {
-        setItems((prev) => prev.map((item) => (item.queueItem.id === current.queueItem.id ? data.detail : item)));
-      }
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Research failed"));
+      const detail = (data as { detail?: QueueItemDetail }).detail;
+      if (detail) replaceDetail(current.queueItem.id, detail);
       showCopyStatus("Research re-run finished — review updated contacts and draft.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Research failed");
+      setActionError(publicErrorMessage(err, "Research failed"));
     } finally {
       setBusy(false);
     }
-  }, [current, busy, showCopyStatus]);
+  }, [current, busy, showCopyStatus, replaceDetail]);
 
   const hideContact = useCallback(
     async (contactId: string) => {
@@ -286,29 +349,23 @@ export default function ApprovalQueueClient() {
       setMenuOpenId(null);
       try {
         const res = await fetch(`/api/sales/contacts/${contactId}`, { method: "DELETE" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not hide contact");
+        const data = await readApiJson(res);
+        if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not hide contact"));
         const remaining = (current.contacts ?? []).filter((c) => c.id !== contactId);
         const next = remaining[0];
         if (next && next.id !== current.contact?.id) {
           await selectContact(next.id);
         } else {
-          setItems((prev) =>
-            prev.map((item) =>
-              item.queueItem.id === current.queueItem.id
-                ? { ...item, contacts: remaining }
-                : item
-            )
-          );
+          replaceDetail(current.queueItem.id, { ...current, contacts: remaining });
         }
         showCopyStatus("Contact hidden from this list.");
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : "Could not hide contact");
+        setActionError(publicErrorMessage(err, "Could not hide contact"));
       } finally {
         setBusy(false);
       }
     },
-    [current, busy, selectContact, showCopyStatus]
+    [current, busy, selectContact, showCopyStatus, replaceDetail]
   );
 
   const moveFunnel = useCallback(
@@ -317,13 +374,7 @@ export default function ApprovalQueueClient() {
       setMenuOpenId(null);
       const itemId = current.queueItem.id;
       const previous = current.opportunity.relationshipStage;
-      setItems((prev) =>
-        prev.map((item) =>
-          item.queueItem.id === itemId
-            ? { ...item, opportunity: { ...item.opportunity, relationshipStage: stage } }
-            : item
-        )
-      );
+      replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: stage } });
       showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
       void (async () => {
         try {
@@ -332,21 +383,15 @@ export default function ApprovalQueueClient() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ stage }),
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Could not move funnel");
+          const data = await readApiJson(res);
+          if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not move funnel"));
         } catch (err) {
-          setItems((prev) =>
-            prev.map((item) =>
-              item.queueItem.id === itemId
-                ? { ...item, opportunity: { ...item.opportunity, relationshipStage: previous } }
-                : item
-            )
-          );
-          setActionError(err instanceof Error ? err.message : "Could not move funnel");
+          replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: previous } });
+          setActionError(publicErrorMessage(err, "Could not move funnel"));
         }
       })();
     },
-    [current, showCopyStatus]
+    [current, showCopyStatus, replaceDetail]
   );
 
   const markContactSent = useCallback(
@@ -356,7 +401,7 @@ export default function ApprovalQueueClient() {
       setActionError(null);
       const itemId = current.queueItem.id;
       const snapshot = current;
-      setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? applySentDraft(item, contactId) : item)));
+      replaceDetail(itemId, applySentDraft(current, contactId));
       showCopyStatus(`Marked sent — stays in Awareness. Nudge in ${NUDGE_DUE_AFTER_DAYS} days if no reply.`);
       void (async () => {
         try {
@@ -370,39 +415,31 @@ export default function ApprovalQueueClient() {
                 : {}),
             }),
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Could not mark sent");
+          const data = (await readApiJson(res)) as QueueMutationPayload;
+          if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not mark sent"));
           if (!data.remaining) {
-            setItems((prev) => {
-              const idx = prev.findIndex((i) => i.queueItem.id === itemId);
-              const next = prev.filter((i) => i.queueItem.id !== itemId);
-              const nextIndex = Math.min(idx < 0 ? 0 : idx, Math.max(0, next.length - 1));
-              setTimeout(() => setSelectedIndex(nextIndex), 0);
-              return next;
-            });
+            dropQueueRow(itemId);
             setMobileDetailOpen(false);
           } else if (data.nextContactId || data.detail || data.draft) {
-            setItems((prev) =>
-              prev.map((item) => {
-                if (item.queueItem.id !== itemId) return item;
-                const sent = applySentDraft(item, contactId);
-                const next = applySelectContactResponse(sent, data, (data.nextContactId as string) || contactId);
-                const nextDraft = next.draft;
-                if (nextDraft) {
-                  setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
-                  setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
-                }
-                return next;
-              })
-            );
+            setDetailsById((prev) => {
+              const item = prev[itemId] ?? snapshot;
+              const sent = applySentDraft(item, contactId);
+              const next = applySelectContactResponse(sent, data, data.nextContactId || contactId);
+              const nextDraft = next.draft;
+              if (nextDraft) {
+                setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
+                setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
+              }
+              return { ...prev, [itemId]: next };
+            });
           }
         } catch (err) {
-          setItems((prev) => prev.map((item) => (item.queueItem.id === itemId ? snapshot : item)));
-          setActionError(err instanceof Error ? err.message : "Could not mark sent");
+          replaceDetail(itemId, snapshot);
+          setActionError(publicErrorMessage(err, "Could not mark sent"));
         }
       })();
     },
-    [current, editedSubject, editedBody, showCopyStatus]
+    [current, editedSubject, editedBody, showCopyStatus, replaceDetail, dropQueueRow]
   );
 
   const improveDraft = useCallback(async () => {
@@ -415,22 +452,20 @@ export default function ApprovalQueueClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject: editedSubject, body: editedBody }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Improve failed");
+      const data = (await readApiJson(res)) as QueueMutationPayload;
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Improve failed"));
       const saved = draftFromMutationPayload(data);
       if (!saved) throw new Error("Improve failed — no draft returned");
-      setItems((prev) =>
-        prev.map((item) => (item.queueItem.id === current.queueItem.id ? { ...item, draft: saved } : item))
-      );
+      replaceDetail(current.queueItem.id, { ...current, draft: saved });
       setEditedSubject(saved.editedSubject ?? saved.aiSubject);
       setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
       showCopyStatus("AI rewrite saved as a draft — not sent. Edit further if you want.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Improve failed");
+      setActionError(publicErrorMessage(err, "Improve failed"));
     } finally {
       setImproving(false);
     }
-  }, [current, busy, improving, editedSubject, editedBody, showCopyStatus]);
+  }, [current, busy, improving, editedSubject, editedBody, showCopyStatus, replaceDetail]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -445,7 +480,7 @@ export default function ApprovalQueueClient() {
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((i) => Math.min(items.length - 1, i + 1));
+        setSelectedIndex((i) => Math.min(sidebar.length - 1, i + 1));
         setMobileDetailOpen(true);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -458,9 +493,9 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items.length, mobileDetailOpen, sendConfirmOpen]);
+  }, [sidebar.length, mobileDetailOpen, sendConfirmOpen]);
 
-  const pendingCount = items.length;
+  const pendingCount = sidebar.length;
   const selectedAlreadySent = Boolean(
     current &&
       (current.contactDrafts ?? []).some(
@@ -469,9 +504,22 @@ export default function ApprovalQueueClient() {
   );
 
   if (loading) return <p className="text-gray-400">Loading queue…</p>;
-  if (loadError) return <p className="text-red-400">{loadError}</p>;
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-red-800 bg-red-950/40 p-6">
+        <p className="text-red-300">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-3 rounded-md border border-red-700 px-3 py-1.5 text-sm text-red-100 hover:bg-red-900/40"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
-  if (items.length === 0) {
+  if (sidebar.length === 0) {
     return (
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
         Queue is empty. Run the pipeline against an organization to generate reviewable opportunities.
@@ -488,7 +536,7 @@ export default function ApprovalQueueClient() {
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">{pendingCount} pending</div>
         <ul className="max-h-[75vh] overflow-y-auto overscroll-contain">
-          {items.map((item, i) => (
+          {sidebar.map((item, i) => (
             <li key={item.queueItem.id}>
               <button
                 type="button"
@@ -500,15 +548,15 @@ export default function ApprovalQueueClient() {
                 <span className="min-w-0 flex-1 truncate">
                   <span className="block truncate font-medium">
                     {item.queueItem.kind === "nudge" && <span className="mr-1 text-amber-400">Nudge · </span>}
-                    {item.organization.name}
+                    {item.organizationName}
                   </span>
-                  <span className="block truncate text-xs text-gray-500">{item.opportunity.title}</span>
+                  <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                 </span>
-                {item.score ? (
-                  <ScoreBadge score={item.score.totalScore} />
-                ) : item.draft?.confidenceScore != null ? (
+                {item.totalScore != null ? (
+                  <ScoreBadge score={item.totalScore} />
+                ) : item.draftConfidence != null ? (
                   <span className="rounded-md border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
-                    {Math.round(item.draft.confidenceScore * 100)}%
+                    {Math.round(item.draftConfidence * 100)}%
                   </span>
                 ) : null}
               </button>
@@ -517,7 +565,7 @@ export default function ApprovalQueueClient() {
         </ul>
       </div>
 
-      {current && (
+      {(current || selected) && (
         <div className={`rounded-xl border border-gray-800 p-4 sm:p-6 ${mobileDetailOpen ? "block" : "hidden lg:block"}`}>
           <button
             type="button"
@@ -527,6 +575,32 @@ export default function ApprovalQueueClient() {
             ← Back to queue
           </button>
 
+          {!current && (
+            <div>
+              <h2 className="text-xl font-semibold text-white">{selected?.organizationName}</h2>
+              <p className="text-sm text-gray-400">{selected?.opportunityTitle}</p>
+              {detailLoading || detailError?.id !== selectedId ? (
+                <p className="mt-4 text-sm text-gray-400">Loading contacts…</p>
+              ) : (
+                <div className="mt-4">
+                  <p className="text-sm text-red-300">{detailError?.message ?? "Could not load this organization."}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailError(null);
+                      setDetailNonce((n) => n + 1);
+                    }}
+                    className="mt-3 rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-800"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {current && (
+          <>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold text-white">
@@ -778,6 +852,8 @@ export default function ApprovalQueueClient() {
               Organization
             </Link>
           </div>
+          </>
+          )}
         </div>
       )}
 

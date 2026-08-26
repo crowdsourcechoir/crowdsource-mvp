@@ -391,6 +391,17 @@ export type OpportunityBrief = {
   risks: string[];
 };
 
+/** Sidebar row for GET /api/sales/queue — cheap fields only, no contacts/drafts/findings. */
+export type QueueSidebarItem = {
+  queueItem: ApprovalQueueItem;
+  organizationId: string;
+  organizationName: string;
+  opportunityId: string;
+  opportunityTitle: string;
+  totalScore: number | null;
+  draftConfidence: number | null;
+};
+
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */
 export type QueueItemDetail = {
   queueItem: ApprovalQueueItem;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createOrganization, listOrganizations } from "@/lib/sales/db/organizations";
 import { listOrganizationTypes } from "@/lib/sales/db/lookups";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
+import { publicErrorMessage } from "@/lib/sales/http-error";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     ]);
     return NextResponse.json({ organizations, organizationTypes }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
+    return NextResponse.json({ error: publicErrorMessage(err, "Failed to load organizations") }, { status: 500 });
   }
 }
 
@@ -44,6 +45,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ organization });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
+    return NextResponse.json({ error: publicErrorMessage(err, "Failed to add organization") }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
+import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 
 const STAGES = FUNNEL_STAGES.map((s) => ({
   ...s,
@@ -110,12 +111,12 @@ export default function FunnelClient() {
     setLoading(true);
     try {
       const res = await fetch("/api/sales/funnel", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load funnel");
-      setItems(data.items ?? []);
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load funnel"));
+      setItems((data as { items?: FunnelItemDetail[] }).items ?? []);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load funnel");
+      setError(publicErrorMessage(err, "Failed to load funnel"));
     } finally {
       setLoading(false);
     }
