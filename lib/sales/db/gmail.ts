@@ -1,6 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import type { GmailConnection } from "../types";
-import { GMAIL_OWNER_KEY } from "../gmail/constants";
+import { GMAIL_OWNER_KEY, hasSendsEnabledMarker, withSendsEnabledMarker } from "../gmail/constants";
 import { gmailSendsAllowed } from "../outreach/send-guard";
 
 function rowToConnection(row: Record<string, unknown>): GmailConnection {
@@ -11,7 +11,7 @@ function rowToConnection(row: Record<string, unknown>): GmailConnection {
     refreshTokenEncrypted: row.refresh_token_encrypted as string,
     historyId: (row.history_id as string | null) ?? null,
     scopes: (row.scopes as string[] | null) ?? [],
-    sendsEnabled: row.sends_enabled === true,
+    sendsEnabled: row.sends_enabled === true || hasSendsEnabledMarker(row.scopes as string[] | null),
     connectedAt: row.connected_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -103,22 +103,37 @@ export async function setGmailSendsEnabled(
   enabled: boolean,
   ownerKey: string = GMAIL_OWNER_KEY
 ): Promise<{ connected: boolean; email: string | null; configured: boolean; sendsEnabled: boolean }> {
+  const connection = await getGmailConnection(ownerKey);
+  if (!connection) {
+    throw new Error("Gmail is not connected. Connect Gmail first, then Resume sending.");
+  }
+
   const db = requireSupabaseAdmin();
-  const { data, error } = await db
+  const now = new Date().toISOString();
+  const scopes = withSendsEnabledMarker(connection.scopes, enabled);
+  const withColumn = await db
     .from("gmail_connections")
-    .update({ sends_enabled: enabled, updated_at: new Date().toISOString() })
+    .update({ sends_enabled: enabled, scopes, updated_at: now })
     .eq("owner_key", ownerKey)
     .select("id")
     .maybeSingle();
-  if (error) {
-    if (/sends_enabled/i.test(error.message)) {
-      throw new Error(
-        "Run supabase/sales-platform-add-gmail-send-safety.sql in the Supabase SQL Editor, then retry Resume sending."
-      );
+
+  if (withColumn.error && /sends_enabled/i.test(withColumn.error.message)) {
+    const withoutColumn = await db
+      .from("gmail_connections")
+      .update({ scopes, updated_at: now })
+      .eq("owner_key", ownerKey)
+      .select("id")
+      .maybeSingle();
+    if (withoutColumn.error) throw new Error(withoutColumn.error.message);
+    if (!withoutColumn.data) {
+      throw new Error("Gmail is not connected. Connect Gmail first, then Resume sending.");
     }
-    throw new Error(error.message);
+    return getGmailConnectionStatus(ownerKey);
   }
-  if (!data) {
+
+  if (withColumn.error) throw new Error(withColumn.error.message);
+  if (!withColumn.data) {
     throw new Error("Gmail is not connected. Connect Gmail first, then Resume sending.");
   }
   return getGmailConnectionStatus(ownerKey);

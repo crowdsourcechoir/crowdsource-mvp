@@ -8,6 +8,11 @@ import {
   pickNextRemainingInitialDraft,
   shouldBlockInitialGmailSend,
 } from "../../lib/sales/outreach/send-guard.ts";
+import {
+  GMAIL_SENDS_ENABLED_MARKER,
+  hasSendsEnabledMarker,
+  withSendsEnabledMarker,
+} from "../../lib/sales/gmail/constants.ts";
 
 function draft(overrides = {}) {
   return {
@@ -115,6 +120,12 @@ function main() {
   assert.equal(gmailSendsAllowed({ envFlag: undefined, connectionSendsEnabled: true }), true);
   assert.equal(gmailSendsAllowed({ envFlag: "false", connectionSendsEnabled: true }), false);
   assert.equal(gmailSendsAllowed({ envFlag: "", connectionSendsEnabled: false }), false);
+
+  assert.equal(hasSendsEnabledMarker(["https://www.googleapis.com/auth/gmail.send"]), false);
+  assert.equal(hasSendsEnabledMarker(["https://www.googleapis.com/auth/gmail.send", GMAIL_SENDS_ENABLED_MARKER]), true);
+  assert.deepEqual(withSendsEnabledMarker(["gmail.send"], true), ["gmail.send", GMAIL_SENDS_ENABLED_MARKER]);
+  assert.deepEqual(withSendsEnabledMarker(["gmail.send", GMAIL_SENDS_ENABLED_MARKER], false), ["gmail.send"]);
+  assert.equal(withSendsEnabledMarker(["gmail.send", GMAIL_SENDS_ENABLED_MARKER], true).filter((s) => s === GMAIL_SENDS_ENABLED_MARKER).length, 1);
 
   console.log("ok: send-guard blocks same-contact duplicates and keeps remint/nudge working");
 }

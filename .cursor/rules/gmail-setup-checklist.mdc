@@ -1,21 +1,20 @@
 ---
-description: Gmail reconnect is OAuth + Resume sending (not first-time Google Cloud setup)
+description: Gmail reconnect is OAuth + Resume sending (SQL is optional)
 alwaysApply: true
 ---
 
 # Gmail — reconnect (OAuth is already configured in Vercel)
 
-Production `GET /api/sales/gmail/status` is `configured: true`. The 2026-08-15 same-contact multi-send is guarded in code (draft claim, no remaining-queue hop to the same person, remint-only resend).
+Production `GET /api/sales/gmail/status` is `configured: true`. Same-contact multi-send is guarded in code. Resume sending does **not** require a SQL migration (uses a scopes marker if `sends_enabled` is missing).
 
-## Joel still needs to do (once this change is on production)
+## Joel still needs to do
 
-1. Run `supabase/sales-platform-add-gmail-send-safety.sql` once in the Supabase SQL Editor (adds `sends_enabled` + unique open draft per contact).
-2. Open `https://app.crowdsourcechoir.com/admin/sales` → **Connect Gmail** → Google consent.
-3. Click **Resume sending**. Reconnect alone stays paused.
-4. Send from the queue with **Send** → **Yes, send now**. Pause sending anytime without disconnecting.
+1. Open `https://app.crowdsourcechoir.com/admin/sales` → **Connect Gmail** → Google consent.
+2. Click **Resume sending**. Reconnect alone stays paused.
+3. Send from the queue with **Send** → **Yes, send now**. Pause sending anytime without disconnecting.
 
-If Resume sending errors about `sends_enabled`, the SQL in step 1 was not applied yet.
+Skip the Supabase SQL Editor. The unique-index script timed out and is optional.
 
-Emergency off: set Vercel `SALES_GMAIL_SENDS_ENABLED=false` (wins over the UI toggle) or click Pause sending / Disconnect.
+Emergency off: **Pause sending**, **Disconnect**, or Vercel `SALES_GMAIL_SENDS_ENABLED=false`.
 
 When Gmail is connected and sending is resumed, delete or update this rule so it stops surfacing as pending.
