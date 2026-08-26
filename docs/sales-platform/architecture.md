@@ -190,7 +190,7 @@ HubSpot and Mailchimp are **not** used for prospect outreach. Gmail is the sende
 - **Nudges:** Cron `/api/sales/cron/nudges` drafts follow-ups into the approval queue; human approve sends in-thread. Never auto-send.
 - **Activities:** `outreach_activities` + opportunity touch columns (`last_outbound_at`, `last_inbound_at`, `next_follow_up_at`, `gmail_thread_id`).
 - **Learning:** `outreach_feedback` from edits/rejects feeds draft/nudge few-shots.
-- **Setup:** `supabase/sales-platform-add-gmail.sql` + `supabase/sales-platform-add-gmail-send-safety.sql` + `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_TOKEN_ENCRYPTION_KEY` (see `.env.example`). Connect Gmail then **Resume sending** on `/admin/sales`.
+- **Setup:** `supabase/sales-platform-add-gmail.sql` + `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_TOKEN_ENCRYPTION_KEY` (see `.env.example`). Connect Gmail then **Resume sending** on `/admin/sales`. The `sends_enabled` column is optional.
 
 ## 8. Security and reliability considerations
 

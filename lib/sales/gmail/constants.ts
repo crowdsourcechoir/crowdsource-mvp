@@ -12,6 +12,23 @@ export const GMAIL_SCOPES = [
 
 export const GMAIL_OWNER_KEY = "default";
 
+/**
+ * Stored only in our gmail_connections.scopes array — never sent to Google.
+ * Lets Resume sending work before the optional sends_enabled column exists
+ * (Supabase SQL editor timed out on the heavier unique-index migration).
+ */
+export const GMAIL_SENDS_ENABLED_MARKER = "csc:gmail-sends-enabled";
+
+export function hasSendsEnabledMarker(scopes: string[] | null | undefined): boolean {
+  return (scopes ?? []).includes(GMAIL_SENDS_ENABLED_MARKER);
+}
+
+export function withSendsEnabledMarker(scopes: string[] | null | undefined, enabled: boolean): string[] {
+  const next = (scopes ?? []).filter((scope) => scope !== GMAIL_SENDS_ENABLED_MARKER);
+  if (enabled) next.push(GMAIL_SENDS_ENABLED_MARKER);
+  return next;
+}
+
 export function gmailThreadUrl(threadId: string): string {
   return `https://mail.google.com/mail/u/0/#inbox/${threadId}`;
 }
