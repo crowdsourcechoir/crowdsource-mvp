@@ -173,3 +173,6 @@ should remain the source of truth for workspace language.
 
 Platform maturity and V2 community planning live in
 `docs/crowdsource-platform-v2-plan.md`.
+
+Gameday concurrency (QR stampede, media uploads at stadium scale) lives in
+`docs/gameday-scale-strategy.md`.
