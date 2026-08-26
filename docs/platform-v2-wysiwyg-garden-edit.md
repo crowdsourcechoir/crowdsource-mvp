@@ -74,3 +74,37 @@ The long admin form (Fan map / commerce / debugger) is tooling — not the prima
 4. Document that map pin-on-garden lands next (Composer/Live seams stay API-ready)
 
 Non-goals this cut: full zone drag on map, Creation Engine, reply/remix, Sales CRM.
+
+---
+
+## Seed → Bloom model (product lock, pending build)
+
+| Concept | Fan-facing | Behavior |
+|---|---|---|
+| **Plant a seed** | Replaces “Leave a mark” | First living act in the Garden |
+| **Seed → Bloom** | “Grow a journey” from a seed | Each seed *can* become a Bloom (same family as today’s Blooms) |
+| **Bloom lifetime** | Evergreen or time-bound | Open forever, or closes after an event / window |
+| **Bloom stage** | Center or map | **Center:** full-bleed atmosphere + prompts in the middle (current live Bloom / Song Garden). **Map:** prompts unlock and sit on places |
+
+Garden = persistent world. Seed = contribution that can sprout. Bloom = journey grown from a seed (or planned show). Song Garden is a *presentation* of a Bloom, not a separate platform.
+
+### Bloom atmosphere (background) — pluggable, not video-only
+
+Blooms already can generate a **vibe-prompt video loop**. That stays available, but atmosphere is a **chooser**, not a single pipeline:
+
+| Mode | What fans see | Source |
+|---|---|---|
+| **Vibe video loop** | Moving full-bleed loop (today’s Bloom tool) | Generate from vibe prompt |
+| **Static photo** | Still full-bleed image | Upload / library / hero |
+| **Map plate** | Season / venue art (± ambient motion) | Garden map pin path |
+| **Gaussian / spatial env** | Soft 3D / immersive field (future-friendly) | Separate generator or asset |
+| **Solid / gradient** | Minimal brand wash | Brand colors only |
+
+Rules:
+- Atmosphere is set **per Bloom** (and Garden can supply a default).
+- Center-stage Blooms use atmosphere behind centered prompts.
+- Map-stage Blooms use map (or map + overlay atmosphere); prompts live on pins.
+- Generating a new vibe loop must **not** wipe an intentionally chosen static photo / gaussian — swap modes explicitly in the ⋮ / stage picker.
+
+UI sketch (edit ⋮ → **Atmosphere**): pick mode → upload or Generate → preview on the live garden before publish.
+
