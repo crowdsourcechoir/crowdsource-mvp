@@ -161,11 +161,31 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
   if (items.length === 0) return [];
   const db = requireSupabaseAdmin();
 
-  const opportunities = await fetchInChunks<{ id: string; title: string; organization_id: string }>(
-    items.map((item) => item.opportunityId),
-    async (chunk) => db.from("opportunities").select("id, title, organization_id").in("id", chunk)
-  );
+  const scoreIds = items.map((item) => item.prospectScoreId).filter((id): id is string => Boolean(id));
+  const draftIds = items.map((item) => item.outreachDraftId).filter((id): id is string => Boolean(id));
+
+  const [opportunities, scoreRows, draftRows] = await Promise.all([
+    fetchInChunks<{ id: string; title: string; organization_id: string }>(
+      items.map((item) => item.opportunityId),
+      async (chunk) => db.from("opportunities").select("id, title, organization_id").in("id", chunk)
+    ),
+    scoreIds.length > 0
+      ? fetchInChunks<{ id: string; total_score: number }>(scoreIds, async (chunk) =>
+          db.from("prospect_scores").select("id, total_score").in("id", chunk)
+        )
+      : Promise.resolve([]),
+    draftIds.length > 0
+      ? fetchInChunks<{ id: string; confidence_score: number | null }>(draftIds, async (chunk) =>
+          db.from("outreach_drafts").select("id, confidence_score").in("id", chunk)
+        )
+      : Promise.resolve([]),
+  ]);
   const oppById = new Map(opportunities.map((row) => [row.id, row]));
+  const scoresById = new Map(scoreRows.map((row) => [row.id, Number(row.total_score)]));
+  const confidenceByDraft = new Map<string, number>();
+  for (const row of draftRows) {
+    if (row.confidence_score != null) confidenceByDraft.set(row.id, Number(row.confidence_score));
+  }
 
   const organizations = await fetchInChunks<{ id: string; name: string }>(
     opportunities.map((row) => row.organization_id),
@@ -173,61 +193,19 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
   );
   const orgById = new Map(organizations.map((row) => [row.id, row]));
 
-  const scoreIds = items.map((item) => item.prospectScoreId).filter((id): id is string => Boolean(id));
-  const scoresById = new Map<string, number>();
-  if (scoreIds.length > 0) {
-    const scoreRows = await fetchInChunks<{ id: string; total_score: number }>(scoreIds, async (chunk) =>
-      db.from("prospect_scores").select("id, total_score").in("id", chunk)
-    );
-    for (const row of scoreRows) scoresById.set(row.id, Number(row.total_score));
-  }
-
-  const missingScoreOppIds = items
-    .filter((item) => !item.prospectScoreId || scoresById.get(item.prospectScoreId) == null)
-    .map((item) => item.opportunityId);
-  const latestScoreByOpp = new Map<string, { score: number; at: number }>();
-  if (missingScoreOppIds.length > 0) {
-    const scoreRows = await fetchInChunks<{
-      opportunity_id: string;
-      total_score: number;
-      created_at: string;
-    }>(missingScoreOppIds, async (chunk) =>
-      db.from("prospect_scores").select("opportunity_id, total_score, created_at").in("opportunity_id", chunk)
-    );
-    for (const row of scoreRows) {
-      const at = new Date(row.created_at).getTime();
-      const prev = latestScoreByOpp.get(row.opportunity_id);
-      if (!prev || at >= prev.at) {
-        latestScoreByOpp.set(row.opportunity_id, { score: Number(row.total_score), at });
-      }
-    }
-  }
-
-  const draftIds = items.map((item) => item.outreachDraftId).filter((id): id is string => Boolean(id));
-  const confidenceByDraft = new Map<string, number>();
-  if (draftIds.length > 0) {
-    const draftRows = await fetchInChunks<{ id: string; confidence_score: number | null }>(draftIds, async (chunk) =>
-      db.from("outreach_drafts").select("id, confidence_score").in("id", chunk)
-    );
-    for (const row of draftRows) {
-      if (row.confidence_score != null) confidenceByDraft.set(row.id, Number(row.confidence_score));
-    }
-  }
-
   const sidebar: QueueSidebarItem[] = [];
   for (const queueItem of items) {
     const opportunity = oppById.get(queueItem.opportunityId);
     if (!opportunity) continue;
     const organization = orgById.get(opportunity.organization_id);
     if (!organization) continue;
-    const linkedScore = queueItem.prospectScoreId ? scoresById.get(queueItem.prospectScoreId) : undefined;
     sidebar.push({
       queueItem,
       organizationId: organization.id,
       organizationName: organization.name,
       opportunityId: opportunity.id,
       opportunityTitle: opportunity.title,
-      totalScore: linkedScore ?? latestScoreByOpp.get(queueItem.opportunityId)?.score ?? null,
+      totalScore: queueItem.prospectScoreId ? scoresById.get(queueItem.prospectScoreId) ?? null : null,
       draftConfidence: queueItem.outreachDraftId
         ? confidenceByDraft.get(queueItem.outreachDraftId) ?? null
         : null,

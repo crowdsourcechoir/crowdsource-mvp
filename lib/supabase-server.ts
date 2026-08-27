@@ -15,8 +15,14 @@ if (url && serviceRoleKey) {
     // serving stale Supabase rows after writes (e.g. queue drafts still saying "I've attached..."
     // after ensure-book-links updated them).
     global: {
-      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-        fetch(input, { ...init, cache: "no-store" }),
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        const timeout = AbortSignal.timeout(8_000);
+        const signal =
+          init?.signal && typeof AbortSignal.any === "function"
+            ? AbortSignal.any([init.signal, timeout])
+            : timeout;
+        return fetch(input, { ...init, cache: "no-store", signal });
+      },
     },
   });
 }

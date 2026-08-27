@@ -19,6 +19,16 @@ assert.equal(
   publicErrorMessage("fetch failed", "x"),
   "The database is temporarily unreachable. Wait a minute and retry."
 );
+const typeErr = new TypeError("fetch failed");
+assert.equal(publicErrorMessage(typeErr, "x"), "The database is temporarily unreachable. Wait a minute and retry.");
+assert.equal(
+  publicErrorMessage("TypeError: fetch failed", "x"),
+  "The database is temporarily unreachable. Wait a minute and retry."
+);
+assert.equal(
+  publicErrorMessage("upstream connect error or disconnect/reset before headers. reset reason: connection termination", "x"),
+  "The database is temporarily unreachable. Wait a minute and retry."
+);
 assert.equal(publicErrorMessage("Contact needs a name and verified-format email", "x"), "Contact needs a name and verified-format email");
 assert.equal(apiErrorFromBody({ error: cloudflare522 }, "Failed to load queue"), "The database is temporarily unreachable. Wait a minute and retry.");
 assert.equal(publicErrorMessage("", "fallback"), "fallback");

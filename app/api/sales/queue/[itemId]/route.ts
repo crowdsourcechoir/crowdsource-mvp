@@ -4,6 +4,7 @@ import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 15;
 
 /** Full review payload for one queue row. The list endpoint is sidebar-only. */
 export async function GET(_request: Request, { params }: { params: Promise<{ itemId: string }> }) {

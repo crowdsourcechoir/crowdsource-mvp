@@ -81,7 +81,7 @@ export default function ApprovalQueueClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/sales/queue", { cache: "no-store" });
+      const res = await fetch("/api/sales/queue", { cache: "no-store", signal: AbortSignal.timeout(20_000) });
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load queue"));
       const body = data as { items?: QueueSidebarItem[]; gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean } };
@@ -138,7 +138,7 @@ export default function ApprovalQueueClient() {
     setDetailError(null);
     void (async () => {
       try {
-        const res = await fetch(`/api/sales/queue/${selectedId}`, { cache: "no-store" });
+        const res = await fetch(`/api/sales/queue/${selectedId}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
         const data = await readApiJson(res);
         if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load this organization"));
         if (cancelled) return;
