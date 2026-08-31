@@ -99,6 +99,7 @@ export async function executeFindLeads(raw: FindLeadsRequest): Promise<FindLeads
       typeLabel,
       city: org.locationCity,
       region: org.locationRegion,
+      roleHint,
     });
     const discovery = await runDiscoveryRun("manual", {
       mode: "custom",

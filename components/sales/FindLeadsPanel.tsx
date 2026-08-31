@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Organization } from "@/lib/sales/types";
 import { CONTACT_ROLE_PRESETS, type FindLeadsAction } from "@/lib/sales/find-leads";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 
 type FindLeadsPanelProps = {
   organization: Organization | null;
+  initialAction?: FindLeadsAction;
+  initialRole?: string;
 };
 
 const ACTIONS: { id: FindLeadsAction; label: string; hint: string }[] = [
@@ -16,10 +18,10 @@ const ACTIONS: { id: FindLeadsAction; label: string; hint: string }[] = [
   { id: "fill_queue", label: "Unstick queue", hint: "Re-run high-score leads stuck without a verified email." },
 ];
 
-export default function FindLeadsPanel({ organization }: FindLeadsPanelProps) {
-  const [action, setAction] = useState<FindLeadsAction>("contact");
+export default function FindLeadsPanel({ organization, initialAction, initialRole }: FindLeadsPanelProps) {
+  const [action, setAction] = useState<FindLeadsAction>(initialAction ?? "contact");
   const [roleId, setRoleId] = useState<string>(CONTACT_ROLE_PRESETS[0].id);
-  const [customRole, setCustomRole] = useState("");
+  const [customRole, setCustomRole] = useState(initialRole ?? "");
   const [count, setCount] = useState(10);
   const [focus, setFocus] = useState("");
   const [intent, setIntent] = useState("");
@@ -27,12 +29,29 @@ export default function FindLeadsPanel({ organization }: FindLeadsPanelProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (initialAction) setAction(initialAction);
+  }, [initialAction]);
+
+  useEffect(() => {
+    if (initialRole?.trim()) setCustomRole(initialRole.trim());
+  }, [initialRole]);
+
+  useEffect(() => {
+    if (initialAction !== "similar" || !organization?.name) return;
+    setIntent((prev) => {
+      if (prev.trim()) return prev;
+      return `10 more like ${organization.name}${initialRole ? ` (${initialRole})` : ""}`;
+    });
+  }, [initialAction, organization?.name, initialRole]);
+
   const roleHint = useMemo(() => {
     if (customRole.trim()) return customRole.trim();
     return CONTACT_ROLE_PRESETS.find((p) => p.id === roleId)?.hint ?? CONTACT_ROLE_PRESETS[0].hint;
   }, [customRole, roleId]);
 
   const needsOrg = action === "contact" || action === "similar";
+  const similarRoleHint = action === "similar" ? customRole.trim() || null : null;
 
   async function run() {
     setBusy(true);
@@ -47,7 +66,7 @@ export default function FindLeadsPanel({ organization }: FindLeadsPanelProps) {
           intent: intent.trim() || undefined,
           organizationId: organization?.id,
           organizationName: organization?.name,
-          roleHint: action === "contact" ? roleHint : undefined,
+          roleHint: action === "contact" ? roleHint : similarRoleHint,
           count,
           focus: action === "discover" ? focus.trim() || undefined : undefined,
         }),
@@ -98,31 +117,33 @@ export default function FindLeadsPanel({ organization }: FindLeadsPanelProps) {
         <p className="mt-3 text-xs text-amber-300">Select an organization in search first.</p>
       ) : null}
 
-      {action === "contact" ? (
+      {action === "contact" || action === "similar" ? (
         <div className="mt-3 space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {CONTACT_ROLE_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => {
-                  setRoleId(preset.id);
-                  setCustomRole("");
-                }}
-                className={`rounded-full border px-2.5 py-1 text-xs ${
-                  roleId === preset.id && !customRole
-                    ? "border-emerald-600 bg-emerald-950/40 text-emerald-200"
-                    : "border-gray-800 text-gray-400 hover:border-gray-600"
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
+          {action === "contact" ? (
+            <div className="flex flex-wrap gap-1.5">
+              {CONTACT_ROLE_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    setRoleId(preset.id);
+                    setCustomRole("");
+                  }}
+                  className={`rounded-full border px-2.5 py-1 text-xs ${
+                    roleId === preset.id && !customRole
+                      ? "border-emerald-600 bg-emerald-950/40 text-emerald-200"
+                      : "border-gray-800 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <input
             value={customRole}
             onChange={(e) => setCustomRole(e.target.value)}
-            placeholder="Or type a role…"
+            placeholder={action === "similar" ? "Optional role to look for…" : "Or type a role…"}
             className="w-full rounded-md border border-gray-800 bg-gray-900 px-3 py-1.5 text-sm text-white placeholder:text-gray-600"
           />
         </div>

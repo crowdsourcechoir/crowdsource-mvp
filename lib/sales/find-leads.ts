@@ -100,10 +100,22 @@ export function similarFocusForOrg(input: {
   typeLabel: string | null;
   city: string | null;
   region: string | null;
+  roleHint?: string | null;
 }): string {
   const type = input.typeLabel?.trim() || "organization";
   const where = [input.city, input.region].filter(Boolean).join(", ");
-  return `${type}s like ${input.name}${where ? ` in ${where}` : ""} annual conference fan experience`;
+  const role = input.roleHint?.trim();
+  const roleBit = role ? ` — ${role}` : "";
+  return `${type}s like ${input.name}${where ? ` in ${where}` : ""} annual conference fan experience${roleBit}`;
+}
+
+export function findMoreLikeRoleHref(orgId: string, role: string): string {
+  const params = new URLSearchParams({
+    find: "similar",
+    orgId,
+    role,
+  });
+  return `/admin/sales/organizations?${params.toString()}`;
 }
 
 export function contactRoleRank(roleTitle: string | null | undefined, roleHint: string | null | undefined): number {

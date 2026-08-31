@@ -3,7 +3,7 @@
  * Run: npx tsx scripts/sales/test-find-leads.mjs
  */
 import assert from "node:assert/strict";
-import { contactRoleRank, parseFindIntent, similarFocusForOrg } from "../../lib/sales/find-leads.ts";
+import { contactRoleRank, findMoreLikeRoleHref, parseFindIntent, similarFocusForOrg } from "../../lib/sales/find-leads.ts";
 
 const contact = parseFindIntent("find me the fan engagement person at this org");
 assert.equal(contact.action, "contact");
@@ -33,8 +33,25 @@ const focus = similarFocusForOrg({
 });
 assert.match(focus, /Sports teams like Gonzaga/);
 assert.match(focus, /Spokane/);
+assert.doesNotMatch(focus, /Director/);
+
+const focusWithRole = similarFocusForOrg({
+  name: "Seattle Sounders FC",
+  typeLabel: "Sports team",
+  city: "Seattle",
+  region: "WA",
+  roleHint: "Director of Fan Engagement",
+});
+assert.match(focusWithRole, /Sports teams like Seattle Sounders FC/);
+assert.match(focusWithRole, /Director of Fan Engagement/);
 
 assert.ok(contactRoleRank("Director of Fan Engagement", "fan engagement marketing") > contactRoleRank("Accountant", "fan engagement marketing"));
 assert.equal(contactRoleRank(null, "fan engagement"), 0);
+
+const href = findMoreLikeRoleHref("org-1", "Director of Fan Engagement");
+assert.match(href, /^\/admin\/sales\/organizations\?/);
+assert.match(href, /find=similar/);
+assert.match(href, /orgId=org-1/);
+assert.match(href, /Director/);
 
 console.log("find-leads intent ok");

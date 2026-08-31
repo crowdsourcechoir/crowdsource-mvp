@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import type { Organization } from "@/lib/sales/types";
 import type { TodaySnapshot } from "@/lib/sales/today";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import OrgSearchBar from "@/components/sales/OrgSearchBar";
-import FindLeadsPanel from "@/components/sales/FindLeadsPanel";
 import ApprovalQueueClient from "@/components/sales/ApprovalQueueClient";
 import FollowUpsClient from "@/components/sales/FollowUpsClient";
 import RepliesWorkPane from "@/components/sales/RepliesWorkPane";
@@ -34,7 +32,6 @@ export default function SalesHomeClient() {
   const searchParams = useSearchParams();
   const [snapshot, setSnapshot] = useState<TodaySnapshot | null>(null);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
-  const [org, setOrg] = useState<Organization | null>(null);
   const [error, setError] = useState<string | null>(null);
   const workParam = searchParams.get("work");
   const work = parseWork(workParam);
@@ -72,7 +69,12 @@ export default function SalesHomeClient() {
   return (
     <div>
       <div className="mb-6">
-        <OrgSearchBar selected={org} onSelect={setOrg} />
+        <OrgSearchBar
+          selected={null}
+          onSelect={(next) => {
+            if (next) router.push(`/admin/sales/organizations/${next.id}`);
+          }}
+        />
       </div>
 
       {gmail && !gmail.connected ? (
@@ -110,31 +112,28 @@ export default function SalesHomeClient() {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <FindLeadsPanel organization={org} />
-        <div className="min-w-0">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-              {work === "send" ? "Send queue" : work === "followups" ? "Follow-ups" : "Replies"}
-            </h2>
-            {work === "send" ? (
-              <Link href="/admin/sales/queue" className="text-xs text-gray-600 underline">
-                Full queue
-              </Link>
-            ) : work === "followups" ? (
-              <Link href="/admin/sales/follow-ups" className="text-xs text-gray-600 underline">
-                Full follow-ups
-              </Link>
-            ) : (
-              <Link href="/admin/sales/funnel" className="text-xs text-gray-600 underline">
-                Funnel board
-              </Link>
-            )}
-          </div>
-          {work === "send" ? <ApprovalQueueClient /> : null}
-          {work === "followups" ? <FollowUpsClient /> : null}
-          {work === "replies" ? <RepliesWorkPane /> : null}
+      <div className="min-w-0">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            {work === "send" ? "Send queue" : work === "followups" ? "Follow-ups" : "Replies"}
+          </h2>
+          {work === "send" ? (
+            <Link href="/admin/sales/queue" className="text-xs text-gray-600 underline">
+              Full queue
+            </Link>
+          ) : work === "followups" ? (
+            <Link href="/admin/sales/follow-ups" className="text-xs text-gray-600 underline">
+              Full follow-ups
+            </Link>
+          ) : (
+            <Link href="/admin/sales/funnel" className="text-xs text-gray-600 underline">
+              Funnel board
+            </Link>
+          )}
         </div>
+        {work === "send" ? <ApprovalQueueClient /> : null}
+        {work === "followups" ? <FollowUpsClient /> : null}
+        {work === "replies" ? <RepliesWorkPane /> : null}
       </div>
 
       <details className="mt-12 rounded-xl border border-gray-900">
