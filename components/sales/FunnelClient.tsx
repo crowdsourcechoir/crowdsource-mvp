@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
@@ -103,6 +104,8 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
 }
 
 export default function FunnelClient() {
+  const searchParams = useSearchParams();
+  const focus = searchParams.get("focus");
   const [items, setItems] = useState<FunnelItemDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,10 +156,20 @@ export default function FunnelClient() {
   const grouped = useMemo(() => {
     const byStage = new Map<RelationshipStage, FunnelItemDetail[]>(STAGES.map((s) => [s.key, []]));
     for (const item of items) {
-      if (item.opportunity.relationshipStage) byStage.get(item.opportunity.relationshipStage)?.push(item);
+      if (!item.opportunity.relationshipStage) continue;
+      if (focus === "replies") {
+        const inbound = Boolean(item.opportunity.lastInboundAt);
+        const interest = item.opportunity.relationshipStage === "interest";
+        if (!inbound && !interest) continue;
+      } else if (focus === "nudge") {
+        if (!item.needsNudge) continue;
+      } else if (focus === "won") {
+        if (item.opportunity.relationshipStage !== "purchase") continue;
+      }
+      byStage.get(item.opportunity.relationshipStage)?.push(item);
     }
     return byStage;
-  }, [items]);
+  }, [items, focus]);
 
   if (loading) return <p className="text-gray-400">Loading funnel…</p>;
   if (error) return <p className="text-red-400">{error}</p>;
@@ -170,6 +183,18 @@ export default function FunnelClient() {
   }
 
   return (
+    <div>
+      {focus ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-2 text-sm text-gray-300">
+          <span>
+            Showing {focus === "replies" ? "replies / Interest" : focus === "nudge" ? "follow-ups due" : focus}
+            {" — "}
+            <Link href="/admin/sales/funnel" className="underline">
+              show all
+            </Link>
+          </span>
+        </div>
+      ) : null}
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {STAGES.map((stage) => {
         const stageItems = grouped.get(stage.key) ?? [];
@@ -189,6 +214,7 @@ export default function FunnelClient() {
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
