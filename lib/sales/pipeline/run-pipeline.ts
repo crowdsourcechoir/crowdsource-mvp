@@ -8,6 +8,7 @@ import { looksLikePersonName, hasVerifiedEmail } from "../dedupe";
 import { ensureBookLinks } from "../outreach/ensureBookLinks";
 import { claimLooksLikeCalendarDate } from "../research/extractEventDates";
 import type { Contact, PipelineStage } from "../types";
+import { contactRoleRank } from "../find-leads";
 
 import { runNormalizeStage } from "./stages/normalize";
 import { runResearchStage } from "./stages/research";
@@ -55,10 +56,11 @@ export type PipelineRunSummary = {
  * can always look up/confirm the real send-to address before approving. Email verification
  * status is only the tie-breaker among named people.
  */
-function pickBestContact(contacts: Contact[]): Contact | null {
+function pickBestContact(contacts: Contact[], contactRoleHint?: string | null): Contact | null {
   const emailRank = (c: Contact) =>
     ({ valid_format: 0, verified_deliverable: 0, risky: 1, unverified: 2, invalid: 3 })[c.emailVerificationStatus] ?? 2;
-  const rank = (c: Contact) => (looksLikePersonName(c.fullName) ? 0 : 10) + emailRank(c);
+  const rank = (c: Contact) =>
+    (looksLikePersonName(c.fullName) ? 0 : 10) + emailRank(c) - contactRoleRank(c.roleTitle, contactRoleHint) * 5;
   const withName = contacts.filter((c) => c.fullName);
   if (withName.length === 0) return null;
   return [...withName].sort((a, b) => rank(a) - rank(b))[0];
@@ -70,9 +72,15 @@ function pickBestContact(contacts: Contact[]): Contact | null {
  * stage is a separate agent_runs row; a failure at one stage halts only what depends on it,
  * not the whole run (see docs/sales-platform/ai-workflow.md failure-isolation notes per stage).
  */
+export type PipelineRunOptions = {
+  /** Bias research + contact pick toward this role (e.g. "fan engagement"). */
+  contactRoleHint?: string | null;
+};
+
 export async function runPipelineForOrganization(
   organizationId: string,
-  trigger: "manual" | "cron" | "reprocess_request" = "manual"
+  trigger: "manual" | "cron" | "reprocess_request" = "manual",
+  options?: PipelineRunOptions
 ): Promise<PipelineRunSummary> {
   const org = await getOrganization(organizationId);
   if (!org) throw new Error(`Organization ${organizationId} not found.`);
@@ -91,6 +99,7 @@ export async function runPipelineForOrganization(
     // Non-fatal — draft stage also sanitizes attachment wording per email.
   }
 
+  const contactRoleHint = options?.contactRoleHint?.trim() || null;
   const pipelineRun = await createPipelineRun(organizationId, trigger);
   const stagesRun: PipelineRunSummary["stagesRun"] = [];
   let hadFailure = false;
@@ -128,7 +137,9 @@ export async function runPipelineForOrganization(
   const freshOrg = (await getOrganization(organizationId)) ?? org;
 
   // Stage 2 — research. Partial failure is acceptable; continue with whatever was found.
-  const researchResult = await runStage("research", { organizationId }, () => runResearchStage(freshOrg, pipelineRun.id));
+  const researchResult = await runStage("research", { organizationId, contactRoleHint }, () =>
+    runResearchStage(freshOrg, pipelineRun.id, { contactRoleHint })
+  );
 
   // Stage 3 — opportunity detection. Even on failure, proceed with whatever opportunities already existed.
   await runStage("detect_opportunity", { organizationId }, () => runDetectOpportunitiesStage(freshOrg, pipelineRun.id));
@@ -154,7 +165,7 @@ export async function runPipelineForOrganization(
   await runStage("verify_contact", { organizationId }, () => runVerifyContactsStage(freshOrg));
 
   const contacts = await listContactsForOrganization(organizationId);
-  let bestContact = pickBestContact(contacts);
+  let bestContact = pickBestContact(contacts, contactRoleHint);
 
   // A human decision is final — re-running the pipeline (e.g. to refresh research on other
   // opportunities for this org) must never re-score/re-draft/re-queue an opportunity a human
@@ -219,7 +230,7 @@ export async function runPipelineForOrganization(
         await runStage("enrich_contact", { organizationId, afterDeepen: true }, () => runEnrichContactsStage(freshOrg));
         await runStage("verify_contact", { organizationId, afterDeepen: true }, () => runVerifyContactsStage(freshOrg));
         const refreshedContacts = await listContactsForOrganization(organizationId);
-        bestContact = pickBestContact(refreshedContacts);
+        bestContact = pickBestContact(refreshedContacts, contactRoleHint);
         contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
         const rescored = await runStage("score", { opportunityId: opportunity.id, rescoreAfterDeepen: true }, () =>
           runScoreStage(freshOrg, opportunity, pipelineRun.id)

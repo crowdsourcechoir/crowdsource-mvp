@@ -46,10 +46,18 @@ For namedPeopleMentioned, only include an actual named human being (a real first
  * Returns the raw HTML too, so the caller can discover further links from it.
  * Exported for the deepen-research pass (search-backed second hop) to reuse the same boundary.
  */
+function researchSystemPrompt(contactRoleHint?: string | null): string {
+  if (!contactRoleHint?.trim()) return SYSTEM_PROMPT;
+  return `${SYSTEM_PROMPT}
+
+Joel asked to prioritize named people whose titles relate to: "${contactRoleHint.trim()}". Still never invent names or emails.`;
+}
+
 export async function fetchAndExtractFromUrl(
   org: Organization,
   pipelineRunId: string,
-  url: string
+  url: string,
+  contactRoleHint?: string | null
 ): Promise<{
   html: string | null;
   fetched: boolean;
@@ -78,7 +86,7 @@ export async function fetchAndExtractFromUrl(
     const result = await callStructured({
       schema: PageFindingsSchema,
       schemaName: "page_findings",
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: researchSystemPrompt(contactRoleHint),
       userContent: buildResearchUserContent(org.name, url, page.text),
     });
     usage.model = result.model;
@@ -150,7 +158,8 @@ export async function fetchAndExtractFromUrl(
  */
 export async function runResearchStage(
   org: Organization,
-  pipelineRunId: string
+  pipelineRunId: string,
+  options?: { contactRoleHint?: string | null }
 ): Promise<{ output: ResearchStageOutput; model?: string; tokensInput?: number; tokensOutput?: number; costUsd?: number }> {
   const startUrl = org.websiteUrl;
   if (!startUrl) {
@@ -181,7 +190,8 @@ export async function runResearchStage(
   // Level 0 — homepage.
   pagesAttempted += 1;
   visited.add(origin);
-  const home = await fetchAndExtractFromUrl(org, pipelineRunId, origin);
+  const roleHint = options?.contactRoleHint ?? null;
+  const home = await fetchAndExtractFromUrl(org, pipelineRunId, origin, roleHint);
   if (home.fetched) pagesFetched += 1;
   findingsCreated += home.findingsCreated;
   namedPeopleMentioned.push(...home.namedPeople);
@@ -203,7 +213,7 @@ export async function runResearchStage(
     if (visited.has(link.url) || pagesAttempted >= MAX_PAGES_TO_FETCH) continue;
     visited.add(link.url);
     pagesAttempted += 1;
-    const page = await fetchAndExtractFromUrl(org, pipelineRunId, link.url);
+    const page = await fetchAndExtractFromUrl(org, pipelineRunId, link.url, roleHint);
     if (page.fetched) pagesFetched += 1;
     findingsCreated += page.findingsCreated;
     namedPeopleMentioned.push(...page.namedPeople);
@@ -224,7 +234,7 @@ export async function runResearchStage(
       if (visited.has(link.url) || pagesAttempted >= MAX_PAGES_TO_FETCH) continue;
       visited.add(link.url);
       pagesAttempted += 1;
-      const page = await fetchAndExtractFromUrl(org, pipelineRunId, link.url);
+      const page = await fetchAndExtractFromUrl(org, pipelineRunId, link.url, roleHint);
       if (page.fetched) pagesFetched += 1;
       findingsCreated += page.findingsCreated;
       namedPeopleMentioned.push(...page.namedPeople);

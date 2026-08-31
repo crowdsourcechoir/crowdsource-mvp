@@ -15,8 +15,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? undefined;
+    const limitRaw = Number(searchParams.get("limit") ?? 500);
+    const limit = Number.isFinite(limitRaw) ? Math.min(500, Math.max(1, Math.floor(limitRaw))) : 500;
     const [organizations, organizationTypes] = await Promise.all([
-      listOrganizations({ search, limit: 500 }),
+      listOrganizations({ search, limit }),
       listOrganizationTypes(),
     ]);
     return NextResponse.json({ organizations, organizationTypes }, { headers: { "Cache-Control": "no-store" } });

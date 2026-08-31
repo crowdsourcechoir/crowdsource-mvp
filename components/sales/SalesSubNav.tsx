@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS: { href: string; label: string; exact?: boolean }[] = [
-  { href: "/admin/sales", label: "Today", exact: true },
+  { href: "/admin/sales", label: "Home", exact: true },
   { href: "/admin/sales/queue", label: "Queue" },
   { href: "/admin/sales/follow-ups", label: "Follow-ups" },
   { href: "/admin/sales/organizations", label: "Organizations" },
