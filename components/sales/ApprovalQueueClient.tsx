@@ -551,8 +551,15 @@ export default function ApprovalQueueClient() {
 
   if (sidebar.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-        No first-touch drafts. Follow-ups are on Follow-ups, not here. Run the pipeline to generate new sends.
+      <div>
+        {copyStatus && (
+          <p className="mb-4 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
+            {copyStatus}
+          </p>
+        )}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
+          No first-touch drafts. Follow-ups are on Follow-ups, not here. Run the pipeline to generate new sends.
+        </div>
       </div>
     );
   }
