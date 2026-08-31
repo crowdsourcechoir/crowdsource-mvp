@@ -84,7 +84,7 @@ export default function SalesHomeClient() {
         </div>
       ) : null}
 
-      {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
+      {error && !/database not configured/i.test(error) ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
 
       <div className="mb-6 flex flex-wrap gap-2">
         {todos.map((todo) => {
