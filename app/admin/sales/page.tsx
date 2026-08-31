@@ -9,7 +9,7 @@ export default function SalesOverviewPage() {
     <div>
       <h1 className="mb-2 text-2xl font-bold text-white">Today</h1>
       <p className="mb-4 text-sm text-gray-400">
-        Replies first, then follow-ups, then new sends. Queue is unchanged — keep working sports contacts there.
+        Replies first, then follow-ups, then new sends. Queue stays first-touch; nudges are on Follow-ups.
       </p>
       <SalesSubNav />
       <SalesTodayClient />

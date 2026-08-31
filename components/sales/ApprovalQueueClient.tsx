@@ -522,7 +522,7 @@ export default function ApprovalQueueClient() {
   if (sidebar.length === 0) {
     return (
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-        Queue is empty. Run the pipeline against an organization to generate reviewable opportunities.
+        No first-touch drafts. Follow-ups are on Follow-ups, not here. Run the pipeline to generate new sends.
       </div>
     );
   }

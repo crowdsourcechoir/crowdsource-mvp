@@ -157,7 +157,8 @@ export async function listQueueItems(status?: ApprovalQueueItemStatus): Promise<
  * Cloudflare once the D1 seed filled the queue).
  */
 export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): Promise<QueueSidebarItem[]> {
-  const items = await listQueueItems(status);
+  // First-touch only — pending nudges live on /admin/sales/follow-ups, not Queue.
+  const items = (await listQueueItems(status)).filter((item) => item.kind !== "nudge");
   if (items.length === 0) return [];
   const db = requireSupabaseAdmin();
 
@@ -294,6 +295,36 @@ export async function retractPendingQueueItemForOpportunity(opportunityId: strin
     .select("id");
   if (error) throw new Error(error.message);
   return (data ?? []).length > 0;
+}
+
+/** Close pending *nudge* rows (snooze / lost). Leaves first-touch Queue items alone. */
+export async function dismissPendingNudgesForOpportunities(
+  opportunityIds: string[],
+  input: { status: ApprovalQueueItemStatus; decisionNotes: string; deferredUntil?: string | null }
+): Promise<number> {
+  const unique = Array.from(new Set(opportunityIds.filter(Boolean)));
+  if (unique.length === 0) return 0;
+  const db = requireSupabaseAdmin();
+  const row: Record<string, unknown> = {
+    status: input.status,
+    decision_notes: input.decisionNotes,
+    decided_by: "operator",
+    decided_at: new Date().toISOString(),
+  };
+  if (input.deferredUntil !== undefined) row.deferred_until = input.deferredUntil;
+  let dismissed = 0;
+  for (let i = 0; i < unique.length; i += IN_CHUNK) {
+    const { data, error } = await db
+      .from("approval_queue_items")
+      .update(row)
+      .in("opportunity_id", unique.slice(i, i + IN_CHUNK))
+      .eq("kind", "nudge")
+      .eq("status", "pending")
+      .select("id");
+    if (error) throw new Error(error.message);
+    dismissed += (data ?? []).length;
+  }
+  return dismissed;
 }
 
 export async function decideQueueItem(

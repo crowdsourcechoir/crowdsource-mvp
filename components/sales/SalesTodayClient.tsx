@@ -93,12 +93,10 @@ export default function SalesTodayClient() {
   }
   if (!snapshot) return null;
 
-  const followHref =
-    snapshot.followUpDrafts > 0 ? "/admin/sales/queue" : "/admin/sales/funnel?focus=nudge";
   const followHint =
     snapshot.followUpDrafts > 0
-      ? `${snapshot.followUpDrafts} nudge draft${snapshot.followUpDrafts === 1 ? "" : "s"} already in Queue`
-      : "No-reply after 7 days — drafts still generate into Queue";
+      ? `${snapshot.followUpDrafts} nudge draft${snapshot.followUpDrafts === 1 ? "" : "s"} ready on Follow-ups`
+      : "No-reply after 7 days — generate drafts on Follow-ups";
 
   return (
     <div>
@@ -114,7 +112,7 @@ export default function SalesTodayClient() {
               and finish Google consent for the inbox you send from.
             </li>
             <li>Back on this page, click <span className="font-medium">Resume sending</span>. Connect alone stays paused.</li>
-            <li>Each email still needs Queue → Send → Yes, send now. Pause anytime without disconnecting.</li>
+            <li>Each email still needs Send → Yes, send now. Pause anytime without disconnecting.</li>
           </ol>
         </div>
       ) : null}
@@ -140,7 +138,7 @@ export default function SalesTodayClient() {
           primary={snapshot.replies > 0}
         />
         <ActionCard
-          href={followHref}
+          href="/admin/sales/follow-ups"
           label="Follow-ups due"
           count={snapshot.followUpsDue}
           hint={followHint}
