@@ -112,7 +112,8 @@ export async function learnFromSentOutreach(limit = 80): Promise<LearnFromSentRe
       continue;
     }
 
-    let matchedContact: { id: string; organization_id: string; outreach_persona: string | null } | null = null;
+    type MatchedContact = { id: string; organization_id: string; outreach_persona: string | null };
+    let matchedContact: MatchedContact | null = null;
     for (const email of toEmails) {
       const { data: contacts, error } = await db
         .from("contacts")
@@ -120,8 +121,13 @@ export async function learnFromSentOutreach(limit = 80): Promise<LearnFromSentRe
         .eq("normalized_email", email)
         .limit(1);
       if (error) throw new Error(error.message);
-      if (contacts?.[0]) {
-        matchedContact = contacts[0] as typeof matchedContact;
+      const row = contacts?.[0];
+      if (row) {
+        matchedContact = {
+          id: row.id as string,
+          organization_id: row.organization_id as string,
+          outreach_persona: (row.outreach_persona as string | null) ?? null,
+        };
         break;
       }
     }
