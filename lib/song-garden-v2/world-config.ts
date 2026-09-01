@@ -1,4 +1,5 @@
 import type { Event } from "@/data/mockEvents";
+import type { BrandOverlay } from "@/lib/song-garden-v2/garden/types";
 
 export type WorldAnimationPreset = "particles" | "aurora" | "glow" | "none";
 
@@ -44,6 +45,8 @@ export type WorldConfig = {
   worldSceneStages: WorldSceneStage[];
   /** Ordered sequence of fixed world states. When present, takes priority over worldSceneStages/heroArtworkUrl. */
   worldStoryboard: WorldStoryboardFrame[];
+  /** Client logos and graphics overlaid on the journey UI (from garden brand kit). */
+  brandOverlays?: BrandOverlay[];
   /** When true, ambient "others are here" activity lines may blend in simulated lines if real traffic is sparse. */
   presenceSimulationEnabled: boolean;
 };
@@ -71,6 +74,7 @@ export function defaultWorldConfig(event: Pick<Event, "title" | "heroImage">): W
     aiArtworkPrompt: null,
     worldSceneStages: [],
     worldStoryboard: [],
+    brandOverlays: [],
     presenceSimulationEnabled: true,
   };
 }
@@ -94,6 +98,7 @@ export function resolveWorldConfig(
     aiArtworkPrompt: override.aiArtworkPrompt?.trim() || defaults.aiArtworkPrompt,
     worldSceneStages: sortedSceneStages(override.worldSceneStages) ?? defaults.worldSceneStages,
     worldStoryboard: cleanedStoryboard(override.worldStoryboard) ?? defaults.worldStoryboard,
+    brandOverlays: override.brandOverlays?.length ? override.brandOverlays : defaults.brandOverlays,
     presenceSimulationEnabled:
       override.presenceSimulationEnabled ?? defaults.presenceSimulationEnabled,
   };
@@ -222,6 +227,7 @@ export function normalizeWorldConfigInput(
     aiArtworkPrompt: input.aiArtworkPrompt?.trim() || null,
     worldSceneStages: sortedSceneStages(input.worldSceneStages) ?? [],
     worldStoryboard: cleanedStoryboard(input.worldStoryboard) ?? [],
+    brandOverlays: Array.isArray(input.brandOverlays) ? input.brandOverlays : [],
     presenceSimulationEnabled: input.presenceSimulationEnabled ?? true,
   };
   const isEmpty =

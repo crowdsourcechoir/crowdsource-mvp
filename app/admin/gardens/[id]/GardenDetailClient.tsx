@@ -23,7 +23,13 @@ import type {
 import {
   MAP_PLATE_VARIANT_KEYS,
   MAP_PLATE_VARIANT_LABELS,
+  type BrandOverlay,
+  type BrandOverlayAnchor,
 } from "@/lib/song-garden-v2/garden/types";
+import {
+  BRAND_OVERLAY_ANCHORS,
+  newBrandOverlayId,
+} from "@/lib/song-garden-v2/brand-overlays";
 import FileDropZone from "@/components/ui/FileDropZone";
 
 type Props = { gardenId: string };
@@ -52,6 +58,18 @@ type SponsorDraft = {
   name: string;
   logoUrl: string;
   credit: string;
+};
+
+type BrandOverlayDraft = {
+  id: string;
+  url: string;
+  label: string;
+  anchor: BrandOverlayAnchor;
+  offsetX: number;
+  offsetY: number;
+  maxWidthPx: number;
+  opacity: number;
+  enabled: boolean;
 };
 
 const POSITION_PRESETS: Array<{ id: string; label: string; x: number; y: number }> = [
@@ -95,6 +113,20 @@ function sponsorsFromGarden(garden: Garden | null): SponsorDraft[] {
   }));
 }
 
+function overlaysFromGarden(garden: Garden | null): BrandOverlayDraft[] {
+  return (garden?.brandKit?.overlays ?? []).map((o) => ({
+    id: o.id,
+    url: o.url,
+    label: o.label ?? "",
+    anchor: o.anchor,
+    offsetX: o.offsetX,
+    offsetY: o.offsetY,
+    maxWidthPx: o.maxWidthPx,
+    opacity: o.opacity,
+    enabled: o.enabled !== false,
+  }));
+}
+
 export default function GardenDetailClient({ gardenId }: Props) {
   const [garden, setGarden] = useState<Garden | null>(null);
   const [chapters, setChapters] = useState<GardenChapter[]>([]);
@@ -132,6 +164,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
     "default"
   );
   const [uploadingRefs, setUploadingRefs] = useState(false);
+  const [uploadingBrand, setUploadingBrand] = useState(false);
+  const [brandTitle, setBrandTitle] = useState("");
+  const [brandLogoUrl, setBrandLogoUrl] = useState("");
+  const [brandPrimary, setBrandPrimary] = useState("#0B1F3A");
+  const [brandAccent, setBrandAccent] = useState("#CFFF81");
+  const [brandOverlays, setBrandOverlays] = useState<BrandOverlayDraft[]>([]);
   /** `zone:key` or `sponsor:key` while a logo file is uploading. */
   const [uploadingLogoKey, setUploadingLogoKey] = useState<string | null>(null);
   const [generatingPlate, setGeneratingPlate] = useState(false);
@@ -179,6 +217,11 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setStatus(gBody.garden?.status ?? "live");
       setZones(zonesFromGarden(gBody.garden ?? null));
       setSponsors(sponsorsFromGarden(gBody.garden ?? null));
+      setBrandTitle(gBody.garden?.brandKit?.title ?? gBody.garden?.title ?? "");
+      setBrandLogoUrl(gBody.garden?.brandKit?.logoUrl ?? "");
+      setBrandPrimary(gBody.garden?.brandKit?.primaryColor ?? "#0B1F3A");
+      setBrandAccent(gBody.garden?.brandKit?.accentColor ?? "#CFFF81");
+      setBrandOverlays(overlaysFromGarden(gBody.garden ?? null));
       setMapImageUrl(gBody.garden?.brandKit?.heroArtworkUrl ?? "");
       const plate = gBody.garden?.brandKit?.mapPlate;
       setMapRefs(plate?.referenceUrls?.length ? [...plate.referenceUrls] : [""]);
@@ -506,6 +549,210 @@ export default function GardenDetailClient({ gardenId }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSaveBranding() {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const nextOverlays: BrandOverlay[] = brandOverlays
+        .map((o) => ({
+          id: o.id.trim() || newBrandOverlayId(),
+          url: o.url.trim(),
+          label: o.label.trim() || null,
+          anchor: o.anchor,
+          offsetX: Number(o.offsetX) || 0,
+          offsetY: Number(o.offsetY) || 0,
+          maxWidthPx: Number(o.maxWidthPx) || 120,
+          opacity: Number(o.opacity) || 0.95,
+          enabled: o.enabled,
+        }))
+        .filter((o) => o.url);
+
+      const res = await fetch(`/api/gardens/${gardenId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brandKit: {
+            ...(garden?.brandKit ?? {}),
+            title: brandTitle.trim() || garden?.title || "Song Garden",
+            logoUrl: brandLogoUrl.trim() || null,
+            primaryColor: brandPrimary.trim() || "#0B1F3A",
+            accentColor: brandAccent.trim() || "#CFFF81",
+            overlays: nextOverlays,
+          },
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Failed to save branding");
+      setNotice("Client branding saved. Open the public garden to preview overlays.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save branding");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUploadBrandAssets(
+    picked: File[],
+    opts?: { asLogo?: boolean; overlayId?: string }
+  ) {
+    if (picked.length === 0) return;
+
+    const MAX_BYTES = 20 * 1024 * 1024;
+    const isImageFile = (f: File) =>
+      f.type.startsWith("image/") ||
+      f.type === "image/svg+xml" ||
+      (!f.type && /\.(jpe?g|png|webp|gif|svg|heic|heif|avif)$/i.test(f.name));
+
+    const files = picked.filter(isImageFile);
+    if (files.length === 0) {
+      setError("That file didn’t look like an image. Use PNG, JPEG, WebP, or SVG.");
+      return;
+    }
+    for (const file of files) {
+      if (file.size > MAX_BYTES) {
+        setError(`“${file.name}” is over 20MB. Compress it and try again.`);
+        return;
+      }
+    }
+
+    setUploadingBrand(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const prepareRes = await fetch(`/api/gardens/${gardenId}/brand-assets/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: files.map((file) => ({
+            name: file.name,
+            contentType:
+              file.type?.startsWith("image/") || file.type === "image/svg+xml"
+                ? file.type
+                : "image/png",
+            size: file.size,
+          })),
+        }),
+      });
+      const prepareBody = (await prepareRes.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        uploads?: Array<{ signedUrl: string; publicUrl: string; contentType: string }>;
+      };
+
+      if (!prepareRes.ok || !prepareBody.uploads?.length) {
+        if (prepareBody.code === "not_configured" && files[0].size <= 1.5 * 1024 * 1024) {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("Could not read file."));
+            reader.readAsDataURL(files[0]);
+          });
+          if (opts?.asLogo) setBrandLogoUrl(dataUrl);
+          else if (opts?.overlayId) {
+            setBrandOverlays((prev) =>
+              prev.map((row) => (row.id === opts.overlayId ? { ...row, url: dataUrl } : row))
+            );
+          } else {
+            setBrandOverlays((prev) => [
+              ...prev,
+              {
+                id: newBrandOverlayId(),
+                url: dataUrl,
+                label: files[0].name.replace(/\.[^.]+$/, ""),
+                anchor: "top-right",
+                offsetX: 0,
+                offsetY: 0,
+                maxWidthPx: 140,
+                opacity: 0.9,
+                enabled: true,
+              },
+            ]);
+          }
+          setNotice("Image attached locally (storage not configured). Save branding to keep it.");
+          return;
+        }
+        throw new Error(prepareBody.error || "Could not prepare brand upload.");
+      }
+
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < prepareBody.uploads.length; i += 1) {
+        const upload = prepareBody.uploads[i];
+        const file = files[i];
+        const put = await fetch(upload.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": upload.contentType },
+          body: file,
+        });
+        if (!put.ok) {
+          const detail = await put.text().catch(() => "");
+          throw new Error(
+            `Could not upload “${file.name}”${detail ? `: ${detail.slice(0, 120)}` : "."}`
+          );
+        }
+        uploadedUrls.push(upload.publicUrl);
+      }
+
+      if (opts?.asLogo && uploadedUrls[0]) {
+        setBrandLogoUrl(uploadedUrls[0]);
+        setNotice("Logo uploaded. Save branding to publish on /g.");
+        return;
+      }
+
+      if (opts?.overlayId && uploadedUrls[0]) {
+        setBrandOverlays((prev) =>
+          prev.map((row) =>
+            row.id === opts.overlayId ? { ...row, url: uploadedUrls[0] } : row
+          )
+        );
+        setNotice("Graphic updated. Save branding to publish.");
+        return;
+      }
+
+      setBrandOverlays((prev) => [
+        ...prev,
+        ...uploadedUrls.map((url, i) => ({
+          id: newBrandOverlayId(),
+          url,
+          label: files[i]?.name.replace(/\.[^.]+$/, "") || "Brand graphic",
+          anchor: "top-right" as BrandOverlayAnchor,
+          offsetX: 0,
+          offsetY: i * 8,
+          maxWidthPx: 140,
+          opacity: 0.9,
+          enabled: true,
+        })),
+      ]);
+      setNotice(
+        uploadedUrls.length > 1
+          ? `${uploadedUrls.length} graphics uploaded. Save branding to publish.`
+          : "Graphic uploaded. Save branding to publish."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Brand upload failed.");
+    } finally {
+      setUploadingBrand(false);
+    }
+  }
+
+  function addBrandOverlay() {
+    setBrandOverlays((prev) => [
+      ...prev,
+      {
+        id: newBrandOverlayId(),
+        url: "",
+        label: "Brand graphic",
+        anchor: "bottom-right",
+        offsetX: 0,
+        offsetY: 0,
+        maxWidthPx: 120,
+        opacity: 0.85,
+        enabled: true,
+      },
+    ]);
   }
 
   async function handleUploadLogoFiles(
@@ -1156,6 +1403,327 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </ul>
         </section>
       ) : null}
+
+      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+        <div>
+          <h2 className="text-sm font-medium text-gray-200">Client branding</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Upload a logo and optional brand graphics — they overlay on the public garden with
+            adjustable position, size, and opacity. Open <code className="text-gray-400">/g</code>{" "}
+            after saving to preview.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-gray-400">
+            Display title
+            <input
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              value={brandTitle}
+              onChange={(e) => setBrandTitle(e.target.value)}
+              placeholder="Ballard FC"
+            />
+          </label>
+          <label className="block text-xs text-gray-400">
+            Primary color
+            <input
+              type="color"
+              className="mt-1 h-10 w-full rounded-lg border border-gray-700 bg-black/40 px-1 py-1"
+              value={brandPrimary}
+              onChange={(e) => setBrandPrimary(e.target.value)}
+            />
+          </label>
+          <label className="block text-xs text-gray-400">
+            Accent color
+            <input
+              type="color"
+              className="mt-1 h-10 w-full rounded-lg border border-gray-700 bg-black/40 px-1 py-1"
+              value={brandAccent}
+              onChange={(e) => setBrandAccent(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="space-y-2 rounded-lg border border-gray-800 bg-black/30 p-3">
+          <p className="text-xs font-medium text-gray-300">Primary logo</p>
+          <div className="flex flex-wrap items-start gap-3">
+            {brandLogoUrl.trim() ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={brandLogoUrl.trim()}
+                alt=""
+                className="h-14 max-w-[10rem] rounded border border-gray-700 bg-white/5 object-contain p-1"
+              />
+            ) : (
+              <div className="flex h-14 w-24 items-center justify-center rounded border border-dashed border-gray-700 text-[10px] text-gray-600">
+                No logo
+              </div>
+            )}
+            <div className="min-w-0 flex-1 space-y-2">
+              <input
+                className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                value={brandLogoUrl}
+                onChange={(e) => setBrandLogoUrl(e.target.value)}
+                placeholder="https://…/logo.png or /fans/…/logo.png"
+              />
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-[#CFFF81]/40 bg-black/40 px-3 py-2 text-sm text-[#CFFF81] hover:bg-[#CFFF81]/10">
+                {uploadingBrand ? "Uploading…" : "Upload logo"}
+                <input
+                  type="file"
+                  accept="image/*,.svg"
+                  className="hidden"
+                  disabled={uploadingBrand || saving}
+                  onChange={(e) =>
+                    void handleUploadBrandAssets(Array.from(e.target.files ?? []), { asLogo: true })
+                  }
+                />
+              </label>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500">
+            The logo also appears as a top-left overlay unless you add custom overlays below.
+          </p>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-gray-800 bg-black/30 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium text-gray-300">Brand graphics</p>
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800">
+                {uploadingBrand ? "Uploading…" : "Upload graphic"}
+                <input
+                  type="file"
+                  accept="image/*,.svg"
+                  multiple
+                  className="hidden"
+                  disabled={uploadingBrand || saving}
+                  onChange={(e) => void handleUploadBrandAssets(Array.from(e.target.files ?? []))}
+                />
+              </label>
+              <button
+                type="button"
+                className="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800"
+                onClick={addBrandOverlay}
+              >
+                Add empty slot
+              </button>
+            </div>
+          </div>
+
+          {brandOverlays.length === 0 ? (
+            <p className="text-xs text-gray-500">
+              Optional sponsor marks, wordmarks, or corner badges — each with its own placement.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {brandOverlays.map((overlay, index) => (
+                <div
+                  key={overlay.id}
+                  className="space-y-2 rounded-lg border border-gray-800 bg-black/20 p-3"
+                >
+                  <div className="flex flex-wrap items-start gap-3">
+                    {overlay.url.trim() ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={overlay.url.trim()}
+                        alt=""
+                        className="h-12 max-w-[6rem] rounded border border-gray-700 bg-white/5 object-contain p-1"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-16 items-center justify-center rounded border border-dashed border-gray-700 text-[10px] text-gray-600">
+                        empty
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <input
+                        className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                        value={overlay.url}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index ? { ...row, url: e.target.value } : row
+                            )
+                          )
+                        }
+                        placeholder="Image URL"
+                      />
+                      <label className="inline-flex cursor-pointer items-center text-[11px] text-gray-400 underline">
+                        Replace image
+                        <input
+                          type="file"
+                          accept="image/*,.svg"
+                          className="hidden"
+                          disabled={uploadingBrand || saving}
+                          onChange={(e) =>
+                            void handleUploadBrandAssets(Array.from(e.target.files ?? []), {
+                              overlayId: overlay.id,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block text-[11px] text-gray-400">
+                      Label (internal)
+                      <input
+                        className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-2 py-1.5 text-sm text-white"
+                        value={overlay.label}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index ? { ...row, label: e.target.value } : row
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="block text-[11px] text-gray-400">
+                      Corner / edge
+                      <select
+                        className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-2 py-1.5 text-sm text-white"
+                        value={overlay.anchor}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index
+                                ? { ...row, anchor: e.target.value as BrandOverlayAnchor }
+                                : row
+                            )
+                          )
+                        }
+                      >
+                        {BRAND_OVERLAY_ANCHORS.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-[11px] text-gray-400">
+                      Max width ({overlay.maxWidthPx}px)
+                      <input
+                        type="range"
+                        min={40}
+                        max={320}
+                        step={4}
+                        className="mt-2 w-full"
+                        value={overlay.maxWidthPx}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index
+                                ? { ...row, maxWidthPx: Number(e.target.value) || 120 }
+                                : row
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="block text-[11px] text-gray-400">
+                      Opacity ({Math.round(overlay.opacity * 100)}%)
+                      <input
+                        type="range"
+                        min={0.1}
+                        max={1}
+                        step={0.05}
+                        className="mt-2 w-full"
+                        value={overlay.opacity}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index
+                                ? { ...row, opacity: Number(e.target.value) || 0.9 }
+                                : row
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="block text-[11px] text-gray-400">
+                      Offset X ({overlay.offsetX}px)
+                      <input
+                        type="range"
+                        min={-80}
+                        max={80}
+                        step={2}
+                        className="mt-2 w-full"
+                        value={overlay.offsetX}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index
+                                ? { ...row, offsetX: Number(e.target.value) || 0 }
+                                : row
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="block text-[11px] text-gray-400">
+                      Offset Y ({overlay.offsetY}px)
+                      <input
+                        type="range"
+                        min={-80}
+                        max={80}
+                        step={2}
+                        className="mt-2 w-full"
+                        value={overlay.offsetY}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index
+                                ? { ...row, offsetY: Number(e.target.value) || 0 }
+                                : row
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="flex items-center gap-2 text-xs text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={overlay.enabled}
+                        onChange={(e) =>
+                          setBrandOverlays((prev) =>
+                            prev.map((row, i) =>
+                              i === index ? { ...row, enabled: e.target.checked } : row
+                            )
+                          )
+                        }
+                        className="rounded border-gray-600"
+                      />
+                      Visible on /g
+                    </label>
+                    <button
+                      type="button"
+                      className="text-xs text-red-300 underline"
+                      onClick={() =>
+                        setBrandOverlays((prev) => prev.filter((_, i) => i !== index))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handleSaveBranding()}
+          disabled={saving || uploadingBrand}
+          className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save branding"}
+        </button>
+      </section>
 
       <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
         <div>

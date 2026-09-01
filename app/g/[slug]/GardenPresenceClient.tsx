@@ -22,6 +22,7 @@ import { worldConfigFromBrand } from "@/lib/song-garden-v2/garden/snapshot";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
 import type { WorldGrowthNode } from "@/lib/song-garden-v2/growth-nodes";
 import WorldStage from "@/components/song-garden-v2/WorldStage";
+import BrandOverlayLayer from "@/components/song-garden-v2/BrandOverlayLayer";
 import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
 import CelebrationBurst from "@/components/song-garden-v2/CelebrationBurst";
 import { useCelebration } from "@/components/song-garden-v2/engine/useCelebration";
@@ -385,6 +386,7 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       soundtrackUnlocked={unlocked}
       growthNodes={growthNodes}
     >
+      {snapshot ? <BrandOverlayLayer brand={snapshot.brand} /> : null}
       {zones.length > 0 && mapArtworkUrl ? (
         <div
           ref={surfaceRef}
@@ -599,21 +601,12 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
           {/* Top chrome: logo left · eyebrow center · energy right */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
             <div className="pointer-events-auto min-w-0 justify-self-start">
-              {world.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={world.logoUrl}
-                  alt=""
-                  className="h-8 w-auto opacity-95 drop-shadow sm:h-9"
-                />
-              ) : (
-                <p
-                  className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.28em] drop-shadow"
-                  style={{ color: world.accentColor }}
-                >
-                  {snapshot?.brand.title || gardenTitle}
-                </p>
-              )}
+              <p
+                className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.28em] drop-shadow"
+                style={{ color: world.accentColor }}
+              >
+                {snapshot?.brand.title || gardenTitle}
+              </p>
             </div>
             <div className="pointer-events-none max-w-[11rem] justify-self-center px-1 text-center sm:max-w-[14rem]">
               <p
@@ -765,10 +758,6 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
       ) : (
         <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col px-4 pb-10 pt-[max(1.5rem,env(safe-area-inset-top))]">
           <header className="text-center">
-            {world.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={world.logoUrl} alt="" className="mx-auto mb-2 h-8 w-auto opacity-90" />
-            ) : null}
             <p
               className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"
               style={{ color: world.accentColor, opacity: 0.85 }}
