@@ -648,13 +648,17 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         )}
       </header>
 
-      {world.presenceSimulationEnabled !== false && (
-        <WorldPresenceTicker eventId={event.id} accentColor={world.accentColor} />
-      )}
-
       {world.logoUrl ? (
         <WorldBloomLogo url={world.logoUrl} maxWidthPx={world.logoMaxWidthPx} />
       ) : null}
+
+      {world.presenceSimulationEnabled !== false && (
+        <WorldPresenceTicker
+          eventId={event.id}
+          accentColor={world.accentColor}
+          className={world.logoUrl ? "mt-2" : "mt-4"}
+        />
+      )}
 
       {/* Hide prompt UI instantly while celebrating so the burst isn't overlaid on the question. */}
       {!celebration.active ? (

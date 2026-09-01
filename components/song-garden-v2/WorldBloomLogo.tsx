@@ -7,13 +7,13 @@ type Props = {
   maxWidthPx?: number | null;
 };
 
-/** Client logo on the bloom journey — sits below the ambient presence bubble. */
+/** Client logo on the bloom journey — below world title, above the presence bubble. */
 export default function WorldBloomLogo({ url, maxWidthPx }: Props) {
   const src = url.trim();
   if (!src) return null;
   const width = resolveBloomLogoMaxWidthPx(maxWidthPx);
   return (
-    <div className="pointer-events-none relative z-20 mx-auto mt-1 flex w-full max-w-lg shrink-0 justify-center px-4 pb-2">
+    <div className="pointer-events-none relative z-20 mx-auto mt-3 flex w-full max-w-lg shrink-0 justify-center px-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

@@ -1624,8 +1624,9 @@ export default function EventForm({
             <div>
               <span className={labelClass}>Client logo</span>
               <p className="mt-0.5 text-[11px] text-gray-500">
-                Shown on the public bloom just below the live presence bubble (e.g. “another voice
-                is warming up”). Upload a PNG or SVG with transparency when possible.
+                Shown on the public bloom below the world title and above the live presence bubble
+                (e.g. “another voice is warming up”). Upload a PNG or SVG with transparency when
+                possible.
               </p>
             </div>
             <div className="flex flex-wrap items-start gap-3">

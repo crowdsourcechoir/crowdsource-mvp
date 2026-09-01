@@ -7,6 +7,8 @@ import { buildAmbientLines, useAmbientActivity } from "@/lib/song-garden-v2/pres
 type WorldPresenceTickerProps = {
   eventId: string;
   accentColor: string;
+  /** Top margin — tighter when a logo sits above the bubble. */
+  className?: string;
 };
 
 const LINE_VISIBLE_MS = 7500;
@@ -18,7 +20,11 @@ const FIRST_SHOW_DELAY_MS = 3200;
  * Quiet ambient presence line under the title. Height is reserved so show/hide
  * never nudges the moment card.
  */
-export default function WorldPresenceTicker({ eventId, accentColor }: WorldPresenceTickerProps) {
+export default function WorldPresenceTicker({
+  eventId,
+  accentColor,
+  className = "mt-4",
+}: WorldPresenceTickerProps) {
   const summary = useAmbientActivity(eventId);
   const [lineIndex, setLineIndex] = useState(0);
   const [visible, setVisible] = useState(false);
@@ -40,7 +46,9 @@ export default function WorldPresenceTicker({ eventId, accentColor }: WorldPrese
   const line = lines.length ? lines[lineIndex % lines.length] : null;
 
   return (
-    <div className="pointer-events-none relative z-20 mx-auto mt-4 h-10 w-full max-w-lg shrink-0 px-4">
+    <div
+      className={`pointer-events-none relative z-20 mx-auto h-10 w-full max-w-lg shrink-0 px-4 ${className}`}
+    >
       <div className="absolute inset-x-0 top-0 flex justify-center">
         <AnimatePresence>
           {visible && line && (
