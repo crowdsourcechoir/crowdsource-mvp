@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import TypewriterText from "@/components/TypewriterText";
+import WorldProgressTrail from "./WorldProgressTrail";
 
 type MomentOverlayProps = {
   /** Unique per creative moment — changing this cross-fades content without navigating. */
@@ -10,6 +11,8 @@ type MomentOverlayProps = {
   accentColor: string;
   /** World primary — tints the glass so it feels like the garden, not a gray sheet. */
   primaryColor: string;
+  /** When set, dot trail renders at the top of the prompt card. */
+  progress?: { completed: number; total: number } | null;
   children: React.ReactNode;
 };
 
@@ -22,6 +25,7 @@ export default function MomentOverlay({
   eyebrow,
   accentColor,
   primaryColor,
+  progress,
   children,
 }: MomentOverlayProps) {
   return (
@@ -50,6 +54,15 @@ export default function MomentOverlay({
             `,
           }}
         >
+          {progress && progress.total > 0 ? (
+            <div className="mb-4">
+              <WorldProgressTrail
+                completed={progress.completed}
+                total={progress.total}
+                accentColor={accentColor}
+              />
+            </div>
+          ) : null}
           {eyebrow && (
             <p
               className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.25em]"

@@ -74,7 +74,6 @@ import {
 } from "@/lib/song-garden-v2/moment-labels";
 import WorldStage from "./WorldStage";
 import MomentOverlay from "./MomentOverlay";
-import WorldProgressTrail from "./WorldProgressTrail";
 import WorldPresenceTicker from "./WorldPresenceTicker";
 import WorldBloomLogo from "./WorldBloomLogo";
 import TextMomentPad from "./TextMomentPad";
@@ -652,11 +651,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         >
           {world.title}
         </p>
-        {showProgress && (
-          <div className="mt-3">
-            <WorldProgressTrail completed={progress.completed} total={progress.total} accentColor={world.accentColor} />
-          </div>
-        )}
       </header>
 
       {world.logoUrl ? (
@@ -678,6 +672,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           eyebrow={eyebrow}
           accentColor={world.accentColor}
           primaryColor={world.primaryColor}
+          progress={
+            showProgress ? { completed: progress.completed, total: progress.total } : null
+          }
         >
           {position.phase === "landing" && (
             <div className="space-y-5 text-center">
