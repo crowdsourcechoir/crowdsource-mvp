@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import type { OutreachFeedback, OutreachFeedbackDecision } from "../types";
+import { EXTERNAL_SENT_BODY, EXTERNAL_SENT_SUBJECT } from "../outreach/external-sent";
 
 function rowToFeedback(row: Record<string, unknown>): OutreachFeedback {
   return {
@@ -153,7 +154,7 @@ export async function backfillAcceptedEditFeedback(limit = 100): Promise<{ creat
   const { data: drafts, error } = await db
     .from("outreach_drafts")
     .select("id, opportunity_id, contact_id, ai_subject, ai_body, edited_subject, edited_body, status")
-    .eq("status", "approved_with_edits")
+    .in("status", ["approved", "approved_with_edits"])
     .not("edited_body", "is", null)
     .order("updated_at", { ascending: false })
     .limit(limit);
@@ -177,7 +178,16 @@ export async function backfillAcceptedEditFeedback(limit = 100): Promise<{ creat
 
     const editedBody = (row.edited_body as string | null) ?? null;
     const aiBody = row.ai_body as string;
+    const editedSubject = (row.edited_subject as string | null) ?? "";
     if (!editedBody || editedBody.trim() === aiBody.trim()) {
+      skipped += 1;
+      continue;
+    }
+    if (
+      editedSubject === EXTERNAL_SENT_SUBJECT ||
+      aiBody.includes("Sent from Gmail") ||
+      editedBody.includes("Recorded as already emailed")
+    ) {
       skipped += 1;
       continue;
     }

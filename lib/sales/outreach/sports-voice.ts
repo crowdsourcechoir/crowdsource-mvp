@@ -145,4 +145,22 @@ Given your work leading marketing, I’m especially interested in the potential 
 There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book
 
 Best,
+Joel
+
+--- SPORTS EXAMPLE 4 (college athletics — actual send) ---
+Subject: Turn Oregon State fans into the game-day show
+
+Hi Briana,
+
+I think there could be a great fit between Crowdsource Choir and Oregon State basketball. We create participatory entertainment that harnesses the energy and creativity already in a fanbase and turns it into original chants, anthems, and game-day moments.
+
+Between games: Students and fans contribute voices, sounds, and chant ideas through our digital Chant Garden.
+Game day: We turn those contributions into original Beaver chants and participatory moments that your team can run in-game—or Crowdsource Choir can lead live in the arena.
+Across the season: The strongest moments grow into a catalogue of fan-created chants that can become part of the culture and take on a life of their own.
+
+It’s a season-long participation loop designed to build and sustain energy, belonging, and new traditions with the fanbase.
+
+I’d love to connect and explore what this could look like at Oregon State. If there’s someone else on your team I should connect with, I’d appreciate you pointing me their way.
+
+Best,
 Joel`;

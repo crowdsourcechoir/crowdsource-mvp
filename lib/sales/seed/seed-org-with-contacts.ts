@@ -12,6 +12,7 @@ import {
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { runPipelineForOrganization } from "@/lib/sales/pipeline/run-pipeline";
 import { enqueueOrgManually, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
+import { isSalesInitiativeKey, withSalesInitiative } from "@/lib/sales/initiatives";
 import type { Contact, Organization } from "@/lib/sales/types";
 
 export type SeedContactInput = {
@@ -42,6 +43,8 @@ export type SeedOrgWithContactsInput = {
   manualEventName?: string;
   /** Opportunity type for manual enqueue (default fan_engagement_initiative). */
   opportunityTypeKey?: string;
+  /** Tag for queue filters: sports_fan_culture, conferences_associations, fundraising_galas, arts_culture, entertainment_media, tech_conferences. */
+  salesInitiative?: string;
 };
 
 export type SeedOrgWithContactsResult = {
@@ -76,7 +79,9 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
       organizationTypeId: orgType?.id ?? null,
       source: "manual",
       isExistingClient: false,
-      importMetadata: { seededWithContacts: true },
+      importMetadata: input.salesInitiative && isSalesInitiativeKey(input.salesInitiative)
+        ? withSalesInitiative({ seededWithContacts: true }, input.salesInitiative)
+        : { seededWithContacts: true },
     });
     created = true;
   } else {
@@ -87,6 +92,10 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
       locationRegion: input.locationRegion ?? organization.locationRegion,
       locationCountry: input.locationCountry ?? organization.locationCountry ?? "US",
       organizationTypeId: orgType?.id ?? organization.organizationTypeId,
+      importMetadata:
+        input.salesInitiative && isSalesInitiativeKey(input.salesInitiative)
+          ? withSalesInitiative(organization.importMetadata, input.salesInitiative)
+          : organization.importMetadata,
     });
   }
 

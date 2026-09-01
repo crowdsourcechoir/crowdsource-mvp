@@ -38,6 +38,44 @@ function isConferenceType(opportunityTypeKey?: string | null): boolean {
   return opportunityTypeKey === "annual_conference" || opportunityTypeKey === "association_convention";
 }
 
+function isFundraiserType(opportunityTypeKey?: string | null): boolean {
+  return opportunityTypeKey === "fundraising_gala";
+}
+
+function fanLabelFromOrgName(orgName: string): string {
+  return orgName
+    .replace(/\b(university|college|athletics|athletic department)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim() || orgName;
+}
+
+function conferenceEventName(orgName: string, eventName?: string | null): string {
+  const event = (eventName ?? "").trim();
+  return event || `${orgName} annual conference`;
+}
+
+function conferenceDraft(firstName: string, event: string): { subject: string; body: string } {
+  return {
+    subject: `Crowdsource Choir + ${event}`,
+    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nWe create experiences that move people from being an audience to actually creating something together. Attendees contribute their voices and ideas, and we bring those contributions together into an original anthem that the whole room performs.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\nIf it feels like it could be a fit, I'd love to connect. If this year is already set, I'd be glad to talk about next year — or connect with whoever handles programming.\n\nThanks, ${firstName}!\n\nBest,\nJoel`,
+  };
+}
+
+function fundraiserDraft(firstName: string, orgName: string, event: string): { subject: string; body: string } {
+  return {
+    subject: `Crowdsource Choir + ${event}`,
+    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nFor a room that's already gathered around a cause, this is a way to stop being an audience and actually create something together — an original anthem for ${orgName} that the whole night performs. It can sit as an opening, a live moment mid-program, or a close that people leave humming.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\nIf it feels like it could be a fit, I'd love to connect — or be pointed to whoever produces the event.\n\nThanks, ${firstName}!\n\nBest,\nJoel`,
+  };
+}
+
+function collegeAthleticsDraft(firstName: string, orgName: string): { subject: string; body: string } {
+  const fan = fanLabelFromOrgName(orgName);
+  return {
+    subject: `Turn ${fan} fans into the game-day show`,
+    body: `Hi ${firstName},\n\nI think there could be a great fit between Crowdsource Choir and ${fan} basketball. We create participatory entertainment that harnesses the energy and creativity already in a fanbase and turns it into original chants, anthems, and game-day moments.\n\nBetween games: Students and fans contribute voices, sounds, and chant ideas through our digital Chant Garden.\nGame day: We turn those contributions into original ${fan} chants and participatory moments that your team can run in-game—or Crowdsource Choir can lead live in the arena.\nAcross the season: The strongest moments grow into a catalogue of fan-created chants that can become part of the culture and take on a life of their own.\n\nIt's a season-long participation loop designed to build energy, belonging, and new traditions with the fanbase.\n\nI'd love to connect and explore what this could look like at ${fan}. If there's someone else on your team I should connect with, I'd appreciate you pointing me their way.\n\nBest,\nJoel`,
+  };
+}
+
 /** Prefer programming/events contacts for conferences; entertainment/marketing for sports. */
 function pickPrimaryContact(
   contacts: Contact[],
@@ -72,12 +110,16 @@ function draftCopyForContact(
     return buildSeahawksEmail({ firstName, roleTitle: contact.roleTitle });
   }
 
+  if (isFundraiserType(opts?.opportunityTypeKey) || /\bgala\b/i.test(opts?.eventName ?? "")) {
+    return fundraiserDraft(firstName, orgName, conferenceEventName(orgName, opts?.eventName));
+  }
+
   if (isConferenceType(opts?.opportunityTypeKey)) {
-    const event = (opts?.eventName ?? "").trim() || `${orgName} annual conference`;
-    return {
-      subject: `Crowdsource Choir for ${event}`,
-      body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir.\n\nI thought it might be a unique fit for ${event}. Together, attendees co-create and sing an original anthem inspired by the gathering, so instead of simply hearing the conference message, they become the message. The format can work as an opening session, closing experience, or interactive general session.\n\nI'd love to connect, share what we're building, and explore whether there's a fit — or be pointed to the right person.\n\nThere's a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book\n\nBest,\nJoel`,
-    };
+    return conferenceDraft(firstName, conferenceEventName(orgName, opts?.eventName));
+  }
+
+  if (/\bathletics\b/i.test(orgName)) {
+    return collegeAthleticsDraft(firstName, orgName);
   }
 
   // Non-Seahawks sports: same belonging structure as Joel’s Seahawks emails, club-specific.

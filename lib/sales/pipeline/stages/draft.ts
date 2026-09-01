@@ -42,24 +42,25 @@ Best,
 Joel DeJong
 
 --- EXAMPLE 2 ---
-Hi Samantha,
+Hi J.,
 
 I hope you're doing well!
 
-I'm Joel DeJong, founder of Crowdsource Choir—a participatory musical experience where the audience becomes the choir. I thought it might be a unique fit for the 2027 INSPIRE Annual Conference.
+I'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a particularly natural fit for the World Education Congress.
 
-Unlike a traditional keynote or performance, Crowdsource Choir transforms attendees from spectators into participants. Together, they create something that could only exist because of the unique combination of people in the room. Instead of simply hearing the conference message, they become the message.
+We create experiences that move people from being an audience to actually participating and creating something together. Attendees contribute their voices and ideas, and we bring those contributions together into an original anthem that the whole room performs.
 
-Each engagement is custom-designed for the event. Before the conference, attendees contribute stories, ideas, and voices that become the creative source material for a custom anthem and participatory musical experience, premiered together live during the event. The format is flexible and can serve as an opening session, closing experience, experiential keynote, featured performance, or interactive general session for audiences of 50 to 5,000+.
+For a gathering of people who think deeply about how we convene, engage, and include people, I think there's something especially relevant about experiencing that kind of participation firsthand.
 
 I've included a bit more about the experience here:
 https://www.crowdsourcechoir.com/book
-If it resonates, I'd love to connect and explore whether Crowdsource Choir might fit your conference.
 
-Thanks for your time, and I hope we have a chance to connect.
+If it feels like it could be a fit, I'd love to schedule a quick call and learn more. And if you're not the right person for programming, I'd be grateful if you could point me toward whoever is.
+
+Thanks, and I hope we have a chance to connect.
 
 Best,
-Joel DeJong
+Joel
 
 ${SPORTS_VOICE_REFERENCE_EMAILS}`;
 
@@ -70,9 +71,9 @@ For conference/association prospects, prefer EXAMPLES 1–2. For sports / team /
 ${VOICE_REFERENCE_EMAILS}
 
 --- YOUR THREE FIELDS, MAPPED TO THAT VOICE ---
-- subject: plain and specific, naming the organization or opportunity (e.g. "Crowdsource Choir for the CAIS Trustee/School Head Conference"), never clickbait, never a question mark or exclamation point, never generic ("Exciting opportunity!" / "Quick question").
-- openingReason plays the role of the bridge sentence right after the fixed self-intro line — e.g. "I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life" or "I thought it might be a unique fit for the 2027 INSPIRE Annual Conference." Name the specific opportunity/event. 1 sentence.
-- fitReason plays the role of the paragraph that follows — describing what actually happens and why it fits THIS opportunity specifically, in the same grounded-but-vivid register as "Together, attendees co-create and sing an original anthem..." or the "Unlike a traditional keynote..." paragraph. 1-3 sentences.
+- subject: plain and specific. For conferences use "Crowdsource Choir + {Event Name}" (plus sign, not "for the"). For college athletics use "Turn {school} fans into the game-day show". Never clickbait, never a question mark or exclamation point, never generic ("Exciting opportunity!" / "Quick question").
+- openingReason plays the role of the bridge sentence right after the fixed self-intro line — e.g. "I wanted to reach out because I think it could be a natural fit for the World Education Congress." Name the specific opportunity/event. 1 sentence.
+- fitReason plays the role of the paragraph that follows — describing what actually happens: people move from audience to creating together, contribute voices and ideas, perform an original anthem as a room. 1-3 sentences. Do not pitch "opening session / closing experience / 50 to 5,000+" unless that is already in the findings.
 
 Rules:
 - Describing Crowdsource Choir's own format vividly (e.g. "transforms attendees from spectators into participants") is not a claim that needs evidence — that's our own pitch, not a statement about the prospect. Say it with the same confidence as the reference emails.

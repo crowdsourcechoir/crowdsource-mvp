@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { QueueItemDetail, QueueSidebarItem, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
@@ -10,6 +11,14 @@ import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
+import {
+  QUEUE_CATEGORY_CHIPS,
+  countQueueCategories,
+  matchesQueueCategory,
+  parseQueueCategory,
+  queueCategoryLabel,
+  type QueueCategoryFilter,
+} from "@/lib/sales/queue/category";
 import {
   applySelectContactResponse,
   applySelectedContact,
@@ -43,6 +52,10 @@ function findingForContact(
 }
 
 export default function ApprovalQueueClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const category = parseQueueCategory(searchParams.get("category"));
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
   const [loading, setLoading] = useState(true);
@@ -106,7 +119,13 @@ export default function ApprovalQueueClient() {
     load();
   }, [load]);
 
-  const selected = sidebar[selectedIndex] ?? null;
+  const visible = useMemo(
+    () => sidebar.filter((item) => matchesQueueCategory(item, category)),
+    [sidebar, category]
+  );
+  const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
+
+  const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
   const current = selectedId ? detailsById[selectedId] ?? null : null;
 
@@ -123,10 +142,10 @@ export default function ApprovalQueueClient() {
   }, []);
 
   useEffect(() => {
-    if (selectedIndex >= sidebar.length) {
-      setSelectedIndex(Math.max(0, sidebar.length - 1));
+    if (selectedIndex >= visible.length) {
+      setSelectedIndex(Math.max(0, visible.length - 1));
     }
-  }, [sidebar.length, selectedIndex]);
+  }, [visible.length, selectedIndex]);
 
   useEffect(() => {
     if (!selectedId || current) {
@@ -480,7 +499,7 @@ export default function ApprovalQueueClient() {
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((i) => Math.min(sidebar.length - 1, i + 1));
+        setSelectedIndex((i) => Math.min(Math.max(0, visible.length - 1), i + 1));
         setMobileDetailOpen(true);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -493,9 +512,22 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sidebar.length, mobileDetailOpen, sendConfirmOpen]);
+  }, [visible.length, mobileDetailOpen, sendConfirmOpen]);
 
-  const pendingCount = sidebar.length;
+  useEffect(() => {
+    setSelectedIndex(0);
+    setMobileDetailOpen(false);
+  }, [category]);
+
+  function setCategory(next: QueueCategoryFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("category");
+    else params.set("category", next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  const pendingCount = visible.length;
   const selectedAlreadySent = Boolean(
     current &&
       (current.contactDrafts ?? []).some(
@@ -519,24 +551,59 @@ export default function ApprovalQueueClient() {
     );
   }
 
+  const filterBar = (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {QUEUE_CATEGORY_CHIPS.map((chip) => {
+        const active = category === chip.key;
+        const count = categoryCounts[chip.key];
+        return (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={() => setCategory(chip.key)}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+              active ? "bg-white text-gray-900" : "border border-gray-800 text-gray-300 hover:border-gray-600"
+            }`}
+          >
+            {chip.label}
+            <span className={`ml-1.5 ${active ? "text-gray-500" : "text-gray-500"}`}>{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   if (sidebar.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-        Queue is empty. Run the pipeline against an organization to generate reviewable opportunities.
+      <div>
+        {filterBar}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
+          Queue is empty. Run the pipeline against an organization to generate reviewable opportunities.
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      {filterBar}
       {actionError && (
         <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
       )}
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
-        <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">{pendingCount} pending</div>
+        <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">
+          {category === "all"
+            ? `${pendingCount} pending`
+            : `${pendingCount} ${queueCategoryLabel(category).toLowerCase()} · ${sidebar.length} total`}
+        </div>
+        {visible.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-gray-500">
+            No {queueCategoryLabel(category).toLowerCase()} in the queue.
+          </p>
+        ) : (
         <ul className="max-h-[75vh] overflow-y-auto overscroll-contain">
-          {sidebar.map((item, i) => (
+          {visible.map((item, i) => (
             <li key={item.queueItem.id}>
               <button
                 type="button"
@@ -551,6 +618,9 @@ export default function ApprovalQueueClient() {
                     {item.organizationName}
                   </span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
+                  <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
+                    {queueCategoryLabel(parseQueueCategory(item.category))}
+                  </span>
                 </span>
                 {item.totalScore != null ? (
                   <ScoreBadge score={item.totalScore} />
@@ -563,6 +633,7 @@ export default function ApprovalQueueClient() {
             </li>
           ))}
         </ul>
+        )}
       </div>
 
       {(current || selected) && (
