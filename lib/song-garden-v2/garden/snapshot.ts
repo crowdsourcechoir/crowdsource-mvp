@@ -124,7 +124,8 @@ export function worldConfigFromBrand(brand: BrandKit, fallback: WorldConfig): Wo
   return {
     ...fallback,
     title: brand.title || fallback.title,
-    logoUrl: brand.logoUrl ?? fallback.logoUrl,
+    logoUrl: fallback.logoUrl ?? brand.logoUrl,
+    logoMaxWidthPx: fallback.logoMaxWidthPx ?? null,
     primaryColor: brand.primaryColor || fallback.primaryColor,
     accentColor: brand.accentColor || fallback.accentColor,
     heroArtworkUrl: brand.heroArtworkUrl ?? fallback.heroArtworkUrl,

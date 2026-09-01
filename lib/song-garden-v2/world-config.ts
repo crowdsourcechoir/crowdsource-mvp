@@ -34,6 +34,8 @@ export type WorldConfig = {
   title: string;
   heroArtworkUrl: string | null;
   logoUrl: string | null;
+  /** Max width in px for the client logo below the presence bubble on the bloom journey. */
+  logoMaxWidthPx?: number | null;
   primaryColor: string;
   accentColor: string;
   animationPreset: WorldAnimationPreset;
@@ -50,6 +52,13 @@ export type WorldConfig = {
 
 export const DEFAULT_PRIMARY_COLOR = "#1a0f2d";
 export const DEFAULT_ACCENT_COLOR = "#CFFF81";
+export const DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX = 200;
+
+export function resolveBloomLogoMaxWidthPx(value: number | null | undefined): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX;
+  return Math.max(48, Math.min(400, Math.round(n)));
+}
 
 export const WORLD_ANIMATION_PRESETS: { id: WorldAnimationPreset; label: string }[] = [
   { id: "particles", label: "Particles (drifting light)" },
@@ -87,6 +96,10 @@ export function resolveWorldConfig(
     title: override.title?.trim() || defaults.title,
     heroArtworkUrl: override.heroArtworkUrl?.trim() || defaults.heroArtworkUrl,
     logoUrl: override.logoUrl?.trim() || defaults.logoUrl,
+    logoMaxWidthPx:
+      override.logoMaxWidthPx != null
+        ? resolveBloomLogoMaxWidthPx(override.logoMaxWidthPx)
+        : defaults.logoMaxWidthPx,
     primaryColor: override.primaryColor?.trim() || defaults.primaryColor,
     accentColor: override.accentColor?.trim() || defaults.accentColor,
     animationPreset: override.animationPreset || defaults.animationPreset,
@@ -215,6 +228,8 @@ export function normalizeWorldConfigInput(
     title: input.title?.trim() || "",
     heroArtworkUrl: input.heroArtworkUrl?.trim() || null,
     logoUrl: input.logoUrl?.trim() || null,
+    logoMaxWidthPx:
+      input.logoMaxWidthPx != null ? resolveBloomLogoMaxWidthPx(input.logoMaxWidthPx) : null,
     primaryColor: input.primaryColor?.trim() || DEFAULT_PRIMARY_COLOR,
     accentColor: input.accentColor?.trim() || DEFAULT_ACCENT_COLOR,
     animationPreset: input.animationPreset ?? "particles",

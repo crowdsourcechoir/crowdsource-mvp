@@ -30,6 +30,7 @@ function buildInitialValues(
       title: "",
       heroArtworkUrl: null,
       logoUrl: null,
+      logoMaxWidthPx: null,
       primaryColor: "#1a0f2d",
       accentColor: "#CFFF81",
       animationPreset: "particles" as const,

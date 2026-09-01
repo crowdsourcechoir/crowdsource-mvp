@@ -21,9 +21,10 @@ async function ensureBucket() {
 }
 
 function extFor(name: string, contentType: string): string {
-  const fromName = /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.exec(name)?.[1]?.toLowerCase();
+  const fromName = /\.(jpe?g|png|webp|gif|heic|heif|avif|svg)$/i.exec(name)?.[1]?.toLowerCase();
   if (fromName === "jpeg") return "jpg";
   if (fromName) return fromName;
+  if (contentType.includes("svg")) return "svg";
   if (contentType.includes("png")) return "png";
   if (contentType.includes("webp")) return "webp";
   if (contentType.includes("gif")) return "gif";
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
       contentType?: string;
       size?: number;
       eventId?: string;
+      /** `logo` stores under a -logo- path for bloom client marks. */
+      purpose?: "hero" | "logo";
     };
 
     const size = Number(body.size) || 0;
@@ -61,7 +64,8 @@ export async function POST(request: Request) {
     }
 
     const contentType =
-      typeof body.contentType === "string" && body.contentType.startsWith("image/")
+      typeof body.contentType === "string" &&
+      (body.contentType.startsWith("image/") || body.contentType === "image/svg+xml")
         ? body.contentType
         : "image/jpeg";
     const ext = extFor(body.name || "", contentType);
@@ -69,7 +73,8 @@ export async function POST(request: Request) {
       typeof body.eventId === "string" && body.eventId.trim()
         ? body.eventId.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64)
         : `tmp-${Date.now().toString(36)}`;
-    const path = `heroes/${eventKey}-hero-${Date.now()}.${ext}`;
+    const purpose = body.purpose === "logo" ? "logo" : "hero";
+    const path = `heroes/${eventKey}-${purpose}-${Date.now()}.${ext}`;
 
     await ensureBucket();
 

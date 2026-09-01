@@ -35,7 +35,9 @@ import { COMPLETION_MOMENT_LABEL, DEFAULT_COMPLETION_BUTTON_TEXT, WELCOME_MOMENT
 import { JOURNEY_GARDEN_SLOT_IDS, type GardenSlotId } from "@/lib/songgarden/garden-slots";
 import { canonicalEventSlug, publicEventPath } from "@/lib/event-slug-aliases";
 import {
+  DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX,
   normalizeWorldConfigInput,
+  resolveBloomLogoMaxWidthPx,
   WORLD_ANIMATION_PRESETS,
   type WorldConfig,
 } from "@/lib/song-garden-v2/world-config";
@@ -77,6 +79,7 @@ const EMPTY_WORLD_CONFIG_FORM: WorldConfig = {
   title: "",
   heroArtworkUrl: null,
   logoUrl: null,
+  logoMaxWidthPx: null,
   primaryColor: "#1a0f2d",
   accentColor: "#CFFF81",
   animationPreset: "particles",
@@ -238,6 +241,7 @@ export default function EventForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const [themeError, setThemeError] = useState<string | null>(null);
@@ -1159,6 +1163,104 @@ export default function EventForm({
     }
   }
 
+  async function applyBloomLogo(
+    patch: Partial<Pick<WorldConfig, "logoUrl" | "logoMaxWidthPx">>
+  ) {
+    const nextWorld: WorldConfig = {
+      ...(values.worldConfig ?? EMPTY_WORLD_CONFIG_FORM),
+      logoMaxWidthPx:
+        values.worldConfig?.logoMaxWidthPx ??
+        (patch.logoUrl ? DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX : null),
+      ...patch,
+    };
+    setValues((v) => ({ ...v, worldConfig: nextWorld }));
+    if (eventId) {
+      await persistWorldToServer(nextWorld);
+    }
+  }
+
+  async function handleLogoFiles(files: File[]) {
+    const file = files[0];
+    if (!file) return;
+
+    const isImage =
+      file.type.startsWith("image/") ||
+      file.type === "image/svg+xml" ||
+      (!file.type && /\.(jpe?g|png|webp|gif|svg|heic|heif|avif)$/i.test(file.name));
+    if (!isImage) {
+      setSubmitError("That file didn’t look like an image. Use PNG, JPEG, WebP, or SVG.");
+      return;
+    }
+
+    const MAX_BYTES = 8 * 1024 * 1024;
+    const DATA_URL_SAFE_BYTES = 1.5 * 1024 * 1024;
+
+    if (file.size > MAX_BYTES) {
+      setSubmitError(`“${file.name}” is over 8MB. Compress it and try again.`);
+      return;
+    }
+
+    setUploadingLogo(true);
+    setSubmitError(null);
+    try {
+      const prepareRes = await fetch("/api/events/hero-upload/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: file.name,
+          contentType:
+            file.type?.startsWith("image/") || file.type === "image/svg+xml"
+              ? file.type
+              : "image/png",
+          size: file.size,
+          eventId: eventId || values.slug?.trim() || undefined,
+          purpose: "logo",
+        }),
+      });
+      const prepareBody = (await prepareRes.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        upload?: { signedUrl: string; publicUrl: string; contentType: string };
+      };
+
+      if (prepareRes.ok && prepareBody.upload) {
+        const put = await fetch(prepareBody.upload.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": prepareBody.upload.contentType },
+          body: file,
+        });
+        if (!put.ok) {
+          throw new Error(`Upload failed (${put.status}). Try again.`);
+        }
+        await applyBloomLogo({ logoUrl: prepareBody.upload.publicUrl });
+        return;
+      }
+
+      if (prepareBody.code === "not_configured") {
+        if (file.size > DATA_URL_SAFE_BYTES) {
+          setSubmitError(
+            "Storage isn’t configured. Keep logos under ~1.5MB, or set up Supabase storage."
+          );
+          return;
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Could not read that image."));
+          reader.readAsDataURL(file);
+        });
+        await applyBloomLogo({ logoUrl: dataUrl });
+        return;
+      }
+
+      throw new Error(prepareBody.error || "Could not prepare logo upload.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Logo upload failed.");
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
   const inputClass =
     "mt-0.5 block w-full rounded-lg border border-gray-700/50 bg-[#222] px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-gray-500 focus:outline-none";
   const labelClass = "block text-xs font-medium text-gray-400";
@@ -1517,6 +1619,97 @@ export default function EventForm({
               className={inputClass}
             />
           </label>
+
+          <div className="sm:col-span-2 space-y-2 rounded-lg border border-gray-800 bg-[#1a1a1a]/60 p-3">
+            <div>
+              <span className={labelClass}>Client logo</span>
+              <p className="mt-0.5 text-[11px] text-gray-500">
+                Shown on the public bloom just below the live presence bubble (e.g. “another voice
+                is warming up”). Upload a PNG or SVG with transparency when possible.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-start gap-3">
+              {values.worldConfig?.logoUrl?.trim() ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={values.worldConfig.logoUrl.trim()}
+                  alt=""
+                  className="h-16 max-w-[10rem] rounded border border-gray-700 bg-white/5 object-contain p-1"
+                  style={{
+                    maxWidth: resolveBloomLogoMaxWidthPx(
+                      values.worldConfig.logoMaxWidthPx ?? DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX
+                    ),
+                  }}
+                />
+              ) : (
+                <div className="flex h-16 w-24 items-center justify-center rounded border border-dashed border-gray-700 text-[10px] text-gray-600">
+                  No logo
+                </div>
+              )}
+              <div className="min-w-0 flex-1 space-y-2">
+                <input
+                  type="text"
+                  value={values.worldConfig?.logoUrl ?? ""}
+                  onChange={(e) => setWorldConfigField("logoUrl", e.target.value || null)}
+                  placeholder="https://…/client-logo.png"
+                  className={inputClass}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <FileDropZone
+                    variant="compact"
+                    accept="image/*,.svg"
+                    disabled={uploadingLogo}
+                    label={uploadingLogo ? "Uploading…" : "Upload logo"}
+                    onFiles={(files) => void handleLogoFiles(files)}
+                  />
+                  {values.worldConfig?.logoUrl ? (
+                    <button
+                      type="button"
+                      className={chipClass}
+                      onClick={() => void applyBloomLogo({ logoUrl: null })}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            {values.worldConfig?.logoUrl ? (
+              <label className="block">
+                <span className={labelClass}>
+                  Logo size on page (
+                  {resolveBloomLogoMaxWidthPx(
+                    values.worldConfig.logoMaxWidthPx ?? DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX
+                  )}
+                  px wide)
+                </span>
+                <input
+                  type="range"
+                  min={64}
+                  max={320}
+                  step={4}
+                  className="mt-2 w-full accent-[#CFFF81]"
+                  value={resolveBloomLogoMaxWidthPx(
+                    values.worldConfig.logoMaxWidthPx ?? DEFAULT_BLOOM_LOGO_MAX_WIDTH_PX
+                  )}
+                  onChange={(e) => {
+                    const px = resolveBloomLogoMaxWidthPx(Number(e.target.value));
+                    setWorldConfigField("logoMaxWidthPx", px);
+                  }}
+                  onPointerUp={(e) => {
+                    if (!eventId) return;
+                    const px = resolveBloomLogoMaxWidthPx(Number(e.currentTarget.value));
+                    void applyBloomLogo({ logoMaxWidthPx: px });
+                  }}
+                />
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Drag to resize, then open the public bloom to check placement.{" "}
+                  {eventId ? "Size saves automatically when you release the slider." : "Save the bloom to publish."}
+                </p>
+              </label>
+            ) : null}
+          </div>
+
           <label className="block sm:col-span-2">
             <span className={labelClass}>Hero artwork URL</span>
             <input

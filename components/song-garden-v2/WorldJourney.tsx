@@ -76,6 +76,7 @@ import WorldStage from "./WorldStage";
 import MomentOverlay from "./MomentOverlay";
 import WorldProgressTrail from "./WorldProgressTrail";
 import WorldPresenceTicker from "./WorldPresenceTicker";
+import WorldBloomLogo from "./WorldBloomLogo";
 import TextMomentPad from "./TextMomentPad";
 import SoundMomentPad from "./SoundMomentPad";
 import VideoMomentPad from "./VideoMomentPad";
@@ -634,10 +635,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       growthNodes={growthNodes}
     >
       <header className="mx-auto w-full max-w-lg px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
-        {world.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={world.logoUrl} alt="" className="mx-auto mb-2 h-8 w-auto opacity-90" />
-        ) : null}
         <p
           className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"
           style={{ color: world.accentColor, opacity: 0.85 }}
@@ -654,6 +651,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       {world.presenceSimulationEnabled !== false && (
         <WorldPresenceTicker eventId={event.id} accentColor={world.accentColor} />
       )}
+
+      {world.logoUrl ? (
+        <WorldBloomLogo url={world.logoUrl} maxWidthPx={world.logoMaxWidthPx} />
+      ) : null}
 
       {/* Hide prompt UI instantly while celebrating so the burst isn't overlaid on the question. */}
       {!celebration.active ? (
