@@ -86,7 +86,7 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
   }
 
   if (
-    /\bethdenver\b|\bethereum\b|\bweb3\b|\bcrypto\b|\bhackathon\b|\bdevcon\b|\bpycon\b|\bkubecon\b|\baws re:invent\b|\bdeveloper conference\b|\bconnect\b.*\bcloudflare\b|\bzendesk relate\b|\badobe summit\b/.test(
+    /\bethdenver\b|\bethereum\b|\bweb3\b|\bcrypto\b|\bhackathon\b|\bdevcon\b|\bpycon\b|\bkubecon\b|\baws re:invent\b|\bdeveloper conference\b|\bleaddev\b|\ball things open\b|\bethglobal\b|\bcloudflare\b|\bzendesk\b|\badobe summit\b/.test(
       text
     )
   ) {

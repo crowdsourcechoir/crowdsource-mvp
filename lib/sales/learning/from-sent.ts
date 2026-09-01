@@ -89,8 +89,8 @@ export async function learnFromSentOutreach(limit = 80): Promise<LearnFromSentRe
   const list = await bundle.gmail.users.messages.list({
     userId: "me",
     labelIds: ["SENT"],
-    maxResults: Math.min(50, limit),
-    q: "from:me -in:chats",
+    maxResults: Math.min(8, limit),
+    q: "from:me -in:chats newer_than:90d",
   });
   const messages = list.data.messages ?? [];
   const db = requireSupabaseAdmin();

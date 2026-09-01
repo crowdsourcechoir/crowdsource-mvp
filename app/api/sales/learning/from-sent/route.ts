@@ -3,7 +3,7 @@ import { learnFromSentOutreach } from "@/lib/sales/learning/from-sent";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * Pull Joel's in-app sent edits + Gmail Sent (outside-app rewrites) into outreach_feedback
