@@ -23,6 +23,38 @@ export const SALES_INITIATIVES = {
     opportunityTypeKeys: ["annual_conference", "association_convention"] as const,
     industrySegmentKey: null,
   },
+  fundraising_galas: {
+    key: "fundraising_galas",
+    label: "Fundraisers",
+    description: "Galas and benefits raising ~$1M+ — participatory anthem for the room and the cause.",
+    organizationTypeKeys: ["nonprofit"] as const,
+    opportunityTypeKeys: ["fundraising_gala"] as const,
+    industrySegmentKey: "nonprofit_community",
+  },
+  arts_culture: {
+    key: "arts_culture",
+    label: "Arts",
+    description: "Music, museums, opera, theatre, patron circles — high-fit participatory gatherings.",
+    organizationTypeKeys: ["nonprofit", "festival", "association"] as const,
+    opportunityTypeKeys: ["annual_conference", "community_festival", "fundraising_gala"] as const,
+    industrySegmentKey: null,
+  },
+  entertainment_media: {
+    key: "entertainment_media",
+    label: "Entertainment",
+    description: "TV, film, live music, venues — audience-as-the-show gatherings.",
+    organizationTypeKeys: ["association", "festival", "venue"] as const,
+    opportunityTypeKeys: ["annual_conference", "community_festival"] as const,
+    industrySegmentKey: "sports_entertainment",
+  },
+  tech_conferences: {
+    key: "tech_conferences",
+    label: "Tech",
+    description: "Developer, crypto, and product conferences (ETHDenver, Relate, Connect).",
+    organizationTypeKeys: ["conference", "corporation"] as const,
+    opportunityTypeKeys: ["annual_conference"] as const,
+    industrySegmentKey: null,
+  },
 } as const;
 
 export type SalesInitiativeKey = keyof typeof SALES_INITIATIVES;

@@ -11,15 +11,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const orgs = await listOrganizations({ limit: 500 });
-    const byInitiative = {
-      sports_fan_culture: 0,
-      conferences_associations: 0,
-      untagged: 0,
-    };
+    const byInitiative: Record<string, number> = { untagged: 0 };
+    for (const key of Object.keys(SALES_INITIATIVES)) byInitiative[key] = 0;
     for (const o of orgs) {
       const key = readSalesInitiative(o.importMetadata);
-      if (key === "sports_fan_culture") byInitiative.sports_fan_culture += 1;
-      else if (key === "conferences_associations") byInitiative.conferences_associations += 1;
+      if (key) byInitiative[key] += 1;
       else byInitiative.untagged += 1;
     }
 

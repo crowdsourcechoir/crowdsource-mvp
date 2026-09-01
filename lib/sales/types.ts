@@ -400,6 +400,10 @@ export type QueueSidebarItem = {
   opportunityTitle: string;
   totalScore: number | null;
   draftConfidence: number | null;
+  /** sports | conferences | fundraisers | arts | entertainment | tech */
+  category: string;
+  opportunityTypeKey: string | null;
+  organizationTypeKey: string | null;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

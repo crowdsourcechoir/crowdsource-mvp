@@ -1,5 +1,7 @@
 import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
+import { classifyQueueCategory } from "../queue/category";
+import { readSalesInitiative } from "../initiatives";
 import type { ApprovalQueueItem, ApprovalQueueItemKind, ApprovalQueueItemStatus, QueueSidebarItem } from "../types";
 
 const IN_CHUNK = 150;
@@ -165,10 +167,11 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
   const scoreIds = items.map((item) => item.prospectScoreId).filter((id): id is string => Boolean(id));
   const draftIds = items.map((item) => item.outreachDraftId).filter((id): id is string => Boolean(id));
 
-  const [opportunities, scoreRows, draftRows] = await Promise.all([
-    fetchInChunks<{ id: string; title: string; organization_id: string }>(
+  const [opportunities, scoreRows, draftRows, opportunityTypes, organizationTypes] = await Promise.all([
+    fetchInChunks<{ id: string; title: string; organization_id: string; opportunity_type_id: string | null }>(
       items.map((item) => item.opportunityId),
-      async (chunk) => db.from("opportunities").select("id, title, organization_id").in("id", chunk)
+      async (chunk) =>
+        db.from("opportunities").select("id, title, organization_id, opportunity_type_id").in("id", chunk)
     ),
     scoreIds.length > 0
       ? fetchInChunks<{ id: string; total_score: number }>(scoreIds, async (chunk) =>
@@ -180,17 +183,33 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
           db.from("outreach_drafts").select("id, confidence_score").in("id", chunk)
         )
       : Promise.resolve([]),
+    db.from("opportunity_types").select("id, key"),
+    db.from("organization_types").select("id, key"),
   ]);
+  if (opportunityTypes.error) throw new Error(opportunityTypes.error.message);
+  if (organizationTypes.error) throw new Error(organizationTypes.error.message);
   const oppById = new Map(opportunities.map((row) => [row.id, row]));
   const scoresById = new Map(scoreRows.map((row) => [row.id, Number(row.total_score)]));
   const confidenceByDraft = new Map<string, number>();
   for (const row of draftRows) {
     if (row.confidence_score != null) confidenceByDraft.set(row.id, Number(row.confidence_score));
   }
+  const oppTypeKeyById = new Map(
+    ((opportunityTypes.data ?? []) as { id: string; key: string }[]).map((row) => [row.id, row.key])
+  );
+  const orgTypeKeyById = new Map(
+    ((organizationTypes.data ?? []) as { id: string; key: string }[]).map((row) => [row.id, row.key])
+  );
 
-  const organizations = await fetchInChunks<{ id: string; name: string }>(
+  const organizations = await fetchInChunks<{
+    id: string;
+    name: string;
+    organization_type_id: string | null;
+    import_metadata: Record<string, unknown> | null;
+  }>(
     opportunities.map((row) => row.organization_id),
-    async (chunk) => db.from("organizations").select("id, name").in("id", chunk)
+    async (chunk) =>
+      db.from("organizations").select("id, name, organization_type_id, import_metadata").in("id", chunk)
   );
   const orgById = new Map(organizations.map((row) => [row.id, row]));
 
@@ -200,6 +219,19 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
     if (!opportunity) continue;
     const organization = orgById.get(opportunity.organization_id);
     if (!organization) continue;
+    const opportunityTypeKey = opportunity.opportunity_type_id
+      ? oppTypeKeyById.get(opportunity.opportunity_type_id) ?? null
+      : null;
+    const organizationTypeKey = organization.organization_type_id
+      ? orgTypeKeyById.get(organization.organization_type_id) ?? null
+      : null;
+    const category = classifyQueueCategory({
+      organizationName: organization.name,
+      opportunityTitle: opportunity.title,
+      opportunityTypeKey,
+      organizationTypeKey,
+      salesInitiative: readSalesInitiative(organization.import_metadata),
+    });
     sidebar.push({
       queueItem,
       organizationId: organization.id,
@@ -210,6 +242,9 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
       draftConfidence: queueItem.outreachDraftId
         ? confidenceByDraft.get(queueItem.outreachDraftId) ?? null
         : null,
+      category,
+      opportunityTypeKey,
+      organizationTypeKey,
     });
   }
   return sortQueueSidebarItems(sidebar);
