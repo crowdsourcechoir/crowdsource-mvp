@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { publicErrorMessage, apiErrorFromBody } from "../../lib/sales/http-error.ts";
-import { queueSidebarSortScore, sortQueueSidebarItems } from "../../lib/sales/queue/sidebar.ts";
+import { queueSidebarSortScore, sortQueueSidebarItems, filterFirstTouchSidebarItems } from "../../lib/sales/queue/sidebar.ts";
 
 const cloudflare522 = `<!DOCTYPE html>
 <!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]-->
@@ -58,5 +58,9 @@ assert.equal(sorted[1].queueItem.id, "nudge");
 assert.equal(sorted[2].queueItem.id, "low");
 assert.equal(queueSidebarSortScore({ totalScore: null, draftConfidence: 0.5 }), 50);
 assert.equal(queueSidebarSortScore({ totalScore: null, draftConfidence: null }), -1);
+
+const firstTouch = filterFirstTouchSidebarItems(sorted);
+assert.equal(firstTouch.length, 2);
+assert.equal(firstTouch.some((row) => row.queueItem.kind === "nudge"), false);
 
 console.log("queue sidebar + error sanitizer ok");

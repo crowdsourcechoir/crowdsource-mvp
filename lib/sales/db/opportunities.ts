@@ -152,7 +152,10 @@ export async function updateOpportunityTouchTimestamps(
 }
 
 /** Opportunities due for an AI nudge draft (no pending nudge yet — enforced by caller). */
-export async function listOpportunitiesDueForNudge(nowIso: string = new Date().toISOString()): Promise<Opportunity[]> {
+export async function listOpportunitiesDueForNudge(
+  nowIso: string = new Date().toISOString(),
+  limit = 25
+): Promise<Opportunity[]> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db
     .from("opportunities")
@@ -160,7 +163,7 @@ export async function listOpportunitiesDueForNudge(nowIso: string = new Date().t
     .lte("next_follow_up_at", nowIso)
     .in("relationship_stage", ["awareness", "interest"])
     .order("next_follow_up_at", { ascending: true })
-    .limit(25);
+    .limit(limit);
   if (error) throw new Error(error.message);
   return (data ?? [])
     .map(rowToOpportunity)

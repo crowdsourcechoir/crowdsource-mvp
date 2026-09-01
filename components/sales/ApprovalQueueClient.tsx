@@ -20,6 +20,7 @@ import {
   type QueueMutationPayload,
 } from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
+import FindMoreLikeRoleLink from "@/components/sales/FindMoreLikeRoleLink";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -62,6 +63,7 @@ export default function ApprovalQueueClient() {
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
@@ -164,6 +166,7 @@ export default function ApprovalQueueClient() {
 
   useEffect(() => {
     setSendConfirmOpen(false);
+    setDoneConfirmOpen(false);
     setMenuOpenId(null);
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
@@ -173,6 +176,7 @@ export default function ApprovalQueueClient() {
 
   const selectItem = useCallback((index: number) => {
     setSendConfirmOpen(false);
+    setDoneConfirmOpen(false);
     setSelectedIndex(index);
     setMobileDetailOpen(true);
   }, []);
@@ -320,8 +324,33 @@ export default function ApprovalQueueClient() {
       (d) => d.contactId === current.contact?.id && isSentDraftStatus(d.status)
     );
     if (alreadySent) return;
+    setDoneConfirmOpen(false);
     setSendConfirmOpen(true);
   }, [current, busy]);
+
+  const finishOrg = useCallback(async () => {
+    if (!current || busy) return;
+    setBusy(true);
+    setDoneConfirmOpen(false);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/done`, { method: "POST" });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not leave the queue"));
+      const closed = (data as { closedDrafts?: number }).closedDrafts ?? 0;
+      dropQueueRow(current.queueItem.id);
+      setMobileDetailOpen(false);
+      showCopyStatus(
+        closed > 0
+          ? `Left the queue. Closed ${closed} leftover draft${closed === 1 ? "" : "s"} — not sent.`
+          : "Left the send queue."
+      );
+    } catch (err) {
+      setActionError(publicErrorMessage(err, "Could not leave the queue"));
+    } finally {
+      setBusy(false);
+    }
+  }, [current, busy, dropQueueRow, showCopyStatus]);
 
   const runMoreResearch = useCallback(async () => {
     if (!current || busy) return;
@@ -469,10 +498,11 @@ export default function ApprovalQueueClient() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (sendConfirmOpen) {
+      if (sendConfirmOpen || doneConfirmOpen) {
         if (e.key === "Escape") {
           e.preventDefault();
           setSendConfirmOpen(false);
+          setDoneConfirmOpen(false);
         }
         return;
       }
@@ -493,7 +523,7 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sidebar.length, mobileDetailOpen, sendConfirmOpen]);
+  }, [sidebar.length, mobileDetailOpen, sendConfirmOpen, doneConfirmOpen]);
 
   const pendingCount = sidebar.length;
   const selectedAlreadySent = Boolean(
@@ -521,8 +551,15 @@ export default function ApprovalQueueClient() {
 
   if (sidebar.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-        Queue is empty. Run the pipeline against an organization to generate reviewable opportunities.
+      <div>
+        {copyStatus && (
+          <p className="mb-4 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
+            {copyStatus}
+          </p>
+        )}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
+          No first-touch drafts. Follow-ups are on Follow-ups, not here. Run the pipeline to generate new sends.
+        </div>
       </div>
     );
   }
@@ -531,6 +568,11 @@ export default function ApprovalQueueClient() {
     <div>
       {actionError && (
         <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
+      )}
+      {copyStatus && (
+        <p className="mb-4 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
+          {copyStatus}
+        </p>
       )}
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
@@ -644,6 +686,17 @@ export default function ApprovalQueueClient() {
               ) : (
                 <p className="text-sm text-gray-500">No score yet</p>
               )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setSendConfirmOpen(false);
+                  setDoneConfirmOpen(true);
+                }}
+                className="mt-2 rounded-md border border-gray-700 px-2.5 py-1 text-xs font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+              >
+                Done with org
+              </button>
             </div>
           </div>
 
@@ -709,18 +762,22 @@ export default function ApprovalQueueClient() {
                         >
                           {blurb}
                           <span className="mt-1 block text-gray-400">{c.email}</span>
-                          {source?.sourceUrl && (
+                        </button>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {source?.sourceUrl ? (
                             <a
                               href={source.sourceUrl}
                               target="_blank"
                               rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-1 inline-block text-gray-500 underline"
+                              className="text-xs text-gray-500 underline"
                             >
                               source
                             </a>
-                          )}
-                        </button>
+                          ) : null}
+                          {c.roleTitle ? (
+                            <FindMoreLikeRoleLink orgId={current.organization.id} role={c.roleTitle} className="text-xs text-sky-500/80 underline" />
+                          ) : null}
+                        </div>
                       </div>
                       {menuOpenId === c.id && (
                         <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-xl">
@@ -847,7 +904,17 @@ export default function ApprovalQueueClient() {
             >
               Send
             </button>
-            {copyStatus && <span className="text-xs text-emerald-400">{copyStatus}</span>}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setSendConfirmOpen(false);
+                setDoneConfirmOpen(true);
+              }}
+              className="rounded-lg border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+            >
+              Done with org
+            </button>
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
               Organization
             </Link>
@@ -857,6 +924,40 @@ export default function ApprovalQueueClient() {
         </div>
       )}
 
+      {doneConfirmOpen && current && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-950 p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-white">Remove from the send queue?</h2>
+            <p className="mt-2 text-sm text-gray-300">
+              {current.organization.name} leaves the queue. Remaining drafts are closed and{" "}
+              <span className="font-medium text-white">not sent</span>. Anyone you already emailed stays in the
+              funnel.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setDoneConfirmOpen(false)}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-900 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void finishOrg()}
+                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 disabled:opacity-50"
+              >
+                Done with org
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {sendConfirmOpen && current && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"

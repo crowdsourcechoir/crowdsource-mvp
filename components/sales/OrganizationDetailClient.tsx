@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { AgentRun, Contact, Opportunity, Organization, PipelineRun, ResearchFinding } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
+import FindMoreLikeRoleLink from "@/components/sales/FindMoreLikeRoleLink";
 
 type PipelineRunWithStages = PipelineRun & { agentRuns: AgentRun[] };
 type FindingWithUrl = ResearchFinding & { sourceUrl: string };
@@ -171,6 +172,11 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
                 {c.outreachPersona !== "other" && (
                   <span className="ml-1 text-sky-500">· {PERSONA_STRATEGIES[c.outreachPersona].label}</span>
                 )}
+                {c.roleTitle ? (
+                  <span className="ml-2">
+                    <FindMoreLikeRoleLink orgId={organization.id} role={c.roleTitle} />
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>

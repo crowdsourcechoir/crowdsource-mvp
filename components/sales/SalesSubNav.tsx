@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const LINKS = [
+const LINKS: { href: string; label: string; exact?: boolean }[] = [
+  { href: "/admin/sales", label: "Home", exact: true },
   { href: "/admin/sales/queue", label: "Queue" },
+  { href: "/admin/sales/follow-ups", label: "Follow-ups" },
   { href: "/admin/sales/organizations", label: "Organizations" },
   { href: "/admin/sales/funnel", label: "Funnel" },
 ];
@@ -17,7 +19,7 @@ export default function SalesSubNav() {
   return (
     <nav className="mb-6 flex flex-wrap gap-2" aria-label="Sales sections">
       {LINKS.map((link) => {
-        const active = pathname?.startsWith(link.href);
+        const active = link.exact ? pathname === link.href : Boolean(pathname?.startsWith(link.href));
         return (
           <Link
             key={link.href}

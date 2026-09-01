@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
+import { countFunnelFocus, matchesFunnelFocus, parseFunnelFocus, type FunnelFocus } from "@/lib/sales/funnel-focus";
 
 const STAGES = FUNNEL_STAGES.map((s) => ({
   ...s,
@@ -23,6 +25,17 @@ const ADVANCE_ACTION: Partial<Record<RelationshipStage, { to: RelationshipStage;
   awareness: { to: "interest", label: "Mark replied →" },
   interest: { to: "purchase", label: "Mark won →" },
 };
+
+const CHIPS: { focus: FunnelFocus; label: string }[] = [
+  { focus: "attention", label: "Needs attention" },
+  { focus: "replies", label: "Replies" },
+  { focus: "nudge", label: "Follow-ups" },
+  { focus: "awareness", label: "Awareness" },
+  { focus: "interest", label: "Interest" },
+  { focus: "purchase", label: "Won" },
+  { focus: "lost", label: "Lost" },
+  { focus: "all", label: "All" },
+];
 
 function daysSince(iso: string | null): number | null {
   if (!iso) return null;
@@ -102,7 +115,27 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
   );
 }
 
+function emptyCopy(focus: FunnelFocus): string {
+  if (focus === "purchase") {
+    return "None yet — mark Won from a reply when a deal closes.";
+  }
+  if (focus === "attention") {
+    return "Nothing needs attention. Replies, Interest, and due follow-ups show up here.";
+  }
+  if (focus === "replies") return "No replies or Interest yet.";
+  if (focus === "nudge") return "No follow-ups due. Due nudges also live on Follow-ups.";
+  return "Nothing in this view.";
+}
+
+function chipHref(focus: FunnelFocus): string {
+  if (focus === "attention") return "/admin/sales/funnel";
+  if (focus === "purchase") return "/admin/sales/funnel?focus=won";
+  return `/admin/sales/funnel?focus=${focus}`;
+}
+
 export default function FunnelClient() {
+  const searchParams = useSearchParams();
+  const focus = parseFunnelFocus(searchParams.get("focus"));
   const [items, setItems] = useState<FunnelItemDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,9 +160,6 @@ export default function FunnelClient() {
   }, [load]);
 
   const moveStage = useCallback(async (opportunityId: string, stage: RelationshipStage) => {
-    // Optimistic update — this is a low-stakes, frequently-corrected action, so it's more
-    // important that the board feels immediate than that it's perfectly consistent with a
-    // concurrent edit from elsewhere.
     setItems((prev) =>
       prev.map((item) =>
         item.opportunity.id === opportunityId
@@ -150,10 +180,13 @@ export default function FunnelClient() {
     }
   }, [load]);
 
+  const counts = useMemo(() => countFunnelFocus(items), [items]);
+  const visible = useMemo(() => items.filter((item) => matchesFunnelFocus(item, focus)), [items, focus]);
   const grouped = useMemo(() => {
     const byStage = new Map<RelationshipStage, FunnelItemDetail[]>(STAGES.map((s) => [s.key, []]));
     for (const item of items) {
-      if (item.opportunity.relationshipStage) byStage.get(item.opportunity.relationshipStage)?.push(item);
+      if (!item.opportunity.relationshipStage) continue;
+      byStage.get(item.opportunity.relationshipStage)?.push(item);
     }
     return byStage;
   }, [items]);
@@ -170,25 +203,65 @@ export default function FunnelClient() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {STAGES.map((stage) => {
-        const stageItems = grouped.get(stage.key) ?? [];
-        return (
-          <div key={stage.key} className={`rounded-xl border ${stage.accent} bg-gray-950/40`}>
-            <div className="border-b border-gray-800 px-3 py-2">
-              <h2 className="text-sm font-semibold text-white">{stage.label}</h2>
-              <p className="text-xs text-gray-500">{stageItems.length} opportunit{stageItems.length === 1 ? "y" : "ies"}</p>
-            </div>
-            <div className="max-h-[70vh] space-y-2 overflow-y-auto p-2">
-              {stageItems.length === 0 ? (
-                <p className="px-1 py-2 text-xs text-gray-600">Empty</p>
-              ) : (
-                stageItems.map((item) => <FunnelCard key={item.opportunity.id} item={item} onMove={moveStage} />)
-              )}
-            </div>
-          </div>
-        );
-      })}
+    <div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {CHIPS.map((chip) => {
+          const active = focus === chip.focus;
+          const count =
+            chip.focus === "purchase"
+              ? counts.purchase
+              : counts[chip.focus];
+          return (
+            <Link
+              key={chip.focus}
+              href={chipHref(chip.focus)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                active ? "bg-gray-800 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+              }`}
+            >
+              {chip.label}
+              <span className={`ml-1.5 ${active ? "text-gray-300" : "text-gray-600"}`}>{count}</span>
+            </Link>
+          );
+        })}
+      </div>
+
+      {focus === "all" ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {STAGES.map((stage) => {
+            const stageItems = grouped.get(stage.key) ?? [];
+            return (
+              <div key={stage.key} className={`rounded-xl border ${stage.accent} bg-gray-950/40`}>
+                <div className="border-b border-gray-800 px-3 py-2">
+                  <h2 className="text-sm font-semibold text-white">{stage.label}</h2>
+                  <p className="text-xs text-gray-500">
+                    {stageItems.length} opportunit{stageItems.length === 1 ? "y" : "ies"}
+                  </p>
+                </div>
+                <div className="max-h-[70vh] space-y-2 overflow-y-auto p-2">
+                  {stage.key === "purchase" && stageItems.length === 0 ? (
+                    <p className="px-1 py-2 text-xs text-gray-500">{emptyCopy("purchase")}</p>
+                  ) : stageItems.length === 0 ? (
+                    <p className="px-1 py-2 text-xs text-gray-600">Empty</p>
+                  ) : (
+                    stageItems.map((item) => <FunnelCard key={item.opportunity.id} item={item} onMove={moveStage} />)
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
+          {emptyCopy(focus)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {visible.map((item) => (
+            <FunnelCard key={item.opportunity.id} item={item} onMove={moveStage} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export type NudgeRunResult = {
 
 /**
  * For each due sent email, generate a follow-up draft and enqueue it for human approval.
- * Never sends — approve in the queue triggers send (Gmail if connected).
+ * Never sends — approve on Follow-ups triggers send (Gmail if connected).
  */
 export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
   const dueOpps = await listOpportunitiesDueForNudge();
