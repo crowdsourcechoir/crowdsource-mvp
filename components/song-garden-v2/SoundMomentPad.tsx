@@ -37,6 +37,8 @@ type SoundMomentPadProps = {
   alternateSlots?: GardenSlotDef[];
   /** Called once the clip is durably submitted — parent runs the celebration + advances. */
   onSubmitted: (meta?: { gardenCelebrationLine?: string | null }) => void;
+  /** Optional — lets participants opt out before recording (e.g. skip singing). */
+  onSkip?: () => void;
 };
 
 /**
@@ -55,6 +57,7 @@ export default function SoundMomentPad({
   progressSlotId,
   alternateSlots,
   onSubmitted,
+  onSkip,
 }: SoundMomentPadProps) {
   const hasChoices = !!alternateSlots?.length;
   const choices = hasChoices ? [slot, ...alternateSlots!] : [slot];
@@ -285,6 +288,16 @@ export default function SoundMomentPad({
           {phase === "done" && <span className="text-2xl">✓</span>}
         </motion.button>
       </div>
+      )}
+
+      {onSkip && (phase === "idle" || phase === "choose") && (
+        <button
+          type="button"
+          onClick={onSkip}
+          className="mx-auto block min-h-[44px] font-mono text-xs text-white/55 underline decoration-white/25 underline-offset-4 [touch-action:manipulation] hover:text-white/85"
+        >
+          Skip
+        </button>
       )}
 
       {phase === "recording" && (

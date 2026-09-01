@@ -16,7 +16,7 @@ import {
   getSonggardenContributorName,
   setSonggardenContributorName,
 } from "@/data/songgardenClient";
-import { loadDoneSlots, loadDoneSoundStepIds, clearDoneSlots, saveDoneSoundStepId } from "@/lib/songgarden/garden-storage";
+import { loadDoneSlots, loadDoneSoundStepIds, clearDoneSlots, saveDoneSlot, saveDoneSoundStepId } from "@/lib/songgarden/garden-storage";
 import {
   isAgentContributionStep,
   normalizePromptChannels,
@@ -559,6 +559,17 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     [activeSound, celebration, event.id, gardenSnap, goToStep, growNode, stepIndex]
   );
 
+  const handleSlotSkipped = useCallback(() => {
+    if (!activeSound) return;
+    if (activeSound.isFree) {
+      saveDoneSoundStepId(event.id, activeSound.id);
+    } else if (activeSound.slotId) {
+      saveDoneSlot(event.id, activeSound.slotId);
+    }
+    setChatError(null);
+    goToStep(stepIndex + 1);
+  }, [activeSound, event.id, goToStep, stepIndex]);
+
   const handleVideoSubmitted = useCallback(
     async (blob: Blob) => {
       unlockReferenceTones();
@@ -835,6 +846,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 progressSlotId={activeSound.isFree ? null : activeSound.slotId}
                 alternateSlots={activeSound.alternateSlots}
                 onSubmitted={handleSlotSubmitted}
+                onSkip={handleSlotSkipped}
               />
               {availableChannels.length > 1 && selectedChannel && (
                 <button
