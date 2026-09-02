@@ -119,11 +119,11 @@ export function markdownToEmailHtml(markdown: string): string {
     .map((block) => {
       if (block.type === "ul") {
         const items = block.items.map((item) => `<li style="margin:0 0 4px 0">${linkifyInline(escapeHtml(item))}</li>`).join("");
-        return `<ul style="margin:0 0 12px 0;padding-left:24px">${items}</ul>`;
+        return `<ul style="margin:0 0 12px 0;padding-left:24px;list-style-type:disc">${items}</ul>`;
       }
       if (block.type === "ol") {
         const items = block.items.map((item) => `<li style="margin:0 0 4px 0">${linkifyInline(escapeHtml(item))}</li>`).join("");
-        return `<ol style="margin:0 0 12px 0;padding-left:24px">${items}</ol>`;
+        return `<ol style="margin:0 0 12px 0;padding-left:24px;list-style-type:decimal">${items}</ol>`;
       }
       const text = block.lines.map((line) => linkifyInline(escapeHtml(line))).join("<br>");
       return `<p style="margin:0 0 12px 0">${text || "&nbsp;"}</p>`;

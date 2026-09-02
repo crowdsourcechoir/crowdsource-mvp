@@ -47,6 +47,10 @@ export default function QueueEmailBodyEditor({ value, onChange, onBlur, disabled
       const plain = event.clipboardData.getData("text/plain");
       const markdown = pasteToMarkdown(html, plain);
       const fragment = markdownToEditorHtml(markdown);
+      for (let i = 0; i < 3; i += 1) {
+        if (!document.queryCommandState("insertUnorderedList") && !document.queryCommandState("insertOrderedList")) break;
+        document.execCommand("insertParagraph");
+      }
       document.execCommand("insertHTML", false, fragment);
       emitMarkdown();
     },

@@ -73,6 +73,7 @@ const pasteHtmlWins = pasteToMarkdown("<ul><li>From HTML</li></ul>", "From plain
 assert.match(pasteHtmlWins, /- From HTML/);
 
 const emailHtml = markdownToEmailHtml(draft);
+assert.match(emailHtml, /list-style-type:disc/);
 assert.match(emailHtml, /<ul /);
 assert.match(emailHtml, /<li /);
 assert.match(emailHtml, /href="https:\/\/www\.crowdsourcechoir\.com\/book"/);
