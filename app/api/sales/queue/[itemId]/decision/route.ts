@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { decideQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { updateDraftDecision, getDraft, listDraftsForOpportunity, claimOpenDraftForSend, revertDraftClaim } from "@/lib/sales/db/outreach";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
-import { getContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
+import { getContact, listContactsForOrganization, updateContactVerification } from "@/lib/sales/db/contacts";
 import {
   getOpportunity,
   updateOpportunityStatus,
@@ -19,6 +19,7 @@ import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { draftToPlainText } from "@/lib/sales/outreach/email-body-format";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { pickNextRemainingInitialDraft, shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
@@ -121,6 +122,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           },
           { status: 403 }
         );
+      }
+
+      if (contact.emailVerificationStatus !== "verified_deliverable") {
+        const check = await verifyEmailAddress(contact.email);
+        if (check.status !== "unverified") {
+          await updateContactVerification(contact.id, check.status);
+        }
+        const status = check.status === "unverified" ? "unverified" : check.status;
+        if (status !== "verified_deliverable") {
+          return NextResponse.json(
+            {
+              error:
+                status === "invalid"
+                  ? `Hunter says ${contact.email} will bounce — not sent. Find another contact on this org.`
+                  : `Hunter could not confirm ${contact.email} is deliverable (${check.hunterStatus ?? status}). Not sent.`,
+            },
+            { status: 409 }
+          );
+        }
       }
 
       if (gmailStatus.connected) {

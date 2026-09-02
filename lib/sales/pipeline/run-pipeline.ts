@@ -57,7 +57,7 @@ export type PipelineRunSummary = {
  */
 function pickBestContact(contacts: Contact[]): Contact | null {
   const emailRank = (c: Contact) =>
-    ({ valid_format: 0, verified_deliverable: 0, risky: 1, unverified: 2, invalid: 3 })[c.emailVerificationStatus] ?? 2;
+    ({ verified_deliverable: 0, valid_format: 1, risky: 2, unverified: 3, invalid: 4 })[c.emailVerificationStatus] ?? 3;
   const rank = (c: Contact) => (looksLikePersonName(c.fullName) ? 0 : 10) + emailRank(c);
   const withName = contacts.filter((c) => c.fullName);
   if (withName.length === 0) return null;

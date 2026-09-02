@@ -12,6 +12,7 @@ import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetai
 
 function looksLikeSelectableContact(c: Contact): boolean {
   if (c.duplicateOfContactId) return false;
+  if (c.emailVerificationStatus === "invalid") return false;
   return Boolean(looksLikePersonName(c.fullName) && c.email);
 }
 

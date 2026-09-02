@@ -5,6 +5,8 @@ export type { EnrichmentInput, EnrichmentProvider, EnrichmentResult } from "./ty
 export { getEnrichmentConfigStatus } from "./config-status";
 export type { EnrichmentConfigStatus } from "./config-status";
 export { getHunterAccountCredits } from "./hunter-account";
+export { verifyWithHunter } from "./hunter-verifier";
+export { verifyEmailAddress } from "./verify-email";
 
 /**
  * Hunter.io is the sole contact-enrichment provider for the sales agent.

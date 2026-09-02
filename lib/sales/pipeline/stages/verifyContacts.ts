@@ -1,14 +1,19 @@
 import { listContactsForOrganization, updateContactVerification } from "../../db/contacts";
 import { isPlausibleEmail, extractDomain } from "../../dedupe";
-import type { Organization } from "../../types";
+import { verifyEmailAddress } from "../../enrichment/verify-email";
+import type { Contact, Organization } from "../../types";
 
 export type VerifyContactsStageOutput = {
   checked: number;
   verifiedFormat: number;
+  verifiedDeliverable: number;
   risky: number;
   invalid: number;
   noEmail: number;
+  hunterAttempted: number;
 };
+
+const MAX_HUNTER_VERIFY_PER_RUN = 5;
 
 /** True when email domain matches the org domain or a parent/child (conference.shrm.org ↔ shrm.org). */
 export function emailDomainMatchesOrg(contactDomain: string | null, orgDomain: string | null): boolean {
@@ -17,22 +22,35 @@ export function emailDomainMatchesOrg(contactDomain: string | null, orgDomain: s
   return orgDomain.endsWith(`.${contactDomain}`) || contactDomain.endsWith(`.${orgDomain}`);
 }
 
+export function contactNeedsHunterVerify(contact: Contact): boolean {
+  if (!contact.email || !isPlausibleEmail(contact.email)) return false;
+  return (
+    contact.emailVerificationStatus === "unverified" ||
+    contact.emailVerificationStatus === "risky" ||
+    contact.emailVerificationStatus === "valid_format"
+  );
+}
+
 /**
- * Deterministic only — no MX/SMTP probing in v1 (see docs/sales-platform/ai-workflow.md §5).
- * Format-valid + domain matches the org's own domain (or parent/child) → "valid_format".
- * Format-valid but a different domain (e.g. a personal/agency email) → "risky", still surfaced, never silently promoted.
+ * Format + org-domain check, then Hunter Email Verifier (SMTP) so undeliverable
+ * mailboxes never clear the queue bar. `valid_format` alone is not sendable.
  */
 export async function runVerifyContactsStage(org: Organization): Promise<{ output: VerifyContactsStageOutput }> {
   const contacts = await listContactsForOrganization(org.id);
-  const output: VerifyContactsStageOutput = { checked: 0, verifiedFormat: 0, risky: 0, invalid: 0, noEmail: 0 };
+  const output: VerifyContactsStageOutput = {
+    checked: 0,
+    verifiedFormat: 0,
+    verifiedDeliverable: 0,
+    risky: 0,
+    invalid: 0,
+    noEmail: 0,
+    hunterAttempted: 0,
+  };
+
+  let hunterLeft = MAX_HUNTER_VERIFY_PER_RUN;
 
   for (const contact of contacts) {
-    // Re-check risky when org domain may have been wrong (e.g. conference.* vs apex) so a later
-    // reprocess can promote shrm.org emails for conference.shrm.org orgs.
-    if (
-      contact.emailVerificationStatus !== "unverified" &&
-      contact.emailVerificationStatus !== "risky"
-    ) {
+    if (contact.emailVerificationStatus === "verified_deliverable" || contact.emailVerificationStatus === "invalid") {
       continue;
     }
     output.checked += 1;
@@ -49,10 +67,21 @@ export async function runVerifyContactsStage(org: Organization): Promise<{ outpu
     if (!emailDomainMatchesOrg(contactDomain, org.domain)) {
       await updateContactVerification(contact.id, "risky");
       output.risky += 1;
-    } else {
-      await updateContactVerification(contact.id, "valid_format");
-      output.verifiedFormat += 1;
+      continue;
     }
+
+    await updateContactVerification(contact.id, "valid_format");
+    output.verifiedFormat += 1;
+
+    if (hunterLeft <= 0) continue;
+    hunterLeft -= 1;
+    output.hunterAttempted += 1;
+    const hunter = await verifyEmailAddress(contact.email);
+    if (hunter.status === "unverified") continue;
+    await updateContactVerification(contact.id, hunter.status);
+    if (hunter.status === "verified_deliverable") output.verifiedDeliverable += 1;
+    else if (hunter.status === "invalid") output.invalid += 1;
+    else if (hunter.status === "risky") output.risky += 1;
   }
 
   return { output };
