@@ -7,6 +7,7 @@ import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { looksLikeHtml, sanitizeEmailHtml } from "@/lib/sales/outreach/email-body-format";
 import { funnelStageLabel } from "@/lib/sales/funnel-labels";
 
 const FINDING_LABELS: Record<string, string> = {
@@ -310,9 +311,16 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             </button>
           </div>
           {showEmailBody && emailBody && (
-            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300">
-              {emailBody}
-            </pre>
+            looksLikeHtml(emailBody) ? (
+              <div
+                className="mt-3 rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300 [&_a]:text-sky-300 [&_a]:underline [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3 [&_p:last-child]:mb-0"
+                dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(emailBody) }}
+              />
+            ) : (
+              <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300">
+                {emailBody}
+              </pre>
+            )
           )}
         </section>
       )}

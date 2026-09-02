@@ -1,6 +1,7 @@
 /**
- * Queue drafts stay stored as plain text. Lists use markdown markers so existing
- * emails keep working. The editor and Gmail HTML path round-trip those markers.
+ * Queue drafts start as plain text / markdown. Once Joel edits in TipTap we store
+ * sanitized HTML so hyperlinks, lists, and inline styles survive Gmail send.
+ * Unedited AI drafts stay markdown and still round-trip through the same helpers.
  */
 
 const BULLET = String.raw`[-*•●◦▪·]|\u2022|\u25cf|\u25e6|\uf0b7|\u00b7`;
@@ -38,12 +39,22 @@ function stripTagsKeepText(html: string): string {
 }
 
 function linkifyInline(escapedText: string): string {
-  return escapedText.replace(URL_RE, (raw) => {
+  const placeholders: string[] = [];
+  const stash = (html: string) => {
+    const i = placeholders.length;
+    placeholders.push(html);
+    return `\u0000${i}\u0000`;
+  };
+  let s = escapedText.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, href) =>
+    stash(`<a href="${href}" style="color:#1a73e8;text-decoration:underline">${label}</a>`)
+  );
+  s = s.replace(URL_RE, (raw) => {
     const trimmed = raw.replace(/[),.;:!?]+$/g, "");
     const trailing = raw.slice(trimmed.length);
     const href = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-    return `<a href="${escapeHtml(href)}" style="color:#1a73e8;text-decoration:underline">${escapeHtml(trimmed)}</a>${trailing}`;
+    return `${stash(`<a href="${escapeHtml(href)}" style="color:#1a73e8;text-decoration:underline">${escapeHtml(trimmed)}</a>`)}${trailing}`;
   });
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => placeholders[Number(i)]);
 }
 
 type Block =
@@ -93,7 +104,7 @@ function parseBlocks(markdown: string): Block[] {
 }
 
 function inlineEditor(text: string): string {
-  return escapeHtml(text).replace(/\n/g, "<br>");
+  return linkifyInline(escapeHtml(text)).replace(/\n/g, "<br>");
 }
 
 export function markdownToEditorHtml(markdown: string): string {
@@ -132,6 +143,20 @@ export function markdownToEmailHtml(markdown: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${inner}</div>`;
 }
 
+function hrefToMarkdown(hrefRaw: string, labelRaw: string): string {
+  const href = decodeHtmlEntities(hrefRaw).trim();
+  const label = stripTagsKeepText(labelRaw) || href;
+  if (!href) return label;
+  if (!/^https?:\/\//i.test(href) && !href.startsWith("mailto:")) return label;
+  return label === href || href.includes(label.replace(/^https?:\/\//, "")) ? href : `[${label}](${href})`;
+}
+
+function anchorsToMarkdown(html: string): string {
+  return html.replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) =>
+    hrefToMarkdown(href, text)
+  );
+}
+
 function listItemsFromHtml(inner: string, ordered: boolean): string {
   const items = Array.from(inner.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi));
   if (!items.length) {
@@ -147,11 +172,12 @@ function listItemsFromHtml(inner: string, ordered: boolean): string {
 }
 
 /**
- * Serialize contentEditable HTML (and pasted Word/Docs HTML) back to markdown lists.
+ * Serialize editor HTML (and pasted Word/Docs HTML) back to markdown lists + links.
  */
 export function editorHtmlToMarkdown(html: string): string {
   if (!html) return "";
   let s = html.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ");
+  s = anchorsToMarkdown(s);
 
   s = s.replace(/<ul\b[^>]*>([\s\S]*?)<\/ul>/gi, (_, inner) => `\n${listItemsFromHtml(inner, false)}\n`);
   s = s.replace(/<ol\b[^>]*>([\s\S]*?)<\/ol>/gi, (_, inner) => `\n${listItemsFromHtml(inner, true)}\n`);
@@ -160,10 +186,6 @@ export function editorHtmlToMarkdown(html: string): string {
   s = s.replace(/<br\s*\/?>/gi, "\n");
   s = s.replace(/<\/(p|div|h[1-6]|tr)>/gi, "\n");
   s = s.replace(/<(p|div|h[1-6]|tr)\b[^>]*>/gi, "");
-  s = s.replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) => {
-    const label = stripTagsKeepText(text) || href;
-    return label === href || href.includes(label.replace(/^https?:\/\//, "")) ? href : `${label} ${href}`;
-  });
   s = s.replace(/<[^>]+>/g, "");
   s = decodeHtmlEntities(s);
   s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -228,4 +250,135 @@ export function pasteToMarkdown(html: string | null | undefined, plain: string |
     return fromHtml || plainNorm;
   }
   return plainNorm;
+}
+
+const ALLOWED_TAGS = new Set(["p", "br", "div", "ul", "ol", "li", "a", "strong", "b", "em", "i", "u", "s", "blockquote", "h1", "h2", "h3", "span"]);
+
+function attrValue(attrs: string, name: string): string | null {
+  const match = attrs.match(new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, "i"));
+  return match ? decodeHtmlEntities(match[1]).trim() : null;
+}
+
+function safeHref(raw: string | null): string | null {
+  if (!raw) return null;
+  const href = raw.trim();
+  if (/^https?:\/\//i.test(href) || href.startsWith("mailto:")) return href;
+  if (/^www\./i.test(href)) return `https://${href}`;
+  return null;
+}
+
+function safeColor(raw: string | null): string | null {
+  if (!raw) return null;
+  const color = raw.trim();
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) return color;
+  if (/^rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$/i.test(color)) return color;
+  return null;
+}
+
+function safeTextAlign(raw: string | null): string | null {
+  if (!raw) return null;
+  const align = raw.trim().toLowerCase();
+  if (align === "left" || align === "center" || align === "right" || align === "justify") return align;
+  return null;
+}
+
+function textAlignFromAttrs(attrs: string): string | null {
+  const style = attrValue(attrs, "style") || "";
+  const match = style.match(/text-align\s*:\s*([^;]+)/i);
+  return safeTextAlign(match ? match[1] : attrValue(attrs, "align"));
+}
+
+function openBlockTag(name: string, attrs: string): string {
+  const align = textAlignFromAttrs(attrs);
+  return align ? `<${name} style="text-align:${align}">` : `<${name}>`;
+}
+
+/** True when a saved draft is editor HTML rather than plain/markdown text. */
+export function looksLikeHtml(value: string | null | undefined): boolean {
+  return /<\/?(?:p|div|ul|ol|li|a|br|strong|em|b|i|u|h[1-6]|blockquote|span)\b/i.test(value ?? "");
+}
+
+/**
+ * Allowlist sanitizer so pasted Word/Docs/Gmail HTML can keep links and lists
+ * without scripts or event handlers.
+ */
+export function sanitizeEmailHtml(html: string): string {
+  let s = (html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+
+  s = s.replace(/<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi, (full, tag: string, attrs: string) => {
+    const name = tag.toLowerCase();
+    const closing = full.startsWith("</");
+    if (!ALLOWED_TAGS.has(name)) return "";
+    if (name === "br") return "<br>";
+    if (closing) return `</${name}>`;
+    if (name === "a") {
+      const href = safeHref(attrValue(attrs, "href"));
+      return href ? `<a href="${escapeHtml(href)}">` : "<span>";
+    }
+    if (name === "span") {
+      const style = attrValue(attrs, "style") || "";
+      const colorMatch = style.match(/color\s*:\s*([^;]+)/i);
+      const color = safeColor(colorMatch ? colorMatch[1].trim() : attrValue(attrs, "color"));
+      return color ? `<span style="color:${color}">` : "<span>";
+    }
+    if (name === "p" || name === "div" || name === "h1" || name === "h2" || name === "h3" || name === "li" || name === "blockquote") {
+      return openBlockTag(name, attrs);
+    }
+    return `<${name}>`;
+  });
+
+  return s.replace(/<a>([\s\S]*?)<\/a>/gi, "$1");
+}
+
+function applyGmailInlineStyles(html: string): string {
+  return html
+    .replace(/<a href="([^"]+)">/gi, '<a href="$1" style="color:#1a73e8;text-decoration:underline">')
+    .replace(/<ul>/gi, '<ul style="margin:0 0 12px 0;padding-left:24px;list-style-type:disc">')
+    .replace(/<ol>/gi, '<ol style="margin:0 0 12px 0;padding-left:24px;list-style-type:decimal">')
+    .replace(/<li(?: style="text-align:(left|center|right|justify)")?>/gi, (_, align) =>
+      align ? `<li style="margin:0 0 4px 0;text-align:${align}">` : '<li style="margin:0 0 4px 0">'
+    )
+    .replace(/<p(?: style="text-align:(left|center|right|justify)")?>/gi, (_, align) =>
+      align ? `<p style="margin:0 0 12px 0;text-align:${align}">` : '<p style="margin:0 0 12px 0">'
+    )
+    .replace(/<h1(?: style="text-align:(left|center|right|justify)")?>/gi, (_, align) =>
+      align ? `<h1 style="font-size:20px;margin:0 0 12px 0;text-align:${align}">` : '<h1 style="font-size:20px;margin:0 0 12px 0">'
+    )
+    .replace(/<h2(?: style="text-align:(left|center|right|justify)")?>/gi, (_, align) =>
+      align ? `<h2 style="font-size:18px;margin:0 0 12px 0;text-align:${align}">` : '<h2 style="font-size:18px;margin:0 0 12px 0">'
+    )
+    .replace(/<h3(?: style="text-align:(left|center|right|justify)")?>/gi, (_, align) =>
+      align ? `<h3 style="font-size:16px;margin:0 0 12px 0;text-align:${align}">` : '<h3 style="font-size:16px;margin:0 0 12px 0">'
+    )
+    .replace(/<blockquote>/gi, '<blockquote style="margin:0 0 12px 0;padding-left:12px;border-left:3px solid #ccc">');
+}
+
+export function draftToEditorHtml(value: string | null | undefined): string {
+  const v = value ?? "";
+  if (!v.trim()) return "<p></p>";
+  if (looksLikeHtml(v)) {
+    const cleaned = sanitizeEmailHtml(v);
+    return cleaned.trim() ? cleaned : "<p></p>";
+  }
+  return markdownToEditorHtml(v);
+}
+
+export function draftToPlainText(value: string | null | undefined): string {
+  const v = value ?? "";
+  if (!v.trim()) return "";
+  if (looksLikeHtml(v)) return editorHtmlToMarkdown(v);
+  return v;
+}
+
+export function draftToEmailHtml(value: string | null | undefined): string {
+  const v = value ?? "";
+  if (looksLikeHtml(v)) {
+    const inner = applyGmailInlineStyles(sanitizeEmailHtml(v));
+    return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${inner}</div>`;
+  }
+  return markdownToEmailHtml(v);
 }

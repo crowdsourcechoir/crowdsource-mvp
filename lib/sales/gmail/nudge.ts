@@ -11,6 +11,7 @@ import { createNudgeQueueItem, hasPendingNudgeForContact } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
 import { MAX_NUDGES_PER_OPPORTUNITY, NUDGE_DUE_AFTER_DAYS } from "./constants";
 import { contactIdsDueForNudge, nextPendingFollowUpIso } from "../outreach/nudge-due";
+import { draftToPlainText } from "../outreach/email-body-format";
 
 const NudgeDraftSchema = z.object({
   subject: z.string(),
@@ -115,7 +116,7 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
             eventOrInitiativeName: opportunity.eventOrInitiativeName,
             brief,
             originalSubject: priorSubject,
-            originalBody: priorBody,
+            originalBody: draftToPlainText(priorBody),
             nudgeNumber: sentNudges + 1,
           }),
         });

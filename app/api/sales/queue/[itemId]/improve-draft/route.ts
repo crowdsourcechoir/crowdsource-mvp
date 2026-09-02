@@ -6,6 +6,7 @@ import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
 import { improveOutreachDraft } from "@/lib/sales/outreach/improve-draft";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { draftToPlainText } from "@/lib/sales/outreach/email-body-format";
 import { readSalesInitiative } from "@/lib/sales/initiatives";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +40,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       typeof body?.subject === "string" && body.subject.trim()
         ? body.subject
         : (draft.editedSubject ?? draft.aiSubject);
-    const currentBody =
+    const currentBody = draftToPlainText(
       typeof body?.body === "string" && body.body.trim()
         ? body.body
-        : stripEmailSignature(draft.editedBody ?? draft.aiBody);
+        : stripEmailSignature(draft.editedBody ?? draft.aiBody)
+    );
 
     const initiative = readSalesInitiative(organization.importMetadata);
     const initiativeHint =

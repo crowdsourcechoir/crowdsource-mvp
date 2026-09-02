@@ -17,6 +17,7 @@ import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import { draftToPlainText } from "@/lib/sales/outreach/email-body-format";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { pickNextRemainingInitialDraft, shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
@@ -44,7 +45,7 @@ const QUEUE_STATUS_TO_OPPORTUNITY_STATUS: Record<ApprovalQueueItemStatus, Opport
 };
 
 function normalizeEmailText(value: string): string {
-  return stripEmailSignature(value).replace(/\r\n/g, "\n").trim();
+  return draftToPlainText(stripEmailSignature(value)).replace(/\r\n/g, "\n").trim();
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
@@ -327,9 +328,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           outreachPersona: contact?.outreachPersona ?? null,
           decision: effectiveAction === "reject" ? "rejected" : "approved_with_edits",
           originalSubject: draft.aiSubject,
-          originalBody: draft.aiBody,
+          originalBody: draftToPlainText(draft.aiBody),
           editedSubject: contentDiffersFromAi ? finalSubject : null,
-          editedBody: contentDiffersFromAi ? finalBody : null,
+          editedBody: contentDiffersFromAi && finalBody ? draftToPlainText(finalBody) : null,
           rejectionReason: effectiveAction === "reject" ? (body?.notes as string | null) ?? null : null,
         });
         learned = contentDiffersFromAi || effectiveAction === "reject";

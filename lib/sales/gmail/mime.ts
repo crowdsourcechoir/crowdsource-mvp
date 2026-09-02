@@ -1,4 +1,4 @@
-import { markdownToEmailHtml } from "@/lib/sales/outreach/email-body-format";
+import { draftToEmailHtml, draftToPlainText, looksLikeHtml } from "@/lib/sales/outreach/email-body-format";
 
 /** RFC 2047 encode Subject so em dashes / curly quotes don't mojibake in clients. */
 export function encodeSubjectHeader(subject: string): string {
@@ -26,7 +26,8 @@ export function buildGmailMime(input: {
   boundary?: string;
 }): string {
   const boundary = uniqueBoundary(input.boundary);
-  const html = input.htmlBody ?? markdownToEmailHtml(input.body);
+  const html = input.htmlBody ?? draftToEmailHtml(input.body);
+  const plain = looksLikeHtml(input.body) ? draftToPlainText(input.body) : input.body;
   const headers = [
     `From: ${input.from}`,
     `To: ${input.to}`,
@@ -42,7 +43,7 @@ export function buildGmailMime(input: {
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: 8bit",
     "",
-    input.body,
+    plain,
     `--${boundary}`,
     'Content-Type: text/html; charset="UTF-8"',
     "Content-Transfer-Encoding: 8bit",

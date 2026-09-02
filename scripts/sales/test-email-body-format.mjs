@@ -5,11 +5,14 @@
 import assert from "node:assert/strict";
 import {
   clipboardHtmlToMarkdown,
+  draftToEmailHtml,
+  draftToPlainText,
   editorHtmlToMarkdown,
   markdownToEditorHtml,
   markdownToEmailHtml,
   normalizeListPlainText,
   pasteToMarkdown,
+  sanitizeEmailHtml,
 } from "../../lib/sales/outreach/email-body-format.ts";
 import { buildGmailMime } from "../../lib/sales/gmail/mime.ts";
 
@@ -96,5 +99,39 @@ assert.match(mime, /Content-Type: text\/html; charset="UTF-8"/);
 assert.match(mime, /- a Song Garden that can live in the space/);
 assert.match(mime, /<ul /);
 assert.match(mime, /<li /);
+
+const namedMd = `See [the book](https://www.crowdsourcechoir.com/book) for more.`;
+assert.match(markdownToEmailHtml(namedMd), /href="https:\/\/www\.crowdsourcechoir\.com\/book"/);
+assert.match(markdownToEmailHtml(namedMd), />the book</);
+assert.match(markdownToEditorHtml(namedMd), /<a href="https:\/\/www\.crowdsourcechoir\.com\/book"/);
+
+const htmlDraft = `<p>See <a href="https://www.crowdsourcechoir.com/book">the book</a> page.</p><ul><li>a Song Garden with a <a href="https://www.crowdsourcechoir.com/book">book link</a></li></ul>`;
+const htmlEmail = draftToEmailHtml(htmlDraft);
+assert.match(htmlEmail, /href="https:\/\/www\.crowdsourcechoir\.com\/book"/);
+assert.match(htmlEmail, />the book</);
+assert.match(htmlEmail, /list-style-type:disc/);
+assert.match(draftToPlainText(htmlDraft), /\[the book\]\(https:\/\/www\.crowdsourcechoir\.com\/book\)/);
+assert.match(draftToPlainText(htmlDraft), /\[book link\]\(https:\/\/www\.crowdsourcechoir\.com\/book\)/);
+assert.match(draftToPlainText(htmlDraft), /- a Song Garden with a \[book link\]/);
+
+const dirty = `<p><a href="javascript:alert(1)">x</a><img src="x" onerror="alert(1)"><a href="https://ok.example">safe</a></p>`;
+const cleaned = sanitizeEmailHtml(dirty);
+assert.doesNotMatch(cleaned, /javascript:/i);
+assert.doesNotMatch(cleaned, /onerror/i);
+assert.doesNotMatch(cleaned, /<img/i);
+assert.match(cleaned, /href="https:\/\/ok\.example"/);
+
+const mimeHtml = buildGmailMime({
+  from: "sing@crowdsourcechoir.com",
+  to: "carmen@laautoshow.com",
+  subject: "Crowdsource Choir + LA Auto Show",
+  body: htmlDraft,
+  boundary: "htmlboundary",
+});
+assert.match(mimeHtml, /Content-Type: multipart\/alternative; boundary="htmlboundary"/);
+assert.match(mimeHtml, /href="https:\/\/www\.crowdsourcechoir\.com\/book"/);
+const plainPart = mimeHtml.split("text/plain")[1].split("text/html")[0];
+assert.doesNotMatch(plainPart, /<p>/);
+assert.match(plainPart, /\[the book\]\(https:\/\/www\.crowdsourcechoir\.com\/book\)/);
 
 console.log("email body list formatting ok");

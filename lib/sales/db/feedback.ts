@@ -1,6 +1,7 @@
 import { requireSupabaseAdmin } from "./client";
 import type { OutreachFeedback, OutreachFeedbackDecision } from "../types";
 import { EXTERNAL_SENT_BODY, EXTERNAL_SENT_SUBJECT } from "../outreach/external-sent";
+import { draftToPlainText } from "../outreach/email-body-format";
 
 function rowToFeedback(row: Record<string, unknown>): OutreachFeedback {
   return {
@@ -97,8 +98,8 @@ export async function listRecentAcceptedEditFeedback(input: {
 export function estimateDraftConfidence(feedback: OutreachFeedback[]): number {
   if (feedback.length === 0) return 0.55;
   const ratios = feedback.map((f) => {
-    const original = f.originalBody;
-    const edited = f.editedBody ?? f.originalBody;
+    const original = draftToPlainText(f.originalBody);
+    const edited = draftToPlainText(f.editedBody ?? f.originalBody);
     if (!original.length) return 0.5;
     const distance = levenshteinRatio(original, edited);
     return 1 - distance;
@@ -138,10 +139,10 @@ export function formatFeedbackFewShots(feedback: OutreachFeedback[]): string {
 ORIGINAL SUBJECT: ${f.originalSubject}
 EDITED SUBJECT: ${f.editedSubject ?? f.originalSubject}
 ORIGINAL BODY:
-${f.originalBody}
+${draftToPlainText(f.originalBody)}
 
 EDITED BODY:
-${f.editedBody ?? f.originalBody}`;
+${draftToPlainText(f.editedBody ?? f.originalBody)}`;
   });
   return `The operator has recently customized drafts like these before sending. Prefer the EDITED voice, structure, specificity, and length when filling subject / openingReason / fitReason. Treat ORIGINAL→EDITED as ground truth for how Joel rewrites AI drafts — match the EDITED style, not the ORIGINAL.
 

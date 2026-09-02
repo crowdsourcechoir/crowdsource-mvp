@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { QueueItemDetail, QueueSidebarItem, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
-import { markdownToEmailHtml } from "@/lib/sales/outreach/email-body-format";
+import { draftToEmailHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import QueueEmailBodyEditor from "@/components/sales/QueueEmailBodyEditor";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
@@ -286,8 +286,9 @@ export default function ApprovalQueueClient() {
         !isOutboundEmailBlocked(current.contact.email)
       ) {
         const to = current.contact.email;
-        launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
-        copyEmailToClipboard(to, finalSubject, finalBody, markdownToEmailHtml(finalBody)).catch(() => undefined);
+        const plainBody = draftToPlainText(finalBody);
+        launchMailto(buildMailtoUrl(to, finalSubject, plainBody));
+        copyEmailToClipboard(to, finalSubject, plainBody, draftToEmailHtml(finalBody)).catch(() => undefined);
       }
       if (isApprove && current.contact?.email && isOutboundEmailBlocked(current.contact.email)) {
         setActionError(`Hard block: will not send to ${current.contact.email}.`);
@@ -473,7 +474,7 @@ export default function ApprovalQueueClient() {
       const res = await fetch(`/api/sales/queue/${current.queueItem.id}/improve-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: editedSubject, body: editedBody }),
+        body: JSON.stringify({ subject: editedSubject, body: draftToPlainText(editedBody) }),
       });
       const data = (await readApiJson(res)) as QueueMutationPayload;
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Improve failed"));
@@ -500,7 +501,7 @@ export default function ApprovalQueueClient() {
         return;
       }
       const target = e.target as HTMLElement;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], .ProseMirror")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((i) => Math.min(Math.max(0, visible.length - 1), i + 1));
@@ -926,6 +927,8 @@ export default function ApprovalQueueClient() {
                   onChange={setEditedBody}
                   onBlur={() => void persistDraft().catch(() => undefined)}
                   disabled={busy || improving}
+                  improving={improving}
+                  onImprove={() => void improveDraft()}
                 />
               </div>
             ) : (
