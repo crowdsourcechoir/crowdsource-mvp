@@ -29,7 +29,7 @@ export function buildEmailPlainText(to: string, subject: string, body: string): 
 
 /**
  * Copy draft to the clipboard as plain text, and HTML when the browser supports it so
- * "Crowdsource Choir" pastes into Gmail as a real hyperlink.
+ * links and the italic press-quote signature paste into Gmail.
  */
 export async function copyEmailToClipboard(to: string, subject: string, body: string, htmlBody?: string): Promise<void> {
   const plain = buildEmailPlainText(to, subject, body);
@@ -38,7 +38,7 @@ export async function copyEmailToClipboard(to: string, subject: string, body: st
   }
 
   if (htmlBody && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;white-space:pre-wrap">To: ${escapeHtml(to)}<br>Subject: ${escapeHtml(subject)}<br><br>${htmlBody}</div>`;
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">To: ${escapeHtml(to)}<br>Subject: ${escapeHtml(subject)}<br><br>${htmlBody}</div>`;
     try {
       await navigator.clipboard.write([
         new ClipboardItem({

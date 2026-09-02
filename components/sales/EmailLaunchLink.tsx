@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyEmailToClipboard } from "@/lib/sales/outreach/mailto";
+import { prepareOutboundEmail } from "@/lib/sales/outreach/email-html";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 
 /** Copy-only. Icon, not words. Never sends. */
@@ -26,9 +27,9 @@ export default function EmailLaunchLink({
   }, []);
 
   const handleClick = useCallback(() => {
-    const cleanBody = stripEmailSignature(body);
+    const outbound = prepareOutboundEmail(stripEmailSignature(body));
     if (clearTimer.current) clearTimeout(clearTimer.current);
-    copyEmailToClipboard(to, subject, cleanBody)
+    copyEmailToClipboard(to, subject, outbound.plain, outbound.html)
       .then(() => setStatus("Copied — not sent"))
       .catch(() => setStatus("Copy failed"));
     clearTimer.current = setTimeout(() => setStatus(null), 4000);

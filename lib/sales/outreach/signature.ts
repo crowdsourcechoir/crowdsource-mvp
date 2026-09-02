@@ -1,19 +1,63 @@
 /**
- * Gmail (and other mail clients) already append Joel's signature when a draft is launched via
- * mailto:, so the app must NOT embed the press-quote block in outreach bodies — that produced
- * a duplicate signature. These helpers strip any previously embedded block.
+ * Joel's press-quote signature. Outreach drafts stay unsigned in storage (the LLM and the
+ * queue editor work on the letter body only). The send / copy / mailto path appends this
+ * block so every outbound sales email gets the same footer without duplicating it.
  */
 
-const SIGNATURE_MARKER = "One of the Pacific Northwest's Most Talented Composers";
+export const EMAIL_SIGNATURE_QUOTE = "One of the Pacific Northwest's Most Talented Composers";
 
-/** True when the body includes the press-quote signature block we used to embed. */
+export const EMAIL_SIGNATURE_PLAIN = [
+  "--",
+  "Joel DeJong",
+  "Creator, Crowdsource Choir",
+  `"${EMAIL_SIGNATURE_QUOTE}"`,
+  "—American Songwriter",
+].join("\n");
+
+export const EMAIL_SIGNATURE_HTML = [
+  "--<br>",
+  "Joel DeJong<br>",
+  "Creator, Crowdsource Choir<br>",
+  `<span style="font-style:italic;font-family:Georgia,'Times New Roman',serif">"${EMAIL_SIGNATURE_QUOTE}"</span><br>`,
+  "—American Songwriter",
+].join("\n");
+
+const SIGNATURE_MARKER = EMAIL_SIGNATURE_QUOTE;
+
+/** True when the body includes the press-quote signature block. */
 export function hasEmailSignature(body: string): boolean {
   return body.includes(SIGNATURE_MARKER);
 }
 
+const TRAILING_SIGNATURE_RE = new RegExp(
+  [
+    "\\n*",
+    "\\n--\\s*",
+    "\\nJoel DeJong",
+    "\\nCreator, Crowdsource Choir",
+    "(?:\\nhttps?:\\/\\/(?:www\\.)?crowdsourcechoir\\.com\\/?)?",
+    `\\n(?:<(?:em|i|span)[^>]*>)?["'\\u2018\\u2019\\u201c\\u201d]?${SIGNATURE_MARKER.replace(/'/g, "\\'")}["'\\u2018\\u2019\\u201c\\u201d]?(?:<\\/(?:em|i|span)>)?`,
+    "\\n—American Songwriter\\s*$",
+  ].join(""),
+  "i"
+);
+
+const TRAILING_SIGNATURE_ANY_NAME_RE = new RegExp(
+  [
+    "\\n*",
+    "\\n--\\s*",
+    "\\n[^\\n]+",
+    "\\nCreator, Crowdsource Choir",
+    "(?:\\nhttps?:\\/\\/(?:www\\.)?crowdsourcechoir\\.com\\/?)?",
+    `\\n(?:<(?:em|i|span)[^>]*>)?["'\\u2018\\u2019\\u201c\\u201d]?${SIGNATURE_MARKER.replace(/'/g, "\\'")}["'\\u2018\\u2019\\u201c\\u201d]?(?:<\\/(?:em|i|span)>)?`,
+    "\\n—American Songwriter\\s*$",
+  ].join(""),
+  "i"
+);
+
 /**
- * Removes a trailing Crowdsource Choir press-quote signature (with or without a bare URL line)
- * after the "Best,\\nJoel" sign-off. Idempotent.
+ * Removes a trailing Crowdsource Choir press-quote signature (plain text, HTML em, or an
+ * older URL line between title and quote). Idempotent.
  */
 export function stripEmailSignature(body: string): string {
   if (!body) return body;
@@ -23,22 +67,15 @@ export function stripEmailSignature(body: string): string {
     "$1"
   );
 
-  // "--\nJoel DeJong\nCreator, Crowdsource Choir\n'...'\n—American Songwriter" at end
-  next = next.replace(
-    /\n*\n--\nJoel DeJong\nCreator, Crowdsource Choir\n'One of the Pacific Northwest's Most Talented Composers'\n—American Songwriter\s*$/,
-    ""
-  );
-
-  // Older variant that used {{sender_name}} / Joel DeJong on the Best line before the block
-  next = next.replace(
-    /\n*\n--\n[^\n]+\nCreator, Crowdsource Choir\n'One of the Pacific Northwest's Most Talented Composers'\n—American Songwriter\s*$/,
-    ""
-  );
+  next = next.replace(TRAILING_SIGNATURE_RE, "");
+  next = next.replace(TRAILING_SIGNATURE_ANY_NAME_RE, "");
 
   return next.replace(/[ \t]+$/gm, "").replace(/\n+$/, "");
 }
 
-/** @deprecated Use stripEmailSignature — we no longer embed signatures in drafts. */
+/** Appends the press-quote signature if it is not already present. Idempotent. */
 export function ensureEmailSignature(body: string): string {
-  return stripEmailSignature(body);
+  const stripped = stripEmailSignature(body).replace(/\s+$/, "");
+  if (!stripped) return EMAIL_SIGNATURE_PLAIN;
+  return `${stripped}\n\n${EMAIL_SIGNATURE_PLAIN}`;
 }

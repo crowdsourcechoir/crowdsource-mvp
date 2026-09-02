@@ -11,6 +11,7 @@ import { createNudgeQueueItem, hasPendingNudgeForContact } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
 import { MAX_NUDGES_PER_OPPORTUNITY, NUDGE_DUE_AFTER_DAYS } from "./constants";
 import { contactIdsDueForNudge, nextPendingFollowUpIso } from "../outreach/nudge-due";
+import { stripEmailSignature } from "../outreach/signature";
 
 const NudgeDraftSchema = z.object({
   subject: z.string(),
@@ -101,13 +102,13 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
         const fewShots = formatFeedbackFewShots(feedback);
         const confidence = estimateDraftConfidence(feedback);
         const priorSubject = prior.editedSubject ?? prior.aiSubject;
-        const priorBody = prior.editedBody ?? prior.aiBody;
+        const priorBody = stripEmailSignature(prior.editedBody ?? prior.aiBody);
         const firstName = (contact.fullName ?? "").trim().split(/\s+/)[0] || "there";
 
         const result = await callStructured({
           schema: NudgeDraftSchema,
           schemaName: "nudge_draft",
-          systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel DeJong. Do not invent facts about the prospect. ${fewShots}`,
+          systemPrompt: `You write a short, warm 1:1 follow-up email for Crowdsource Choir sales. Match Joel's plain-spoken voice — no corporate filler, no "just bumping this," no guilt. 2–4 short paragraphs max. Include a clear soft ask to reconnect. Sign off as Joel. Do not include the American Songwriter signature block — the app appends it. Do not invent facts about the prospect. ${fewShots}`,
           userContent: JSON.stringify({
             contactFirstName: firstName,
             organizationName: organization.name,

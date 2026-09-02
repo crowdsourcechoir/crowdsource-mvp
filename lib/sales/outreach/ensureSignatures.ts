@@ -11,8 +11,8 @@ export type EnsureEmailSignaturesResult = {
 
 /**
  * Strips the embedded Crowdsource Choir press-quote signature from templates and non-terminal
- * drafts. Gmail already appends Joel's signature on mailto launch, so embedding it duplicated.
- * Idempotent — safe to re-run.
+ * drafts. The send / copy path appends the live footer (with italic quote in HTML), so stored
+ * bodies stay unsigned. Idempotent — safe to re-run.
  */
 export async function ensureEmailSignatures(): Promise<EnsureEmailSignaturesResult> {
   const db = requireSupabaseAdmin();

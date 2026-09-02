@@ -8,6 +8,7 @@ import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { funnelStageLabel } from "@/lib/sales/funnel-labels";
+import EmailSignaturePreview from "@/components/sales/EmailSignaturePreview";
 
 const FINDING_LABELS: Record<string, string> = {
   audience_size: "Audience",
@@ -310,9 +311,12 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             </button>
           </div>
           {showEmailBody && emailBody && (
-            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300">
-              {emailBody}
-            </pre>
+            <div className="mt-3 rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300">
+              <pre className="whitespace-pre-wrap">{emailBody}</pre>
+              <div className="mt-3 border-t border-gray-800 pt-2">
+                <EmailSignaturePreview />
+              </div>
+            </div>
           )}
         </section>
       )}

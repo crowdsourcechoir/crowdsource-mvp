@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { QueueItemDetail, QueueSidebarItem, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
+import { prepareOutboundEmail } from "@/lib/sales/outreach/email-html";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
@@ -29,6 +30,7 @@ import {
   type QueueMutationPayload,
 } from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
+import EmailDraftEditor from "@/components/sales/EmailDraftEditor";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -282,8 +284,9 @@ export default function ApprovalQueueClient() {
         !isOutboundEmailBlocked(current.contact.email)
       ) {
         const to = current.contact.email;
-        launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
-        copyEmailToClipboard(to, finalSubject, finalBody).catch(() => undefined);
+        const outbound = prepareOutboundEmail(finalBody);
+        launchMailto(buildMailtoUrl(to, finalSubject, outbound.plain));
+        copyEmailToClipboard(to, finalSubject, outbound.plain, outbound.html).catch(() => undefined);
       }
       if (isApprove && current.contact?.email && isOutboundEmailBlocked(current.contact.email)) {
         setActionError(`Hard block: will not send to ${current.contact.email}.`);
@@ -896,12 +899,11 @@ export default function ApprovalQueueClient() {
                   onBlur={() => void persistDraft().catch(() => undefined)}
                   className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-white"
                 />
-                <textarea
+                <EmailDraftEditor
                   value={editedBody}
-                  onChange={(e) => setEditedBody(e.target.value)}
+                  onChange={setEditedBody}
                   onBlur={() => void persistDraft().catch(() => undefined)}
-                  rows={12}
-                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
+                  disabled={busy}
                 />
               </div>
             ) : (
