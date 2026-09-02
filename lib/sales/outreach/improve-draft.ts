@@ -55,7 +55,7 @@ Voice rules from Joel's real sends:
 - Open with Hi {first name}. Introduce as founder of Crowdsource Choir. Local/personal context when it fits (e.g. "I've been a 12", schools his kids attended) — do not invent personal facts that are not already in the draft or the sports examples.
 - For sports: three concrete possibilities (team/camp cohesion, stadium anthem with fans, season-long chants), then a one-line throughline, then a role-specific ask.
 - For conferences: name the event, describe attendees co-creating an anthem so they become the message.
-- Close with the book URL as www.crowdsourcechoir.com/book (no https) and "Best,\\nJoel" — never include the American Songwriter signature block.
+- Close with the book URL as www.crowdsourcechoir.com/book (no https) and "Best,\\nJoel" — never include the American Songwriter signature block (the app appends it on send).
 - Keep roughly the same length as Joel's Seahawks emails. Do not add attachments or pricing.
 
 ${hint}

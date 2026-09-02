@@ -1,5 +1,6 @@
 import { getGmailClient } from "./client";
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
+import { prepareOutboundEmail } from "@/lib/sales/outreach/email-html";
 import { assertOutboundEmailAllowed } from "@/lib/sales/outreach/send-blocklist";
 
 export type GmailSendResult = {
@@ -43,21 +44,37 @@ function buildRfc822(input: {
   inReplyTo?: string | null;
   references?: string | null;
 }): string {
+  const outbound = prepareOutboundEmail(input.body);
+  const boundary = `csc_alt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   const headers = [
     `From: ${input.from}`,
     `To: ${input.to}`,
     `Subject: ${encodeSubjectHeader(input.subject)}`,
     "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
   if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
   if (input.references) headers.push(`References: ${input.references}`);
-  return `${headers.join("\r\n")}\r\n\r\n${input.body}`;
+  const parts = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    outbound.plain,
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    outbound.html,
+    `--${boundary}--`,
+  ].join("\r\n");
+  return `${headers.join("\r\n")}\r\n\r\n${parts}`;
 }
 
 /**
- * Sends a plain-text email from the connected Gmail account. When `threadId` is set, Gmail
- * places the message in that thread (follow-up / nudge).
+ * Sends a multipart (plain + HTML) email from the connected Gmail account. HTML carries the
+ * italic press-quote signature and clickable links. When `threadId` is set, Gmail places the
+ * message in that thread (follow-up / nudge).
  */
 export async function sendGmailMessage(input: {
   to: string;

@@ -1,6 +1,6 @@
 /**
  * Voice + draft structure from Joel’s real Seahawks outreach (Aug 2026).
- * Do NOT embed the Gmail signature — clients append it.
+ * Do NOT embed the press-quote signature — send/copy appends it (HTML italic quote).
  * Never use for tylerc@ (hard-blocked).
  */
 
