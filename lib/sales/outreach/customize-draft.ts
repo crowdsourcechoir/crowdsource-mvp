@@ -49,6 +49,19 @@ export function draftNamesWrongOrganization(body: string, organizationName: stri
   return /With (Pacific Northwest Ballet|the Seahawks|ETHDenver|NAHQ)/i.test(plain);
 }
 
+/** First-pass templates that still leak CRM slugs or doubled articles. */
+export function draftNeedsTemplateRedraft(body: string, subject: string): boolean {
+  const plain = draftToPlainText(body);
+  const sub = subject || "";
+  return (
+    /With .+ — /.test(plain) ||
+    /so the the /i.test(plain) ||
+    /Crowdsource Choir \+ the annual /i.test(sub) ||
+    /for the annual conference/i.test(plain) ||
+    /ballpark ritual|shared-creation anthem/i.test(plain)
+  );
+}
+
 /**
  * Full rewrite in Joel's sent-mail voice, customized to this org + contact + event.
  * Saves as edited copy later — this function does not send or write to the DB.

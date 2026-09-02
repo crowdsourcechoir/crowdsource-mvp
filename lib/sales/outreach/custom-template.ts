@@ -2,20 +2,55 @@ import { classifyOutreachPersona, PERSONA_STRATEGIES } from "@/lib/sales/outreac
 import { classifyQueueCategory, type QueueCategoryKey } from "@/lib/sales/queue/category";
 import { classifySportsDoorway, sportsDoorwayAsk } from "@/lib/sales/outreach/sports-voice";
 
-function eventLabel(opportunityTitle: string, organizationName: string): string {
-  const stripped = opportunityTitle
-    .replace(/^.*participatory anthem for\s+/i, "")
-    .replace(/\s*\([^)]*\)\s*$/, "")
-    .trim();
-  if (stripped && stripped.length < 80 && !/^crowdsource choir/i.test(stripped)) return stripped;
+function isGenericEventLabel(label: string): boolean {
+  return /^(the\s+)?(annual\s+)?(conference|meeting|event|gathering|summit)$/i.test(label.trim());
+}
+
+function eventLabel(
+  opportunityTitle: string,
+  organizationName: string,
+  category?: string | null
+): string {
+  const fromParticipatory = opportunityTitle.match(
+    /participatory anthem for\s+(.+?)(?:\s*\([^)]*\))?\s*$/i
+  );
+  if (fromParticipatory?.[1]) {
+    const event = fromParticipatory[1].trim();
+    if (event && !isGenericEventLabel(event)) return event;
+  }
+
+  // CRM slugs like "Mariners — ballpark ritual / shared-creation anthem"
+  if (category === "sports" || (/—/.test(opportunityTitle) && /anthem|ritual|experience|chant|fan/i.test(opportunityTitle))) {
+    return organizationName;
+  }
+
+  const stripped = opportunityTitle.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (
+    stripped &&
+    stripped.length < 70 &&
+    !/^crowdsource choir/i.test(stripped) &&
+    !/—/.test(stripped) &&
+    !/participatory anthem/i.test(stripped) &&
+    !isGenericEventLabel(stripped)
+  ) {
+    return stripped;
+  }
   return organizationName;
+}
+
+function inTheProgram(event: string): string {
+  return /^the\s/i.test(event) ? `${event} program` : `the ${event} program`;
+}
+
+function theEventPhrase(event: string): string {
+  return /^the\s/i.test(event) ? event : `the ${event}`;
 }
 
 function conferenceAsk(roleTitle: string | null, event: string): string {
   const persona = classifyOutreachPersona(roleTitle);
   const title = (roleTitle ?? "").trim();
   if (title && /event|marketing|program|conference|meeting|experience/i.test(title)) {
-    return `Given your work as ${title}, I'd love to connect and see whether this belongs in the ${event} program — or whether you can point me to whoever owns that.`;
+    return `Given your work as ${title}, I'd love to connect and see whether this belongs in ${inTheProgram(event)} — or whether you can point me to whoever owns that.`;
   }
   return PERSONA_STRATEGIES[persona].cta.replace(/\.$/, "") + ` for ${event}.`;
 }
@@ -32,7 +67,7 @@ function sportsPossibilities(organizationName: string, isCollege: boolean): stri
 
 function conferencePossibilities(event: string): string[] {
   return [
-    `A shared anthem created with attendees so the ${event} message is something they perform, not only hear`,
+    `A shared anthem created with attendees so ${theEventPhrase(event)} message is something they perform, not only hear`,
     `A participatory moment in a general session that turns the room into one choir`,
     `A piece people can keep after they leave — something that belongs to this community, not a one-off soundtrack`,
   ];
@@ -71,13 +106,13 @@ export function buildCustomizedTemplateDraft(input: {
 }): { subject: string; body: string } {
   const first = input.firstName.trim() || "there";
   const org = input.organizationName.trim();
-  const event = eventLabel(input.opportunityTitle, org);
   const category =
     (input.category as QueueCategoryKey | undefined) ||
     classifyQueueCategory({
       organizationName: org,
       opportunityTitle: input.opportunityTitle,
     });
+  const event = eventLabel(input.opportunityTitle, org, category);
 
   const isSeahawks = /seahawks/i.test(org);
   const isCollege = /university|athletics|college|state\b/i.test(`${org} ${input.opportunityTitle}`);
@@ -131,7 +166,7 @@ export function buildCustomizedTemplateDraft(input: {
     "",
     `With ${event}, I see a few connected possibilities:`,
     "",
-    possibilities.join("\n"),
+    possibilities.map((line) => `- ${line}`).join("\n"),
     "",
     throughline,
     "",

@@ -8,9 +8,10 @@ import {
   customizeOutreachDraft,
   looksLikeGenericTemplateDraft,
   draftNamesWrongOrganization,
+  draftNeedsTemplateRedraft,
 } from "@/lib/sales/outreach/customize-draft";
 import { buildCustomizedTemplateDraft } from "@/lib/sales/outreach/custom-template";
-import { coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
+import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { parseQueueCategory, matchesQueueCategory, type QueueCategoryFilter } from "@/lib/sales/queue/category";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 
@@ -58,11 +59,14 @@ export async function POST(request: Request) {
         continue;
       }
       const currentBody = coalesceDraftBody(detail.draft.editedBody, detail.draft.aiBody);
+      const currentSubject = coalesceDraftSubject(detail.draft.editedSubject, detail.draft.aiSubject);
       const generic = looksLikeGenericTemplateDraft(currentBody);
       const wrongOrg = draftNamesWrongOrganization(currentBody, detail.organization.name);
+      const weak = draftNeedsTemplateRedraft(currentBody, currentSubject);
       const alreadyNamed =
         !generic &&
         !wrongOrg &&
+        !weak &&
         currentBody.length > 850 &&
         new RegExp(detail.organization.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(currentBody);
       if (alreadyNamed) {
