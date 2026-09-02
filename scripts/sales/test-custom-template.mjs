@@ -18,6 +18,13 @@ assert.match(nahq.body, /^- A shared anthem/m);
 assert.doesNotMatch(nahq.body, /Seahawks|Pacific Northwest Ballet|I thought it might be a unique fit|the the /);
 assert.equal(looksLikeGenericTemplateDraft(nahq.body), false);
 assert.equal(draftNeedsTemplateRedraft("With Mariners — ballpark ritual", "Crowdsourcing a Seattle Mariners choir"), true);
+assert.equal(
+  draftNeedsTemplateRedraft(
+    "With Seattle Mariners, I see a few connected possibilities:\n\nI'd love to connect and explore whether there's a fit with Seattle Mariners — or be pointed to the right person.",
+    "Crowdsourcing a Seattle Mariners choir"
+  ),
+  false
+);
 assert.equal(draftNeedsTemplateRedraft(nahq.body, nahq.subject), false);
 
 const mariners = buildCustomizedTemplateDraft({

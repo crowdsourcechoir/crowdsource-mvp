@@ -54,7 +54,7 @@ export function draftNeedsTemplateRedraft(body: string, subject: string): boolea
   const plain = draftToPlainText(body);
   const sub = subject || "";
   return (
-    /With .+ — /.test(plain) ||
+    /^With .+\s+—\s+/m.test(plain) ||
     /so the the /i.test(plain) ||
     /Crowdsource Choir \+ the annual /i.test(sub) ||
     /for the annual conference/i.test(plain) ||
