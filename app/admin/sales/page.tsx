@@ -2,7 +2,7 @@ import SalesOverviewClient from "@/components/sales/SalesOverviewClient";
 import DigestClient from "@/components/sales/DigestClient";
 import GmailConnectClient from "@/components/sales/GmailConnectClient";
 import EnrichmentConfigClient from "@/components/sales/EnrichmentConfigClient";
-import AddOrganizationForm from "@/components/sales/AddOrganizationForm";
+import { AddOrganizationLauncher } from "@/components/sales/AddOrganizationForm";
 
 export default function SalesOverviewPage() {
   return (
@@ -11,7 +11,9 @@ export default function SalesOverviewPage() {
       <p className="mb-6 text-sm text-gray-400">AI-assisted prospecting — discover, research, score, and prepare outreach for human approval.</p>
       <EnrichmentConfigClient />
       <GmailConnectClient />
-      <AddOrganizationForm />
+      <div className="mb-6 flex justify-end">
+        <AddOrganizationLauncher />
+      </div>
       <SalesOverviewClient />
       <div className="mt-6">
         <DigestClient />

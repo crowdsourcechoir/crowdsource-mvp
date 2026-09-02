@@ -1,19 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SALES_INITIATIVES, type SalesInitiativeKey } from "@/lib/sales/initiatives";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
+import SalesSearchBox from "@/components/sales/SalesSearchBox";
 
 const INITIATIVE_KEYS = Object.keys(SALES_INITIATIVES) as SalesInitiativeKey[];
 
+export function AddOrgPlusButton({
+  onClick,
+  className = "",
+}: {
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Add organization"
+      title="Add organization"
+      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-800 text-gray-300 hover:border-gray-500 hover:bg-gray-900 hover:text-white ${className}`}
+    >
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+        <path d="M10 3.5a.75.75 0 0 1 .75.75V9.25h5a.75.75 0 0 1 0 1.5h-5v5a.75.75 0 0 1-1.5 0v-5h-5a.75.75 0 0 1 0-1.5h5V4.25A.75.75 0 0 1 10 3.5Z" />
+      </svg>
+    </button>
+  );
+}
+
 export default function AddOrganizationForm({
   onQueued,
-  compact = false,
+  open,
+  onClose,
 }: {
   onQueued?: (queueItemId: string) => void;
-  compact?: boolean;
+  open: boolean;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(!compact);
   const [name, setName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [contactFullName, setContactFullName] = useState("");
@@ -23,6 +47,17 @@ export default function AddOrganizationForm({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    setMessage(null);
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !busy) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy, onClose]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +89,7 @@ export default function AddOrganizationForm({
         setContactEmail("");
         setContactRoleTitle("");
         onQueued?.(body.queueItemId);
+        onClose();
       }
     } catch (err) {
       setError(publicErrorMessage(err, "Could not add organization"));
@@ -62,31 +98,48 @@ export default function AddOrganizationForm({
     }
   }
 
+  if (!open) return null;
+
   return (
-    <div className="mb-6 rounded-xl border border-gray-800 bg-gray-900/30 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold text-white">Add organization</h2>
-          <p className="mt-0.5 text-xs text-gray-500">
-            Name + a contact (email optional — Hunter will look it up from the website).
-          </p>
-        </div>
-        {compact && (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-org-title"
+      onClick={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl border border-gray-700 bg-gray-950 p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 id="add-org-title" className="text-lg font-semibold text-white">
+              Add organization
+            </h2>
+            <p className="mt-1 text-sm text-gray-400">
+              Name + a contact (email optional — Hunter will look it up from the website).
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="rounded-md border border-gray-700 px-3 py-1 text-xs text-gray-200 hover:bg-gray-800"
+            onClick={() => {
+              if (!busy) onClose();
+            }}
+            className="rounded-md px-2 py-1 text-sm text-gray-400 hover:bg-gray-900 hover:text-white"
+            aria-label="Close"
           >
-            {open ? "Hide" : "Add org"}
+            ✕
           </button>
-        )}
-      </div>
-      {open && (
-        <form onSubmit={submit} className="mt-3 grid gap-2 sm:grid-cols-2">
+        </div>
+        <form onSubmit={submit} className="mt-4 grid gap-2 sm:grid-cols-2">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            autoFocus
             placeholder="Organization name"
             className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
           />
@@ -126,7 +179,15 @@ export default function AddOrganizationForm({
               </option>
             ))}
           </select>
-          <div className="sm:col-span-2">
+          <div className="flex flex-wrap justify-end gap-2 sm:col-span-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onClose}
+              className="rounded-lg border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-900 disabled:opacity-50"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={busy || !name.trim()}
@@ -138,7 +199,18 @@ export default function AddOrganizationForm({
           {error && <p className="sm:col-span-2 text-sm text-red-400">{error}</p>}
           {message && <p className="sm:col-span-2 text-sm text-emerald-400">{message}</p>}
         </form>
-      )}
+      </div>
+    </div>
+  );
+}
+
+export function AddOrganizationLauncher({ onQueued }: { onQueued?: (queueItemId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex items-center gap-2">
+      <SalesSearchBox />
+      <AddOrgPlusButton onClick={() => setOpen(true)} />
+      <AddOrganizationForm open={open} onClose={() => setOpen(false)} onQueued={onQueued} />
     </div>
   );
 }
