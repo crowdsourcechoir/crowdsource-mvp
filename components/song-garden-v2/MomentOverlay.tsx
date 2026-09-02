@@ -29,7 +29,7 @@ export default function MomentOverlay({
   children,
 }: MomentOverlayProps) {
   return (
-    <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-center px-4 py-6 sm:px-6">
+    <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-center overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
       <AnimatePresence mode="wait">
         <motion.div
           key={momentKey}
@@ -37,7 +37,7 @@ export default function MomentOverlay({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -14, scale: 0.99 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-3xl p-6 sm:p-8"
+          className="rounded-3xl p-5 sm:p-8"
           style={{
             background: `linear-gradient(
               165deg,
