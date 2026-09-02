@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { QueueItemDetail, QueueSidebarItem, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
+import { markdownToEmailHtml } from "@/lib/sales/outreach/email-body-format";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
+import QueueEmailBodyEditor from "@/components/sales/QueueEmailBodyEditor";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
@@ -283,7 +285,7 @@ export default function ApprovalQueueClient() {
       ) {
         const to = current.contact.email;
         launchMailto(buildMailtoUrl(to, finalSubject, finalBody));
-        copyEmailToClipboard(to, finalSubject, finalBody).catch(() => undefined);
+        copyEmailToClipboard(to, finalSubject, finalBody, markdownToEmailHtml(finalBody)).catch(() => undefined);
       }
       if (isApprove && current.contact?.email && isOutboundEmailBlocked(current.contact.email)) {
         setActionError(`Hard block: will not send to ${current.contact.email}.`);
@@ -896,12 +898,11 @@ export default function ApprovalQueueClient() {
                   onBlur={() => void persistDraft().catch(() => undefined)}
                   className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-white"
                 />
-                <textarea
+                <QueueEmailBodyEditor
                   value={editedBody}
-                  onChange={(e) => setEditedBody(e.target.value)}
+                  onChange={setEditedBody}
                   onBlur={() => void persistDraft().catch(() => undefined)}
-                  rows={12}
-                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
+                  disabled={busy || improving}
                 />
               </div>
             ) : (

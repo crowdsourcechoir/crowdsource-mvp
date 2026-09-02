@@ -1,6 +1,7 @@
 import { getGmailClient } from "./client";
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { assertOutboundEmailAllowed } from "@/lib/sales/outreach/send-blocklist";
+import { buildGmailMime } from "./mime";
 
 export type GmailSendResult = {
   messageId: string;
@@ -29,35 +30,10 @@ function encodeRawMessage(raw: string): string {
     .replace(/=+$/, "");
 }
 
-/** RFC 2047 encode Subject so em dashes / curly quotes don't mojibake in clients. */
-function encodeSubjectHeader(subject: string): string {
-  if (/^[\x20-\x7E]*$/.test(subject)) return subject;
-  return `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
-}
-
-function buildRfc822(input: {
-  from: string;
-  to: string;
-  subject: string;
-  body: string;
-  inReplyTo?: string | null;
-  references?: string | null;
-}): string {
-  const headers = [
-    `From: ${input.from}`,
-    `To: ${input.to}`,
-    `Subject: ${encodeSubjectHeader(input.subject)}`,
-    "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-  ];
-  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
-  if (input.references) headers.push(`References: ${input.references}`);
-  return `${headers.join("\r\n")}\r\n\r\n${input.body}`;
-}
-
 /**
- * Sends a plain-text email from the connected Gmail account. When `threadId` is set, Gmail
- * places the message in that thread (follow-up / nudge).
+ * Sends from the connected Gmail account as multipart text+HTML so list markers
+ * render as real bullets/numbers. When `threadId` is set, Gmail places the
+ * message in that thread (follow-up / nudge).
  */
 export async function sendGmailMessage(input: {
   to: string;
@@ -76,7 +52,7 @@ export async function sendGmailMessage(input: {
   }
 
   const raw = encodeRawMessage(
-    buildRfc822({
+    buildGmailMime({
       from: bundle.email,
       to: input.to,
       subject: input.subject,
