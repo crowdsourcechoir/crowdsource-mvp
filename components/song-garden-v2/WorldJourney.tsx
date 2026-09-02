@@ -677,29 +677,35 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           }
         >
           {position.phase === "landing" && (
-            <div className="space-y-5 text-center">
-              <p className="mx-auto max-w-xl font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-                <TypewriterText
-                  key={event.landingHeadline || DEFAULT_OPENING_PROMPT}
-                  text={event.landingHeadline || DEFAULT_OPENING_PROMPT}
-                  speed={9}
-                  className="inline"
-                />
-              </p>
-              {!!event.landingCopy && (
-                <p className="mx-auto max-w-xl font-mono text-sm text-gray-300">{event.landingCopy}</p>
-              )}
-              <form onSubmit={handleStartJourney} className="space-y-4">
+            <div className="space-y-6 text-center">
+              <div className="space-y-4">
+                <p className="mx-auto max-w-md font-mono text-[1.1875rem] font-semibold leading-snug tracking-tight text-white sm:text-[1.25rem]">
+                  <TypewriterText
+                    key={event.landingHeadline || DEFAULT_OPENING_PROMPT}
+                    text={event.landingHeadline || DEFAULT_OPENING_PROMPT}
+                    speed={9}
+                    className="inline"
+                  />
+                </p>
+                {!!event.landingCopy && (
+                  <p className="mx-auto max-w-md font-mono text-[0.9375rem] leading-relaxed text-white/90 sm:text-base">
+                    {event.landingCopy}
+                  </p>
+                )}
+              </div>
+              <form onSubmit={handleStartJourney} className="space-y-3">
                 {requireContributionConsent && (
-                  <label className="flex items-start gap-3 px-1 py-1 text-left">
+                  <label className="flex items-start gap-2.5 border-t border-white/10 px-0.5 pt-3 text-left">
                     <input
                       type="checkbox"
                       checked={contributionConsentAgreed}
                       onChange={(e) => setContributionConsentAgreed(e.target.checked)}
-                      className="mt-1 h-5 w-5 shrink-0"
+                      className="mt-0.5 h-4 w-4 shrink-0"
                       style={{ accentColor: world.accentColor }}
                     />
-                    <span className="font-mono text-sm text-gray-100">{contributionConsentLabel}</span>
+                    <span className="font-mono text-[11px] leading-snug text-white/55">
+                      {contributionConsentLabel}
+                    </span>
                   </label>
                 )}
                 <button
