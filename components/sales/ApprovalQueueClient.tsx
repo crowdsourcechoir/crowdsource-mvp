@@ -13,6 +13,7 @@ import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
+import type { SalesSearchHit } from "@/lib/sales/search/query";
 import {
   QUEUE_CATEGORY_CHIPS,
   countQueueCategories,
@@ -33,6 +34,7 @@ import {
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrganizationForm";
 import AddContactForm from "@/components/sales/AddContactForm";
+import SalesSearchBox from "@/components/sales/SalesSearchBox";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -80,6 +82,7 @@ export default function ApprovalQueueClient() {
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [addOrgOpen, setAddOrgOpen] = useState(false);
+  const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
@@ -200,6 +203,34 @@ export default function ApprovalQueueClient() {
     setSelectedIndex(index);
     setMobileDetailOpen(true);
   }, []);
+
+  const pickFromSearch = useCallback(
+    (hit: SalesSearchHit) => {
+      if (hit.queueItemId) {
+        const inVisible = visible.findIndex((row) => row.queueItem.id === hit.queueItemId);
+        if (inVisible >= 0) {
+          selectItem(inVisible);
+          return;
+        }
+        if (sidebar.some((row) => row.queueItem.id === hit.queueItemId)) {
+          setJumpToQueueItemId(hit.queueItemId);
+          setCategory("all");
+          return;
+        }
+      }
+      router.push(`/admin/sales/organizations/${hit.organizationId}`);
+    },
+    [visible, sidebar, selectItem, router]
+  );
+
+  useEffect(() => {
+    if (!jumpToQueueItemId) return;
+    const idx = visible.findIndex((row) => row.queueItem.id === jumpToQueueItemId);
+    if (idx >= 0) {
+      selectItem(idx);
+      setJumpToQueueItemId(null);
+    }
+  }, [jumpToQueueItemId, visible, selectItem]);
 
   const persistDraftSnapshot = useCallback(async (itemId: string, subject: string, body: string) => {
     const cleanedEditedBody = stripEmailSignature(body);
@@ -520,6 +551,7 @@ export default function ApprovalQueueClient() {
   }, [visible.length, mobileDetailOpen, sendConfirmOpen]);
 
   useEffect(() => {
+    if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
   }, [category]);
@@ -565,11 +597,20 @@ export default function ApprovalQueueClient() {
           );
         })}
       </div>
+      <SalesSearchBox onPick={pickFromSearch} />
       <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
     </div>
   );
 
-  if (loading) return <p className="text-gray-400">Loading queue…</p>;
+  if (loading) {
+    return (
+      <div>
+        {filterBar}
+        {addOrgModal}
+        <p className="text-gray-400">Loading queue…</p>
+      </div>
+    );
+  }
   if (loadError) {
     return (
       <div>
