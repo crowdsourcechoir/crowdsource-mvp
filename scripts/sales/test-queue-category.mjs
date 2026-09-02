@@ -86,6 +86,33 @@ assert.equal(
 );
 
 assert.equal(
+  classifyQueueCategory({
+    organizationName: "SpaceX",
+    opportunityTitle: "SpaceX launch / campus gathering — developer conference",
+    opportunityTypeKey: "annual_conference",
+  }),
+  "tech"
+);
+
+assert.equal(
+  classifyQueueCategory({
+    organizationName: "SEMA Show",
+    opportunityTitle: "SEMA Show — auto show",
+    opportunityTypeKey: "annual_conference",
+  }),
+  "entertainment"
+);
+
+assert.equal(
+  classifyQueueCategory({
+    organizationName: "Pacific Science Center",
+    opportunityTitle: "Pacific Science Center installation",
+    organizationTypeKey: "nonprofit",
+  }),
+  "arts"
+);
+
+assert.equal(
   matchesQueueCategory({ category: "arts", organizationName: "Wedgwood Circle" }, "arts"),
   true
 );

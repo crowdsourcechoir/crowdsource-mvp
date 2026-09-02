@@ -86,7 +86,7 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
   }
 
   if (
-    /\bethdenver\b|\bethereum\b|\bweb3\b|\bcrypto\b|\bhackathon\b|\bdevcon\b|\bpycon\b|\bkubecon\b|\baws re:invent\b|\bdeveloper conference\b|\bleaddev\b|\ball things open\b|\bethglobal\b|\bcloudflare\b|\bzendesk\b|\badobe summit\b/.test(
+    /\bethdenver\b|\bethereum\b|\bweb3\b|\bcrypto\b|\bhackathon\b|\bdevcon\b|\bpycon\b|\bkubecon\b|\baws re:invent\b|\bdeveloper conference\b|\bleaddev\b|\ball things open\b|\bethglobal\b|\bcloudflare\b|\bzendesk\b|\badobe summit\b|\bgoogle i\/o\b|\bmeta connect\b|\bwwdc\b|\bnvidia gtc\b|\bspace symposium\b|\bspacex\b|\bwaymo\b|\bdreamforce\b|\bcisco live\b|\bmobile world congress\b|\bvivatech\b/.test(
       text
     )
   ) {
@@ -94,7 +94,7 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
   }
 
   if (
-    /\bnatas\b|\bnatpe\b|\bpromax\b|\brealscreen\b|\bemmy\b|\btelevision\b|\bstreaming\b|\bfilm festival\b|\bsundance\b|\btribeca\b|\bniva\b|\bvenue association\b|\bbroadway league\b|\brecording academy\b|\bmusic biz\b|\ba2im\b|\bpollstar\b|\blive nation\b/.test(
+    /\bnatas\b|\bnatpe\b|\bpromax\b|\brealscreen\b|\bemmy\b|\btelevision\b|\bstreaming\b|\bfilm festival\b|\bsundance\b|\btribeca\b|\bniva\b|\bvenue association\b|\bbroadway league\b|\brecording academy\b|\bmusic biz\b|\ba2im\b|\bpollstar\b|\blive nation\b|\bauto show\b|\bmotor show\b|\bsema\b|\bconcours\b|\bgoodwood\b|\bpebble beach\b|\bmeow wolf\b|\bsphere las vegas\b|\bcirque\b|\bcoachella\b|\btomorrowland\b|\bnamm\b|\biaapa\b/.test(
       text
     )
   ) {
@@ -103,7 +103,7 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
 
   if (
     orgType === "festival" ||
-    /\bwedgwood\b|\borchestra\b|\bphilharmonic\b|\bsymphony\b|\bopera\b|\bballet\b|\bchoir\b|\bchorus\b|\btheatre\b|\btheater\b|\bmuseum\b|\barts council\b|\bperforming arts\b|\bfilm independent\b|\bjazz\b|\bfolk alliance\b|\bamericana\b|\blincoln center\b|\bcarnegie hall\b|\bkexp\b/.test(
+    /\bwedgwood\b|\borchestra\b|\bphilharmonic\b|\bsymphony\b|\bopera\b|\bballet\b|\bchoir\b|\bchorus\b|\btheatre\b|\btheater\b|\bmuseum\b|\barts council\b|\bperforming arts\b|\bfilm independent\b|\bjazz\b|\bfolk alliance\b|\bamericana\b|\blincoln center\b|\bcarnegie hall\b|\bkexp\b|\bscience center\b|\bplanetarium\b|\bexploratorium\b|\bmaker faire\b|\bteamlab\b|\bartechouse\b|\bars electronica\b/.test(
       text
     )
   ) {
