@@ -33,6 +33,7 @@ import {
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 import AddOrganizationForm from "@/components/sales/AddOrganizationForm";
 import AddContactForm from "@/components/sales/AddContactForm";
+import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -79,6 +80,7 @@ export default function ApprovalQueueClient() {
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [findContactsOpen, setFindContactsOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
@@ -187,6 +189,7 @@ export default function ApprovalQueueClient() {
 
   useEffect(() => {
     setSendConfirmOpen(false);
+    setFindContactsOpen(false);
     setMenuOpenId(null);
     if (current?.draft) {
       setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
@@ -196,6 +199,7 @@ export default function ApprovalQueueClient() {
 
   const selectItem = useCallback((index: number) => {
     setSendConfirmOpen(false);
+    setFindContactsOpen(false);
     setSelectedIndex(index);
     setMobileDetailOpen(true);
   }, []);
@@ -499,6 +503,13 @@ export default function ApprovalQueueClient() {
         }
         return;
       }
+      if (findContactsOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setFindContactsOpen(false);
+        }
+        return;
+      }
       const target = e.target as HTMLElement;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "j" || e.key === "ArrowDown") {
@@ -516,7 +527,7 @@ export default function ApprovalQueueClient() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [visible.length, mobileDetailOpen, sendConfirmOpen]);
+  }, [visible.length, mobileDetailOpen, sendConfirmOpen, findContactsOpen]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -766,6 +777,13 @@ export default function ApprovalQueueClient() {
                               ) : hasDraft ? (
                                 <span className="ml-2 text-xs text-gray-500">draft</span>
                               ) : null}
+                              {c.emailVerificationStatus === "verified_deliverable" ? (
+                                <span className="ml-2 text-xs font-medium text-emerald-400">verified</span>
+                              ) : c.emailVerificationStatus === "invalid" ? (
+                                <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
+                              ) : (
+                                <span className="ml-2 text-xs text-amber-400">unverified</span>
+                              )}
                             </span>
                             <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
                           </button>
@@ -869,20 +887,40 @@ export default function ApprovalQueueClient() {
               <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
             )}
             {current.queueItem.status === "pending" && (
-              <AddContactForm
-                itemId={current.queueItem.id}
-                onAdded={(detail, message) => {
-                  if (detail) {
-                    replaceDetail(current.queueItem.id, detail);
-                    const d = detail.draft;
-                    if (d) {
-                      setEditedSubject(d.editedSubject ?? d.aiSubject);
-                      setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+              <div className="mt-3 flex flex-wrap items-start gap-2">
+                <AddContactForm
+                  itemId={current.queueItem.id}
+                  onAdded={(detail, message) => {
+                    if (detail) {
+                      replaceDetail(current.queueItem.id, detail);
+                      const d = detail.draft;
+                      if (d) {
+                        setEditedSubject(d.editedSubject ?? d.aiSubject);
+                        setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+                      }
                     }
-                  }
-                  showCopyStatus(message);
-                }}
-              />
+                    showCopyStatus(message);
+                  }}
+                />
+                <FindMoreContactsForm
+                  itemId={current.queueItem.id}
+                  orgName={current.organization.name}
+                  domainHint={current.organization.domain ?? current.organization.websiteUrl}
+                  open={findContactsOpen}
+                  onOpenChange={setFindContactsOpen}
+                  onFound={(detail, message) => {
+                    if (detail) {
+                      replaceDetail(current.queueItem.id, detail);
+                      const d = detail.draft;
+                      if (d) {
+                        setEditedSubject(d.editedSubject ?? d.aiSubject);
+                        setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+                      }
+                    }
+                    showCopyStatus(message);
+                  }}
+                />
+              </div>
             )}
           </div>
 

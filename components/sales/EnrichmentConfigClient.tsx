@@ -89,7 +89,7 @@ export default function EnrichmentConfigClient() {
     <div className="mb-6 rounded-xl border border-gray-800 p-4">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Contact enrichment (Hunter only)</h2>
       <p className="mt-1 text-sm text-gray-300">
-        Hunter Email Finder is the sole enrichment provider for this sales agent.
+        Hunter Email Finder finds addresses; Email Verifier (0.5 credit) checks they will not bounce before they reach the queue.
       </p>
       {credits?.ok ? (
         <p className="mt-2 text-xs text-gray-500">

@@ -49,7 +49,7 @@ export default function AddContactForm({
   }
 
   return (
-    <div className="mt-3">
+    <div>
       {!open ? (
         <button
           type="button"

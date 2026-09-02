@@ -157,7 +157,7 @@ export async function ensureContactDrafts(input: {
   );
   const contacts = readyContacts(await listContactsForOrganization(input.organization.id));
   if (contacts.length === 0) {
-    throw new Error("No named contact with a verified-format email — cannot enqueue.");
+    throw new Error("No named contact with a Hunter-verified deliverable email — cannot enqueue.");
   }
   const primary = pickPrimaryContact(contacts, input.opportunityTypeKey) ?? contacts[0];
   const existing = await listDraftsForOpportunity(input.opportunityId);
@@ -254,7 +254,7 @@ export async function enqueueOrgManually(input: {
   const primary = pickPrimaryContact(contacts, input.opportunityTypeKey);
   if (!primary) {
     throw new Error(
-      "No named contact with a verified-format email (excluding hard-blocked addresses) — cannot enqueue."
+      "No named contact with a Hunter-verified deliverable email (excluding hard-blocked addresses) — cannot enqueue."
     );
   }
 

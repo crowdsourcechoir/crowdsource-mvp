@@ -5,7 +5,7 @@ import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
 import { listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
-import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +38,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     if (!contact || contact.organizationId !== opportunity.organizationId) {
       return NextResponse.json({ error: "Contact not on this organization" }, { status: 400 });
     }
-    if (!looksLikePersonName(contact.fullName) || !contact.email || !hasVerifiedEmail(contact)) {
-      return NextResponse.json({ error: "Contact needs a name and verified-format email" }, { status: 400 });
+    if (!looksLikePersonName(contact.fullName) || !contact.email) {
+      return NextResponse.json({ error: "Contact needs a name and email" }, { status: 400 });
+    }
+    if (contact.emailVerificationStatus === "invalid") {
+      return NextResponse.json({ error: "That address failed verification — it will bounce." }, { status: 400 });
     }
     if (isOutboundEmailBlocked(contact.email)) {
       return NextResponse.json(

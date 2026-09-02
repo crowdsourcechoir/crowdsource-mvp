@@ -8,8 +8,9 @@ import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { getOpportunity } from "@/lib/sales/db/opportunities";
-import { extractDomain, isPlausibleEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { extractDomain, hasVerifiedEmail, isPlausibleEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { enrichContactEmail } from "@/lib/sales/enrichment";
+import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import {
   SALES_INITIATIVES,
   isSalesInitiativeKey,
@@ -56,14 +57,16 @@ async function upsertNamedContact(input: {
   fullName: string;
   email: string;
   roleTitle: string | null;
+  emailVerificationStatus?: Contact["emailVerificationStatus"];
 }): Promise<{ contact: Contact; created: boolean }> {
+  const status = input.emailVerificationStatus ?? "unverified";
   const existing = await findExistingContact(input.organizationId, input.email, input.fullName);
   if (existing) {
     const contact = await updateContact(existing.id, {
       fullName: input.fullName,
       roleTitle: input.roleTitle ?? existing.roleTitle,
       email: input.email,
-      emailVerificationStatus: "valid_format",
+      emailVerificationStatus: status,
     });
     return { contact, created: false };
   }
@@ -73,7 +76,7 @@ async function upsertNamedContact(input: {
     roleTitle: input.roleTitle,
     email: input.email,
     source: "manual",
-    emailVerificationStatus: "valid_format",
+    emailVerificationStatus: status,
   });
   return { contact, created: true };
 }
@@ -139,13 +142,20 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
     if (!looksLikePersonName(contactName)) {
       throw new Error("Contact needs a first and last name.");
     }
-    const upserted = await upsertNamedContact({
-      organizationId: organization.id,
-      fullName: contactName,
-      email,
-      roleTitle: input.contactRoleTitle?.trim() || null,
-    });
-    contact = upserted.contact;
+    const verified = await verifyEmailAddress(email);
+    if (verified.status === "invalid") {
+      hunter.error = `Hunter says ${email} will bounce.`;
+      email = "";
+    } else {
+      const upserted = await upsertNamedContact({
+        organizationId: organization.id,
+        fullName: contactName,
+        email,
+        roleTitle: input.contactRoleTitle?.trim() || null,
+        emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
+      });
+      contact = upserted.contact;
+    }
   } else if (contactName && !email) {
     // Persist the named person even without email so Joel can fill it later.
     if (looksLikePersonName(contactName)) {
@@ -165,7 +175,7 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
   }
 
   let manualEnqueue: ManualEnqueueResult | null = null;
-  if (contact && isPlausibleEmail(contact.email) && looksLikePersonName(contact.fullName)) {
+  if (contact && hasVerifiedEmail(contact) && looksLikePersonName(contact.fullName)) {
     const opportunityTypeKey = initiative
       ? SALES_INITIATIVES[initiative as SalesInitiativeKey].opportunityTypeKeys[0]
       : "fan_engagement_initiative";
@@ -191,8 +201,10 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
 
   const message = contactName
     ? hunter.error
-      ? `${organization.name} saved. ${hunter.error} Add an email to put them in the queue.`
-      : `${organization.name} saved. Add an email (or a website so Hunter can find it) to put this in the queue.`
+      ? `${organization.name} saved. ${hunter.error}`
+      : contact?.email
+        ? `${organization.name} saved. ${contact.fullName} is not Hunter-verified as deliverable yet, so they were not queued.`
+        : `${organization.name} saved. Add an email (or a website so Hunter can find it) to put this in the queue.`
     : `${organization.name} saved. Add a named contact to put it in the queue.`;
 
   return {
@@ -264,12 +276,42 @@ export async function addContactToQueueItem(input: {
     };
   }
 
+  const verified = await verifyEmailAddress(email);
+  if (verified.status === "invalid") {
+    const contact = await createContact({
+      organizationId: organization.id,
+      fullName,
+      roleTitle: input.roleTitle?.trim() || null,
+      email,
+      source: "manual",
+      emailVerificationStatus: "invalid",
+    });
+    return {
+      contact,
+      hunter,
+      selected: false,
+      detail: await assembleQueueItemDetailFromQueueItem(item),
+      message: `Saved ${fullName} but Hunter says ${email} will bounce — not added to the send list.`,
+    };
+  }
+
   const { contact } = await upsertNamedContact({
     organizationId: organization.id,
     fullName,
     email,
     roleTitle: input.roleTitle?.trim() || null,
+    emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
   });
+
+  if (verified.status !== "verified_deliverable") {
+    return {
+      contact,
+      hunter,
+      selected: false,
+      detail: await assembleQueueItemDetailFromQueueItem(item),
+      message: `Saved ${contact.fullName} (${email}) but Hunter could not confirm deliverability (${verified.hunterStatus ?? verified.status}) — not queued to send.`,
+    };
+  }
 
   const created = await ensureContactDrafts({
     organization,

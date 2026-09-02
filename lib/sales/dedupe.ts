@@ -60,13 +60,12 @@ export function looksLikePersonName(name: string | null | undefined): boolean {
 
 /**
  * "Verified enough to actually send to" bar used to gate queue entry (see run-pipeline.ts and
- * docs/sales-platform/ai-workflow.md §4/§10) — `valid_format` (format + domain checks out) or
- * `verified_deliverable` (a future live-probe result, not yet produced by v1's stage 5, but
- * accepted here so this gate doesn't need a code change once that lands). `risky` and
- * `unverified` don't clear the bar: a human shouldn't be asked to approve outreach to an address
- * the pipeline itself isn't confident is real.
+ * docs/sales-platform/ai-workflow.md §4/§10) — Hunter Email Verifier must return a live
+ * SMTP-ok result (`verified_deliverable`). `valid_format` is only a syntax + org-domain check
+ * and was letting undeliverable mailboxes into the queue (bounces). `risky` and `unverified`
+ * never clear the bar.
  */
 export function hasVerifiedEmail(contact: Contact | null | undefined): boolean {
   if (!contact) return false;
-  return contact.emailVerificationStatus === "valid_format" || contact.emailVerificationStatus === "verified_deliverable";
+  return contact.emailVerificationStatus === "verified_deliverable";
 }
