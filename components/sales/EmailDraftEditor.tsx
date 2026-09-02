@@ -26,14 +26,23 @@ export default function EmailDraftEditor({
   rows?: number;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const selectionRef = useRef({ start: 0, end: 0 });
   const [linkForm, setLinkForm] = useState<LinkForm | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
+  const rememberSelection = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    selectionRef.current = { start: el.selectionStart, end: el.selectionEnd };
+  }, []);
+
   const captureSelection = useCallback((): { start: number; end: number; selected: string } => {
     const el = textareaRef.current;
-    const start = el?.selectionStart ?? value.length;
-    const end = el?.selectionEnd ?? start;
+    const liveStart = el?.selectionStart;
+    const liveEnd = el?.selectionEnd;
+    const start = liveStart != null && liveEnd != null && liveStart !== liveEnd ? liveStart : selectionRef.current.start;
+    const end = liveStart != null && liveEnd != null && liveStart !== liveEnd ? liveEnd : selectionRef.current.end;
     return { start, end, selected: value.slice(start, end) };
   }, [value]);
 
@@ -169,7 +178,13 @@ export default function EmailDraftEditor({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
+        onSelect={rememberSelection}
+        onKeyUp={rememberSelection}
+        onMouseUp={rememberSelection}
+        onBlur={() => {
+          rememberSelection();
+          onBlur?.();
+        }}
         rows={rows}
         className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
       />

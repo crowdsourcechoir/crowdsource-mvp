@@ -8,7 +8,7 @@ export default function EmailSignaturePreview({ className = "" }: { className?: 
       <p>Joel DeJong</p>
       <p>Creator, Crowdsource Choir</p>
       <p>
-        <i className="italic">&quot;{EMAIL_SIGNATURE_QUOTE}&quot;</i>
+        <span className="italic font-serif">&quot;{EMAIL_SIGNATURE_QUOTE}&quot;</span>
       </p>
       <p>—American Songwriter</p>
     </div>

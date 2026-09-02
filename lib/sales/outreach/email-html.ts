@@ -95,10 +95,20 @@ export function wrapOutreachEmailHtml(innerHtml: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#111111">${innerHtml}<br>\n<br>\n${EMAIL_SIGNATURE_HTML}</div>`;
 }
 
+function markdownLinksToPlain(body: string): string {
+  return body.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (full, label: string, href: string) => {
+    const safe = sanitizeHttpUrl(href);
+    if (!safe) return full;
+    const text = label.trim() || safe;
+    return text === safe ? safe : `${text} (${safe})`;
+  });
+}
+
 /** Plain + HTML payload for Gmail send, clipboard copy, and mailto fallback. */
 export function prepareOutboundEmail(body: string): OutboundEmailContent {
-  const plain = ensureEmailSignature(body);
-  const html = wrapOutreachEmailHtml(renderEmailBodyHtml(body));
+  const unsigned = stripEmailSignature(body);
+  const plain = ensureEmailSignature(markdownLinksToPlain(unsigned));
+  const html = wrapOutreachEmailHtml(renderEmailBodyHtml(unsigned));
   return { plain, html };
 }
 
@@ -115,7 +125,9 @@ export function insertMarkdownLink(
   const to = Math.max(0, Math.min(Math.max(start, end), body.length));
   const selected = body.slice(from, to);
   const text = (label ?? selected).trim() || safe;
-  const snippet = `[${text}](${safe})`;
+  let snippet = `[${text}](${safe})`;
+  if (from > 0 && !/\s/.test(body[from - 1])) snippet = ` ${snippet}`;
+  if (to < body.length && !/\s/.test(body[to])) snippet = `${snippet} `;
   const next = `${body.slice(0, from)}${snippet}${body.slice(to)}`;
   return { body: next, cursor: from + snippet.length };
 }

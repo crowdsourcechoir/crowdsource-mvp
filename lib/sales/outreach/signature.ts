@@ -18,7 +18,7 @@ export const EMAIL_SIGNATURE_HTML = [
   "--<br>",
   "Joel DeJong<br>",
   "Creator, Crowdsource Choir<br>",
-  `<i style="font-style:italic">"${EMAIL_SIGNATURE_QUOTE}"</i><br>`,
+  `<span style="font-style:italic;font-family:Georgia,'Times New Roman',serif">"${EMAIL_SIGNATURE_QUOTE}"</span><br>`,
   "—American Songwriter",
 ].join("\n");
 
@@ -36,7 +36,7 @@ const TRAILING_SIGNATURE_RE = new RegExp(
     "\\nJoel DeJong",
     "\\nCreator, Crowdsource Choir",
     "(?:\\nhttps?:\\/\\/(?:www\\.)?crowdsourcechoir\\.com\\/?)?",
-    `\\n(?:<(?:em|i)[^>]*>)?["'\\u2018\\u2019\\u201c\\u201d]?${SIGNATURE_MARKER.replace(/'/g, "\\'")}["'\\u2018\\u2019\\u201c\\u201d]?(?:<\\/(?:em|i)>)?`,
+    `\\n(?:<(?:em|i|span)[^>]*>)?["'\\u2018\\u2019\\u201c\\u201d]?${SIGNATURE_MARKER.replace(/'/g, "\\'")}["'\\u2018\\u2019\\u201c\\u201d]?(?:<\\/(?:em|i|span)>)?`,
     "\\n—American Songwriter\\s*$",
   ].join(""),
   "i"
@@ -49,7 +49,7 @@ const TRAILING_SIGNATURE_ANY_NAME_RE = new RegExp(
     "\\n[^\\n]+",
     "\\nCreator, Crowdsource Choir",
     "(?:\\nhttps?:\\/\\/(?:www\\.)?crowdsourcechoir\\.com\\/?)?",
-    `\\n(?:<(?:em|i)[^>]*>)?["'\\u2018\\u2019\\u201c\\u201d]?${SIGNATURE_MARKER.replace(/'/g, "\\'")}["'\\u2018\\u2019\\u201c\\u201d]?(?:<\\/(?:em|i)>)?`,
+    `\\n(?:<(?:em|i|span)[^>]*>)?["'\\u2018\\u2019\\u201c\\u201d]?${SIGNATURE_MARKER.replace(/'/g, "\\'")}["'\\u2018\\u2019\\u201c\\u201d]?(?:<\\/(?:em|i|span)>)?`,
     "\\n—American Songwriter\\s*$",
   ].join(""),
   "i"
