@@ -133,7 +133,7 @@ export function markdownToEmailHtml(markdown: string): string {
 }
 
 function listItemsFromHtml(inner: string, ordered: boolean): string {
-  const items = [...inner.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)];
+  const items = Array.from(inner.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi));
   if (!items.length) {
     const text = stripTagsKeepText(inner);
     return text ? `${ordered ? "1. " : "- "}${text}` : "";
