@@ -31,7 +31,7 @@ import {
   type QueueMutationPayload,
 } from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
-import AddOrganizationForm from "@/components/sales/AddOrganizationForm";
+import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrganizationForm";
 import AddContactForm from "@/components/sales/AddContactForm";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -79,6 +79,7 @@ export default function ApprovalQueueClient() {
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [addOrgOpen, setAddOrgOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
@@ -539,11 +540,41 @@ export default function ApprovalQueueClient() {
       )
   );
 
+  const addOrgModal = (
+    <AddOrganizationForm open={addOrgOpen} onClose={() => setAddOrgOpen(false)} onQueued={() => void load()} />
+  );
+
+  const filterBar = (
+    <div className="mb-4 flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+        {QUEUE_CATEGORY_CHIPS.map((chip) => {
+          const active = category === chip.key;
+          const count = categoryCounts[chip.key];
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => setCategory(chip.key)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                active ? "bg-white text-gray-900" : "border border-gray-800 text-gray-300 hover:border-gray-600"
+              }`}
+            >
+              {chip.label}
+              <span className={`ml-1.5 ${active ? "text-gray-500" : "text-gray-500"}`}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+      <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
+    </div>
+  );
+
   if (loading) return <p className="text-gray-400">Loading queue…</p>;
   if (loadError) {
     return (
       <div>
-        <AddOrganizationForm onQueued={() => void load()} />
+        {filterBar}
+        {addOrgModal}
         <div className="rounded-xl border border-red-800 bg-red-950/40 p-6">
           <p className="text-red-300">{loadError}</p>
           <button
@@ -558,35 +589,13 @@ export default function ApprovalQueueClient() {
     );
   }
 
-  const filterBar = (
-    <div className="mb-4 flex flex-wrap gap-2">
-      {QUEUE_CATEGORY_CHIPS.map((chip) => {
-        const active = category === chip.key;
-        const count = categoryCounts[chip.key];
-        return (
-          <button
-            key={chip.key}
-            type="button"
-            onClick={() => setCategory(chip.key)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-              active ? "bg-white text-gray-900" : "border border-gray-800 text-gray-300 hover:border-gray-600"
-            }`}
-          >
-            {chip.label}
-            <span className={`ml-1.5 ${active ? "text-gray-500" : "text-gray-500"}`}>{count}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-
   if (sidebar.length === 0) {
     return (
       <div>
-        <AddOrganizationForm onQueued={() => void load()} />
         {filterBar}
+        {addOrgModal}
         <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-          Queue is empty. Add an organization and a named contact above.
+          Queue is empty. Add an organization with +.
         </div>
       </div>
     );
@@ -594,8 +603,8 @@ export default function ApprovalQueueClient() {
 
   return (
     <div>
-      <AddOrganizationForm compact onQueued={() => void load()} />
       {filterBar}
+      {addOrgModal}
       {actionError && (
         <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
       )}
