@@ -63,9 +63,7 @@ export function buildDeepenQueries(
 /**
  * Second-pass research for opportunities that scored below the digest bar but look salvageable,
  * or that are missing a calendar event date despite an otherwise strong score.
- * Uses the same Tavily/Serper keys as discovery to find extra pages (dates, attendance, leadership,
- * sponsorship) beyond the org's own nav, then extracts findings with the same untrusted-content
- * boundary as stage 2. No-ops (zero cost) when no search provider is configured.
+ * Hunter-only sales stack: this pass no-ops (zero cost) because Tavily/Serper web search is off.
  *
  * Tracked as another `research` agent_runs row so we don't need a DB stage-constraint migration.
  */

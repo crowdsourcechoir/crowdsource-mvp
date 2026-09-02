@@ -1,23 +1,19 @@
-import { searchWithTavily } from "./tavily";
-import { searchWithSerper } from "./serper";
 import type { SearchProvider, SearchQueryResult } from "./types";
 
 export type { SearchProvider, SearchQueryResult, SearchResultItem } from "./types";
 
 /**
- * Tavily is preferred (results are pre-summarized for LLM consumption); Serper is the
- * automatic fallback. Both are self-serve REST APIs with a free tier — a runtime choice based
- * on whichever key is configured, exactly like lib/sales/enrichment/index.ts's Apollo/Hunter
- * selection, so switching providers is an env var change, not a code change.
+ * Web search (Tavily / Serper) is disabled. Hunter.io is the only paid sales API.
+ * Discovery, deepen-research, and enrichment "search=1" must no-op here even if
+ * TAVILY_API_KEY / SERPER_API_KEY remain in Vercel env.
  */
 export function activeSearchProvider(): SearchProvider | null {
-  if (process.env.TAVILY_API_KEY) return "tavily";
-  if (process.env.SERPER_API_KEY) return "serper";
   return null;
 }
 
-export async function runSearch(query: string): Promise<SearchQueryResult | null> {
-  const provider = activeSearchProvider();
-  if (!provider) return null;
-  return provider === "tavily" ? searchWithTavily(query) : searchWithSerper(query);
+export async function runSearch(_query: string): Promise<SearchQueryResult | null> {
+  return null;
 }
+
+export const SEARCH_DISABLED_REASON =
+  "Web search (Tavily) is off. Hunter is the only sales API — add organizations and contacts yourself.";
