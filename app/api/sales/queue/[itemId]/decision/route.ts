@@ -17,7 +17,7 @@ import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
-import { draftToPlainText } from "@/lib/sales/outreach/email-body-format";
+import { draftToPlainText, coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
 import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
@@ -86,7 +86,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
     const finalSubject =
       providedEditedSubject ?? draft?.editedSubject ?? draft?.aiSubject ?? null;
-    const finalBody = providedEditedBody ?? draft?.editedBody ?? draft?.aiBody ?? null;
+    const finalBody =
+      coalesceDraftBody(providedEditedBody, coalesceDraftBody(draft?.editedBody, draft?.aiBody)) || null;
 
     // Learn from whatever was actually sent vs the AI original — including Save draft then
     // plain "Approve & send", which used to skip feedback because the client thought nothing changed.

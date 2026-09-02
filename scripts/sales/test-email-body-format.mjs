@@ -5,9 +5,11 @@
 import assert from "node:assert/strict";
 import {
   clipboardHtmlToMarkdown,
+  coalesceDraftBody,
   draftToEmailHtml,
   draftToPlainText,
   editorHtmlToMarkdown,
+  isBlankEmailBody,
   markdownToEditorHtml,
   markdownToEmailHtml,
   normalizeListPlainText,
@@ -133,5 +135,13 @@ assert.match(mimeHtml, /href="https:\/\/www\.crowdsourcechoir\.com\/book"/);
 const plainPart = mimeHtml.split("text/plain")[1].split("text/html")[0];
 assert.doesNotMatch(plainPart, /<p>/);
 assert.match(plainPart, /\[the book\]\(https:\/\/www\.crowdsourcechoir\.com\/book\)/);
+
+assert.equal(isBlankEmailBody(""), true);
+assert.equal(isBlankEmailBody("<p></p>"), true);
+assert.equal(isBlankEmailBody("<p><br></p>"), true);
+assert.equal(isBlankEmailBody("Hi Alison,"), false);
+assert.equal(coalesceDraftBody("", "Hi Alison,\n\nBest,\nJoel"), "Hi Alison,\n\nBest,\nJoel");
+assert.equal(coalesceDraftBody("<p></p>", "Hi Alison,"), "Hi Alison,");
+assert.equal(coalesceDraftBody("Custom edit", "AI body"), "Custom edit");
 
 console.log("email body list formatting ok");

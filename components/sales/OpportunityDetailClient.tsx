@@ -7,7 +7,7 @@ import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
 import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
-import { looksLikeHtml, sanitizeEmailHtml } from "@/lib/sales/outreach/email-body-format";
+import { looksLikeHtml, sanitizeEmailHtml, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { funnelStageLabel } from "@/lib/sales/funnel-labels";
 
 const FINDING_LABELS: Record<string, string> = {
@@ -83,8 +83,10 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   if (!detail) return <p className="text-gray-400">Loading…</p>;
 
   const { organization, opportunity, contact, contacts, score, draft, brief } = detail;
-  const emailSubject = draft ? draft.editedSubject ?? draft.aiSubject : null;
-  const emailBody = draft ? stripEmailSignature(draft.editedBody ?? draft.aiBody) : null;
+  const emailSubject = draft ? coalesceDraftSubject(draft.editedSubject, draft.aiSubject) : null;
+  const emailBody = draft
+    ? stripEmailSignature(coalesceDraftBody(draft.editedBody, draft.aiBody))
+    : null;
   const otherContacts = contacts.filter((c) => c.id !== contact?.id);
 
   return (

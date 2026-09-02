@@ -382,3 +382,21 @@ export function draftToEmailHtml(value: string | null | undefined): string {
   }
   return markdownToEmailHtml(v);
 }
+
+/** True when a stored draft body is empty or TipTap's empty <p></p> / <p><br></p>. */
+export function isBlankEmailBody(value: string | null | undefined): boolean {
+  const v = (value ?? "").trim();
+  if (!v) return true;
+  const plain = looksLikeHtml(v) ? draftToPlainText(v) : v;
+  return !plain.trim();
+}
+
+/** Prefer human edits, but never let an empty string hide the AI draft. */
+export function coalesceDraftBody(edited: string | null | undefined, ai: string | null | undefined): string {
+  return isBlankEmailBody(edited) ? ai ?? "" : (edited as string);
+}
+
+export function coalesceDraftSubject(edited: string | null | undefined, ai: string | null | undefined): string {
+  const e = (edited ?? "").trim();
+  return e || (ai ?? "");
+}

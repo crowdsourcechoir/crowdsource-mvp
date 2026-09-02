@@ -9,7 +9,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { Color } from "@tiptap/extension-color";
 import TextStyle from "@tiptap/extension-text-style";
 import Placeholder from "@tiptap/extension-placeholder";
-import { draftToEditorHtml } from "@/lib/sales/outreach/email-body-format";
+import { draftToEditorHtml, isBlankEmailBody } from "@/lib/sales/outreach/email-body-format";
 
 type QueueEmailBodyEditorProps = {
   value: string;
@@ -18,6 +18,7 @@ type QueueEmailBodyEditorProps = {
   disabled?: boolean;
   improving?: boolean;
   onImprove?: () => void;
+  contentKey?: string;
 };
 
 const COLORS = ["#222222", "#d93025", "#1a73e8", "#188038", "#e37400", "#9334e6"];
@@ -62,9 +63,12 @@ export default function QueueEmailBodyEditor({
   disabled,
   improving,
   onImprove,
+  contentKey,
 }: QueueEmailBodyEditorProps) {
   const skipSync = useRef(false);
   const lastEmitted = useRef(value);
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const [formatOpen, setFormatOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -101,6 +105,7 @@ export default function QueueEmailBodyEditor({
     },
     onUpdate: ({ editor: current }) => {
       const html = current.getHTML();
+      if (isBlankEmailBody(html) && !isBlankEmailBody(valueRef.current)) return;
       lastEmitted.current = html;
       skipSync.current = true;
       onChange(html);
@@ -117,11 +122,24 @@ export default function QueueEmailBodyEditor({
 
   useEffect(() => {
     if (!editor) return;
+    skipSync.current = false;
+    const next = draftToEditorHtml(valueRef.current);
+    editor.commands.setContent(next, false);
+    lastEmitted.current = valueRef.current;
+  }, [editor, contentKey]);
+
+  useEffect(() => {
+    if (!editor) return;
     if (skipSync.current) {
       skipSync.current = false;
+      if (!isBlankEmailBody(value) && isBlankEmailBody(editor.getHTML())) {
+        editor.commands.setContent(draftToEditorHtml(value), false);
+        lastEmitted.current = value;
+      }
       return;
     }
     if (value === lastEmitted.current) return;
+    if (isBlankEmailBody(value) && !isBlankEmailBody(editor.getHTML())) return;
     const next = draftToEditorHtml(value);
     if (editor.getHTML() !== next) editor.commands.setContent(next, false);
     lastEmitted.current = value;

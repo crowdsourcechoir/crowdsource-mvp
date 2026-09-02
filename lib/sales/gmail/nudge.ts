@@ -11,7 +11,7 @@ import { createNudgeQueueItem, hasPendingNudgeForContact } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
 import { MAX_NUDGES_PER_OPPORTUNITY, NUDGE_DUE_AFTER_DAYS } from "./constants";
 import { contactIdsDueForNudge, nextPendingFollowUpIso } from "../outreach/nudge-due";
-import { draftToPlainText } from "../outreach/email-body-format";
+import { draftToPlainText, coalesceDraftBody } from "../outreach/email-body-format";
 
 const NudgeDraftSchema = z.object({
   subject: z.string(),
@@ -102,7 +102,7 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
         const fewShots = formatFeedbackFewShots(feedback);
         const confidence = estimateDraftConfidence(feedback);
         const priorSubject = prior.editedSubject ?? prior.aiSubject;
-        const priorBody = prior.editedBody ?? prior.aiBody;
+        const priorBody = coalesceDraftBody(prior.editedBody, prior.aiBody);
         const firstName = (contact.fullName ?? "").trim().split(/\s+/)[0] || "there";
 
         const result = await callStructured({

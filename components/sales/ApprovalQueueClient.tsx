@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { QueueItemDetail, QueueSidebarItem, RelationshipStage, ResearchFinding } from "@/lib/sales/types";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
-import { draftToEmailHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
+import { draftToEmailHtml, draftToPlainText, coalesceDraftBody, coalesceDraftSubject, isBlankEmailBody } from "@/lib/sales/outreach/email-body-format";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import QueueEmailBodyEditor from "@/components/sales/QueueEmailBodyEditor";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
@@ -88,6 +88,7 @@ export default function ApprovalQueueClient() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
+  const draftIdentityRef = useRef("");
 
   const showCopyStatus = useCallback((message: string) => {
     if (copyStatusTimer.current) clearTimeout(copyStatusTimer.current);
@@ -138,6 +139,18 @@ export default function ApprovalQueueClient() {
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
   const current = selectedId ? detailsById[selectedId] ?? null : null;
+
+  const draftIdentity = `${current?.queueItem.id ?? ""}:${current?.draft?.id ?? ""}`;
+  if (draftIdentityRef.current !== draftIdentity) {
+    draftIdentityRef.current = draftIdentity;
+    if (current?.draft) {
+      setEditedSubject(coalesceDraftSubject(current.draft.editedSubject, current.draft.aiSubject));
+      setEditedBody(stripEmailSignature(coalesceDraftBody(current.draft.editedBody, current.draft.aiBody)));
+    } else {
+      setEditedSubject("");
+      setEditedBody("");
+    }
+  }
 
   const replaceDetail = useCallback((itemId: string, next: QueueItemDetail) => {
     setDetailsById((prev) => ({ ...prev, [itemId]: next }));
@@ -195,10 +208,6 @@ export default function ApprovalQueueClient() {
     setSendConfirmOpen(false);
     setFindContactsOpen(false);
     setMenuOpenId(null);
-    if (current?.draft) {
-      setEditedSubject(current.draft.editedSubject ?? current.draft.aiSubject);
-      setEditedBody(stripEmailSignature(current.draft.editedBody ?? current.draft.aiBody));
-    }
   }, [current?.queueItem.id, current?.draft?.id]);
 
   const selectItem = useCallback((index: number) => {
@@ -249,6 +258,7 @@ export default function ApprovalQueueClient() {
 
   const persistDraft = useCallback(async () => {
     if (!current?.draft) return;
+    if (isBlankEmailBody(editedBody) && !isBlankEmailBody(current.draft.aiBody)) return;
     await persistDraftSnapshot(current.queueItem.id, editedSubject, editedBody);
   }, [current, editedSubject, editedBody, persistDraftSnapshot]);
 
@@ -266,8 +276,8 @@ export default function ApprovalQueueClient() {
         replaceDetail(itemId, switched);
         const d = switched.draft;
         if (d) {
-          setEditedSubject(d.editedSubject ?? d.aiSubject);
-          setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+          setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+          setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
         }
       }
       void (async () => {
@@ -287,8 +297,8 @@ export default function ApprovalQueueClient() {
           });
           const d = draftFromMutationPayload(data);
           if (d) {
-            setEditedSubject(d.editedSubject ?? d.aiSubject);
-            setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+            setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+            setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
           }
         } catch (err) {
           setActionError(publicErrorMessage(err, "Could not switch contact"));
@@ -357,8 +367,8 @@ export default function ApprovalQueueClient() {
           replaceDetail(current.queueItem.id, body.detail);
           const nextDraft = draftFromMutationPayload(body);
           if (nextDraft) {
-            setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
-            setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
+            setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
+            setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
           }
         } else {
           dropQueueRow(current.queueItem.id);
@@ -487,8 +497,8 @@ export default function ApprovalQueueClient() {
               const next = applySelectContactResponse(sent, data, data.nextContactId || contactId);
               const nextDraft = next.draft;
               if (nextDraft) {
-                setEditedSubject(nextDraft.editedSubject ?? nextDraft.aiSubject);
-                setEditedBody(stripEmailSignature(nextDraft.editedBody ?? nextDraft.aiBody));
+                setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
+                setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
               }
               return { ...prev, [itemId]: next };
             });
@@ -517,8 +527,8 @@ export default function ApprovalQueueClient() {
       const saved = draftFromMutationPayload(data);
       if (!saved) throw new Error("Improve failed — no draft returned");
       replaceDetail(current.queueItem.id, { ...current, draft: saved });
-      setEditedSubject(saved.editedSubject ?? saved.aiSubject);
-      setEditedBody(stripEmailSignature(saved.editedBody ?? saved.aiBody));
+      setEditedSubject(coalesceDraftSubject(saved.editedSubject, saved.aiSubject));
+      setEditedBody(stripEmailSignature(coalesceDraftBody(saved.editedBody, saved.aiBody)));
       showCopyStatus("AI rewrite saved as a draft — not sent. Edit further if you want.");
     } catch (err) {
       setActionError(publicErrorMessage(err, "Improve failed"));
@@ -946,8 +956,8 @@ export default function ApprovalQueueClient() {
                       replaceDetail(current.queueItem.id, detail);
                       const d = detail.draft;
                       if (d) {
-                        setEditedSubject(d.editedSubject ?? d.aiSubject);
-                        setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
                       }
                     }
                     showCopyStatus(message);
@@ -964,8 +974,8 @@ export default function ApprovalQueueClient() {
                       replaceDetail(current.queueItem.id, detail);
                       const d = detail.draft;
                       if (d) {
-                        setEditedSubject(d.editedSubject ?? d.aiSubject);
-                        setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
                       }
                     }
                     showCopyStatus(message);
@@ -1012,6 +1022,7 @@ export default function ApprovalQueueClient() {
                 />
                 <QueueEmailBodyEditor
                   value={editedBody}
+                  contentKey={draftIdentity}
                   onChange={setEditedBody}
                   onBlur={() => void persistDraft().catch(() => undefined)}
                   disabled={busy || improving}
