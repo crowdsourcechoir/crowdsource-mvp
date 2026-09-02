@@ -3,7 +3,6 @@ import { listAwaitingContactOrganizationIds } from "../db/awaitingContact";
 import { getLastSucceededDigestRun } from "../db/digestRuns";
 import { listQueueItems } from "../db/queue";
 import { assembleQueueItemDetail } from "../db/assemble";
-import { runDiscoveryRun } from "../discovery/run-discovery";
 import { runPipelineBatch, type PipelineBatchSummary } from "../pipeline/run-pipeline-batch";
 import { runPipelineForOrganization } from "../pipeline/run-pipeline";
 import { DEEPEN_MAX_SCORE, DEEPEN_MIN_SCORE } from "../pipeline/stages/deepenResearch";
@@ -35,7 +34,6 @@ export type DigestEnsureResult = {
   continuationRecommended?: boolean;
 };
 
-const MAX_DISCOVERY_RUNS_PER_ENSURE = 2;
 const MAX_NEAR_MISS_REPROCESSES_PER_ENSURE = 6;
 const MAX_AWAITING_CONTACT_REPROCESSES_PER_ENSURE = 6;
 
@@ -138,12 +136,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       continue;
     }
 
-    if (discoveryRuns < MAX_DISCOVERY_RUNS_PER_ENSURE) {
-      await runDiscoveryRun(trigger === "cron" ? "cron" : "manual");
-      discoveryRuns += 1;
-      const afterDiscovery = await listUnprocessedOrganizations(1);
-      if (afterDiscovery.length > 0) continue;
-    }
+    // Tavily/Serper discovery is off — do not mint new orgs via web search.
 
     if (nearMissReprocesses < MAX_NEAR_MISS_REPROCESSES_PER_ENSURE) {
       const nearMissIds = (await listNearMissOrganizationIds(MAX_NEAR_MISS_REPROCESSES_PER_ENSURE)).filter(
@@ -183,7 +176,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       continuationRecommended,
       error: continuationRecommended
         ? `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Continuing overnight top-up until the target is met.`
-        : `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). No unprocessed orgs, awaiting-contact salvage, or near-miss salvage left — discovery/pipeline must add more before another attempt helps.`,
+        : `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). No unprocessed orgs, awaiting-contact salvage, or near-miss salvage left — add orgs/contacts in the queue.`,
     };
   }
 
