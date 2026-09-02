@@ -75,7 +75,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         label: "Supporters",
         x: 0.78,
         y: 0.24,
-        blurb: "Loudest end — leave a mark with the ultras.",
+        blurb: "Loudest end — plant a seed with the ultras.",
         sponsorKey: null,
         prompt: "What's your chant idea for the next game?",
         ctaLabel: "Share your chant",
@@ -89,7 +89,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         blurb: "Service Station #1 — Stoup sideline energy.",
         sponsorKey: "stoup",
         prompt: "What song should blast at the Stoup stand?",
-        ctaLabel: "Leave a mark",
+        ctaLabel: "Plant a seed",
         inputPlaceholder: "Song, vibe, or shout…",
       }),
       zone({
@@ -100,7 +100,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         blurb: "21+ corner — Orgullo Ajeno.",
         sponsorKey: "orgullo-ajeno",
         prompt: "Drop a toast for the 21+ corner.",
-        ctaLabel: "Leave a mark",
+        ctaLabel: "Plant a seed",
         inputPlaceholder: "Your toast…",
       }),
       zone({
@@ -122,7 +122,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         blurb: "Alcohol-free GA — bring the kids.",
         sponsorKey: null,
         prompt: "What's your family's matchday ritual?",
-        ctaLabel: "Leave a mark",
+        ctaLabel: "Plant a seed",
         inputPlaceholder: "A small ritual…",
       }),
       zone({
@@ -133,7 +133,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         blurb: "Kits, scarves, and matchday gear.",
         sponsorKey: null,
         prompt: "What kit piece should Ballard drop next?",
-        ctaLabel: "Leave a mark",
+        ctaLabel: "Plant a seed",
         inputPlaceholder: "Scarf, kit, colorway…",
       }),
       zone({
@@ -156,7 +156,7 @@ export function ballardFcBrandKit(): Partial<BrandKit> {
         blurb: "New / coming seating — claim the south roar.",
         sponsorKey: null,
         prompt: "Claim the south roar — what should it sound like?",
-        ctaLabel: "Leave a mark",
+        ctaLabel: "Plant a seed",
         inputPlaceholder: "A roar, a phrase…",
       }),
       zone({

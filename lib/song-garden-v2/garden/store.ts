@@ -351,6 +351,8 @@ export async function recordGardenContribution(args: {
   sourceType: "clip" | "turn";
   sourceId: string;
   deviceId?: string | null;
+  creditName?: string | null;
+  excerpt?: string | null;
 }): Promise<RecordContributionResult | null> {
   try {
     const chapter = await getChapterByEventId(args.eventId);
@@ -380,6 +382,25 @@ export async function recordGardenContribution(args: {
       garden.mutationPolicy
     );
 
+    const finishCommunity = async () => {
+      try {
+        const { recordCommunityContribution } = await import("@/lib/platform-v2/store");
+        await recordCommunityContribution({
+          gardenId: garden.id,
+          chapterId: chapter.id,
+          bloomEventId: args.eventId,
+          deviceId,
+          sourceType: args.sourceType,
+          sourceId: args.sourceId,
+          kind: args.kind,
+          creditName: args.creditName ?? null,
+          excerpt: args.excerpt ?? null,
+        });
+      } catch (err) {
+        console.warn("[gardens] community spine hook failed:", err);
+      }
+    };
+
     if (USE_LOCAL()) {
       const persisted = localPersistMutation({
         gardenId: garden.id,
@@ -393,6 +414,7 @@ export async function recordGardenContribution(args: {
         nextState: applied.nextState,
         markIndex: applied.markIndex,
       });
+      await finishCommunity();
       return {
         garden: persisted.garden,
         effects: applied.effects,
@@ -466,6 +488,7 @@ export async function recordGardenContribution(args: {
         worldVersion: retry.nextState.version,
         markIndex: retry.markIndex,
       });
+      await finishCommunity();
       return {
         garden: rowToGarden(updated2 as Record<string, unknown>),
         effects: retry.effects,
@@ -487,6 +510,7 @@ export async function recordGardenContribution(args: {
       markIndex: applied.markIndex,
     });
 
+    await finishCommunity();
     return {
       garden: rowToGarden(updated as Record<string, unknown>),
       effects: applied.effects,
