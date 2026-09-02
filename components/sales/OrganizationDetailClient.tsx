@@ -30,6 +30,11 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [togglingClient, setTogglingClient] = useState(false);
+  const [addingContact, setAddingContact] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactRole, setContactRole] = useState("");
+  const [contactMessage, setContactMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +70,34 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
     }
   }
 
+  async function addContact(e: React.FormEvent) {
+    e.preventDefault();
+    if (!contactName.trim()) return;
+    setAddingContact(true);
+    setContactMessage(null);
+    try {
+      const res = await fetch(`/api/sales/organizations/${orgId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: contactName.trim(),
+          email: contactEmail.trim() || null,
+          roleTitle: contactRole.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Could not add contact");
+      setContactName("");
+      setContactEmail("");
+      setContactRole("");
+      setContactMessage(json.message ?? "Contact added.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add contact");
+    } finally {
+      setAddingContact(false);
+    }
+  }
   async function toggleExistingClient() {
     if (!data) return;
     setTogglingClient(true);
@@ -175,6 +208,35 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
             ))}
           </ul>
         )}
+        <form onSubmit={addContact} className="mt-3 grid gap-2 sm:grid-cols-3">
+          <input
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            required
+            placeholder="First and last name"
+            className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
+          />
+          <input
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
+            placeholder="Email (optional — Hunter)"
+            className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
+          />
+          <input
+            value={contactRole}
+            onChange={(e) => setContactRole(e.target.value)}
+            placeholder="Role (optional)"
+            className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
+          />
+          <button
+            type="submit"
+            disabled={addingContact || !contactName.trim()}
+            className="rounded-md bg-sky-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 sm:col-span-3 w-fit"
+          >
+            {addingContact ? "Adding…" : "Add contact"}
+          </button>
+        </form>
+        {contactMessage && <p className="mt-2 text-sm text-emerald-400">{contactMessage}</p>}
       </section>
 
       <section className="rounded-xl border border-gray-800 p-4">

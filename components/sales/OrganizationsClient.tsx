@@ -13,9 +13,6 @@ export default function OrganizationsClient() {
   const [error, setError] = useState<string | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<Record<string, string>>({});
-  const [newName, setNewName] = useState("");
-  const [newWebsite, setNewWebsite] = useState("");
-  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async (q?: string) => {
     setLoading(true);
@@ -39,28 +36,6 @@ export default function OrganizationsClient() {
   }, [load]);
 
   const typeLabel = (id: string | null) => types.find((t) => t.id === id)?.label ?? "Unclassified";
-
-  async function addOrganization(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    setAdding(true);
-    try {
-      const res = await fetch("/api/sales/organizations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), websiteUrl: newWebsite.trim() || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to add organization");
-      setNewName("");
-      setNewWebsite("");
-      await load(search);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add organization");
-    } finally {
-      setAdding(false);
-    }
-  }
 
   async function runPipeline(orgId: string) {
     setRunningId(orgId);
@@ -87,24 +62,6 @@ export default function OrganizationsClient() {
 
   return (
     <div>
-      <form onSubmit={addOrganization} className="mb-6 flex flex-wrap gap-2 rounded-xl border border-gray-800 p-4">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="Organization name"
-          className="min-w-[220px] flex-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
-        />
-        <input
-          value={newWebsite}
-          onChange={(e) => setNewWebsite(e.target.value)}
-          placeholder="Website URL (optional)"
-          className="min-w-[220px] flex-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
-        />
-        <button disabled={adding} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 disabled:opacity-50">
-          {adding ? "Adding…" : "Add organization"}
-        </button>
-      </form>
-
       <div className="mb-4 flex items-center gap-2">
         <input
           value={search}

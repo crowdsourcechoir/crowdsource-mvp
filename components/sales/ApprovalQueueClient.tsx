@@ -29,6 +29,8 @@ import {
   type QueueMutationPayload,
 } from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
+import AddOrganizationForm from "@/components/sales/AddOrganizationForm";
+import AddContactForm from "@/components/sales/AddContactForm";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -538,15 +540,18 @@ export default function ApprovalQueueClient() {
   if (loading) return <p className="text-gray-400">Loading queue…</p>;
   if (loadError) {
     return (
-      <div className="rounded-xl border border-red-800 bg-red-950/40 p-6">
-        <p className="text-red-300">{loadError}</p>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="mt-3 rounded-md border border-red-700 px-3 py-1.5 text-sm text-red-100 hover:bg-red-900/40"
-        >
-          Retry
-        </button>
+      <div>
+        <AddOrganizationForm onQueued={() => void load()} />
+        <div className="rounded-xl border border-red-800 bg-red-950/40 p-6">
+          <p className="text-red-300">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-3 rounded-md border border-red-700 px-3 py-1.5 text-sm text-red-100 hover:bg-red-900/40"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -576,9 +581,10 @@ export default function ApprovalQueueClient() {
   if (sidebar.length === 0) {
     return (
       <div>
+        <AddOrganizationForm onQueued={() => void load()} />
         {filterBar}
         <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-          Queue is empty. Run the pipeline against an organization to generate reviewable opportunities.
+          Queue is empty. Add an organization and a named contact above.
         </div>
       </div>
     );
@@ -586,6 +592,7 @@ export default function ApprovalQueueClient() {
 
   return (
     <div>
+      <AddOrganizationForm compact onQueued={() => void load()} />
       {filterBar}
       {actionError && (
         <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
@@ -858,6 +865,22 @@ export default function ApprovalQueueClient() {
               </ul>
             ) : (
               <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
+            )}
+            {current.queueItem.status === "pending" && (
+              <AddContactForm
+                itemId={current.queueItem.id}
+                onAdded={(detail, message) => {
+                  if (detail) {
+                    replaceDetail(current.queueItem.id, detail);
+                    const d = detail.draft;
+                    if (d) {
+                      setEditedSubject(d.editedSubject ?? d.aiSubject);
+                      setEditedBody(stripEmailSignature(d.editedBody ?? d.aiBody));
+                    }
+                  }
+                  showCopyStatus(message);
+                }}
+              />
             )}
           </div>
 
