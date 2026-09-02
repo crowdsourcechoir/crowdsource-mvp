@@ -9,6 +9,7 @@ import {
   looksLikeGenericTemplateDraft,
   draftNamesWrongOrganization,
 } from "@/lib/sales/outreach/customize-draft";
+import { buildCustomizedTemplateDraft } from "@/lib/sales/outreach/custom-template";
 import { coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
 import { parseQueueCategory, matchesQueueCategory, type QueueCategoryFilter } from "@/lib/sales/queue/category";
 import { publicErrorMessage } from "@/lib/sales/http-error";
@@ -26,13 +27,14 @@ export async function POST(request: Request) {
     const limit = Math.min(12, Math.max(1, Number(body?.limit) || 6));
     const offset = Math.max(0, Number(body?.offset) || 0);
     const learn = body?.learn !== false;
+    const preferTemplate = body?.preferTemplate === true;
     const category = parseQueueCategory(typeof body?.category === "string" ? body.category : "all") as QueueCategoryFilter;
 
-    if (learn && offset === 0) {
+    if (learn && offset === 0 && !preferTemplate) {
       await learnFromSentOutreach(40).catch(() => undefined);
     }
 
-    const sent = await listRecentSentPlainEmails(10);
+    const sent = preferTemplate ? [] : await listRecentSentPlainEmails(10);
     const sentExamples = formatSentEmailsForPrompt(sent);
 
     const sidebar = (await listQueueSidebarItems("pending")).filter(
@@ -69,7 +71,30 @@ export async function POST(request: Request) {
       }
 
       try {
-        const customized = await customizeOutreachDraft({ detail, sentExamples });
+        let customized: { subject: string; body: string };
+        if (preferTemplate) {
+          customized = buildCustomizedTemplateDraft({
+            firstName: (detail.contact.fullName ?? "there").split(/\s+/)[0] || "there",
+            roleTitle: detail.contact.roleTitle,
+            organizationName: detail.organization.name,
+            opportunityTitle: detail.opportunity.title,
+            category: row.category,
+          });
+        } else {
+          try {
+            customized = await customizeOutreachDraft({ detail, sentExamples });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "";
+            if (!/429|credits remaining/i.test(message)) throw err;
+            customized = buildCustomizedTemplateDraft({
+              firstName: (detail.contact.fullName ?? "there").split(/\s+/)[0] || "there",
+              roleTitle: detail.contact.roleTitle,
+              organizationName: detail.organization.name,
+              opportunityTitle: detail.opportunity.title,
+              category: row.category,
+            });
+          }
+        }
         await updateDraftEdits(detail.draft.id, {
           editedSubject: customized.subject,
           editedBody: customized.body,
@@ -109,5 +134,24 @@ export async function POST(request: Request) {
     );
   } catch (err) {
     return NextResponse.json({ error: publicErrorMessage(err, "Redraft failed") }, { status: 500 });
+  }
+}
+
+export async function GET() {
+  try {
+    const sent = await listRecentSentPlainEmails(10);
+    return NextResponse.json(
+      {
+        count: sent.length,
+        emails: sent.map((email) => ({
+          to: email.to,
+          subject: email.subject,
+          body: email.body,
+        })),
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch (err) {
+    return NextResponse.json({ error: publicErrorMessage(err, "Could not load sent mail") }, { status: 500 });
   }
 }
