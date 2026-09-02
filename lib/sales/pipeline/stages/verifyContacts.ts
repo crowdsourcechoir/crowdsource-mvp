@@ -10,17 +10,34 @@ export type VerifyContactsStageOutput = {
   noEmail: number;
 };
 
+/** University / NCAA athletics orgs whose public site is often not the staff mailbox domain. */
+export function orgLooksLikeUniversityOrAthletics(name?: string | null, domain?: string | null): boolean {
+  const blob = `${name ?? ""} ${domain ?? ""}`.toLowerCase();
+  return /\b(university|universities|athletics|college|collegiate|ncaa)\b/.test(blob);
+}
+
 /** True when email domain matches the org domain or a parent/child (conference.shrm.org ↔ shrm.org). */
-export function emailDomainMatchesOrg(contactDomain: string | null, orgDomain: string | null): boolean {
+export function emailDomainMatchesOrg(
+  contactDomain: string | null,
+  orgDomain: string | null,
+  org?: { name?: string | null }
+): boolean {
   if (!contactDomain || !orgDomain) return false;
   if (contactDomain === orgDomain) return true;
-  return orgDomain.endsWith(`.${contactDomain}`) || contactDomain.endsWith(`.${orgDomain}`);
+  if (orgDomain.endsWith(`.${contactDomain}`) || contactDomain.endsWith(`.${orgDomain}`)) return true;
+  // Athletics sites (gohuskies.com, gozags.com) vs staff mail (@uw.edu, @gonzaga.edu).
+  if (contactDomain.endsWith(".edu") && orgLooksLikeUniversityOrAthletics(org?.name, orgDomain)) {
+    return true;
+  }
+  return false;
 }
 
 /**
  * Deterministic only — no MX/SMTP probing in v1 (see docs/sales-platform/ai-workflow.md §5).
  * Format-valid + domain matches the org's own domain (or parent/child) → "valid_format".
- * Format-valid but a different domain (e.g. a personal/agency email) → "risky", still surfaced, never silently promoted.
+ * Format-valid university `.edu` on an athletics/university org also matches (Sidearm sites).
+ * Format-valid but a different domain (e.g. a personal/agency email) → "risky", still surfaced,
+ * never silently promoted. A human click in the queue can promote `risky` to `valid_format`.
  */
 export async function runVerifyContactsStage(org: Organization): Promise<{ output: VerifyContactsStageOutput }> {
   const contacts = await listContactsForOrganization(org.id);
@@ -46,7 +63,7 @@ export async function runVerifyContactsStage(org: Organization): Promise<{ outpu
       continue;
     }
     const contactDomain = extractDomain(contact.email.split("@")[1]);
-    if (!emailDomainMatchesOrg(contactDomain, org.domain)) {
+    if (!emailDomainMatchesOrg(contactDomain, org.domain, org)) {
       await updateContactVerification(contact.id, "risky");
       output.risky += 1;
     } else {

@@ -218,10 +218,11 @@ export default function ApprovalQueueClient() {
 
   const selectContact = useCallback(
     (contactId: string) => {
-      if (!current || current.contact?.id === contactId) return;
+      if (!current) return;
       setSendConfirmOpen(false);
       setMenuOpenId(null);
       setActionError(null);
+      if (current.contact?.id === contactId) return;
       const itemId = current.queueItem.id;
       const prevSubject = editedSubject;
       const prevBody = editedBody;
