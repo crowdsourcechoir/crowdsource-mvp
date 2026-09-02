@@ -25,12 +25,14 @@ const COLORS = ["#222222", "#d93025", "#1a73e8", "#188038", "#e37400", "#9334e6"
 function IconButton({
   title,
   active,
+  expanded,
   disabled,
   onClick,
   children,
 }: {
   title: string;
   active?: boolean;
+  expanded?: boolean;
   disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
@@ -40,6 +42,7 @@ function IconButton({
       type="button"
       title={title}
       aria-label={title}
+      aria-expanded={expanded}
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
@@ -62,7 +65,7 @@ export default function QueueEmailBodyEditor({
 }: QueueEmailBodyEditorProps) {
   const skipSync = useRef(false);
   const lastEmitted = useRef(value);
-  const [formatOpen, setFormatOpen] = useState(true);
+  const [formatOpen, setFormatOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
 
@@ -156,7 +159,12 @@ export default function QueueEmailBodyEditor({
   return (
     <div className="rounded-md border border-gray-700 bg-gray-900">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-800 px-1 py-1">
-        <IconButton title="Formatting options" active={formatOpen} onClick={() => setFormatOpen((open) => !open)}>
+        <IconButton
+          title={formatOpen ? "Hide formatting" : "Show formatting"}
+          active={formatOpen}
+          expanded={formatOpen}
+          onClick={() => setFormatOpen((open) => !open)}
+        >
           <span className="text-[13px] font-semibold leading-none">
             A<span className="text-[10px]">a</span>
           </span>
