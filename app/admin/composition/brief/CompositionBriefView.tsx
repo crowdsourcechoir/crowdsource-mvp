@@ -192,10 +192,18 @@ function BriefSections({ brief }: { brief: CompositionBrief }) {
   );
 }
 
-export default function CompositionBriefView() {
+export default function CompositionBriefView({
+  eventId: eventIdProp = null,
+  sessionId: sessionIdProp = null,
+  embedded = false,
+}: {
+  eventId?: string | null;
+  sessionId?: string | null;
+  embedded?: boolean;
+} = {}) {
   const searchParams = useSearchParams();
-  const eventId = searchParams.get("eventId")?.trim() || null;
-  const sessionId = searchParams.get("sessionId")?.trim() || null;
+  const eventId = (eventIdProp ?? searchParams.get("eventId")?.trim()) || null;
+  const sessionId = (sessionIdProp ?? searchParams.get("sessionId")?.trim()) || null;
 
   const [brief, setBrief] = useState<CompositionBrief | null>(null);
   const [loading, setLoading] = useState(true);
@@ -242,24 +250,30 @@ export default function CompositionBriefView() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white">
+    <div className={embedded ? "text-white" : "min-h-screen bg-[#0c0c0e] text-white"}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold sm:text-2xl">Composition Brief</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            Organized creative material from audience participation and Signal choices.
-          </p>
+          {!embedded && (
+            <>
+              <h1 className="text-xl font-bold sm:text-2xl">Composition Brief</h1>
+              <p className="mt-1 text-sm text-gray-400">
+                Organized creative material from audience participation and Signal choices.
+              </p>
+            </>
+          )}
           {hasScope && (
-            <p className="mt-2 font-mono text-xs text-gray-500">
+            <p className={`font-mono text-xs text-gray-500 ${embedded ? "" : "mt-2"}`}>
               {eventId && `event ${eventId}`}
               {eventId && sessionId && " · "}
               {sessionId && `session ${sessionId}`}
             </p>
           )}
         </div>
-        <Link href="/admin/live" className="text-sm font-medium text-gray-500 hover:text-gray-300">
-          ← Live
-        </Link>
+        {!embedded && (
+          <Link href="/admin/live" className="text-sm font-medium text-gray-500 hover:text-gray-300">
+            ← Live
+          </Link>
+        )}
       </div>
 
       {!hasScope && (

@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   fetchClipFile,
   songgardenAudioUrl,
   type SonggardenClip,
 } from "@/data/songgardenClient";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
+import { formatClipDuration } from "@/lib/songgarden/clip-prompt";
 import { wavFilename } from "@/lib/songgarden/sound-pack";
+import ClipWaveform from "./ClipWaveform";
 
 type DraggableAudioClipProps = {
   eventId: string;
@@ -18,12 +20,6 @@ type DraggableAudioClipProps = {
   onPlayed?: () => void;
   onOpenDetail?: (clip: SonggardenClip) => void;
 };
-
-function formatDuration(ms: number | null): string {
-  if (ms == null || !Number.isFinite(ms)) return "";
-  const s = Math.round(ms / 1000);
-  return `${s}s`;
-}
 
 export { wavFilename };
 
@@ -36,160 +32,259 @@ export default function DraggableAudioClip({
   onPlayed,
   onOpenDetail,
 }: DraggableAudioClipProps) {
-  const [dragging, setDragging] = useState(false);
-  const [audioError, setAudioError] = useState(false);
-  const [audioSrc, setAudioSrc] = useState<string | null>(null);
-  const [audioLoading, setAudioLoading] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileCacheRef = useRef<File | null>(null);
+  const streamUrl = songgardenAudioUrl(eventId, clip.id, clip.submittedAt);
+  const [src, setSrc] = useState(streamUrl);
+  const [arrayBuffer, setArrayBuffer] = useState<ArrayBuffer | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
+
+  const padName = (
+    clip.label?.trim() && clip.label.trim().length <= 14
+      ? clip.label.trim()
+      : songgardenCategoryLabel(clip.category)
+  ).toUpperCase();
+  const durationLabel = formatClipDuration(clip.durationMs, audioDuration);
+  const title =
+    clip.label?.trim() ||
+    clip.filename.replace(/\.[^.]+$/, "") ||
+    songgardenCategoryLabel(clip.category);
+  const trimLabel =
+    clip.trimStatus === "trimmed"
+      ? `Trimmed −${clip.trimLeadMs ?? 0}ms / −${clip.trimTrailMs ?? 0}ms`
+      : clip.trimStatus === "skipped"
+        ? "Silence kept"
+        : clip.hasOriginal
+          ? "Original kept"
+          : null;
 
   useEffect(() => {
     let objectUrl: string | null = null;
     let cancelled = false;
-
     fileCacheRef.current = null;
-    setAudioError(false);
-    setAudioLoading(true);
-    setAudioSrc(null);
+    setError(false);
+    setSrc(streamUrl);
+    setArrayBuffer(null);
+    setCurrentTime(0);
 
     void fetchClipFile(eventId, clip)
-      .then((file) => {
+      .then(async (file) => {
         if (cancelled) return;
-        objectUrl = URL.createObjectURL(file);
         fileCacheRef.current = file;
-        setAudioSrc(objectUrl);
+        objectUrl = URL.createObjectURL(file);
+        setSrc(objectUrl);
+        const buf = await file.arrayBuffer();
+        if (!cancelled) setArrayBuffer(buf);
       })
       .catch(() => {
-        if (!cancelled) setAudioError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setAudioLoading(false);
+        // Stream URL still works for playback / DownloadURL.
       });
 
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      audioRef.current?.pause();
     };
-  }, [eventId, clip.id, clip.submittedAt, clip.trimStatus]);
+  }, [eventId, clip.id, clip.submittedAt, clip.trimStatus, streamUrl]);
 
-  async function ensureFile(): Promise<File> {
-    if (fileCacheRef.current) return fileCacheRef.current;
-    const file = await fetchClipFile(eventId, clip);
-    fileCacheRef.current = file;
-    return file;
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !playing) return;
+    let raf = 0;
+    const tick = () => {
+      setCurrentTime(el.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
+  async function togglePlay() {
+    if (error) return;
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      el.pause();
+      setPlaying(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      await el.play();
+      setPlaying(true);
+      onPlayed?.();
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleCardDragStart(e: React.DragEvent<HTMLDivElement>) {
+  function handleSeek(timeSec: number) {
+    const el = audioRef.current;
+    if (!el) return;
+    el.currentTime = timeSec;
+    setCurrentTime(timeSec);
+  }
+
+  function handleDragStart(e: DragEvent<HTMLButtonElement>) {
     setDragging(true);
     e.dataTransfer.effectAllowed = "copy";
-
     const name = wavFilename(clip);
-
-    // Native apps (Ableton, Finder, etc.) only accept the DownloadURL format,
-    // which points at an absolute URL the OS downloads as a real .wav file.
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const absoluteUrl = origin + songgardenAudioUrl(eventId, clip.id, clip.submittedAt);
+    const absoluteUrl = origin + streamUrl;
     e.dataTransfer.setData("DownloadURL", `audio/wav:${name}:${absoluteUrl}`);
     e.dataTransfer.setData("text/uri-list", absoluteUrl);
-
-    // Browser drop targets: attach the already-fetched File when available.
+    e.dataTransfer.setData("text/plain", name);
     const cached = fileCacheRef.current;
     if (cached) {
       try {
         const wavFile =
-          cached.name === name
-            ? cached
-            : new File([cached], name, { type: "audio/wav" });
+          cached.name === name ? cached : new File([cached], name, { type: "audio/wav" });
         e.dataTransfer.items.add(wavFile);
       } catch {
-        // items.add can throw in some browsers; DownloadURL still works.
+        // DownloadURL still works for native DAWs.
       }
     }
   }
 
   return (
     <div
-      draggable
-      onDragStart={handleCardDragStart}
-      onDragEnd={() => setDragging(false)}
-      title="Drag into Ableton, Suno, or Finder"
-      className={`group relative flex cursor-grab flex-col rounded-xl border bg-[#14141a] p-3 transition active:cursor-grabbing ${
-        selected
-          ? "border-[#CFFF81] ring-1 ring-[#CFFF81]/40"
-          : "border-gray-700/70 hover:border-gray-500"
-      } ${dragging ? "opacity-60" : ""} ${isNew ? "animate-pulse border-emerald-500/70" : ""}`}
+      className={`relative rounded-xl border bg-[#121214] p-3 ${
+        playing || selected
+          ? "border-[#CFFF81]/70"
+          : "border-gray-800"
+      } ${dragging ? "opacity-60" : ""} ${error ? "border-red-800/60" : ""} ${
+        isNew ? "animate-pulse" : ""
+      }`}
     >
       {isNew && (
         <span className="absolute -right-2 -top-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">
           New
         </span>
       )}
-      <div
-        className="mb-2 flex cursor-pointer items-start justify-between gap-2"
-        onClick={(e) => onSelectToggle(clip.id, e.shiftKey || e.metaKey || e.ctrlKey)}
-      >
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-white">
-            {clip.label || clip.filename.replace(/\.[^.]+$/, "")}
+
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onEnded={() => {
+          setPlaying(false);
+          setCurrentTime(0);
+        }}
+        onPause={() => setPlaying(false)}
+        onLoadedMetadata={() => {
+          if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
+            setAudioDuration(audioRef.current.duration);
+          }
+        }}
+        onError={() => setError(true)}
+      />
+
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={() => void togglePlay()}
+          disabled={error}
+          className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+            playing
+              ? "bg-[#CFFF81] text-black"
+              : "border border-white/20 bg-white/5 text-gray-100 hover:border-white/40"
+          } disabled:opacity-40`}
+          aria-label={playing ? "Pause" : "Play"}
+        >
+          {loading && !playing ? "…" : error ? "!" : playing ? "❚❚" : "▶"}
+        </button>
+
+        <button
+          type="button"
+          className="min-w-0 flex-1 cursor-pointer text-left"
+          onClick={(e) => onSelectToggle(clip.id, e.shiftKey || e.metaKey || e.ctrlKey)}
+        >
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">
+            {padName}
+            <span className="text-gray-600"> · {durationLabel}</span>
+            <span className="text-gray-600"> · {songgardenCategoryLabel(clip.category)}</span>
+            {trimLabel ? (
+              <span className={clip.trimStatus === "trimmed" ? "text-[#CFFF81]/70" : "text-gray-600"}>
+                {" "}
+                · {trimLabel}
+              </span>
+            ) : null}
+            {clip.contributorName ? (
+              <span className="text-gray-600"> · {clip.contributorName}</span>
+            ) : null}
           </p>
-          <p className="truncate text-xs text-gray-500">
-            {clip.contributorName || "Anonymous"} · {songgardenCategoryLabel(clip.category)}
-            {clip.durationMs ? ` · ${formatDuration(clip.durationMs)}` : ""}
-            {clip.trimStatus === "trimmed"
-              ? " · Trimmed"
-              : clip.hasOriginal
-                ? " · Original kept"
-                : ""}
+          <p className="mt-0.5 text-sm font-semibold uppercase tracking-wide leading-snug text-gray-100">
+            {title}
           </p>
-        </div>
+        </button>
+
         <div className="flex shrink-0 items-start gap-2">
           <input
             type="checkbox"
             checked={selected}
             readOnly
-            className="mt-0.5 h-4 w-4 accent-[#CFFF81]"
-            aria-label={`Select ${clip.label || clip.filename}`}
-          />
-        </div>
-      </div>
-      {audioError ? (
-        <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
-          Could not load audio for this clip.
-        </p>
-      ) : audioLoading || !audioSrc ? (
-        <div className="flex h-9 items-center rounded-lg border border-gray-700/70 bg-black/20 px-3 text-xs text-gray-500">
-          Loading preview…
-        </div>
-      ) : (
-        <audio
-          src={audioSrc}
-          controls
-          preload="metadata"
-          draggable={false}
-          onDragStart={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          className="h-9 w-full"
-          onPlay={onPlayed}
-          onError={() => setAudioError(true)}
-        />
-      )}
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-[10px] uppercase tracking-wide text-gray-600 group-hover:text-gray-400">
-          Drag into DAW
-        </p>
-        {onOpenDetail ? (
-          <button
-            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenDetail(clip);
+              onSelectToggle(clip.id, true);
             }}
-            className="text-[10px] font-semibold uppercase tracking-wide text-[#CFFF81] hover:underline"
+            className="mt-1 h-4 w-4 accent-[#CFFF81]"
+            aria-label={`Select ${title}`}
+          />
+          <button
+            type="button"
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={() => setDragging(false)}
+            title="Drag into Ableton / Finder"
+            className="cursor-grab rounded-lg border border-dashed border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 hover:border-[#CFFF81]/40 hover:text-[#CFFF81] active:cursor-grabbing"
           >
-            Edit
+            Drag
           </button>
-        ) : null}
+          {onOpenDetail ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDetail(clip);
+              }}
+              className="rounded-lg border border-gray-700 px-2 py-1 text-[10px] uppercase tracking-wide text-[#CFFF81] hover:border-[#CFFF81]/40"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-2">
+        {error ? (
+          <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+            Could not load audio for this clip.
+          </p>
+        ) : (
+          <>
+            <ClipWaveform
+              arrayBuffer={arrayBuffer}
+              currentTime={currentTime}
+              duration={
+                audioDuration && Number.isFinite(audioDuration)
+                  ? audioDuration
+                  : (clip.durationMs ?? 0) / 1000
+              }
+              playing={playing}
+              onSeek={handleSeek}
+            />
+            <p className="mt-1 text-right font-mono text-[10px] tabular-nums text-gray-500">
+              {formatClipDuration(currentTime * 1000)} / {durationLabel}
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
