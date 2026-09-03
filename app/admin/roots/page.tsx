@@ -41,24 +41,24 @@ const rootTools = [
 export default function RootsPage() {
   return (
     <div className="w-full space-y-8 text-white">
-      <section className="rounded-3xl border border-[#CFFF81]/20 bg-[#121214] p-6 shadow-2xl shadow-black/30 sm:p-8">
+      <div className="mb-6 sm:mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">Root System</p>
-        <h1 className="mt-3 text-2xl font-bold sm:text-3xl">Roots</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-300 sm:text-base">
-          The hidden participation methodology, musical intelligence, memory, and facilitation logic
-          that help a Garden come alive during a Bloom.
+        <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Roots</h1>
+        <p className="mt-2 max-w-3xl text-sm text-gray-400">
+          The hidden participation methodology, musical intelligence, memory, and facilitation logic that help a
+          Garden come alive during a Bloom.
         </p>
-      </section>
+      </div>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
-        <div className="rounded-2xl border border-gray-800 bg-black/25 p-5">
+        <div className="rounded-xl border border-gray-800 bg-[#121214] p-5">
           <h2 className="text-lg font-semibold text-white">Participation loop</h2>
           <p className="mt-2 text-sm leading-6 text-gray-400">
             Roots protect the loop that moves people from spectatorship into shared creation.
           </p>
           <ol className="mt-5 space-y-2">
             {rootPrinciples.map((principle, index) => (
-              <li key={principle} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2">
+              <li key={principle} className="flex items-center gap-3 rounded-lg bg-white/[0.03] px-3 py-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#CFFF81]/15 text-xs font-bold text-[#CFFF81]">
                   {index + 1}
                 </span>
@@ -68,7 +68,7 @@ export default function RootsPage() {
           </ol>
         </div>
 
-        <div className="rounded-2xl border border-gray-800 bg-black/25 p-5">
+        <div className="rounded-xl border border-gray-800 bg-[#121214] p-5">
           <h2 className="text-lg font-semibold text-white">What belongs here</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {[
@@ -81,7 +81,7 @@ export default function RootsPage() {
               "Recognition and reward moments",
               "Belonging and escalation design",
             ].map((item) => (
-              <div key={item} className="rounded-xl border border-gray-800 bg-[#121214] px-4 py-3 text-sm text-gray-300">
+              <div key={item} className="rounded-lg border border-gray-800 bg-[#0c0c0e] px-4 py-3 text-sm text-gray-300">
                 {item}
               </div>
             ))}
@@ -91,7 +91,7 @@ export default function RootsPage() {
 
       <section>
         <div className="mb-4">
-          <h2 className="text-xl font-semibold text-white">Current Roots-facing tools</h2>
+          <h2 className="text-lg font-semibold text-white">Current Roots-facing tools</h2>
           <p className="mt-1 text-sm text-gray-400">
             These are not the whole Root System, but they are the current admin entry points into it.
           </p>
@@ -101,7 +101,7 @@ export default function RootsPage() {
             <Link
               key={tool.href}
               href={tool.href}
-              className="rounded-2xl border border-gray-800 bg-[#18181b] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#202024]"
+              className="rounded-xl border border-gray-800 bg-[#121214] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#18181b]"
             >
               <h3 className="text-base font-semibold text-white">{tool.title}</h3>
               <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">{tool.description}</p>

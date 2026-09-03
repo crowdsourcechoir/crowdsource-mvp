@@ -6,16 +6,23 @@ import { AddOrganizationLauncher } from "@/components/sales/AddOrganizationForm"
 
 export default function SalesOverviewPage() {
   return (
-    <div>
-      <h1 className="mb-2 text-2xl font-bold text-white sm:text-3xl">Sales</h1>
-      <p className="mb-6 text-sm text-gray-400">AI-assisted prospecting — discover, research, score, and prepare outreach for human approval.</p>
-      <EnrichmentConfigClient />
-      <GmailConnectClient />
+    <div className="w-full text-white">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl font-bold text-white sm:text-3xl">Sales</h1>
+        <p className="mt-2 text-sm text-gray-400">
+          AI-assisted prospecting — discover, research, score, and prepare outreach for human approval.
+        </p>
+      </div>
+
       <div className="mb-6 flex justify-end">
         <AddOrganizationLauncher />
       </div>
+
       <SalesOverviewClient />
-      <div className="mt-6">
+
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <EnrichmentConfigClient />
+        <GmailConnectClient />
         <DigestClient />
       </div>
     </div>

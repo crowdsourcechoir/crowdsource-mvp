@@ -41,24 +41,24 @@ const contributionTypes = [
 export default function ComposerPage() {
   return (
     <div className="w-full space-y-8 text-white">
-      <section className="rounded-3xl border border-[#CFFF81]/20 bg-[#121214] p-6 shadow-2xl shadow-black/30 sm:p-8">
+      <div className="mb-6 sm:mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
           Musical formation
         </p>
-        <h1 className="mt-3 text-2xl font-bold sm:text-3xl">Composer</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-300 sm:text-base">
-          Where living inputs become musical compositions. Composer gathers voice, words, sounds,
-          images, and video from a Garden or Bloom and shapes them into songs, chants, anthems, and
-          show material — with the room, not instead of it.
+        <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Composer</h1>
+        <p className="mt-2 max-w-3xl text-sm text-gray-400">
+          Where living inputs become musical compositions. Composer gathers voice, words, sounds, images, and video
+          from a Garden or Bloom and shapes them into songs, chants, anthems, and show material — with the room, not
+          instead of it.
         </p>
-      </section>
+      </div>
 
-      <section className="rounded-2xl border border-gray-800 bg-black/25 p-5">
+      <section className="rounded-xl border border-gray-800 bg-[#121214] p-5">
         <h2 className="text-lg font-semibold text-white">First-class contribution media</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-          Contributions are not only audio or text. Photos, selfies, submitted videos, and short
-          crowd clips belong in the same living archive so they can become show visuals, gameday
-          moments, sponsor activations, and post-event memories.
+          Contributions are not only audio or text. Photos, selfies, submitted videos, and short crowd clips belong in
+          the same living archive so they can become show visuals, gameday moments, sponsor activations, and
+          post-event memories.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {contributionTypes.map((type) => (
@@ -74,7 +74,7 @@ export default function ComposerPage() {
 
       <section>
         <div className="mb-4">
-          <h2 className="text-xl font-semibold text-white">Composer entry points</h2>
+          <h2 className="text-lg font-semibold text-white">Composer entry points</h2>
           <p className="mt-1 text-sm text-gray-400">
             Surfaces for gathering material and forming it into musical compositions.
           </p>
@@ -84,7 +84,7 @@ export default function ComposerPage() {
             <Link
               key={area.title}
               href={area.href}
-              className="rounded-2xl border border-gray-800 bg-[#18181b] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#202024]"
+              className="rounded-xl border border-gray-800 bg-[#121214] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#18181b]"
             >
               <h3 className="text-base font-semibold text-white">{area.title}</h3>
               <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">{area.description}</p>

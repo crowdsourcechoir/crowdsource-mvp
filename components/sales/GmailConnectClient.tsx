@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SalesOverlay, SalesToolButton } from "@/components/sales/SalesOverlay";
 
 type Status = {
   connected: boolean;
@@ -10,6 +11,7 @@ type Status = {
 };
 
 export default function GmailConnectClient() {
+  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -49,9 +51,13 @@ export default function GmailConnectClient() {
     const params = new URLSearchParams(window.location.search);
     const gmail = params.get("gmail");
     if (gmail === "connected") {
+      setOpen(true);
       setMessage("Gmail connected. Sending stays paused until you click Resume sending.");
     }
-    if (gmail === "error") setError(params.get("message") || "Gmail connect failed.");
+    if (gmail === "error") {
+      setOpen(true);
+      setError(params.get("message") || "Gmail connect failed.");
+    }
   }, []);
 
   async function disconnect() {
@@ -130,19 +136,34 @@ export default function GmailConnectClient() {
     }
   }
 
+  const tone = status?.connected
+    ? status.sendsEnabled
+      ? "ok"
+      : "warn"
+    : status?.configured
+      ? "warn"
+      : "neutral";
+  const buttonStatus = loading
+    ? "…"
+    : status?.connected
+      ? status.sendsEnabled
+        ? "sending on"
+        : "paused"
+      : status?.configured
+        ? "not connected"
+        : "setup";
+
   return (
-    <div className="mb-6 rounded-xl border border-gray-800 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Gmail (1:1 outreach)</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            Approve in the queue sends from your inbox. Or mark <span className="text-gray-300">Sent</span> on a
-            contact card if you already emailed them. Replies move Awareness → Interest; Lost is manual. A nudge
-            draft appears after 7 days with no reply — never auto-sent. Same contact cannot be emailed twice from
-            leftover duplicate drafts.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <>
+      <SalesToolButton label="Gmail" status={buttonStatus} tone={tone} onClick={() => setOpen(true)} />
+      <SalesOverlay open={open} title="Gmail (1:1 outreach)" onClose={() => setOpen(false)}>
+        <p className="mb-4 text-xs text-gray-500">
+          Approve in the queue sends from your inbox. Or mark <span className="text-gray-300">Sent</span> on a contact
+          card if you already emailed them. Replies move Awareness → Interest; Lost is manual. A nudge draft appears
+          after 7 days with no reply — never auto-sent.
+        </p>
+
+        <div className="mb-4 flex flex-wrap gap-2">
           {status?.connected ? (
             <>
               {status.sendsEnabled ? (
@@ -157,7 +178,7 @@ export default function GmailConnectClient() {
                 <button
                   onClick={() => void setSendsEnabled(true)}
                   disabled={busy}
-                  className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                  className="rounded-lg bg-[#CFFF81] px-4 py-1.5 text-sm font-semibold text-black disabled:opacity-50"
                 >
                   Resume sending
                 </button>
@@ -187,44 +208,44 @@ export default function GmailConnectClient() {
           ) : (
             <a
               href="/api/sales/gmail/connect"
-              className="rounded-lg bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-900"
+              className="rounded-lg bg-[#CFFF81] px-4 py-1.5 text-sm font-semibold text-black"
             >
               Connect Gmail
             </a>
           )}
         </div>
-      </div>
 
-      {loading ? (
-        <p className="mt-3 text-sm text-gray-500">Loading…</p>
-      ) : status?.connected ? (
-        status.sendsEnabled ? (
-          <p className="mt-3 text-sm text-emerald-400">Connected as {status.email} — sending on. Each send still asks for confirmation.</p>
-        ) : (
-          <p className="mt-3 text-sm text-amber-300">
-            Connected as {status.email} — sending paused. Click Resume sending when you are ready. One confirm still
-            emails only that one contact.
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading…</p>
+        ) : status?.connected ? (
+          status.sendsEnabled ? (
+            <p className="text-sm text-emerald-400">
+              Connected as {status.email} — sending on. Each send still asks for confirmation.
+            </p>
+          ) : (
+            <p className="text-sm text-amber-300">
+              Connected as {status.email} — sending paused. Click Resume sending when you are ready.
+            </p>
+          )
+        ) : status?.configured ? (
+          <p className="text-sm text-amber-300">
+            Not connected. Click Connect Gmail, finish Google consent, then Resume sending.
           </p>
-        )
-      ) : status?.configured ? (
-        <p className="mt-3 text-sm text-amber-300">
-          Not connected. Click Connect Gmail, finish Google consent, then Resume sending. Approve will use clipboard
-          until then.
-        </p>
-      ) : status ? (
-        <p className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-          OAuth env not set. Add <span className="font-mono">GOOGLE_CLIENT_ID</span>,{" "}
-          <span className="font-mono">GOOGLE_CLIENT_SECRET</span>, and{" "}
-          <span className="font-mono">GMAIL_TOKEN_ENCRYPTION_KEY</span> in Vercel Production.
-        </p>
-      ) : (
-        <p className="mt-3 text-sm text-amber-300">
-          Couldn’t load Gmail status. Connect Gmail still starts Google consent if OAuth is configured.
-        </p>
-      )}
+        ) : status ? (
+          <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+            OAuth env not set. Add <span className="font-mono">GOOGLE_CLIENT_ID</span>,{" "}
+            <span className="font-mono">GOOGLE_CLIENT_SECRET</span>, and{" "}
+            <span className="font-mono">GMAIL_TOKEN_ENCRYPTION_KEY</span> in Vercel Production.
+          </p>
+        ) : (
+          <p className="text-sm text-amber-300">
+            Couldn’t load Gmail status. Connect Gmail still starts Google consent if OAuth is configured.
+          </p>
+        )}
 
-      {message && <p className="mt-2 text-sm text-emerald-400">{message}</p>}
-      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-    </div>
+        {message && <p className="mt-2 text-sm text-emerald-400">{message}</p>}
+        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      </SalesOverlay>
+    </>
   );
 }

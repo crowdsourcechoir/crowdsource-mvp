@@ -86,7 +86,7 @@ export default function GardensAdminClient() {
 
   return (
     <div className="w-full space-y-8 text-gray-100">
-      <div>
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold text-white sm:text-3xl">Song Gardens</h1>
         <p className="mt-2 text-sm text-gray-400">
           Persistent worlds where voices, words, sounds, photos, selfies, videos, and memories keep growing.

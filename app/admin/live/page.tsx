@@ -152,7 +152,7 @@ export default function LivePage() {
 
   return (
     <div className="text-white">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6 sm:mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Live</h1>
           <p className="mt-2 text-sm text-gray-400">
