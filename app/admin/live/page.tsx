@@ -99,7 +99,7 @@ function ModeIcon({ mode }: { mode: LiveMode }) {
 
 function modeTileStyle(mode: LiveMode, active: boolean) {
   if (!active) return "border-gray-700 bg-black/20 text-gray-300 hover:text-white hover:border-gray-600";
-  if (mode === "game") return "border-blue-500/60 bg-blue-500/15 text-white border-[1px] shadow-[0_0_0_1px_rgba(59,130,246,0.4)]";
+  if (mode === "game") return "border-[#CFFF81]/60 bg-[#CFFF81]/10 text-white border-[1px] shadow-[0_0_0_1px_rgba(207,255,129,0.3)]";
   if (mode === "fishbowl") return "border-purple-500/60 bg-purple-500/15 text-white border-[1px] shadow-[0_0_0_1px_rgba(168,85,247,0.4)]";
   return "border-amber-500/60 bg-amber-500/15 text-white border-[1px] shadow-[0_0_0_1px_rgba(245,158,11,0.4)]";
 }
@@ -151,7 +151,7 @@ export default function LivePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white">
+    <div className="text-white">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Live</h1>
@@ -161,7 +161,7 @@ export default function LivePage() {
         </div>
       </div>
 
-      <section className="mb-8 rounded-2xl border border-gray-700/60 bg-[#18181b] p-5 sm:p-6">
+      <section className="mb-8 rounded-xl border border-gray-800 bg-[#121214] p-5 sm:p-6">
         <h2 className="text-lg font-bold text-white sm:text-xl">Start Session</h2>
         <p className="mt-1 text-sm text-gray-400">Select a mode and optionally assign it to a Bloom</p>
 
@@ -199,7 +199,7 @@ export default function LivePage() {
           <select
             value={assignedEventId ?? ""}
             onChange={(e) => setAssignedEventId(e.target.value ? e.target.value : null)}
-            className="w-full rounded-xl border border-gray-700/60 bg-black/30 px-3 py-3 text-sm text-white focus:border-gray-600 focus:outline-none"
+            className="w-full rounded-lg border border-gray-700 bg-black/30 px-3 py-2 text-sm text-white focus:border-gray-600 focus:outline-none"
             disabled={loadingEvents}
           >
             <option value="">{`None (standalone session)`}</option>
@@ -221,7 +221,7 @@ export default function LivePage() {
             type="button"
             disabled={launching}
             onClick={handleLaunchSession}
-            className="min-h-[52px] flex-1 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
           >
             {launching ? "Launching…" : "Launch Session"}
           </button>

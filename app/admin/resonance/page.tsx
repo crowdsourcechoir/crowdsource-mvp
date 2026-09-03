@@ -51,7 +51,7 @@ export default function ResonanceAdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#08070d] px-5 py-8 text-white">
+    <main className="text-white">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
         <section>
           <p className="text-xs uppercase tracking-[0.34em] text-white/40">

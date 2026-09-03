@@ -210,38 +210,25 @@ export default function AdminEventsList() {
           Manage live events, gameday moments, and activations where Gardens come alive.
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex rounded-xl border border-gray-700 bg-black/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setFilter("upcoming")}
-              className={`min-h-[44px] rounded-lg px-5 py-2 text-sm font-medium transition ${
-                filter === "upcoming" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              Upcoming
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("past")}
-              className={`min-h-[44px] rounded-lg px-5 py-2 text-sm font-medium transition ${
-                filter === "past" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              Past
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("all")}
-              className={`min-h-[44px] rounded-lg px-5 py-2 text-sm font-medium transition ${
-                filter === "all" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              All
-            </button>
+          <div className="flex gap-1.5">
+            {(["upcoming", "past", "all"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  filter === f
+                    ? "bg-[#CFFF81]/15 text-[#CFFF81] border border-[#CFFF81]/30"
+                    : "border border-transparent text-gray-400 hover:text-white"
+                }`}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
           </div>
           <Link
             href="/admin/events/new"
-            className="inline-flex min-h-[48px] items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-200"
+            className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e]"
           >
             + Create Bloom
           </Link>
@@ -251,8 +238,7 @@ export default function AdminEventsList() {
       {showFullSkeleton ? (
         <AdminEventsLoadingSkeleton />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-700/60 bg-[#18181b]">
-          <ul className="divide-y divide-gray-800/80">
+        <div className="space-y-2">
           {filtered.map((event) => {
             const theme = event.agentThemeId ? themes.find((t) => t.id === event.agentThemeId) : null;
             const badgeLabel =
@@ -262,12 +248,9 @@ export default function AdminEventsList() {
                   ? "Fundraiser"
                   : "Other";
             return (
-              <li key={event.id} className="p-1 sm:p-2">
-                <AdminEventCard event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
-              </li>
+              <AdminEventCard key={event.id} event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
             );
           })}
-          </ul>
         </div>
       )}
 
@@ -289,14 +272,14 @@ export default function AdminEventsList() {
           {events.length > 0 && filter === "upcoming" && (
             <p className="text-sm text-gray-400">
               You have {events.length} bloom{events.length === 1 ? "" : "s"} total.{" "}
-              <button type="button" className="font-medium text-blue-400 hover:underline" onClick={() => setFilter("past")}>
+              <button type="button" className="font-medium text-[#CFFF81] hover:underline" onClick={() => setFilter("past")}>
                 Show Past
               </button>
             </p>
           )}
           {events.length > 0 && filter === "past" && (
             <p className="text-sm text-gray-400">
-              <button type="button" className="font-medium text-blue-400 hover:underline" onClick={() => setFilter("upcoming")}>
+              <button type="button" className="font-medium text-[#CFFF81] hover:underline" onClick={() => setFilter("upcoming")}>
                 Show Upcoming
               </button>
             </p>

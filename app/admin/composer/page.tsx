@@ -41,8 +41,8 @@ const contributionTypes = [
 export default function ComposerPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8 text-white">
-      <section className="rounded-3xl border border-purple-400/20 bg-[#121214] p-6 shadow-2xl shadow-black/30 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-purple-300">
+      <section className="rounded-3xl border border-[#CFFF81]/20 bg-[#121214] p-6 shadow-2xl shadow-black/30 sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
           Musical formation
         </p>
         <h1 className="mt-3 text-3xl font-bold sm:text-4xl">Composer</h1>
@@ -84,11 +84,11 @@ export default function ComposerPage() {
             <Link
               key={area.title}
               href={area.href}
-              className="rounded-2xl border border-gray-800 bg-[#18181b] p-5 transition hover:border-purple-300/50 hover:bg-[#202024]"
+              className="rounded-2xl border border-gray-800 bg-[#18181b] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#202024]"
             >
               <h3 className="text-base font-semibold text-white">{area.title}</h3>
               <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">{area.description}</p>
-              <span className="mt-4 inline-flex text-sm font-semibold text-purple-200">
+              <span className="mt-4 inline-flex text-sm font-semibold text-[#CFFF81]">
                 {area.cta}
                 {" ->"}
               </span>

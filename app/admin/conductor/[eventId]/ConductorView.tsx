@@ -215,7 +215,7 @@ export default function ConductorView({
                   type="button"
                   onClick={onParticipationBeat}
                   disabled={!canBeat}
-                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   + Participation beat
                 </button>
@@ -287,7 +287,7 @@ export default function ConductorView({
               type="button"
               onClick={() => onStageIndexChange(Math.min(stages.length - 1, currentStageIndex + 1))}
               disabled={currentStageIndex === stages.length - 1}
-              className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
+              className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
             >
               Next
             </button>

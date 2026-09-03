@@ -279,7 +279,7 @@ export default function CompositionBriefView() {
               type="button"
               disabled={generating}
               onClick={handleGenerate}
-              className="min-h-[44px] rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
+              className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
             >
               {generating ? "Generating…" : brief ? "Regenerate Brief" : "Generate Brief"}
             </button>
@@ -294,7 +294,7 @@ export default function CompositionBriefView() {
                       "application/json; charset=utf-8"
                     )
                   }
-                  className="min-h-[44px] rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                  className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
                 >
                   Download JSON
                 </button>
@@ -307,7 +307,7 @@ export default function CompositionBriefView() {
                       "text/markdown; charset=utf-8"
                     )
                   }
-                  className="min-h-[44px] rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                  className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
                 >
                   Download Markdown
                 </button>

@@ -516,7 +516,7 @@ export default function HostControlRoomPage({
               type="button"
               disabled={actionLoading !== null}
               onClick={handleCloseVoting}
-              className="min-h-[48px] w-full max-w-sm rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50 sm:text-base"
+              className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50 sm:text-base"
             >
               {actionLoading === "close-vote" ? "…" : "Finish round — next prompt"}
             </button>
@@ -535,7 +535,7 @@ export default function HostControlRoomPage({
                 href={displayUrl(session.slug, baseUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mb-2 inline-block rounded bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-gray-200"
+                className="mb-2 inline-block rounded-lg bg-[#CFFF81] px-3 py-1.5 text-sm font-semibold text-black hover:bg-[#bdf25e]"
               >
                 Display on screen →
               </a>
@@ -572,7 +572,7 @@ export default function HostControlRoomPage({
               <button
                 type="button"
                 onClick={() => setGameMode("live")}
-                className={`min-h-[44px] rounded-lg px-4 text-sm font-semibold transition ${
+                className={`rounded-lg px-4 text-sm font-semibold transition ${
                   gameMode === "live" ? "bg-gray-800 text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
               >
@@ -581,7 +581,7 @@ export default function HostControlRoomPage({
               <button
                 type="button"
                 onClick={() => setGameMode("prepop")}
-                className={`min-h-[44px] rounded-lg px-4 text-sm font-semibold transition ${
+                className={`rounded-lg px-4 text-sm font-semibold transition ${
                   gameMode === "prepop" ? "bg-gray-800 text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
               >
@@ -603,7 +603,7 @@ export default function HostControlRoomPage({
                     type="button"
                     disabled={sending || session.state !== "WAITING"}
                     onClick={handleSignalHarmonicRound}
-                    className="mt-3 min-h-[44px] rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500 disabled:opacity-40"
+                    className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-500 disabled:opacity-40"
                   >
                     {sending ? "Starting…" : "Start harmonic world vote"}
                   </button>
@@ -662,7 +662,7 @@ export default function HostControlRoomPage({
                   type="button"
                   disabled={sending || !promptText.trim()}
                   onClick={handleSendPrompt}
-                  className="min-h-[48px] rounded-xl bg-white px-6 py-3 text-base font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                  className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
                 >
                   {sending ? "Sending…" : "Send Prompt Live"}
                 </button>
@@ -682,7 +682,7 @@ export default function HostControlRoomPage({
                       key={cat}
                       type="button"
                       onClick={() => togglePrepopCategory(cat)}
-                      className={`min-h-[40px] rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                      className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                         selected ? "bg-gray-800 text-white" : "border border-gray-700 bg-[#1f1f1f] text-gray-400 hover:text-gray-200"
                       }`}
                     >
@@ -697,7 +697,7 @@ export default function HostControlRoomPage({
                   type="button"
                   disabled={sending || prepopSelectedCategories.length === 0}
                   onClick={handlePrepopStart}
-                  className="min-h-[48px] w-full rounded-xl bg-white px-6 py-3 text-base font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                  className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
                 >
                   {sending ? "Starting…" : "Start Pre-populated Game"}
                 </button>
@@ -733,7 +733,7 @@ export default function HostControlRoomPage({
                     type="button"
                     disabled={!session.current_round_id || actionLoading !== null}
                     onClick={handleRevealResults}
-                    className="min-h-[44px] rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                    className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
                   >
                     {actionLoading === "reveal" ? "…" : "Reveal Results"}
                   </button>
@@ -743,7 +743,7 @@ export default function HostControlRoomPage({
                       type="button"
                       disabled={!session.current_round_id || actionLoading !== null}
                       onClick={handleCloseSubmissions}
-                      className="min-h-[44px] rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                      className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
                     >
                       {actionLoading === "close" ? "…" : "Close Submissions"}
                     </button>
@@ -751,7 +751,7 @@ export default function HostControlRoomPage({
                       type="button"
                       disabled={rounds.length === 0 || actionLoading !== null}
                       onClick={handleStartVoting}
-                      className="min-h-[44px] rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                      className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
                     >
                       {actionLoading === "voting" ? "…" : "Start Voting"}
                     </button>
@@ -766,7 +766,7 @@ export default function HostControlRoomPage({
                     type="button"
                     disabled={actionLoading !== null}
                     onClick={handlePrepopNextQuestion}
-                    className="min-h-[44px] rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                    className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
                   >
                     {actionLoading === "prepop-next" ? "…" : "Next Question"}
                   </button>
@@ -776,7 +776,7 @@ export default function HostControlRoomPage({
                       type="button"
                       disabled={actionLoading !== null}
                       onClick={handleCloseVoting}
-                      className="min-h-[52px] w-full max-w-md rounded-xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                      className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
                     >
                       {actionLoading === "close-vote" ? "…" : "Finish round — next prompt"}
                     </button>
@@ -792,7 +792,7 @@ export default function HostControlRoomPage({
                       type="button"
                       disabled={actionLoading !== null}
                       onClick={handleCloseVoting}
-                      className="min-h-[44px] rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                      className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
                     >
                       {actionLoading === "close-vote" ? "…" : "Close Voting"}
                     </button>
@@ -805,7 +805,7 @@ export default function HostControlRoomPage({
               type="button"
               disabled={actionLoading !== null}
               onClick={handleEndSession}
-              className="min-h-[44px] rounded-xl border border-red-800/60 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+              className="rounded-lg border border-red-800/60 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
             >
               {actionLoading === "end" ? "…" : "End Session"}
             </button>
@@ -916,7 +916,7 @@ export default function HostControlRoomPage({
             href={sessionId ? exportRawCsvUrl(sessionId) : "#"}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-h-[44px] inline-flex items-center rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+            className="inline-flex items-center rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
           >
             Export raw (CSV)
           </a>
@@ -924,14 +924,14 @@ export default function HostControlRoomPage({
             type="button"
             disabled={songPackLoading}
             onClick={handleGenerateSongPack}
-            className="min-h-[44px] rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+            className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {songPackLoading ? "Generating…" : "Generate Song Pack (AI)"}
           </button>
           <button
             type="button"
             onClick={handleDownloadSongPack}
-            className="min-h-[44px] rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+            className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
           >
             Download Song Pack
           </button>
@@ -940,7 +940,7 @@ export default function HostControlRoomPage({
               sessionId,
               eventId: session.linked_event_id,
             })}
-            className="min-h-[44px] inline-flex items-center rounded-xl border border-violet-700/60 bg-violet-950/40 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/40"
+            className="inline-flex items-center rounded-lg border border-violet-700/60 bg-violet-950/40 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/40"
           >
             Composition Brief →
           </Link>

@@ -2607,7 +2607,7 @@ export default function EventForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isSubmitting ? "Saving…" : submitLabel}
       </button>

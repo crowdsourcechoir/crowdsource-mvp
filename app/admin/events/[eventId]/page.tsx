@@ -140,7 +140,7 @@ function SubmissionVideoPlayer({ dataUrl }: { dataUrl: string }) {
             type="button"
             onClick={handleConvertAndPlay}
             disabled={converting}
-            className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 disabled:opacity-50"
+            className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
           >
             {converting ? "Converting…" : "Convert & play"}
           </button>
@@ -518,7 +518,7 @@ export default function EventDetailPage() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link
               href={`/admin/events/${event.id}/edit`}
-              className="min-h-[44px] rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-200 active:bg-gray-300"
+              className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e]"
             >
               Edit event
             </Link>
@@ -526,13 +526,13 @@ export default function EventDetailPage() {
               href={publicEventPath(event.slug)}
               target="_blank"
               rel="noopener noreferrer"
-              className="min-h-[44px] rounded-xl border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+              className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
             >
               Open public link
             </Link>
             <Link
               href={`/admin/songgarden/${event.id}`}
-              className="min-h-[44px] rounded-xl border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
+              className="rounded-lg border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
             >
               Composition canvas
             </Link>
@@ -717,7 +717,7 @@ export default function EventDetailPage() {
                     setLoadingSongSeed(false);
                   }
                 }}
-                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
+                className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
               >
                 {loadingSongSeed ? "Generating…" : "Generate Song Seed"}
               </button>
@@ -1126,7 +1126,7 @@ export default function EventDetailPage() {
                   setTranscribeAllStatus(null);
                 }
               }}
-              className="rounded-lg border border-white/30 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-50"
+              className="rounded-lg bg-[#CFFF81] px-3 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
             >
               {transcribeAllStatus ?? "Transcribe all & generate"}
             </button>

@@ -27,72 +27,67 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
   const dateFormatted = formatDateLong(event.date);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-gray-700/60 bg-[#111216]">
-      <div className="flex gap-4 border-b border-gray-700/60 p-4 sm:p-5">
-        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-gray-700/60 bg-[#1a1c22] sm:h-28 sm:w-28">
-          <EventHeroThumb src={event.heroImage} title={event.title} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-2xl font-semibold text-white">{event.title}</h3>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-300">
-            <span>{dateFormatted} · {timeFormatted}</span>
-            <span className="inline-flex items-center gap-1 text-gray-400">
-              <span aria-hidden>📍</span>
-              <a
-                href={googleMapsSearchUrl(event.venue, event.address)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-gray-200 hover:underline"
-              >
-                {event.venue}
-              </a>
+    <article className="flex items-center gap-4 rounded-xl border border-gray-800 bg-[#121214] px-4 py-3">
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-700/60 bg-[#1a1c22]">
+        <EventHeroThumb src={event.heroImage} title={event.title} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-base font-semibold text-white">{event.title}</h3>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+          <span>{dateFormatted} · {timeFormatted}</span>
+          <span className="inline-flex items-center gap-1">
+            📍
+            <a
+              href={googleMapsSearchUrl(event.venue, event.address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-gray-200 hover:underline"
+            >
+              {event.venue}
+            </a>
+          </span>
+          {badgeLabel && (
+            <span className="rounded-full border border-gray-600/80 bg-[#1b1f28] px-2 py-0.5 text-xs text-gray-300">
+              {badgeLabel}
             </span>
-            {badgeLabel && (
-              <span className="rounded-full border border-gray-600/80 bg-[#1b1f28] px-3 py-1 text-xs font-semibold text-gray-200">
-                {badgeLabel}
-              </span>
-            )}
-          </div>
+          )}
         </div>
       </div>
-
-      <div className="p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href={`/admin/events/${event.id}`}
-            className="inline-flex min-h-[46px] items-center justify-center rounded-xl bg-blue-600 px-5 py-2 text-base font-semibold text-white hover:bg-blue-700"
-          >
-            Manage Event
-          </Link>
-          <a
-            href={eventUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-gray-700 bg-[#171a21] px-4 py-2 text-base font-medium text-gray-200 hover:bg-[#1d2230]"
-            title={eventUrl}
-          >
-            View Public Link
-          </a>
-          <button
-            type="button"
-            onClick={() => setShowQr((v) => !v)}
-            className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-gray-700 bg-[#171a21] px-4 py-2 text-base font-medium text-gray-200 hover:bg-[#1d2230]"
-          >
-            {showQr ? "Hide QR" : "Show QR"}
-          </button>
-        </div>
-        {showQr && (
-          <div className="mt-4">
-            <QRCodeDisplay
-              key={eventUrl}
-              url={eventUrl}
-              size={112}
-              className="rounded border border-gray-600"
-              downloadFilename={`${publicSlug}-qr.png`}
-            />
-          </div>
-        )}
+      <div className="flex shrink-0 items-center gap-2">
+        <Link
+          href={`/admin/events/${event.id}`}
+          className="rounded-lg bg-[#CFFF81] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#bdf25e]"
+        >
+          Manage
+        </Link>
+        <a
+          href={eventUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+          title={eventUrl}
+        >
+          Public Link
+        </a>
+        <button
+          type="button"
+          onClick={() => setShowQr((v) => !v)}
+          className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+        >
+          {showQr ? "Hide QR" : "QR"}
+        </button>
       </div>
+      {showQr && (
+        <div className="mt-3 ml-20">
+          <QRCodeDisplay
+            key={eventUrl}
+            url={eventUrl}
+            size={96}
+            className="rounded border border-gray-600"
+            downloadFilename={`${publicSlug}-qr.png`}
+          />
+        </div>
+      )}
     </article>
   );
 }
