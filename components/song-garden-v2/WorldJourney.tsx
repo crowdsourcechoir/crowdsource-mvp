@@ -1,8 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Event } from "@/data/mockEvents";
-import TurnstileWidget from "@/components/TurnstileWidget";
 import TypewriterText from "@/components/TypewriterText";
 import {
   startAgentInterview,
@@ -77,10 +77,12 @@ import MomentOverlay from "./MomentOverlay";
 import WorldPresenceTicker from "./WorldPresenceTicker";
 import WorldBloomLogo from "./WorldBloomLogo";
 import TextMomentPad from "./TextMomentPad";
-import SoundMomentPad from "./SoundMomentPad";
-import VideoMomentPad from "./VideoMomentPad";
-import CelebrationBurst from "./CelebrationBurst";
 import { useCelebration } from "./engine/useCelebration";
+
+const TurnstileWidget = dynamic(() => import("@/components/TurnstileWidget"), { ssr: false });
+const SoundMomentPad = dynamic(() => import("./SoundMomentPad"), { ssr: false });
+const VideoMomentPad = dynamic(() => import("./VideoMomentPad"), { ssr: false });
+const CelebrationBurst = dynamic(() => import("./CelebrationBurst"), { ssr: false });
 
 type WorldJourneyProps = {
   event: Event;
@@ -165,6 +167,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   );
   const interviewVersion = eventInterviewVersion(event);
   const journeySteps = useMemo(() => resolveJourneySteps(event), [event]);
+  const journeyManaged = journeySteps.length > 0;
 
   useEffect(() => {
     if (!event.slug) return;
@@ -389,9 +392,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         try {
           const { turns } = await getConversation(savedId);
           const lastAgent = [...turns].reverse().find((t) => t.role === "agent");
-          // Prime agent if empty conversation
-          if (!lastAgent) {
-            await withTimeout(sendMessage(savedId, ""), 20000, "Timed out priming conversation.");
+          if (!lastAgent && !journeyManaged) {
+            await withTimeout(
+              sendMessage(savedId, "", { journeyManaged: false }),
+              20000,
+              "Timed out priming conversation."
+            );
           }
           setConversationReady(true);
           return savedId;
@@ -407,7 +413,13 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       );
       setConversationId(conversation.id);
       localStorage.setItem(conversationIdKey(event.id, token), conversation.id);
-      await withTimeout(sendMessage(conversation.id, ""), 20000, "Timed out while starting the first question.");
+      if (!journeyManaged) {
+        await withTimeout(
+          sendMessage(conversation.id, "", { journeyManaged: false }),
+          20000,
+          "Timed out while starting the first question."
+        );
+      }
       setConversationReady(true);
       return conversation.id;
     } catch (err) {
@@ -417,7 +429,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       ensuringConversation.current = false;
       setSending(false);
     }
-  }, [conversationId, conversationReady, event.id, interviewVersion]);
+  }, [conversationId, conversationReady, event.id, interviewVersion, journeyManaged]);
 
   // When landing on a contribution step, ensure agent conversation exists for persistence.
   useEffect(() => {
@@ -514,6 +526,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       const sent = await sendMessage(convId, textValue, {
         captchaToken: captchaGateActive ? emailCaptchaToken : null,
         deviceId: getOrCreateSonggardenDeviceId(),
+        journeyManaged,
       });
       setEmailCaptchaToken(null);
       setSending(false);
@@ -584,6 +597,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         const sent = await sendMessage(convId, "(recording)", {
           videoDataUrl,
           deviceId: getOrCreateSonggardenDeviceId(),
+          journeyManaged,
         });
         setSending(false);
         growNode("video");

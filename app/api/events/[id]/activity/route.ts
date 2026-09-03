@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { localAgentParticipantActivity } from "@/lib/local-agent-interview-store";
 import { localSonggardenActivity } from "@/lib/local-songgarden-store";
 
+import { PUBLIC_ACTIVITY_CACHE } from "@/lib/http/public-cache";
+
 export const dynamic = "force-dynamic";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
@@ -47,18 +49,28 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         localAgentParticipantActivity(eventId, sinceIso),
         localSonggardenActivity(eventId, sinceIso),
       ]);
-      return NextResponse.json({
-        participantsTotal: participants.total,
-        participantsRecent: participants.recent,
-        clipsTotal: clips.total,
-        clipsRecent: clips.recent,
-        windowMinutes: RECENT_WINDOW_MINUTES,
-      });
+      return NextResponse.json(
+        {
+          participantsTotal: participants.total,
+          participantsRecent: participants.recent,
+          clipsTotal: clips.total,
+          clipsRecent: clips.recent,
+          windowMinutes: RECENT_WINDOW_MINUTES,
+        },
+        { headers: { "Cache-Control": PUBLIC_ACTIVITY_CACHE } }
+      );
     }
 
     if (!supabaseAdmin) {
       return NextResponse.json(
-        { participantsTotal: 0, participantsRecent: 0, clipsTotal: 0, clipsRecent: 0, windowMinutes: RECENT_WINDOW_MINUTES }
+        {
+          participantsTotal: 0,
+          participantsRecent: 0,
+          clipsTotal: 0,
+          clipsRecent: 0,
+          windowMinutes: RECENT_WINDOW_MINUTES,
+        },
+        { headers: { "Cache-Control": PUBLIC_ACTIVITY_CACHE } }
       );
     }
 
@@ -67,17 +79,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       countSince("songgarden_clips", "event_id", "submitted_at", eventId, sinceIso),
     ]);
 
-    return NextResponse.json({
-      participantsTotal: participants.total,
-      participantsRecent: participants.recent,
-      clipsTotal: clips.total,
-      clipsRecent: clips.recent,
-      windowMinutes: RECENT_WINDOW_MINUTES,
-    });
+    return NextResponse.json(
+      {
+        participantsTotal: participants.total,
+        participantsRecent: participants.recent,
+        clipsTotal: clips.total,
+        clipsRecent: clips.recent,
+        windowMinutes: RECENT_WINDOW_MINUTES,
+      },
+      { headers: { "Cache-Control": PUBLIC_ACTIVITY_CACHE } }
+    );
   } catch {
     // Ambient/best-effort signal — never block the experience on this failing.
     return NextResponse.json(
-      { participantsTotal: 0, participantsRecent: 0, clipsTotal: 0, clipsRecent: 0, windowMinutes: RECENT_WINDOW_MINUTES }
+      {
+        participantsTotal: 0,
+        participantsRecent: 0,
+        clipsTotal: 0,
+        clipsRecent: 0,
+        windowMinutes: RECENT_WINDOW_MINUTES,
+      },
+      { headers: { "Cache-Control": PUBLIC_ACTIVITY_CACHE } }
     );
   }
 }

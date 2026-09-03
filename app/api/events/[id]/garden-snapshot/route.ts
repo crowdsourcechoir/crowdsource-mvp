@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getEventGardenSnapshot } from "@/lib/song-garden-v2/garden/store";
 
+import { PUBLIC_SNAPSHOT_CACHE } from "@/lib/http/public-cache";
+
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: { id: string } };
@@ -21,7 +23,7 @@ export async function GET(request: Request, context: Ctx) {
     }
     return NextResponse.json(snapshot, {
       headers: {
-        "Cache-Control": "public, max-age=5",
+        "Cache-Control": PUBLIC_SNAPSHOT_CACHE,
         ETag: `"v${snapshot.garden.worldVersion}"`,
       },
     });

@@ -6,8 +6,12 @@ import { EVENT_DETAIL_SELECT, attachHostedHeroes, rowToEvent } from "@/lib/event
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
-/** Server-side event lookup for metadata and OG image routes. */
-export async function getEventBySlugServer(slug: string): Promise<Event | null> {
+type EventFetchOptions = {
+  /** Skip storage storyboard recovery — participant reads must stay fast under load. */
+  publicRead?: boolean;
+};
+
+async function fetchEventRow(slug: string, opts?: EventFetchOptions): Promise<Event | null> {
   const canonicalSlug = canonicalEventSlug(slug);
   if (!canonicalSlug.trim()) return null;
 
@@ -26,6 +30,18 @@ export async function getEventBySlugServer(slug: string): Promise<Event | null> 
 
   if (error || !data) return null;
   const event = rowToEvent(data as Record<string, unknown>) as Event;
-  await attachHostedHeroes([event]);
+  await attachHostedHeroes([event], { skipStorageScan: opts?.publicRead === true });
   return event;
 }
+
+/** Server-side event lookup for metadata and OG image routes. */
+export async function getEventBySlugServer(slug: string): Promise<Event | null> {
+  return fetchEventRow(slug);
+}
+
+/** Fast path for public `/e/[slug]` — no storage hero/storyboard scans on page view. */
+export async function getPublicEventBySlugServer(slug: string): Promise<Event | null> {
+  return fetchEventRow(slug, { publicRead: true });
+}
+
+export type { EventFetchOptions };

@@ -180,7 +180,10 @@ export function applyHeroAttachments(
  * from storage `heroes/{id}-hero*`. Writes recovered URLs back so the next
  * list load stays a cheap SQL filter.
  */
-export async function attachHostedHeroes(events: HeroAttachable[]): Promise<void> {
+export async function attachHostedHeroes(
+  events: HeroAttachable[],
+  opts?: { skipStorageScan?: boolean }
+): Promise<void> {
   if (!events.length) return;
 
   const dbHeroById = new Map<string, string>();
@@ -211,7 +214,7 @@ export async function attachHostedHeroes(events: HeroAttachable[]): Promise<void
     (e) => !hostedHeroUrl(dbHeroById.get(String(e.id)) ?? e.heroImage)
   );
   let urlByPrefix = new Map<string, string>();
-  if (missing.length) {
+  if (missing.length && !opts?.skipStorageScan) {
     try {
       const files = await listHeroFiles();
       urlByPrefix = newestHeroUrlByPrefix(files);
@@ -220,7 +223,16 @@ export async function attachHostedHeroes(events: HeroAttachable[]): Promise<void
     }
   }
 
-  const persist = applyHeroAttachments(events, dbHeroById, urlByPrefix);
+  let persist: Array<{ id: string; url: string }> = [];
+  if (opts?.skipStorageScan) {
+    for (const e of events) {
+      const url = hostedHeroUrl(dbHeroById.get(String(e.id)) ?? e.heroImage);
+      if (url) e.heroImage = url;
+    }
+  } else {
+    persist = applyHeroAttachments(events, dbHeroById, urlByPrefix);
+  }
+
   const db = supabaseAdmin;
   if (persist.length && db) {
     await Promise.all(

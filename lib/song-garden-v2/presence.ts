@@ -14,6 +14,8 @@ export {
 import type { ActivitySummary } from "./presence-lines";
 
 const POLL_MS = 25_000;
+/** Defer ambient reads until after first paint / first interaction window. */
+const FIRST_POLL_DELAY_MS = 8_000;
 
 /** Best-effort poll of the read-only activity-summary endpoint. Never throws into the UI. */
 export function useAmbientActivity(eventId: string): ActivitySummary | null {
@@ -23,9 +25,11 @@ export function useAmbientActivity(eventId: string): ActivitySummary | null {
 
   useEffect(() => {
     let cancelled = false;
+    let interval: number | undefined;
+
     async function poll() {
       try {
-        const res = await fetch(`/api/events/${eventIdRef.current}/activity`, { cache: "no-store" });
+        const res = await fetch(`/api/events/${eventIdRef.current}/activity`);
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as ActivitySummary;
         if (!cancelled) setSummary(data);
@@ -33,11 +37,16 @@ export function useAmbientActivity(eventId: string): ActivitySummary | null {
         // ambient signal only — ignore failures
       }
     }
-    void poll();
-    const interval = window.setInterval(poll, POLL_MS);
+
+    const startTimer = window.setTimeout(() => {
+      void poll();
+      interval = window.setInterval(poll, POLL_MS);
+    }, FIRST_POLL_DELAY_MS);
+
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      window.clearTimeout(startTimer);
+      if (interval != null) window.clearInterval(interval);
     };
   }, [eventId]);
 

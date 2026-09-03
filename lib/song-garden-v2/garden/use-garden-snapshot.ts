@@ -5,6 +5,7 @@ import { getOrCreateSonggardenDeviceId } from "@/data/songgardenClient";
 import type { GardenSnapshot, WorldEffect } from "./types";
 
 const POLL_MS = 25_000;
+const FIRST_POLL_DELAY_MS = 8_000;
 
 export type UseGardenSnapshotResult = {
   snapshot: GardenSnapshot | null;
@@ -31,9 +32,7 @@ export function useGardenSnapshot(eventId: string): UseGardenSnapshotResult {
       const deviceId = getOrCreateSonggardenDeviceId();
       const params = new URLSearchParams();
       if (deviceId) params.set("deviceId", deviceId);
-      const res = await fetch(`/api/events/${id}/garden-snapshot?${params}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/events/${id}/garden-snapshot?${params}`);
       if (res.status === 404) {
         setLinked(false);
         setSnapshot(null);
@@ -54,18 +53,24 @@ export function useGardenSnapshot(eventId: string): UseGardenSnapshotResult {
 
   useEffect(() => {
     let cancelled = false;
+    let interval: number | undefined;
     setLoading(true);
-    void (async () => {
-      const data = await refresh();
-      if (cancelled) return;
-      if (!data) setLoading(false);
-    })();
-    const interval = window.setInterval(() => {
-      void refresh();
-    }, POLL_MS);
+
+    const startTimer = window.setTimeout(() => {
+      void (async () => {
+        const data = await refresh();
+        if (cancelled) return;
+        if (!data) setLoading(false);
+      })();
+      interval = window.setInterval(() => {
+        void refresh();
+      }, POLL_MS);
+    }, FIRST_POLL_DELAY_MS);
+
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      window.clearTimeout(startTimer);
+      if (interval != null) window.clearInterval(interval);
     };
   }, [eventId, refresh]);
 

@@ -67,7 +67,9 @@ export async function getAllEvents(): Promise<Event[]> {
 
 export async function getEventBySlug(slug: string): Promise<Event | null> {
   try {
-    const res = await fetch(`/api/events?slug=${encodeURIComponent(slug)}`, { cache: "no-store" });
+    const res = await fetch(`/api/events?slug=${encodeURIComponent(slug)}&public=1`, {
+      cache: "default",
+    });
     if (res.status === 404) throw new Error("NOT_FOUND");
     if (!res.ok) {
       const text = await res.text();

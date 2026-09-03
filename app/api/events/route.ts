@@ -16,10 +16,9 @@ import {
   storyboardNeedsRecovery,
 } from "@/lib/events-db";
 import { leanWorldConfigKeepingVibe, type WorldConfig } from "@/lib/song-garden-v2/world-config";
+import { PUBLIC_EVENT_CACHE, NO_STORE } from "@/lib/http/public-cache";
 
 export const dynamic = "force-dynamic";
-
-const NO_STORE = { headers: { "Cache-Control": "no-store" } };
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -46,6 +45,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawSlug = searchParams.get("slug");
   const slug = rawSlug ? canonicalEventSlug(rawSlug) : null;
+  const publicRead = searchParams.get("public") === "1";
 
   try {
     if (slug) {
@@ -59,8 +59,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       const event = rowToEvent(data as unknown as Record<string, unknown>);
-      await attachHostedHeroes([event]);
-      if (storyboardNeedsRecovery(event.worldConfig)) {
+      await attachHostedHeroes([event], { skipStorageScan: publicRead });
+      if (!publicRead && storyboardNeedsRecovery(event.worldConfig)) {
         const recovered = await recoverStoryboardForEvent({
           eventId: String(event.id),
           slug: String(event.slug),
@@ -74,7 +74,9 @@ export async function GET(request: Request) {
           event.worldConfig = recovered.worldConfig;
         }
       }
-      return NextResponse.json(event);
+      return NextResponse.json(event, {
+        headers: publicRead ? { "Cache-Control": PUBLIC_EVENT_CACHE } : NO_STORE.headers,
+      });
     }
 
     const { data, error } = await supabaseAdmin

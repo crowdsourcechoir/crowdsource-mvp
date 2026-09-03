@@ -23,6 +23,11 @@ import {
   recordGardenContribution,
 } from "@/lib/song-garden-v2/garden/store";
 import { effectCelebrationLine, type WorldEffect } from "@/lib/song-garden-v2/garden/types";
+import type { SongGardenConfig } from "@/lib/songgarden/config";
+import {
+  eventHasManagedJourney,
+  JOURNEY_MANAGED_STUB,
+} from "@/lib/agent-journey-managed";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -431,6 +436,7 @@ export async function POST(
     const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
     const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
+    const journeyManagedRequested = body.journeyManaged === true;
     const deviceId =
       typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
         ? body.deviceId.trim()
@@ -479,11 +485,16 @@ export async function POST(
 
       const { data: eventRow } = await supabaseAdmin
         .from("events")
-        .select("id, title, agent_theme_id, agent_brief")
+        .select("id, title, agent_theme_id, agent_brief, song_garden_config")
         .eq("id", conv.event_id)
         .single();
-      let eventData: { id: string; title: string; agent_theme_id: string | null; agent_brief: unknown } | null =
-        eventRow as typeof eventRow;
+      let eventData: {
+        id: string;
+        title: string;
+        agent_theme_id: string | null;
+        agent_brief: unknown;
+        song_garden_config: SongGardenConfig | null;
+      } | null = eventRow as typeof eventRow;
       if (USE_LOCAL_EVENTS && (conv.local_event_id || !eventData)) {
         const localId = conv.local_event_id ?? conv.event_id;
         if (localId) {
@@ -494,12 +505,32 @@ export async function POST(
               title: local.title,
               agent_theme_id: local.agent_theme_id,
               agent_brief: local.agent_brief,
+              song_garden_config: (local.song_garden_config as SongGardenConfig | null) ?? null,
             };
           }
         }
       }
       if (!eventData) {
         return NextResponse.json({ error: "Event not found." }, { status: 404 });
+      }
+
+      const managedJourney =
+        journeyManagedRequested &&
+        eventHasManagedJourney(eventData.song_garden_config, null);
+
+      if (managedJourney) {
+        await supabaseAdmin
+          .from("agent_conversations")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", conversationId);
+
+        return NextResponse.json({
+          turn: null,
+          nextMessage: {
+            ...JOURNEY_MANAGED_STUB,
+            suggestedAnswerTypes: ["text"],
+          },
+        });
       }
 
       const { data: themeRow } = await supabaseAdmin
@@ -642,20 +673,66 @@ export async function POST(
 
     const { data: eventRow } = await supabaseAdmin
       .from("events")
-      .select("id, title, agent_theme_id, agent_brief")
+      .select("id, title, agent_theme_id, agent_brief, song_garden_config")
       .eq("id", conv.event_id)
       .single();
-    let eventData: { id: string; title: string; agent_theme_id: string | null; agent_brief: unknown } | null = eventRow as typeof eventRow;
+    let eventData: {
+      id: string;
+      title: string;
+      agent_theme_id: string | null;
+      agent_brief: unknown;
+      song_garden_config: SongGardenConfig | null;
+    } | null = eventRow as typeof eventRow;
     if (USE_LOCAL_EVENTS && (conv.local_event_id || !eventData)) {
       const localId = conv.local_event_id ?? conv.event_id;
       if (localId) {
         const local = localEventsGetById(localId);
         if (local)
-          eventData = { id: local.id, title: local.title, agent_theme_id: local.agent_theme_id, agent_brief: local.agent_brief };
+          eventData = {
+            id: local.id,
+            title: local.title,
+            agent_theme_id: local.agent_theme_id,
+            agent_brief: local.agent_brief,
+            song_garden_config: (local.song_garden_config as SongGardenConfig | null) ?? null,
+          };
       }
     }
     if (!eventData) {
       return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+
+    const managedJourney =
+      journeyManagedRequested &&
+      eventHasManagedJourney(eventData.song_garden_config, null);
+
+    if (managedJourney && userTurn != null) {
+      const eventIdForGarden = String(
+        (USE_LOCAL_EVENTS && conv.local_event_id ? conv.local_event_id : null) ||
+          conv.event_id ||
+          eventData.id
+      );
+      const gardenFields = await gardenPayloadForTurn({
+        eventId: eventIdForGarden,
+        turnId: String((userTurn as { id: string }).id),
+        content,
+        hasAudio: Boolean(storedAudioUrl || audioDataUrl),
+        hasVideo: Boolean(storedVideoUrl || videoDataUrl),
+        deviceId,
+      });
+
+      await supabaseAdmin
+        .from("agent_conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", conversationId);
+
+      return NextResponse.json({
+        turn: userTurn ? rowToTurn(userTurn) : null,
+        nextMessage: {
+          ...JOURNEY_MANAGED_STUB,
+          suggestedAnswerTypes: ["text"],
+        },
+        ...gardenFields,
+      });
     }
 
     const { data: themeRow } = await supabaseAdmin
