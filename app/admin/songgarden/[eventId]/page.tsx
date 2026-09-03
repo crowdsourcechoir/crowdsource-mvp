@@ -29,9 +29,17 @@ export default function SonggardenAdminPage() {
     return (
       <div>
         <p className="text-gray-400">Event not found.</p>
-        <Link href="/admin/events" className="mt-2 inline-block text-sm text-[#CFFF81] hover:underline">
-          Back to events
-        </Link>
+        <p className="mt-2 max-w-md text-sm text-gray-500">
+          This composition canvas needs a valid Bloom id. Pick a bloom from Composer or the Blooms list.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3 text-sm">
+          <Link href="/admin/composer" className="font-medium text-[#CFFF81] hover:underline">
+            Open Composer
+          </Link>
+          <Link href="/admin/events" className="text-gray-400 hover:underline">
+            Back to blooms
+          </Link>
+        </div>
       </div>
     );
   }

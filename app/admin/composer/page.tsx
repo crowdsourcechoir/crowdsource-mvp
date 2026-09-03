@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { getAllEvents } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
+import { isEventUpcoming } from "@/lib/formatDate";
 import CompositionBriefView from "@/app/admin/composition/brief/CompositionBriefView";
 
 const contributionTypes = [
@@ -17,56 +18,50 @@ const contributionTypes = [
   "Ambient moments",
 ];
 
-const composerAreas = [
-  {
-    title: "Garden material",
-    description: "Open a Garden to tend its map, chapters, memory, and arrangement surface.",
-    href: "/admin/gardens",
-    cta: "Open Gardens",
-  },
-  {
-    title: "Bloom material",
-    description: "Open a Bloom to review contributions, media, song seeds, memory, and live prep.",
-    href: "/admin/events",
-    cta: "Open Blooms",
-  },
-  {
-    title: "Song Garden audio pads",
-    description: "Use the event-specific arrangement surface for audio clips, pads, and pre-show musical material.",
-    href: "/admin/events",
-    cta: "Choose a Bloom",
-  },
-];
-
 export default function ComposerPage() {
-  const [briefOpen, setBriefOpen] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string>("");
-  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [briefEventId, setBriefEventId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!briefOpen) return;
-    setLoadingEvents(true);
+    let cancelled = false;
+    setLoading(true);
     getAllEvents()
       .then((list) => {
-        setEvents(Array.isArray(list) ? list : []);
-        setSelectedEventId((prev) => {
-          if (prev) return prev;
-          return Array.isArray(list) && list[0]?.id ? String(list[0].id) : "";
+        if (cancelled) return;
+        const sorted = [...(Array.isArray(list) ? list : [])].sort((a, b) => {
+          const au = isEventUpcoming(a.date) ? 0 : 1;
+          const bu = isEventUpcoming(b.date) ? 0 : 1;
+          if (au !== bu) return au - bu;
+          return (b.date || "").localeCompare(a.date || "");
         });
+        setEvents(sorted);
+        setError(null);
       })
-      .catch(() => setEvents([]))
-      .finally(() => setLoadingEvents(false));
-  }, [briefOpen]);
+      .catch((err) => {
+        if (cancelled) return;
+        setEvents([]);
+        setError(err instanceof Error ? err.message : "Could not load blooms.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (!briefOpen) return;
+    if (!briefEventId) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setBriefOpen(false);
+      if (e.key === "Escape") setBriefEventId(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [briefOpen]);
+  }, [briefEventId]);
+
+  const briefEvent = events.find((e) => e.id === briefEventId) ?? null;
 
   return (
     <div className="w-full space-y-8 text-white">
@@ -76,11 +71,84 @@ export default function ComposerPage() {
         </p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Composer</h1>
         <p className="mt-2 max-w-3xl text-sm text-gray-400">
-          Where living inputs become musical compositions. Composer gathers voice, words, sounds, images, and video
-          from a Garden or Bloom and shapes them into songs, chants, anthems, and show material — with the room, not
-          instead of it.
+          Where living inputs become musical compositions. Pick a Bloom to open its pads, composition canvas, or
+          creative brief — with the room, not instead of it.
         </p>
       </div>
+
+      <section>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Blooms to compose</h2>
+            <p className="mt-1 text-sm text-gray-400">
+              Open pads, canvas, or brief for each event. Upcoming blooms first.
+            </p>
+          </div>
+          <Link href="/admin/events" className="text-sm font-medium text-[#CFFF81] hover:underline">
+            All Blooms →
+          </Link>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading blooms…</p>
+        ) : error ? (
+          <div className="rounded-xl border border-rose-800/50 bg-rose-950/20 p-4 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : events.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-700 bg-[#121214] px-5 py-8 text-sm text-gray-400">
+            No blooms yet.{" "}
+            <Link href="/admin/events/new" className="text-[#CFFF81] hover:underline">
+              Create one
+            </Link>{" "}
+            to start composing.
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-800 overflow-hidden rounded-xl border border-gray-800 bg-[#121214]">
+            {events.map((event) => (
+              <li
+                key={event.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/admin/events/${event.id}`}
+                    className="block truncate text-base font-semibold text-white hover:text-[#CFFF81]"
+                  >
+                    {event.title || "Untitled bloom"}
+                  </Link>
+                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                    {event.date || "No date"}
+                    {event.venue ? ` · ${event.venue}` : ""}
+                    {event.slug ? ` · ${event.slug}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/songgarden/${event.id}`}
+                    className="rounded-lg border border-gray-700 bg-[#18181b] px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81]/50 hover:text-white"
+                  >
+                    Pads / canvas
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setBriefEventId(event.id)}
+                    className="rounded-lg border border-gray-700 bg-[#18181b] px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81]/50 hover:text-white"
+                  >
+                    Brief
+                  </button>
+                  <Link
+                    href={`/admin/events/${event.id}`}
+                    className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-3 py-1.5 text-xs font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+                  >
+                    Bloom
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-xl border border-gray-800 bg-[#121214] p-5">
         <h2 className="text-lg font-semibold text-white">First-class contribution media</h2>
@@ -101,50 +169,13 @@ export default function ComposerPage() {
         </div>
       </section>
 
-      <section>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-white">Composer entry points</h2>
-          <p className="mt-1 text-sm text-gray-400">
-            Surfaces for gathering material and forming it into musical compositions.
-          </p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {composerAreas.map((area) => (
-            <Link
-              key={area.title}
-              href={area.href}
-              className="rounded-xl border border-gray-800 bg-[#121214] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#18181b]"
-            >
-              <h3 className="text-base font-semibold text-white">{area.title}</h3>
-              <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">{area.description}</p>
-              <span className="mt-4 inline-flex text-sm font-semibold text-[#CFFF81]">
-                {area.cta}
-                {" ->"}
-              </span>
-            </Link>
-          ))}
-
-          <button
-            type="button"
-            onClick={() => setBriefOpen(true)}
-            className="rounded-xl border border-gray-800 bg-[#121214] p-5 text-left transition hover:border-[#CFFF81]/50 hover:bg-[#18181b]"
-          >
-            <h3 className="text-base font-semibold text-white">Composition brief</h3>
-            <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">
-              Turn collected voices, words, sounds, images, and videos into musical direction and song material.
-            </p>
-            <span className="mt-4 inline-flex text-sm font-semibold text-[#CFFF81]">Open brief -&gt;</span>
-          </button>
-        </div>
-      </section>
-
-      {briefOpen && (
+      {briefEventId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
             type="button"
             aria-label="Close overlay"
             className="absolute inset-0 bg-black/70"
-            onClick={() => setBriefOpen(false)}
+            onClick={() => setBriefEventId(null)}
           />
           <div
             role="dialog"
@@ -159,50 +190,21 @@ export default function ComposerPage() {
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-white">Composition Brief</h2>
                 <p className="mt-1 text-sm text-gray-400">
-                  Organized creative material from audience participation and Signal choices.
+                  {briefEvent?.title || "Organized creative material from audience participation."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setBriefOpen(false)}
+                onClick={() => setBriefEventId(null)}
                 className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-300 hover:bg-gray-800"
               >
                 Close
               </button>
             </div>
-
-            <div className="border-b border-gray-800 px-5 py-3">
-              <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
-                Bloom
-                <select
-                  value={selectedEventId}
-                  onChange={(e) => setSelectedEventId(e.target.value)}
-                  disabled={loadingEvents}
-                  className="mt-1.5 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white focus:border-gray-500 focus:outline-none"
-                >
-                  {loadingEvents ? (
-                    <option value="">Loading blooms…</option>
-                  ) : events.length === 0 ? (
-                    <option value="">No blooms yet</option>
-                  ) : (
-                    events.map((ev) => (
-                      <option key={ev.id} value={ev.id}>
-                        {ev.title}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
-            </div>
-
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              {selectedEventId ? (
-                <Suspense fallback={<p className="text-sm text-gray-500">Loading brief…</p>}>
-                  <CompositionBriefView key={selectedEventId} eventId={selectedEventId} embedded />
-                </Suspense>
-              ) : (
-                <p className="text-sm text-gray-500">Choose a Bloom to generate or view its composition brief.</p>
-              )}
+              <Suspense fallback={<p className="text-sm text-gray-500">Loading brief…</p>}>
+                <CompositionBriefView key={briefEventId} eventId={briefEventId} embedded />
+              </Suspense>
             </div>
           </div>
         </div>
