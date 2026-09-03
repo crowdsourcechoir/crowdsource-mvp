@@ -1,17 +1,20 @@
+import type { Event } from "@/data/mockEvents";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
+import { resolveJourneySteps } from "@/lib/songgarden/journey-steps";
 
-/** WorldJourney drives steps from config — agent LLM is not needed on each submit. */
+/** WorldJourney drives steps from config or agent brief — agent LLM is not needed on each submit. */
 export function eventHasManagedJourney(
   songGardenConfig: SongGardenConfig | null | undefined,
-  journeySteps: unknown[] | null | undefined
+  journeySteps: unknown[] | null | undefined,
+  agentBrief?: unknown | null
 ): boolean {
-  const fromConfig = songGardenConfig?.journeySteps;
-  const steps = Array.isArray(journeySteps) && journeySteps.length > 0
-    ? journeySteps
-    : Array.isArray(fromConfig) && fromConfig.length > 0
-      ? fromConfig
-      : null;
-  return Boolean(steps && steps.length > 0);
+  const eventLike = {
+    agentBrief: agentBrief ?? null,
+    songGardenConfig: songGardenConfig ?? null,
+    journeySteps: Array.isArray(journeySteps) ? journeySteps : undefined,
+  } as Event;
+
+  return resolveJourneySteps(eventLike).length > 0;
 }
 
 export const JOURNEY_MANAGED_STUB = {

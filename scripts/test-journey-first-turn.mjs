@@ -95,6 +95,57 @@ async function main() {
     stopReason: sent.data.nextMessage.stopReason,
     turnRole: sent.data.turn?.role,
   });
+
+  // Brief-synthesized steps (no journeySteps in songGardenConfig) — production conference pattern.
+  const slug2 = `journey-brief-${Date.now()}`;
+  const briefOnly = await json("POST", "/api/events", {
+    slug: slug2,
+    title: "Brief-only Journey Test",
+    description: "test",
+    date: "2026-09-01",
+    time: "12:00",
+    venue: "Test",
+    address: "Test",
+    prompt: "test",
+    heroImage: "",
+    heroImageMode: "color",
+    landingHeadline: "Test",
+    landingCopy: "Test",
+    ctaText: "Start",
+    anthemCompletionMessage: "Done",
+    allowAudioVideoPrompt: false,
+    agentBrief: {
+      collectName: false,
+      askAboutItems: [
+        {
+          prompt:
+            "What is a source of renewal for you? A person. A place. A practice. A memory. A sound.",
+          phaseLabel: "YOUR RENEWAL",
+        },
+      ],
+    },
+  });
+  if (briefOnly.status >= 400) {
+    throw new Error(`create brief event failed: ${briefOnly.status} ${JSON.stringify(briefOnly.data)}`);
+  }
+  const eventId2 = briefOnly.data?.id ?? briefOnly.data?.event?.id;
+  const started2 = await json("POST", "/api/agent/participants", {
+    eventId: eventId2,
+    sessionToken: `tok_${Date.now()}`,
+  });
+  const conversationId2 = started2.data?.conversation?.id;
+  const sent2 = await json("POST", `/api/agent/conversations/${conversationId2}/send`, {
+    content: "Morning walks by the river",
+    journeyManaged: true,
+    deviceId: "dev_testscript02",
+  });
+  if (sent2.status >= 400) {
+    throw new Error(`brief-only first turn failed: ${sent2.status} ${JSON.stringify(sent2.data)}`);
+  }
+  console.log("ok: brief-synthesized journey first turn", {
+    eventId: eventId2,
+    stopReason: sent2.data?.nextMessage?.stopReason,
+  });
 }
 
 main().catch((err) => {

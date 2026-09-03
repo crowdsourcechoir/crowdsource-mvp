@@ -295,7 +295,8 @@ export async function POST(
           journeyManagedRequested &&
           eventHasManagedJourney(
             (eventData.song_garden_config as SongGardenConfig | null) ?? null,
-            null
+            null,
+            eventData.agent_brief
           );
         if (!managedOk) {
           return NextResponse.json(
@@ -311,7 +312,8 @@ export async function POST(
           journeyManagedRequested &&
           eventHasManagedJourney(
             (eventData.song_garden_config as SongGardenConfig | null) ?? null,
-            null
+            null,
+            eventData.agent_brief
           );
         if (managedJourney) {
           return NextResponse.json({
@@ -421,7 +423,8 @@ export async function POST(
         journeyManagedRequested &&
         eventHasManagedJourney(
           (eventData.song_garden_config as SongGardenConfig | null) ?? null,
-          null
+          null,
+          eventData.agent_brief
         );
 
       const gardenFields = await gardenPayloadForTurn({
@@ -631,7 +634,7 @@ export async function POST(
 
       const managedJourney =
         journeyManagedRequested &&
-        eventHasManagedJourney(eventData.song_garden_config, null);
+        eventHasManagedJourney(eventData.song_garden_config, null, eventData.agent_brief);
 
       if (managedJourney) {
         await supabaseAdmin
@@ -724,19 +727,23 @@ export async function POST(
     if (isFirstMessage && content !== "") {
       const { data: firstEventRow } = await supabaseAdmin
         .from("events")
-        .select("id, song_garden_config")
+        .select("id, song_garden_config, agent_brief")
         .eq("id", conv.event_id)
         .single();
       let firstEventConfig = (firstEventRow as { song_garden_config?: SongGardenConfig | null } | null)
         ?.song_garden_config ?? null;
+      let firstEventBrief =
+        (firstEventRow as { agent_brief?: unknown | null } | null)?.agent_brief ?? null;
       if (USE_LOCAL_EVENTS && conv.local_event_id) {
         const local = localEventsGetById(conv.local_event_id);
         if (local) {
           firstEventConfig = (local.song_garden_config as SongGardenConfig | null) ?? null;
+          firstEventBrief = local.agent_brief ?? null;
         }
       }
       const managedOk =
-        journeyManagedRequested && eventHasManagedJourney(firstEventConfig, null);
+        journeyManagedRequested &&
+        eventHasManagedJourney(firstEventConfig, null, firstEventBrief);
       if (!managedOk) {
         return NextResponse.json(
           { error: "Unexpected message before interview started." },
@@ -848,7 +855,7 @@ export async function POST(
 
     const managedJourney =
       journeyManagedRequested &&
-      eventHasManagedJourney(eventData.song_garden_config, null);
+      eventHasManagedJourney(eventData.song_garden_config, null, eventData.agent_brief);
 
     if (managedJourney && userTurn != null) {
       const eventIdForGarden = String(
