@@ -1982,21 +1982,25 @@ export default function EventForm({
           {aiGenNotice && <p className="text-[11px] text-emerald-400">{aiGenNotice}</p>}
 
           <div className="divide-y divide-gray-800/80">
-            {(values.worldConfig?.worldStoryboard ?? []).map((frame, i) => (
+            {(values.worldConfig?.worldStoryboard ?? []).map((frame, i) => {
+              const canPreview = Boolean(frame.sceneUrl || frame.videoUrl);
+              const openPreview = () => {
+                if (!canPreview) return;
+                setMediaPreview({
+                  title: `Frame ${i + 1}`,
+                  stillUrl: frame.sceneUrl,
+                  videoUrl: frame.videoUrl,
+                });
+              };
+              return (
               <div key={i} className="flex flex-col gap-1.5 py-2 sm:flex-row sm:items-center">
                 <span className="w-14 shrink-0 text-[11px] font-medium text-gray-500">Frame {i + 1}</span>
-                {frame.sceneUrl || frame.videoUrl ? (
+                {canPreview ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      setMediaPreview({
-                        title: `Frame ${i + 1}`,
-                        stillUrl: frame.sceneUrl,
-                        videoUrl: frame.videoUrl,
-                      })
-                    }
-                    className="relative h-10 w-16 shrink-0 overflow-hidden rounded ring-offset-2 ring-offset-[#18181b] hover:ring-2 hover:ring-[#CFFF81]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#CFFF81]"
-                    title="Preview frame"
+                    onClick={openPreview}
+                    className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md ring-offset-2 ring-offset-[#18181b] hover:ring-2 hover:ring-[#CFFF81]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#CFFF81]"
+                    title="Click to preview"
                     aria-label={`Preview frame ${i + 1}`}
                   >
                     {frame.sceneUrl ? (
@@ -2007,41 +2011,71 @@ export default function EventForm({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gray-800/80 text-[10px] text-gray-400">
-                        ▶
+                      <div className="flex h-full w-full items-center justify-center bg-gray-800/80 text-xs text-gray-300">
+                        ▶ Video
                       </div>
                     )}
-                    {frame.videoUrl ? (
-                      <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[9px] font-medium text-white">
-                        Preview
-                      </span>
-                    ) : null}
+                    <span className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-white">
+                      Preview
+                    </span>
                   </button>
                 ) : (
-                  <div className="h-10 w-16 shrink-0 rounded bg-gray-800/80" />
+                  <div className="flex h-14 w-24 shrink-0 items-center justify-center rounded-md bg-gray-800/80 text-[10px] text-gray-500">
+                    No media
+                  </div>
                 )}
-                <input
-                  type="text"
-                  value={frame.videoUrl ?? ""}
-                  onChange={(e) => {
-                    const frames = [...(values.worldConfig?.worldStoryboard ?? [])];
-                    frames[i] = { ...frames[i], videoUrl: e.target.value || null };
-                    setWorldConfigField("worldStoryboard", frames);
-                  }}
-                  placeholder="Video URL"
-                  className={`${inputClass} flex-1`}
-                />
-                <input
-                  type="text"
-                  value={frame.sceneUrl ?? ""}
-                  onChange={(e) => {
-                    const frames = [...(values.worldConfig?.worldStoryboard ?? [])];
-                    frames[i] = { ...frames[i], sceneUrl: e.target.value || null };
-                    setWorldConfigField("worldStoryboard", frames);
-                  }}
-                  placeholder="Still URL"
-                  className={`${inputClass} flex-1`}
-                />
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={frame.videoUrl ?? ""}
+                      onChange={(e) => {
+                        const frames = [...(values.worldConfig?.worldStoryboard ?? [])];
+                        frames[i] = { ...frames[i], videoUrl: e.target.value || null };
+                        setWorldConfigField("worldStoryboard", frames);
+                      }}
+                      placeholder="Video URL"
+                      className={`${inputClass} min-w-0 flex-1`}
+                      onDoubleClick={openPreview}
+                      title={canPreview ? "Double-click to preview" : undefined}
+                    />
+                    {frame.videoUrl ? (
+                      <button
+                        type="button"
+                        onClick={openPreview}
+                        className={chipClass}
+                        title="Preview this frame"
+                      >
+                        Preview
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={frame.sceneUrl ?? ""}
+                      onChange={(e) => {
+                        const frames = [...(values.worldConfig?.worldStoryboard ?? [])];
+                        frames[i] = { ...frames[i], sceneUrl: e.target.value || null };
+                        setWorldConfigField("worldStoryboard", frames);
+                      }}
+                      placeholder="Still URL"
+                      className={`${inputClass} min-w-0 flex-1`}
+                      onDoubleClick={openPreview}
+                      title={canPreview ? "Double-click to preview" : undefined}
+                    />
+                    {frame.sceneUrl && !frame.videoUrl ? (
+                      <button
+                        type="button"
+                        onClick={openPreview}
+                        className={chipClass}
+                        title="Preview this frame"
+                      >
+                        Preview
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => handleRegenerateFrame(i)}
@@ -2064,7 +2098,8 @@ export default function EventForm({
                   ×
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
           <button
             type="button"

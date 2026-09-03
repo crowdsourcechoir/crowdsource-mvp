@@ -1,31 +1,11 @@
-import Link from "next/link";
+"use client";
 
-const composerAreas = [
-  {
-    title: "Garden material",
-    description: "Open a Garden to tend its map, chapters, memory, and arrangement surface.",
-    href: "/admin/gardens",
-    cta: "Open Gardens",
-  },
-  {
-    title: "Bloom material",
-    description: "Open a Bloom to review contributions, media, song seeds, memory, and live prep.",
-    href: "/admin/events",
-    cta: "Open Blooms",
-  },
-  {
-    title: "Song Garden audio pads",
-    description: "Use the event-specific arrangement surface for audio clips, pads, and pre-show musical material.",
-    href: "/admin/events",
-    cta: "Choose a Bloom",
-  },
-  {
-    title: "Composition brief",
-    description: "Turn collected voices, words, sounds, images, and videos into musical direction and song material.",
-    href: "/admin/composition/brief",
-    cta: "Open brief",
-  },
-];
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getAllEvents } from "@/data/eventsClient";
+import { compositionBriefAdminUrl } from "@/data/compositionClient";
+import type { Event } from "@/data/mockEvents";
+import { isEventUpcoming } from "@/lib/formatDate";
 
 const contributionTypes = [
   "Voice",
@@ -39,6 +19,38 @@ const contributionTypes = [
 ];
 
 export default function ComposerPage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getAllEvents()
+      .then((list) => {
+        if (cancelled) return;
+        const sorted = [...(Array.isArray(list) ? list : [])].sort((a, b) => {
+          const au = isEventUpcoming(a.date) ? 0 : 1;
+          const bu = isEventUpcoming(b.date) ? 0 : 1;
+          if (au !== bu) return au - bu;
+          return (b.date || "").localeCompare(a.date || "");
+        });
+        setEvents(sorted);
+        setError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setEvents([]);
+        setError(err instanceof Error ? err.message : "Could not load blooms.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="w-full space-y-8 text-white">
       <div className="mb-6 sm:mb-8">
@@ -47,18 +59,93 @@ export default function ComposerPage() {
         </p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Composer</h1>
         <p className="mt-2 max-w-3xl text-sm text-gray-400">
-          Where living inputs become musical compositions. Composer gathers voice, words, sounds, images, and video
-          from a Garden or Bloom and shapes them into songs, chants, anthems, and show material — with the room, not
-          instead of it.
+          Where living inputs become musical compositions. Pick a Bloom to open its pads, composition
+          canvas, or creative brief — with the room, not instead of it.
         </p>
       </div>
+
+      <section>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Blooms to compose</h2>
+            <p className="mt-1 text-sm text-gray-400">
+              Open pads, canvas, or brief for each event. Upcoming blooms first.
+            </p>
+          </div>
+          <Link
+            href="/admin/events"
+            className="text-sm font-medium text-[#CFFF81] hover:underline"
+          >
+            All Blooms →
+          </Link>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading blooms…</p>
+        ) : error ? (
+          <div className="rounded-xl border border-rose-800/50 bg-rose-950/20 p-4 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : events.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-700 bg-[#121214] px-5 py-8 text-sm text-gray-400">
+            No blooms yet.{" "}
+            <Link href="/admin/events/new" className="text-[#CFFF81] hover:underline">
+              Create one
+            </Link>{" "}
+            to start composing.
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-800 overflow-hidden rounded-xl border border-gray-800 bg-[#121214]">
+            {events.map((event) => (
+              <li
+                key={event.id}
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/admin/events/${event.id}`}
+                    className="block truncate text-base font-semibold text-white hover:text-[#CFFF81]"
+                  >
+                    {event.title || "Untitled bloom"}
+                  </Link>
+                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                    {event.date || "No date"}
+                    {event.venue ? ` · ${event.venue}` : ""}
+                    {event.slug ? ` · ${event.slug}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/songgarden/${event.id}`}
+                    className="rounded-lg border border-gray-700 bg-[#18181b] px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81]/50 hover:text-white"
+                  >
+                    Pads / canvas
+                  </Link>
+                  <Link
+                    href={compositionBriefAdminUrl({ eventId: event.id })}
+                    className="rounded-lg border border-gray-700 bg-[#18181b] px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81]/50 hover:text-white"
+                  >
+                    Brief
+                  </Link>
+                  <Link
+                    href={`/admin/events/${event.id}`}
+                    className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-3 py-1.5 text-xs font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+                  >
+                    Bloom
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-xl border border-gray-800 bg-[#121214] p-5">
         <h2 className="text-lg font-semibold text-white">First-class contribution media</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-          Contributions are not only audio or text. Photos, selfies, submitted videos, and short crowd clips belong in
-          the same living archive so they can become show visuals, gameday moments, sponsor activations, and
-          post-event memories.
+          Contributions are not only audio or text. Photos, selfies, submitted videos, and short crowd
+          clips belong in the same living archive so they can become show visuals, gameday moments,
+          sponsor activations, and post-event memories.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {contributionTypes.map((type) => (
@@ -68,31 +155,6 @@ export default function ComposerPage() {
             >
               {type}
             </span>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-white">Composer entry points</h2>
-          <p className="mt-1 text-sm text-gray-400">
-            Surfaces for gathering material and forming it into musical compositions.
-          </p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {composerAreas.map((area) => (
-            <Link
-              key={area.title}
-              href={area.href}
-              className="rounded-xl border border-gray-800 bg-[#121214] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#18181b]"
-            >
-              <h3 className="text-base font-semibold text-white">{area.title}</h3>
-              <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">{area.description}</p>
-              <span className="mt-4 inline-flex text-sm font-semibold text-[#CFFF81]">
-                {area.cta}
-                {" ->"}
-              </span>
-            </Link>
           ))}
         </div>
       </section>
