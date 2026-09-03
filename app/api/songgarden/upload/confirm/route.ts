@@ -23,6 +23,12 @@ const VALID_CATEGORIES = new Set(SONGGARDEN_CATEGORIES.map((c) => c.id));
 
 const CLIP_SELECT =
   "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, trim_lead_ms, trim_trail_ms, trim_status, has_original, audio_storage_path, audio_original_storage_path";
+const CLIP_SELECT_NO_TRIM =
+  "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, audio_storage_path, audio_original_storage_path";
+
+function isTrimSchemaMissing(message: string): boolean {
+  return /audio_data_original|trim_lead_ms|trim_trail_ms|trim_status|has_original/i.test(message);
+}
 
 function rowToClip(row: Record<string, unknown>): SonggardenClip {
   const trimStatus =
@@ -210,6 +216,7 @@ export async function POST(request: Request) {
     const trimTrailMs = Number(body.trimTrailMs);
     const ipHash = hashClientIp(getRequestClientIp(request));
 
+    // Originals live in Storage (audio_original_storage_path); never write audio_data_original bytea.
     const insertRow = {
       event_id: eventId,
       contributor_name:
@@ -223,7 +230,6 @@ export async function POST(request: Request) {
       session_token: sessionToken,
       ip_hash: ipHash,
       audio_data: null,
-      audio_data_original: null,
       audio_storage_path: playablePath,
       audio_original_storage_path: originalPath,
       trim_lead_ms: Number.isFinite(trimLeadMs) ? trimLeadMs : null,
@@ -237,6 +243,32 @@ export async function POST(request: Request) {
       .insert(insertRow)
       .select(CLIP_SELECT)
       .single();
+
+    // Prod may not have run supabase/songgarden-trim-originals.sql — keep storage paths, drop trim cols.
+    if (error && isTrimSchemaMissing(error.message)) {
+      const {
+        trim_lead_ms: _l,
+        trim_trail_ms: _t,
+        trim_status: _s,
+        has_original: _h,
+        ...noTrimRow
+      } = insertRow;
+      const fallback = await supabaseAdmin
+        .from("songgarden_clips")
+        .insert(noTrimRow)
+        .select(CLIP_SELECT_NO_TRIM)
+        .single();
+      data = fallback.data
+        ? {
+            ...fallback.data,
+            trim_lead_ms: null,
+            trim_trail_ms: null,
+            trim_status: "none",
+            has_original: hasOriginal,
+          }
+        : null;
+      error = fallback.error;
+    }
 
     if (error && isStorageSchemaMissing(error.message)) {
       return NextResponse.json(
