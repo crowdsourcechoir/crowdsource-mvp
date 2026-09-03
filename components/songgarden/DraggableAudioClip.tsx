@@ -186,12 +186,12 @@ export default function DraggableAudioClip({
         onError={() => setError(true)}
       />
 
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2">
         <button
           type="button"
           onClick={() => void togglePlay()}
           disabled={error}
-          className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
             playing
               ? "bg-[#CFFF81] text-black"
               : "border border-white/20 bg-white/5 text-gray-100 hover:border-white/40"
@@ -206,7 +206,7 @@ export default function DraggableAudioClip({
           className="min-w-0 flex-1 cursor-pointer text-left"
           onClick={(e) => onSelectToggle(clip.id, e.shiftKey || e.metaKey || e.ctrlKey)}
         >
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">
+          <p className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">
             {padName}
             <span className="text-gray-600"> · {durationLabel}</span>
             <span className="text-gray-600"> · {songgardenCategoryLabel(clip.category)}</span>
@@ -220,12 +220,12 @@ export default function DraggableAudioClip({
               <span className="text-gray-600"> · {clip.contributorName}</span>
             ) : null}
           </p>
-          <p className="mt-0.5 text-sm font-semibold uppercase tracking-wide leading-snug text-gray-100">
+          <p className="mt-0.5 truncate text-sm font-semibold uppercase tracking-wide leading-snug text-gray-100">
             {title}
           </p>
         </button>
 
-        <div className="flex shrink-0 items-start gap-2">
+        <div className="flex shrink-0 flex-wrap items-start justify-end gap-1">
           <input
             type="checkbox"
             checked={selected}

@@ -156,7 +156,7 @@ export default function SonggardenCanvas({ eventId, eventTitle }: SonggardenCanv
                   Select all
                 </button>
               </div>
-              <div className="space-y-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {list.map((clip) => (
                   <DraggableAudioClip
                     key={clip.id}
@@ -174,7 +174,7 @@ export default function SonggardenCanvas({ eventId, eventTitle }: SonggardenCanv
           );
         })
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((clip) => (
             <DraggableAudioClip
               key={clip.id}

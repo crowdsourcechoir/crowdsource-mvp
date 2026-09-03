@@ -314,7 +314,7 @@ export default function GardenCompositionCanvas({
                     Select all
                   </button>
                 </div>
-                <div className="space-y-2">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {list.map((clip) => (
                     <div key={clip.id} className="space-y-1">
                       <DraggableAudioClip
@@ -338,7 +338,7 @@ export default function GardenCompositionCanvas({
             );
           })
         : (
-          <div className="space-y-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((clip) => (
               <div key={clip.id} className="space-y-1">
                 <DraggableAudioClip
