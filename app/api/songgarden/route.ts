@@ -11,6 +11,7 @@ import {
   getRequestClientIp,
   hashClientIp,
 } from "@/lib/songgarden/rate-limit";
+import { parseDeviceId, parseSessionToken } from "@/lib/songgarden/upload-auth";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 import { encodeSupabaseBytea } from "@/lib/supabase-bytea";
 import {
@@ -61,20 +62,6 @@ const CLIP_SELECT_LEGACY =
 /** True when supabase/songgarden-trim-originals.sql has not been applied yet. */
 function isTrimSchemaMissing(message: string): boolean {
   return /audio_data_original|trim_lead_ms|trim_trail_ms|trim_status|has_original/i.test(message);
-}
-
-function parseDeviceId(value: FormDataEntryValue | null): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!/^dev_[a-zA-Z0-9_-]{8,64}$/.test(trimmed)) return null;
-  return trimmed;
-}
-
-function parseSessionToken(value: FormDataEntryValue | null): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!/^sg_sess_[a-zA-Z0-9_-]{8,64}$/.test(trimmed)) return null;
-  return trimmed;
 }
 
 export async function GET(request: Request) {

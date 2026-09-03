@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSonggardenReadAudio } from "@/lib/local-songgarden-store";
 import { decodeSupabaseBytea } from "@/lib/supabase-bytea";
+import { clipStoragePublicUrl } from "@/lib/songgarden/storage-upload";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -48,22 +49,21 @@ export async function GET(
     if (wantOriginal) {
       const full = await supabaseAdmin
         .from("songgarden_clips")
-        .select("filename, mime_type, audio_data, audio_data_original, has_original")
+        .select(
+          "filename, mime_type, audio_data, audio_data_original, has_original, audio_storage_path, audio_original_storage_path"
+        )
         .eq("id", clipId)
         .eq("event_id", eventId)
         .single();
-      if (full.error && /audio_data_original|has_original/i.test(full.error.message)) {
-        return jsonError(
-          "Original audio columns are not available yet. Run supabase/songgarden-trim-originals.sql in Supabase.",
-          404
-        );
+      if (full.error && /audio_data_original|has_original|audio_storage_path/i.test(full.error.message)) {
+        return jsonError("Audio columns not available yet. Run supabase migrations.", 404);
       }
       data = (full.data as Record<string, unknown> | null) ?? null;
       error = full.error;
     } else {
       const playable = await supabaseAdmin
         .from("songgarden_clips")
-        .select("filename, mime_type, audio_data")
+        .select("filename, mime_type, audio_data, audio_storage_path")
         .eq("id", clipId)
         .eq("event_id", eventId)
         .single();
@@ -74,6 +74,23 @@ export async function GET(
     if (error || !data) return jsonError("Not found.", 404);
 
     const row = data;
+    const storagePath = wantOriginal
+      ? (row.audio_original_storage_path as string | null)
+      : (row.audio_storage_path as string | null);
+
+    if (storagePath?.trim()) {
+      const url = clipStoragePublicUrl(storagePath.trim());
+      if (url) {
+        return NextResponse.redirect(url, {
+          status: 302,
+          headers: {
+            "Cache-Control": "public, max-age=3600",
+            "X-Songgarden-Audio": wantOriginal ? "original" : "playable",
+          },
+        });
+      }
+    }
+
     let buffer: Buffer;
     if (wantOriginal) {
       if (!row.audio_data_original) {
@@ -81,6 +98,9 @@ export async function GET(
       }
       buffer = decodeSupabaseBytea(row.audio_data_original);
     } else {
+      if (!row.audio_data) {
+        return jsonError("Audio not found.", 404);
+      }
       buffer = decodeSupabaseBytea(row.audio_data);
     }
 

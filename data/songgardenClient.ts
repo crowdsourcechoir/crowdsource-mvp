@@ -1,4 +1,9 @@
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
+import {
+  confirmClipUpload,
+  prepareClipUpload,
+  putToSignedUpload,
+} from "@/lib/songgarden/direct-upload-client";
 
 export type { SonggardenCategoryId, SonggardenClip };
 
@@ -79,11 +84,60 @@ export async function submitSonggardenClip(args: {
   trimTrailMs?: number | null;
   trimStatus?: "none" | "trimmed" | "skipped";
 }): Promise<SonggardenSubmitResult> {
+  const deviceId = getOrCreateSonggardenDeviceId();
+  const sessionToken = getOrCreateSonggardenSessionToken(args.eventId);
+  const mimeType = args.audio.type || "audio/wav";
+  const ext = (args.filename.split(".").pop() || "wav").toLowerCase();
+
+  // Production: direct-to-storage (bypasses Vercel body limit). Falls back to multipart if schema missing.
+  try {
+    const prepared = await prepareClipUpload({
+      eventId: args.eventId,
+      category: args.category,
+      deviceId,
+      sessionToken,
+      playableSize: args.audio.size,
+      originalSize: args.originalAudio?.size ?? 0,
+      contentType: mimeType,
+      ext,
+    });
+
+    await putToSignedUpload(prepared.playable.signedUrl, args.audio, mimeType);
+    if (prepared.original && args.originalAudio) {
+      await putToSignedUpload(prepared.original.signedUrl, args.originalAudio, mimeType);
+    }
+
+    const data = (await confirmClipUpload({
+      eventId: args.eventId,
+      category: args.category,
+      deviceId,
+      sessionToken,
+      contributorName: args.contributorName ?? null,
+      label: args.label ?? null,
+      filename: args.filename,
+      mimeType,
+      durationMs: args.durationMs ?? null,
+      trimLeadMs: args.trimLeadMs ?? null,
+      trimTrailMs: args.trimTrailMs ?? null,
+      trimStatus: args.trimStatus ?? "none",
+      playablePath: prepared.playable.path,
+      originalPath: prepared.original?.path ?? null,
+    })) as SonggardenSubmitResult;
+
+    return data;
+  } catch (err) {
+    const code = (err as Error & { code?: string }).code;
+    if (code !== "schema_missing") {
+      throw err;
+    }
+    // Legacy path until migration is applied.
+  }
+
   const form = new FormData();
   form.set("eventId", args.eventId);
   form.set("category", args.category);
-  form.set("deviceId", getOrCreateSonggardenDeviceId());
-  form.set("sessionToken", getOrCreateSonggardenSessionToken(args.eventId));
+  form.set("deviceId", deviceId);
+  form.set("sessionToken", sessionToken);
   form.set("audio", args.audio, args.filename);
   if (args.originalAudio) {
     form.set("audioOriginal", args.originalAudio, args.filename.replace(/\.wav$/i, ".original.wav"));
