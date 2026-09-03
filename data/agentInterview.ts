@@ -179,6 +179,10 @@ export async function sendMessage(
   options?: {
     audioDataUrl?: string | null;
     videoDataUrl?: string | null;
+    audioStoragePath?: string | null;
+    videoStoragePath?: string | null;
+    audioPublicUrl?: string | null;
+    videoPublicUrl?: string | null;
     captchaToken?: string | null;
     deviceId?: string | null;
     /** WorldJourney drives steps — skip OpenAI on submit when true. */
@@ -195,6 +199,10 @@ export async function sendMessage(
     content,
     audioDataUrl: options?.audioDataUrl ?? null,
     videoDataUrl: options?.videoDataUrl ?? null,
+    audioStoragePath: options?.audioStoragePath ?? null,
+    videoStoragePath: options?.videoStoragePath ?? null,
+    audioPublicUrl: options?.audioPublicUrl ?? null,
+    videoPublicUrl: options?.videoPublicUrl ?? null,
     captchaToken: options?.captchaToken ?? null,
     deviceId: options?.deviceId ?? null,
     journeyManaged: options?.journeyManaged === true,

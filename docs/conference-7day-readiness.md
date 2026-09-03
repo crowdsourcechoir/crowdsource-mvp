@@ -18,17 +18,21 @@ Run in **Supabase SQL Editor** (production):
 
 Without this, sound uploads fall back to legacy multipart (through Vercel).
 
-## Day 1–2 — Sound direct-to-storage (in branch)
+## Day 1–2 — Direct-to-storage (live on main)
 
-- `POST /api/songgarden/upload/prepare` → signed URL
-- Client PUT → Storage
-- `POST /api/songgarden/upload/confirm` → metadata only
-- Playback redirects to CDN URL; legacy `bytea` clips unchanged
+**Sound (Song Garden pads):**
+- `POST /api/songgarden/upload/prepare` → signed URL → PUT → confirm
+- Requires `supabase/songgarden-storage-paths.sql`
 
-## Day 3–4 — Prove + optional video
+**Video (journey VideoMomentPad):**
+- `POST /api/agent/conversations/[id]/media/prepare` → signed URL → PUT
+- Send turn with `videoStoragePath` + `videoPublicUrl` (no base64 through Vercel)
 
-- Load test: 200 concurrent page loads + 50 text submits + 20 sound uploads
-- If journey includes **video**: same pattern for agent media (separate slice)
+**Audio pads** use the songgarden clip path above. Interview audio via agent send supports the same direct pattern when used.
+
+## Day 3–4 — Prove
+
+- Load test: 200 concurrent page loads + 50 text submits + 20 sound uploads + 10 video uploads
 
 ## Day 5 — Conference lock
 
@@ -43,4 +47,4 @@ Without this, sound uploads fall back to legacy multipart (through Vercel).
 
 ## Not required for text-only conference
 
-Full video direct-to-storage and bytea backfill can wait until after if the conference stays text-first.
+Legacy bytea clip backfill can wait until after if you never play old clips from DB.

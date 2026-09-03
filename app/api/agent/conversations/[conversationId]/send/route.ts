@@ -28,6 +28,11 @@ import {
   eventHasManagedJourney,
   JOURNEY_MANAGED_STUB,
 } from "@/lib/agent-journey-managed";
+import {
+  agentMediaPublicUrl,
+  isPathForConversation,
+  verifyAgentMediaObject,
+} from "@/lib/agent-media/storage-upload";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -181,6 +186,40 @@ async function persistMedia(conversationId: string, kind: "audio" | "video", dat
   return data.publicUrl;
 }
 
+async function resolveTurnMediaUrl(
+  conversationId: string,
+  kind: "audio" | "video",
+  direct: { storagePath?: string | null; publicUrl?: string | null },
+  dataUrl: string | null
+): Promise<string | null> {
+  const path = direct.storagePath?.trim();
+  if (path) {
+    if (!isPathForConversation(conversationId, path)) {
+      throw new Error(`Invalid ${kind} storage path.`);
+    }
+    const ok = await verifyAgentMediaObject(path);
+    if (!ok) {
+      throw new Error(`${kind} upload not found. Complete the Storage PUT before send.`);
+    }
+    return direct.publicUrl?.trim() || agentMediaPublicUrl(path);
+  }
+  return persistMedia(conversationId, kind, dataUrl);
+}
+
+function hasTurnMedia(body: {
+  audioDataUrl?: string | null;
+  videoDataUrl?: string | null;
+  audioStoragePath?: string | null;
+  videoStoragePath?: string | null;
+}): boolean {
+  return Boolean(
+    body.audioDataUrl ||
+      body.videoDataUrl ||
+      body.audioStoragePath?.trim() ||
+      body.videoStoragePath?.trim()
+  );
+}
+
 export const maxDuration = 30;
 
 export async function POST(
@@ -298,7 +337,7 @@ export async function POST(
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
-      if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
+      if (!content && !hasTurnMedia(body) && !isVoiceVideoQuestion) {
         return NextResponse.json({
           turn: null,
           nextMessage: {
@@ -435,14 +474,18 @@ export async function POST(
     const content = rawContent === "__skip_name__" ? "" : rawContent.trim();
     const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
     const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
+    const audioStoragePath =
+      typeof body.audioStoragePath === "string" ? body.audioStoragePath : null;
+    const videoStoragePath =
+      typeof body.videoStoragePath === "string" ? body.videoStoragePath : null;
+    const audioPublicUrl = typeof body.audioPublicUrl === "string" ? body.audioPublicUrl : null;
+    const videoPublicUrl = typeof body.videoPublicUrl === "string" ? body.videoPublicUrl : null;
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
     const journeyManagedRequested = body.journeyManaged === true;
     const deviceId =
       typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
         ? body.deviceId.trim()
         : null;
-    const storedAudioUrl = await persistMedia(conversationId, "audio", audioDataUrl);
-    const storedVideoUrl = await persistMedia(conversationId, "video", videoDataUrl);
 
     const { data: conv, error: eConv } = await supabaseAdmin
       .from("agent_conversations")
@@ -453,6 +496,19 @@ export async function POST(
       if (eConv?.code === "PGRST116") return NextResponse.json(null, { status: 404 });
       return NextResponse.json({ error: eConv?.message ?? "Not found" }, { status: 500 });
     }
+
+    const storedAudioUrl = await resolveTurnMediaUrl(
+      conversationId,
+      "audio",
+      { storagePath: audioStoragePath, publicUrl: audioPublicUrl },
+      audioDataUrl
+    );
+    const storedVideoUrl = await resolveTurnMediaUrl(
+      conversationId,
+      "video",
+      { storagePath: videoStoragePath, publicUrl: videoPublicUrl },
+      videoDataUrl
+    );
 
     const { data: turns } = await supabaseAdmin
       .from("agent_conversation_turns")
@@ -609,7 +665,7 @@ export async function POST(
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
-      if (!content && !audioDataUrl && !videoDataUrl && !isVoiceVideoQuestion) {
+      if (!content && !hasTurnMedia(body) && !isVoiceVideoQuestion) {
         return NextResponse.json({
           turn: null,
           nextMessage: {

@@ -28,8 +28,8 @@ import {
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
 import { isCompletionButtonVisible } from "@/lib/songgarden/config";
+import { uploadTurnMedia } from "@/lib/agent-media/direct-upload-client";
 import {
-  blobToDataUrl,
   conversationIdKey,
   DEFAULT_CTA_TEXT,
   DEFAULT_OPENING_PROMPT,
@@ -593,9 +593,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           setSending(false);
           throw new Error("Could not start the conversation. Try again.");
         }
-        const videoDataUrl = await blobToDataUrl(blob);
+        const { storagePath, publicUrl } = await uploadTurnMedia(convId, "video", blob);
         const sent = await sendMessage(convId, "(recording)", {
-          videoDataUrl,
+          videoStoragePath: storagePath,
+          videoPublicUrl: publicUrl,
           deviceId: getOrCreateSonggardenDeviceId(),
           journeyManaged,
         });
@@ -612,7 +613,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         throw err instanceof Error ? err : new Error("Submit failed");
       }
     },
-    [celebration, ensureConversation, gardenSnap, goToStep, growNode, stepIndex]
+    [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, stepIndex]
   );
 
   function handleParticipateAgain() {
