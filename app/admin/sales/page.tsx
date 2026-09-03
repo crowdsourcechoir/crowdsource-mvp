@@ -8,7 +8,10 @@ export default function SalesOverviewPage() {
   return (
     <div className="w-full text-white">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold text-white sm:text-3xl">Sales</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+          Prospecting Intelligence
+        </p>
+        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Sales</h1>
         <p className="mt-2 text-sm text-gray-400">
           AI-assisted prospecting — discover, research, score, and prepare outreach for human approval.
         </p>

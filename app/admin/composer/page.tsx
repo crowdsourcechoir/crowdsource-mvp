@@ -43,7 +43,7 @@ export default function ComposerPage() {
     <div className="w-full space-y-8 text-white">
       <div className="mb-6 sm:mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
-          Musical formation
+          Musical Formation
         </p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Composer</h1>
         <p className="mt-2 max-w-3xl text-sm text-gray-400">

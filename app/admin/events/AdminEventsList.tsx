@@ -205,7 +205,10 @@ export default function AdminEventsList() {
       )}
 
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold text-white sm:text-3xl">Blooms</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+          Live Events
+        </p>
+        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Blooms</h1>
         <p className="mt-2 text-sm text-gray-400">
           Manage live events, gameday moments, and activations where Gardens come alive.
         </p>
