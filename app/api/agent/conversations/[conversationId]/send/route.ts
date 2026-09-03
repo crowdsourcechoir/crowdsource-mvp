@@ -240,6 +240,7 @@ export async function POST(
       const audioDataUrl = typeof body.audioDataUrl === "string" ? body.audioDataUrl : null;
       const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
       const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
+      const journeyManagedRequested = body.journeyManaged === true;
       const deviceId =
         typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
           ? body.deviceId.trim()
@@ -288,9 +289,38 @@ export async function POST(
         createdAt: string;
       } | null = null;
 
-      if (isFirstMessage) {
-        if (content !== "") {
-          return NextResponse.json({ error: "Unexpected message before interview started." }, { status: 400 });
+      let managedFirstUserTurn = false;
+      if (isFirstMessage && content !== "") {
+        const managedOk =
+          journeyManagedRequested &&
+          eventHasManagedJourney(
+            (eventData.song_garden_config as SongGardenConfig | null) ?? null,
+            null
+          );
+        if (!managedOk) {
+          return NextResponse.json(
+            { error: "Unexpected message before interview started." },
+            { status: 400 }
+          );
+        }
+        managedFirstUserTurn = true;
+      }
+
+      if (isFirstMessage && content === "") {
+        const managedJourney =
+          journeyManagedRequested &&
+          eventHasManagedJourney(
+            (eventData.song_garden_config as SongGardenConfig | null) ?? null,
+            null
+          );
+        if (managedJourney) {
+          return NextResponse.json({
+            turn: null,
+            nextMessage: {
+              ...JOURNEY_MANAGED_STUB,
+              suggestedAnswerTypes: ["text"],
+            },
+          });
         }
 
         const nextResult = await getNextAgentMessage(new OpenAI({ apiKey }), {
@@ -332,8 +362,11 @@ export async function POST(
         });
       }
 
-      // Subsequent user messages.
-      const isNameQuestion = isNameQuestionPrompt(brief as Record<string, unknown>, lastAgentContent);
+      if (!isFirstMessage || managedFirstUserTurn) {
+      const journeyNameStep = body.journeyNameStep === true;
+      const isNameQuestion =
+        isNameQuestionPrompt(brief as Record<string, unknown>, lastAgentContent) ||
+        (managedFirstUserTurn && journeyNameStep);
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
@@ -384,6 +417,44 @@ export async function POST(
         mode: "local",
       });
 
+      const managedJourney =
+        journeyManagedRequested &&
+        eventHasManagedJourney(
+          (eventData.song_garden_config as SongGardenConfig | null) ?? null,
+          null
+        );
+
+      const gardenFields = await gardenPayloadForTurn({
+        eventId: eventData.id,
+        turnId: userTurnInserted.id,
+        content,
+        hasAudio: Boolean(audioDataUrl),
+        hasVideo: Boolean(videoDataUrl),
+        deviceId,
+      });
+
+      if (managedJourney) {
+        return NextResponse.json({
+          turn: {
+            id: userTurnInserted.id,
+            conversationId,
+            turnIndex: userTurnInserted.turnIndex,
+            role: "user",
+            content: userTurnInserted.content,
+            audioUrl: userTurnInserted.audioUrl,
+            videoUrl: userTurnInserted.videoUrl,
+            audioTranscript: userTurnInserted.audioTranscript,
+            videoTranscript: userTurnInserted.videoTranscript,
+            createdAt: userTurnInserted.createdAt,
+          },
+          nextMessage: {
+            ...JOURNEY_MANAGED_STUB,
+            suggestedAnswerTypes: ["text"],
+          },
+          ...gardenFields,
+        });
+      }
+
       const agentCount = existingTurns.filter((t) => t.role === "agent").length;
       const currentStep = agentCount + 1;
 
@@ -408,15 +479,6 @@ export async function POST(
         turnIndex: agentTurnIndex,
         role: "agent",
         content: nextResult.agentMessage,
-      });
-
-      const gardenFields = await gardenPayloadForTurn({
-        eventId: eventData.id,
-        turnId: userTurnInserted.id,
-        content,
-        hasAudio: Boolean(audioDataUrl),
-        hasVideo: Boolean(videoDataUrl),
-        deviceId,
       });
 
       return NextResponse.json({
@@ -452,6 +514,7 @@ export async function POST(
         },
         ...gardenFields,
       });
+      }
     } catch (err) {
       console.error("Local agent send error:", err);
       return NextResponse.json({ error: "Local agent interview server error" }, { status: 500 });
@@ -534,11 +597,7 @@ export async function POST(
 
     let userTurn: Record<string, unknown> | null = null;
 
-    if (isFirstMessage) {
-      if (content !== "") {
-        return NextResponse.json({ error: "Unexpected message before interview started." }, { status: 400 });
-      }
-
+    if (isFirstMessage && content === "") {
       const { data: eventRow } = await supabaseAdmin
         .from("events")
         .select("id, title, agent_theme_id, agent_brief, song_garden_config")
@@ -660,8 +719,38 @@ export async function POST(
         agentTurn: rowToTurn(agentTurnRow),
       });
     }
-    if (!isFirstMessage) {
-      const isNameQuestion = isNameQuestionPrompt(briefForValidation, lastAgentContent);
+
+    let managedFirstUserTurn = false;
+    if (isFirstMessage && content !== "") {
+      const { data: firstEventRow } = await supabaseAdmin
+        .from("events")
+        .select("id, song_garden_config")
+        .eq("id", conv.event_id)
+        .single();
+      let firstEventConfig = (firstEventRow as { song_garden_config?: SongGardenConfig | null } | null)
+        ?.song_garden_config ?? null;
+      if (USE_LOCAL_EVENTS && conv.local_event_id) {
+        const local = localEventsGetById(conv.local_event_id);
+        if (local) {
+          firstEventConfig = (local.song_garden_config as SongGardenConfig | null) ?? null;
+        }
+      }
+      const managedOk =
+        journeyManagedRequested && eventHasManagedJourney(firstEventConfig, null);
+      if (!managedOk) {
+        return NextResponse.json(
+          { error: "Unexpected message before interview started." },
+          { status: 400 }
+        );
+      }
+      managedFirstUserTurn = true;
+    }
+
+    if (!isFirstMessage || managedFirstUserTurn) {
+      const journeyNameStep = body.journeyNameStep === true;
+      const isNameQuestion =
+        isNameQuestionPrompt(briefForValidation, lastAgentContent) ||
+        (managedFirstUserTurn && journeyNameStep);
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }

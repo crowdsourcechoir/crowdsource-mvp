@@ -527,6 +527,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         captchaToken: captchaGateActive ? emailCaptchaToken : null,
         deviceId: getOrCreateSonggardenDeviceId(),
         journeyManaged,
+        journeyNameStep: isNameStep,
       });
       setEmailCaptchaToken(null);
       setSending(false);

@@ -187,6 +187,8 @@ export async function sendMessage(
     deviceId?: string | null;
     /** WorldJourney drives steps — skip OpenAI on submit when true. */
     journeyManaged?: boolean;
+    /** WorldJourney name step — persist participant display name on first turn. */
+    journeyNameStep?: boolean;
   }
 ): Promise<{
   turn: AgentConversationTurn | null;
@@ -206,6 +208,7 @@ export async function sendMessage(
     captchaToken: options?.captchaToken ?? null,
     deviceId: options?.deviceId ?? null,
     journeyManaged: options?.journeyManaged === true,
+    journeyNameStep: options?.journeyNameStep === true,
   });
 }
 
