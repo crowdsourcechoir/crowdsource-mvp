@@ -155,7 +155,7 @@ export default function LivePage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Live</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <p className="mt-2 text-sm text-gray-400">
             Runtime tools for Blooms: prompts, signal play, and live participation moments.
           </p>
         </div>
@@ -163,7 +163,7 @@ export default function LivePage() {
 
       <section className="mb-8 rounded-xl border border-gray-800 bg-[#121214] p-5 sm:p-6">
         <h2 className="text-lg font-bold text-white sm:text-xl">Start Session</h2>
-        <p className="mt-1 text-sm text-gray-400">Select a mode and optionally assign it to a Bloom</p>
+        <p className="mt-2 text-sm text-gray-400">Select a mode and optionally assign it to a Bloom</p>
 
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {(["game", "fishbowl", "signal"] as LiveMode[]).map((m) => (

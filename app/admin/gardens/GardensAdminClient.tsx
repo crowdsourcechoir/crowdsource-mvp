@@ -85,10 +85,10 @@ export default function GardensAdminClient() {
   const ballard = gardens.find((g) => g.slug === "ballard-fc");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 px-4 py-8 text-gray-100">
+    <div className="w-full space-y-8 text-gray-100">
       <div>
-        <h1 className="text-xl font-semibold text-white">Song Gardens</h1>
-        <p className="mt-1 text-sm text-gray-400">
+        <h1 className="text-2xl font-bold text-white sm:text-3xl">Song Gardens</h1>
+        <p className="mt-2 text-sm text-gray-400">
           Persistent worlds where voices, words, sounds, photos, selfies, videos, and memories keep growing.
         </p>
       </div>

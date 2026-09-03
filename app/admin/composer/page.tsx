@@ -40,12 +40,12 @@ const contributionTypes = [
 
 export default function ComposerPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-8 text-white">
+    <div className="w-full space-y-8 text-white">
       <section className="rounded-3xl border border-[#CFFF81]/20 bg-[#121214] p-6 shadow-2xl shadow-black/30 sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
           Musical formation
         </p>
-        <h1 className="mt-3 text-3xl font-bold sm:text-4xl">Composer</h1>
+        <h1 className="mt-3 text-2xl font-bold sm:text-3xl">Composer</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-300 sm:text-base">
           Where living inputs become musical compositions. Composer gathers voice, words, sounds,
           images, and video from a Garden or Bloom and shapes them into songs, chants, anthems, and
