@@ -79,7 +79,7 @@ export default function ConductorView({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-gray-700/60 bg-[#18181b] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-gray-700/60 bg-transparent p-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Experience arc</p>
           <p className="mt-1 text-lg font-semibold text-white">{plan.arcName}</p>
@@ -108,7 +108,7 @@ export default function ConductorView({
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="w-full shrink-0 rounded-xl border border-gray-700/60 bg-[#18181b] p-4 lg:w-56">
+        <aside className="w-full shrink-0 rounded-xl border border-gray-700/60 bg-transparent p-4 lg:w-56">
           <h3 className="text-sm font-semibold text-gray-400">Stages</h3>
           <ul className="mt-3 space-y-1">
             {stages.map((stage, i) => (
@@ -131,7 +131,7 @@ export default function ConductorView({
         </aside>
 
         <div className="min-w-0 flex-1 space-y-6">
-          <section className="rounded-xl border border-gray-700/60 bg-[#18181b] p-6">
+          <section className="rounded-xl border border-gray-700/60 bg-transparent p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-sm text-gray-500">{event.title}</p>
@@ -189,7 +189,7 @@ export default function ConductorView({
             </div>
           </section>
 
-          <section className="rounded-xl border border-gray-700/60 bg-[#18181b] p-6">
+          <section className="rounded-xl border border-gray-700/60 bg-transparent p-6">
             <h3 className="text-sm font-semibold text-gray-300">Pacing</h3>
             <p className="mt-1 text-sm text-gray-500">
               Manual participation budget — advisory only; Live tools are unchanged.
@@ -252,7 +252,7 @@ export default function ConductorView({
             )}
           </section>
 
-          <section className="rounded-xl border border-gray-700/60 bg-[#18181b] p-6">
+          <section className="rounded-xl border border-gray-700/60 bg-transparent p-6">
             <h3 className="text-sm font-semibold text-gray-300">Live tools</h3>
             <p className="mt-1 text-sm text-gray-500">
               Open Host Control Room or Composition when this stage needs them.

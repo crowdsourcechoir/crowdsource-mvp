@@ -49,7 +49,7 @@ export default function LivePromptGameSessionsPage() {
             <li key={s.id}>
               <Link
                 href={`/admin/live-prompt-game/sessions/${s.id}`}
-                className="block rounded-xl border border-gray-700/60 bg-[#18181b] p-4 transition hover:border-gray-600"
+                className="block rounded-xl border border-gray-700/60 bg-transparent p-4 transition hover:border-gray-600"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold text-white">{s.name}</span>

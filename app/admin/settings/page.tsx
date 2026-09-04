@@ -126,7 +126,7 @@ function SettingsCardView({ card }: { card: SettingsCard }) {
   return (
     <Link
       href={card.href}
-      className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5 transition hover:border-[#CFFF81]/40 hover:bg-[#111]"
+      className="rounded-xl border border-transparent bg-transparent p-5 transition-colors hover:border-[#CFFF81]"
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">{card.domain}</p>
       <h3 className="mt-2 text-base font-semibold text-white">{card.title}</h3>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
         </Section>
       ))}
 
-      <section id="profile" className="scroll-mt-8 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+      <section id="profile" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-base font-semibold text-white">Profile</h2>
         <p className="mt-2 text-sm text-gray-400">
           Account profile editing lands next. For now, Sales outreach identity comes from the connected Gmail
@@ -186,7 +186,7 @@ export default function SettingsPage() {
         </p>
       </section>
 
-      <section id="access" className="scroll-mt-8 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+      <section id="access" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-base font-semibold text-white">Sign-in & access</h2>
         <p className="mt-2 text-sm text-gray-400">
           Admin auth stays on the existing gate. Multi-user roles and invite flows can live here when the workspace
@@ -194,7 +194,7 @@ export default function SettingsPage() {
         </p>
       </section>
 
-      <section id="appearance" className="scroll-mt-8 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+      <section id="appearance" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-base font-semibold text-white">Appearance</h2>
         <p className="mt-2 text-sm text-gray-400">
           Shell background is solid black. Click the sidebar divider to switch between icon-only and labeled
@@ -202,7 +202,7 @@ export default function SettingsPage() {
         </p>
       </section>
 
-      <section id="danger" className="scroll-mt-8 rounded-xl border border-red-900/40 bg-[#0a0a0a] p-5">
+      <section id="danger" className="scroll-mt-8 rounded-xl border border-red-900/40 bg-transparent p-5">
         <h2 className="text-base font-semibold text-red-200">Danger zone</h2>
         <p className="mt-2 text-sm text-gray-400">
           Destructive actions (event submission wipes, garden deletes, Gmail disconnect) remain confirm-gated on their

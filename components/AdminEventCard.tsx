@@ -27,10 +27,10 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
   const dateFormatted = formatDateLong(event.date);
 
   return (
-    <article className="rounded-xl border border-gray-800 bg-[#121214] px-4 py-3">
+    <article className="rounded-xl border border-transparent bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-700/60 bg-[#1a1c22]">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-white/15 bg-black">
             <EventHeroThumb src={event.heroImage} title={event.title} />
           </div>
           <div className="min-w-0 flex-1">
@@ -51,7 +51,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
                 </a>
               </span>
               {badgeLabel && (
-                <span className="mt-1 w-fit rounded-full border border-gray-600/80 bg-[#1b1f28] px-2 py-0.5 text-xs text-gray-300 sm:mt-0">
+                <span className="mt-1 w-fit rounded-full border border-white/15 bg-transparent px-2 py-0.5 text-xs text-gray-300 sm:mt-0">
                   {badgeLabel}
                 </span>
               )}
@@ -69,7 +69,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
             href={eventUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
             title={eventUrl}
           >
             Public Link
@@ -77,7 +77,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           <button
             type="button"
             onClick={() => setShowQr((v) => !v)}
-            className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
           >
             {showQr ? "Hide QR" : "QR"}
           </button>
@@ -89,7 +89,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
             key={eventUrl}
             url={eventUrl}
             size={96}
-            className="rounded border border-gray-600"
+            className="rounded border border-white/15"
             downloadFilename={`${publicSlug}-qr.png`}
           />
         </div>

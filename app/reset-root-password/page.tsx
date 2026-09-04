@@ -47,7 +47,7 @@ export default function ResetRootPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0e] px-4 pb-[env(safe-area-inset-bottom)]">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4 pb-[env(safe-area-inset-bottom)]">
       <div className="w-full max-w-xs space-y-6">
         <Link href="/" className="text-sm text-gray-400 hover:text-gray-200 hover:underline">
           Back to sign in
@@ -70,7 +70,7 @@ export default function ResetRootPasswordPage() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            className="w-full rounded-xl border border-gray-600 bg-[#1a1a1a] px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+            className="w-full rounded-xl border border-white/15 bg-black px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-[#CFFF81] focus:outline-none focus:ring-1 focus:ring-[#CFFF81]/40"
             placeholder="Enter a new password"
             required
             disabled={submitting}
@@ -85,7 +85,7 @@ export default function ResetRootPasswordPage() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             autoComplete="new-password"
-            className="w-full rounded-xl border border-gray-600 bg-[#1a1a1a] px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+            className="w-full rounded-xl border border-white/15 bg-black px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-[#CFFF81] focus:outline-none focus:ring-1 focus:ring-[#CFFF81]/40"
             placeholder="Re-enter the new password"
             required
             disabled={submitting}

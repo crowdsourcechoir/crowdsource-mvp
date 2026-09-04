@@ -488,7 +488,7 @@ export default function HostControlRoomPage({
       </div>
 
       {/* Stage state */}
-      <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+      <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
           Stage
         </h2>
@@ -555,7 +555,7 @@ export default function HostControlRoomPage({
 
       {/* Prompt composer — always available while session is active so host can send a new prompt anytime */}
       {!session.ended_at && (
-        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">{session.name} setup</h2>
@@ -721,7 +721,7 @@ export default function HostControlRoomPage({
 
       {/* Host controls */}
       {!session.ended_at && (
-        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
             Controls
           </h2>
@@ -815,7 +815,7 @@ export default function HostControlRoomPage({
 
       {/* Current round prompt (when RESPONDING or VOTING) */}
       {currentRound && (session.state === "RESPONDING" || session.state === "VOTING") && (
-        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
               {session.state === "VOTING"
@@ -849,7 +849,7 @@ export default function HostControlRoomPage({
 
       {/* Raw submissions (RESPONDING) */}
       {session.state === "RESPONDING" && submissions.length > 0 && (
-        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
             Raw submissions ({submissions.length})
           </h2>
@@ -865,7 +865,7 @@ export default function HostControlRoomPage({
 
       {/* Phrase cards (VOTING) */}
       {session.state === "VOTING" && (
-        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
             Phrase cards (tap to hide/lock)
           </h2>
@@ -907,7 +907,7 @@ export default function HostControlRoomPage({
       )}
 
       {/* Exports */}
-      <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+      <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
           Export
         </h2>

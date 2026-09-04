@@ -455,7 +455,7 @@ export default function EventDetailPage() {
 
   if (!event) {
     return (
-      <div className="w-full rounded-xl border border-gray-700 bg-[#18181b] p-6">
+      <div className="w-full rounded-xl border border-gray-700 bg-transparent p-6">
         <p className="text-gray-400">Event not found.</p>
         <p className="mt-2 text-sm text-gray-500">
           With local events (USE_LOCAL_EVENTS=true), events live in the dev server&apos;s memory. If you just created this event, run only one dev server (stop any other terminal running <code className="rounded bg-gray-800 px-1">npm run dev</code>) and try creating again.
@@ -484,7 +484,7 @@ export default function EventDetailPage() {
   return (
     <div className="w-full space-y-10">
       {/* Public-style event card */}
-      <div className="overflow-hidden rounded-2xl border border-gray-700/60 bg-[#18181b]">
+      <div className="overflow-hidden rounded-2xl border border-gray-700/60 bg-transparent">
         <div className="border-b border-gray-700/60">
           <div className="relative h-40 w-full bg-gray-900">
             {event.heroImage ? (
@@ -559,7 +559,7 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-red-900/50 bg-[#18181b] p-6">
+      <section className="rounded-2xl border border-red-900/50 bg-transparent p-6">
         <h2 className="text-lg font-semibold text-red-200">Delete bloom</h2>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
           Rare. Removes this bloom and its interviews, clips, and submissions. You will be asked twice.
@@ -575,7 +575,7 @@ export default function EventDetailPage() {
       </section>
 
       {(transcriptOutput || transcriptError) && (
-        <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
+        <section className="rounded-2xl border border-gray-700/60 bg-transparent p-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-white">Transcript output</h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -723,7 +723,7 @@ export default function EventDetailPage() {
       )}
 
       {event.agentThemeId && (
-        <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
+        <section className="rounded-2xl border border-gray-700/60 bg-transparent p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-white">Song Seed (from Agent Interviews)</h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -877,7 +877,7 @@ export default function EventDetailPage() {
         </section>
       )}
 
-      <section className="rounded-2xl border border-emerald-900/40 bg-[#18181b] p-6">
+      <section className="rounded-2xl border border-emerald-900/40 bg-transparent p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-white">Memory Archive</h2>
@@ -1042,7 +1042,7 @@ export default function EventDetailPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">
+      <section className="rounded-2xl border border-gray-700/60 bg-transparent p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold text-white">Submissions</h2>
@@ -1288,7 +1288,7 @@ export default function EventDetailPage() {
                             {answers.length === 0 ? (
                               <p className="text-sm text-gray-500">No interview answers recorded.</p>
                             ) : (
-                              <ul className="divide-y divide-gray-800/80 rounded-md border border-gray-800 bg-[#121214]">
+                              <ul className="divide-y divide-gray-800/80 rounded-md border border-gray-800 bg-transparent">
                                 {answers.map((a) => (
                                   <li key={a.key} className="px-3 py-2">
                                     <p className="text-[11px] leading-snug text-gray-500">

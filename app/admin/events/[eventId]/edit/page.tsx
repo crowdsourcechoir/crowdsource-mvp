@@ -151,7 +151,7 @@ export default function EditEventPage() {
 
   if (status === "loading") {
     return (
-      <div className="w-full rounded-lg border border-gray-700 bg-[#18181b] p-6">
+      <div className="w-full rounded-lg border border-gray-700 bg-transparent p-6">
         <p className="text-gray-400">Loading event…</p>
       </div>
     );
@@ -159,7 +159,7 @@ export default function EditEventPage() {
 
   if (status === "notFound" || !event || !initialValues) {
     return (
-      <div className="rounded-lg border border-gray-700 bg-[#18181b] p-6">
+      <div className="rounded-lg border border-gray-700 bg-transparent p-6">
         <p className="text-gray-400">Event not found.</p>
         <button
           type="button"

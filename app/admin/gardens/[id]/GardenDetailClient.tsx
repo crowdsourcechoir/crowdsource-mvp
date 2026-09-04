@@ -1048,7 +1048,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         <p className="rounded-lg bg-[#CFFF81]/10 px-3 py-2 text-sm text-[#CFFF81]">{notice}</p>
       ) : null}
 
-      <section className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <section className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
         <h2 className="text-sm font-medium text-gray-200">Status</h2>
         <div className="flex flex-wrap items-center gap-3">
           <select
@@ -1071,7 +1071,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-red-900/50 bg-[#121214] p-4">
+      <section className="space-y-3 rounded-xl border border-red-900/50 bg-transparent p-4">
         <h2 className="text-sm font-medium text-red-200">Delete garden</h2>
         <p className="text-xs text-gray-500">
           Rare. Removes this world and its map, chapters, and merch records. Linked blooms stay in
@@ -1087,7 +1087,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         </button>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <section className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
         <h2 className="text-sm font-medium text-gray-200">Shows (chapters)</h2>
         <p className="text-xs text-gray-500">Link live events so contributions grow this shared garden.</p>
         {chapters.length === 0 ? (
@@ -1099,7 +1099,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               return (
                 <li
                   key={c.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2"
                 >
                   <span>
                     <span className="text-white">{c.label}</span>
@@ -1133,7 +1133,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </ul>
         )}
 
-        <form onSubmit={handleAttach} className="mt-4 space-y-3 border-t border-gray-800 pt-4">
+        <form onSubmit={handleAttach} className="mt-4 space-y-3 border-t border-white/10 pt-4">
           <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">Attach a show</h3>
           <label className="block text-xs text-gray-400">
             Event
@@ -1184,7 +1184,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
       </section>
 
       {garden?.worldState?.landmarks?.length ? (
-        <section className="rounded-xl border border-gray-800 bg-[#121214] p-4">
+        <section className="rounded-xl border border-white/10 bg-transparent p-4">
           <h2 className="text-sm font-medium text-gray-200">Landmarks unlocked</h2>
           <ul className="mt-2 space-y-1 text-sm text-gray-400">
             {garden.worldState.landmarks.map((lm) => (
@@ -1194,7 +1194,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         </section>
       ) : null}
 
-      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <section className="space-y-4 rounded-xl border border-white/10 bg-transparent p-4">
         <div>
           <h2 className="text-sm font-medium text-gray-200">Fan map</h2>
           <p className="mt-1 text-xs text-gray-500">
@@ -1203,7 +1203,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </p>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-gray-800 bg-black/30 p-3">
+        <div className="space-y-3 rounded-lg border border-white/10 bg-black/30 p-3">
           <div>
             <h3 className="text-xs font-medium uppercase tracking-wide text-gray-400">
               Season map plate
@@ -1295,7 +1295,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             {mapRefs.map((url, i) => (
               <div
                 key={`ref-${i}`}
-                className="flex flex-wrap items-start gap-2 rounded-lg border border-gray-800 bg-black/20 p-2"
+                className="flex flex-wrap items-start gap-2 rounded-lg border border-white/10 bg-black/20 p-2"
               >
                 <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-start">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
@@ -1406,7 +1406,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   <img
                     src={mapDraftUrl}
                     alt="Draft season map plate"
-                    className="max-h-48 w-full rounded-lg border border-gray-800 object-cover"
+                    className="max-h-48 w-full rounded-lg border border-white/10 object-cover"
                   />
                 </div>
               ) : null}
@@ -1417,14 +1417,14 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   <img
                     src={mapImageUrl.trim()}
                     alt="Live map plate"
-                    className="max-h-48 w-full rounded-lg border border-gray-800 object-cover"
+                    className="max-h-48 w-full rounded-lg border border-white/10 object-cover"
                   />
                 </div>
               ) : null}
             </div>
           )}
 
-          <div className="space-y-2 border-t border-gray-800 pt-3">
+          <div className="space-y-2 border-t border-white/10 pt-3">
             <h4 className="text-xs font-medium text-gray-300">Matchday variants (M4)</h4>
             <p className="text-[11px] text-gray-500">
               Same layout as the pinned plate — lighting/mood only. Hit regions stay aligned.
@@ -1453,7 +1453,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 return (
                   <li
                     key={key}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-800 px-3 py-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2"
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-white">{MAP_PLATE_VARIANT_LABELS[key]}</p>
@@ -1536,7 +1536,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               <li
                 key={z.key}
                 className={`rounded-lg border p-3 ${
-                  selectedZoneKey === z.key ? "border-[#CFFF81]/50" : "border-gray-800"
+                  selectedZoneKey === z.key ? "border-[#CFFF81]/50" : "border-white/10"
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1597,7 +1597,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                       <img
                         src={z.logoUrl.trim()}
                         alt=""
-                        className="h-12 w-12 rounded-lg border border-gray-800 bg-white/5 object-contain p-1"
+                        className="h-12 w-12 rounded-lg border border-white/10 bg-white/5 object-contain p-1"
                       />
                       <button
                         type="button"
@@ -1765,12 +1765,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </button>
         </div>
 
-        <div className="space-y-3 border-t border-gray-800 pt-4">
+        <div className="space-y-3 border-t border-white/10 pt-4">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Sponsors (optional)</p>
           {sponsors.length ? (
             <ul className="space-y-3 text-sm">
               {sponsors.map((s) => (
-                <li key={s.key} className="rounded-lg border border-gray-800 p-3 space-y-2">
+                <li key={s.key} className="rounded-lg border border-white/10 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-white">{s.name}</span>
                     <button
@@ -1823,7 +1823,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                         <img
                           src={s.logoUrl.trim()}
                           alt=""
-                          className="h-12 w-12 rounded-lg border border-gray-800 bg-white/5 object-contain p-1"
+                          className="h-12 w-12 rounded-lg border border-white/10 bg-white/5 object-contain p-1"
                         />
                         <button
                           type="button"
@@ -1901,7 +1901,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         ) : null}
       </section>
 
-      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <section className="space-y-4 rounded-xl border border-white/10 bg-transparent p-4">
         <GardenCompositionCanvas
           gardenId={gardenId}
           gardenTitle={garden?.title || "Garden"}
@@ -1913,7 +1913,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         />
       </section>
 
-      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <section className="space-y-4 rounded-xl border border-white/10 bg-transparent p-4">
         <div>
           <h2 className="text-sm font-medium text-gray-200">Gameday checklist</h2>
           <p className="mt-1 text-xs text-gray-500">
@@ -1995,7 +1995,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <li
                   key={item.id}
                   className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-3 ${
-                    played ? "border-[#CFFF81]/30 bg-[#CFFF81]/5" : "border-gray-800"
+                    played ? "border-[#CFFF81]/30 bg-[#CFFF81]/5" : "border-white/10"
                   }`}
                 >
                   <span>
@@ -2027,7 +2027,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         )}
       </section>
 
-      <details className="rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <details className="rounded-xl border border-white/10 bg-transparent p-4">
         <summary className="cursor-pointer text-sm font-medium text-gray-300">
           Advanced · Commerce & debugger
         </summary>
@@ -2038,7 +2038,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               Pin editions, preview merch art, and create stub checkout orders.
             </p>
 
-            <form onSubmit={handlePinEdition} className="space-y-3 border-b border-gray-800 pb-4">
+            <form onSubmit={handlePinEdition} className="space-y-3 border-b border-white/10 pb-4">
               <h3 className="text-xs uppercase tracking-wide text-gray-500">Pin edition</h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-xs text-gray-400">
@@ -2080,7 +2080,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   {editions.map((ed) => (
                     <li
                       key={ed.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-800 px-3 py-2"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/10 px-3 py-2"
                     >
                       <span>
                         <span className="text-white">{ed.label}</span>
@@ -2103,7 +2103,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               )}
             </div>
 
-            <div className="space-y-3 border-t border-gray-800 pt-4">
+            <div className="space-y-3 border-t border-white/10 pt-4">
               <h3 className="text-xs uppercase tracking-wide text-gray-500">Stub checkout</h3>
               <div className="flex flex-wrap items-end gap-3">
                 <label className="block text-xs text-gray-400">
@@ -2162,7 +2162,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               {orders.length ? (
                 <ul className="space-y-2 text-xs text-gray-400">
                   {orders.map((o) => (
-                    <li key={o.id} className="rounded border border-gray-800 px-2 py-1.5">
+                    <li key={o.id} className="rounded border border-white/10 px-2 py-1.5">
                       <span className="text-gray-200">{o.kind}</span> · {o.format} · {o.status} · v
                       {o.orderedSnapshot.worldVersion} · {new Date(o.createdAt).toLocaleString()}
                       {o.editionSlug ? ` · edition /${o.editionSlug}` : ""}
@@ -2175,7 +2175,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             </div>
           </div>
 
-          <div className="space-y-4 border-t border-gray-800 pt-6">
+          <div className="space-y-4 border-t border-white/10 pt-6">
             <h2 className="text-sm font-medium text-gray-200">World debugger</h2>
             <p className="text-xs text-gray-500">Live state and recent mutations for engineering checks.</p>
 
@@ -2215,7 +2215,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               <h3 className="text-xs uppercase tracking-wide text-gray-500">recent mutations</h3>
               <ul className="mt-2 max-h-64 space-y-2 overflow-auto text-xs text-gray-400">
                 {(debug?.recentMutations ?? []).map((m) => (
-                  <li key={m.id} className="rounded border border-gray-800 px-2 py-1.5">
+                  <li key={m.id} className="rounded border border-white/10 px-2 py-1.5">
                     <span className="text-gray-300">v{m.worldVersion}</span> · {m.kind} · {m.sourceType}{" "}
                     · {new Date(m.createdAt).toLocaleString()}
                     {m.effects?.length ? (

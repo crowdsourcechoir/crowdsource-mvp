@@ -96,7 +96,7 @@ export default function ComposerPage() {
             {error}
           </div>
         ) : events.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-700 bg-[#121214] px-5 py-8 text-sm text-gray-400">
+          <div className="rounded-xl border border-dashed border-white/15 bg-transparent px-5 py-8 text-sm text-gray-400">
             No blooms yet.{" "}
             <Link href="/admin/events/new" className="text-[#CFFF81] hover:underline">
               Create one
@@ -104,11 +104,11 @@ export default function ComposerPage() {
             to start composing.
           </div>
         ) : (
-          <ul className="divide-y divide-gray-800 overflow-hidden rounded-xl border border-gray-800 bg-[#121214]">
+          <ul className="space-y-2">
             {events.map((event) => (
               <li
                 key={event.id}
-                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-xl border border-transparent bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <Link
@@ -126,20 +126,20 @@ export default function ComposerPage() {
                 <div className="flex flex-wrap gap-2">
                   <Link
                     href={`/admin/songgarden/${event.id}`}
-                    className="rounded-lg border border-gray-700 bg-[#18181b] px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81]/50 hover:text-white"
+                    className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white"
                   >
                     Pads / canvas
                   </Link>
                   <button
                     type="button"
                     onClick={() => setBriefEventId(event.id)}
-                    className="rounded-lg border border-gray-700 bg-[#18181b] px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81]/50 hover:text-white"
+                    className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white"
                   >
                     Brief
                   </button>
                   <Link
                     href={`/admin/events/${event.id}`}
-                    className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-3 py-1.5 text-xs font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+                    className="rounded-lg border border-[#CFFF81]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[#CFFF81] transition-colors hover:border-[#CFFF81] hover:bg-[#CFFF81]/10"
                   >
                     Bloom
                   </Link>
@@ -150,7 +150,7 @@ export default function ComposerPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-gray-800 bg-[#121214] p-5">
+      <section className="rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-lg font-semibold text-white">First-class contribution media</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
           Contributions are not only audio or text. Photos, selfies, submitted videos, and short crowd clips belong in
@@ -161,7 +161,7 @@ export default function ComposerPage() {
           {contributionTypes.map((type) => (
             <span
               key={type}
-              className="rounded-full border border-gray-700 bg-[#18181b] px-3 py-1.5 text-sm text-gray-200"
+              className="rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-sm text-gray-200"
             >
               {type}
             </span>
@@ -181,7 +181,7 @@ export default function ComposerPage() {
             role="dialog"
             aria-modal="true"
             aria-label="Composition Brief"
-            className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-gray-800 bg-[#121214] shadow-2xl shadow-black/50"
+            className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/15 bg-black shadow-2xl shadow-black/50"
           >
             <div className="flex items-start justify-between gap-3 border-b border-gray-800 px-5 py-4">
               <div>

@@ -167,7 +167,7 @@ function BriefSections({ brief }: { brief: CompositionBrief }) {
         </section>
       )}
 
-      <section className="rounded-xl border border-gray-700/60 bg-[#18181b] p-4">
+      <section className="rounded-xl border border-gray-700/60 bg-transparent p-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Source Material</h2>
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <div>
@@ -287,7 +287,7 @@ export default function CompositionBriefView({
       )}
 
       {hasScope && (
-        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-[#18181b] p-4 sm:p-6">
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <div className="flex flex-wrap gap-3">
             <button
               type="button"

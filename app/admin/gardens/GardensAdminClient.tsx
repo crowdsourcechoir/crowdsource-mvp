@@ -96,7 +96,7 @@ export default function GardensAdminClient() {
         </p>
       </div>
 
-      <section className="space-y-3 rounded-xl border border-[#CFFF81]/25 bg-[#121214] p-4">
+      <section className="space-y-3 rounded-xl border border-[#CFFF81]/25 bg-transparent p-4">
         <h2 className="text-sm font-medium text-white">Ballard FC demo</h2>
         <p className="text-xs text-gray-400">
           Loads Interbay Stadium map with sponsored zones (Supporters, Beer Garden, Tequila Zone,
@@ -126,7 +126,7 @@ export default function GardensAdminClient() {
         </div>
       </section>
 
-      <form onSubmit={handleCreate} className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <form onSubmit={handleCreate} className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
         <h2 className="text-sm font-medium text-gray-200">Create garden</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-xs text-gray-400">
@@ -168,14 +168,14 @@ export default function GardensAdminClient() {
       ) : gardens.length === 0 ? (
         <p className="text-sm text-gray-500">No gardens yet.</p>
       ) : (
-        <ul className="divide-y divide-gray-800 rounded-xl border border-gray-800">
+        <ul className="space-y-2">
           {gardens.map((g) => (
             <li
               key={g.id}
-              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-xl border border-transparent bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:underline">
+                <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:text-[#CFFF81]">
                   {g.title}
                 </Link>
                 <p className="text-xs text-gray-500">
@@ -194,7 +194,7 @@ export default function GardensAdminClient() {
               </div>
               <Link
                 href={`/admin/gardens/${g.id}`}
-                className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+                className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
               >
                 Manage
               </Link>

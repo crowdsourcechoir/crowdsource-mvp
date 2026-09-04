@@ -46,7 +46,7 @@ export default function HomePageGate() {
 
   if (state === "loading") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0e] px-4 pb-[env(safe-area-inset-bottom)]">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4 pb-[env(safe-area-inset-bottom)]">
         <p className="text-gray-400">Loading…</p>
       </div>
     );
@@ -54,7 +54,7 @@ export default function HomePageGate() {
 
   if (state === "unauthenticated") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0e] px-4 pb-[env(safe-area-inset-bottom)]">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4 pb-[env(safe-area-inset-bottom)]">
         <div className="w-full max-w-xs space-y-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Crowdsource Choir" className="mx-auto h-14 w-auto" />
@@ -68,7 +68,7 @@ export default function HomePageGate() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              className="w-full rounded-xl border border-gray-600 bg-[#1a1a1a] px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+              className="w-full rounded-xl border border-white/15 bg-black px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-[#CFFF81] focus:outline-none focus:ring-1 focus:ring-[#CFFF81]/40"
               placeholder="Enter password"
               required
               disabled={submitting}
@@ -77,7 +77,7 @@ export default function HomePageGate() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full min-h-[48px] rounded-xl bg-white px-4 py-3 text-base font-medium text-gray-900 hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50"
+              className="w-full min-h-[48px] rounded-xl border border-transparent bg-white px-4 py-3 text-base font-medium text-gray-900 transition-colors hover:border-[#CFFF81] hover:bg-white disabled:opacity-50"
             >
               {submitting ? "Signing in…" : "Sign in"}
             </button>
@@ -93,12 +93,12 @@ export default function HomePageGate() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0e] px-4 pb-[env(safe-area-inset-bottom)]">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4 pb-[env(safe-area-inset-bottom)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/logo.png" alt="Crowdsource Choir" className="h-16 w-auto" />
       <Link
         href="/admin/gardens"
-        className="mt-6 min-h-[48px] min-w-[48px] rounded-xl bg-white px-6 py-3 text-base font-medium text-gray-900 hover:bg-gray-200 active:bg-gray-300"
+        className="mt-6 min-h-[48px] min-w-[48px] rounded-xl border border-transparent bg-white px-6 py-3 text-base font-medium text-gray-900 transition-colors hover:border-[#CFFF81]"
       >
         {"Let's Go!"}
       </Link>

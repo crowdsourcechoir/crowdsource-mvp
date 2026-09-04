@@ -51,14 +51,14 @@ export default function RootsPage() {
       </div>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
-        <div className="rounded-xl border border-gray-800 bg-[#121214] p-5">
+        <div className="rounded-xl border border-white/10 bg-transparent p-5">
           <h2 className="text-lg font-semibold text-white">Participation loop</h2>
           <p className="mt-2 text-sm leading-6 text-gray-400">
             Roots protect the loop that moves people from spectatorship into shared creation.
           </p>
           <ol className="mt-5 space-y-2">
             {rootPrinciples.map((principle, index) => (
-              <li key={principle} className="flex items-center gap-3 rounded-lg bg-white/[0.03] px-3 py-2">
+              <li key={principle} className="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#CFFF81]/15 text-xs font-bold text-[#CFFF81]">
                   {index + 1}
                 </span>
@@ -68,7 +68,7 @@ export default function RootsPage() {
           </ol>
         </div>
 
-        <div className="rounded-xl border border-gray-800 bg-[#121214] p-5">
+        <div className="rounded-xl border border-white/10 bg-transparent p-5">
           <h2 className="text-lg font-semibold text-white">What belongs here</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {[
@@ -101,7 +101,7 @@ export default function RootsPage() {
             <Link
               key={tool.href}
               href={tool.href}
-              className="rounded-xl border border-gray-800 bg-[#121214] p-5 transition hover:border-[#CFFF81]/50 hover:bg-[#18181b]"
+              className="rounded-xl border border-transparent bg-transparent p-5 transition-colors hover:border-[#CFFF81]"
             >
               <h3 className="text-base font-semibold text-white">{tool.title}</h3>
               <p className="mt-2 min-h-[3rem] text-sm leading-6 text-gray-400">{tool.description}</p>

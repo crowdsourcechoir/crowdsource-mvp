@@ -164,7 +164,7 @@ export default function LivePage() {
         </div>
       </div>
 
-      <section className="mb-8 rounded-xl border border-gray-800 bg-[#121214] p-5 sm:p-6">
+      <section className="mb-8 rounded-xl border border-white/10 bg-transparent p-5 sm:p-6">
         <h2 className="text-lg font-bold text-white sm:text-xl">Start Session</h2>
         <p className="mt-2 text-sm text-gray-400">Select a mode and optionally assign it to a Bloom</p>
 
