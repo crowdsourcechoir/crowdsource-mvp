@@ -20,6 +20,15 @@ function kindLabel(kind: FirstTouchEvent["kind"]): { text: string; className: st
   return { text: "Sent", className: "text-sky-300" };
 }
 
+function decodeSnippet(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 function StatCard({
   label,
   value,
@@ -59,7 +68,7 @@ function EventRow({ event }: { event: FirstTouchEvent }) {
           {event.organizationName}
         </Link>
         {event.contactName ? <p className="truncate text-xs text-gray-500">{event.contactName}</p> : null}
-        {event.snippet ? <p className="mt-0.5 line-clamp-2 text-xs text-gray-400">{event.snippet}</p> : null}
+        {event.snippet ? <p className="mt-0.5 line-clamp-2 text-xs text-gray-400">{decodeSnippet(event.snippet)}</p> : null}
       </div>
     </li>
   );
