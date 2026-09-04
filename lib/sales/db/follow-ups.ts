@@ -97,10 +97,19 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
       .in("opportunity_id", oppIds)
       .order("created_at", { ascending: false });
     if (queueErr) throw new Error(queueErr.message);
+    const statusByOpp = new Map<string, string>();
     for (const row of queueRows ?? []) {
       const oppId = String(row.opportunity_id);
-      if (queueByOpp.has(oppId)) continue;
-      queueByOpp.set(oppId, String(row.id));
+      const status = String(row.status ?? "");
+      if (!queueByOpp.has(oppId)) {
+        queueByOpp.set(oppId, String(row.id));
+        statusByOpp.set(oppId, status);
+        continue;
+      }
+      if (statusByOpp.get(oppId) !== "pending" && status === "pending") {
+        queueByOpp.set(oppId, String(row.id));
+        statusByOpp.set(oppId, status);
+      }
     }
   }
 

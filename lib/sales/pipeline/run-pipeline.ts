@@ -210,7 +210,7 @@ export async function runPipelineForOrganization(
       // Always re-run contact stages after a contact-gap deepen (even if no new people were
       // extracted — enrichment may now succeed on names we already had after a prior provider error).
       if (deepen && (deepen.findingsCreated > 0 || deepen.namedPeopleMentioned.length > 0 || contactGap)) {
-        if (deepen.namedPeopleMentioned.length > 0) {
+        if (deepen.namedPeopleMentioned.length > 0 || contactGap) {
           await runStage("find_contact", { organizationId, afterDeepen: true }, () =>
             runDiscoverContactsStage(freshOrg, deepen.namedPeopleMentioned)
           );

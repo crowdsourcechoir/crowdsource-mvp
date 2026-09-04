@@ -58,7 +58,10 @@ export function isGenericMailboxEmail(email: string | null | undefined): boolean
 
 export function looksLikeGenericRoleName(name: string | null | undefined): boolean {
   if (!name) return false;
-  return GENERIC_ROLE_NAMES.test(name.trim());
+  const trimmed = name.trim();
+  if (GENERIC_ROLE_NAMES.test(trimmed)) return true;
+  // "Community & Social Impact team", "Storm ticket sales and service team"
+  return /\b(team|inbox|mailbox)s?$/i.test(trimmed);
 }
 
 /** Display name when the operator only typed an inbox address. */

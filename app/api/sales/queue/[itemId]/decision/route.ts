@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { decideQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
+import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
 import { updateDraftDecision, getDraft, listDraftsForOpportunity, claimOpenDraftForSend, revertDraftClaim } from "@/lib/sales/db/outreach";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
-import { getContact, listContactsForOrganization, updateContactVerification } from "@/lib/sales/db/contacts";
+import { getContact, updateContactVerification } from "@/lib/sales/db/contacts";
 import {
   getOpportunity,
   updateOpportunityStatus,
@@ -18,10 +18,12 @@ import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { draftToPlainText, coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
-import { isGenericMailboxEmail, isSendableContact } from "@/lib/sales/dedupe";
+import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
-import { pickNextRemainingInitialDraft, shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
+import { resolveRemainingAfterSend } from "@/lib/sales/outreach/remaining-contacts";
+import { shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
 import type { ApprovalQueueItemStatus, OpportunityStatus } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -59,10 +61,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       return NextResponse.json({ error: `Unknown action "${action}"` }, { status: 400 });
     }
 
-    const item = await getQueueItem(itemId);
-    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    const loaded = await getQueueItem(itemId);
+    if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    let item;
+    try {
+      item = await ensureQueueItemActionable(loaded);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status ?? 500;
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status });
     }
 
     const draft = item.outreachDraftId ? await getDraft(item.outreachDraftId) : null;
@@ -259,27 +265,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     }
 
     // Multi-contact queue: after sending one contact, keep the item pending if OTHER
-    // people still have unsent initial drafts. Never auto-advance to the person just
-    // emailed, even if a duplicate open draft remains.
+    // sendable contacts remain — including general event inboxes that may not have a draft yet.
     let remaining = false;
     let nextDetail = null;
     if (isApprove && item.kind === "initial") {
-      const orgContacts = await listContactsForOrganization(opportunity.organizationId);
-      const readyIds = new Set(
-        orgContacts
-          .filter((c) => isSendableContact(c) && c.email && !isOutboundEmailBlocked(c.email))
-          .map((c) => c.id)
-      );
-      const drafts = await listDraftsForOpportunity(opportunity.id);
-      const nextDraft = pickNextRemainingInitialDraft({
-        drafts,
-        readyContactIds: readyIds,
+      const organization = await getOrganization(opportunity.organizationId);
+      const afterSend = await resolveRemainingAfterSend({
+        item,
+        opportunity,
+        organization,
         justSentDraftId: draft?.id ?? null,
         justSentContactId: draft?.contactId ?? null,
       });
-      if (nextDraft) {
+      if (afterSend.remaining) {
         remaining = true;
-        await setQueueItemOutreachDraft(itemId, nextDraft.id);
         nextDetail = await assembleQueueItemDetailFromQueueItem((await getQueueItem(itemId))!);
       }
     }

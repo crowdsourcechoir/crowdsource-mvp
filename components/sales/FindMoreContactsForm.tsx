@@ -101,8 +101,8 @@ export default function FindMoreContactsForm({
             </h2>
             <p className="mt-2 text-sm text-gray-300">
               Hunter will search {orgName}
-              {domainHint ? ` (${domainHint})` : ""} for people matching what you type, then add them to this
-              contacts grid.
+              {domainHint ? ` (${domainHint})` : ""} for event-team people and general inboxes matching what you
+              type, then add them to this contacts grid.
             </p>
             <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-gray-500" htmlFor={`${titleId}-q`}>
               Who should we look for?

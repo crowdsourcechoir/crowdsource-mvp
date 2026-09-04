@@ -1,11 +1,13 @@
 import { createContact, findExistingContact, listContactsForOrganization } from "../../db/contacts";
-import { hasVerifiedEmail, looksLikePersonName } from "../../dedupe";
+import { discoverEventContactsForOrganization } from "../../enrichment/event-contacts";
+import { hasVerifiedEmail, isSendableContact, looksLikePersonName } from "../../dedupe";
 import type { Organization } from "../../types";
 import type { ResearchStageOutput } from "./research";
 
 export type DiscoverContactsStageOutput = {
   existingContactCount: number;
   createdFromResearchCount: number;
+  createdFromHunterEventSearch: number;
 };
 
 /**
@@ -26,14 +28,14 @@ export async function runDiscoverContactsStage(
 ): Promise<{ output: DiscoverContactsStageOutput }> {
   const existing = await listContactsForOrganization(org.id);
   if (existing.some((c) => hasVerifiedEmail(c))) {
-    return { output: { existingContactCount: existing.length, createdFromResearchCount: 0 } };
+    return {
+      output: { existingContactCount: existing.length, createdFromResearchCount: 0, createdFromHunterEventSearch: 0 },
+    };
   }
 
   let created = 0;
   for (const person of namedPeopleMentioned) {
-    // Defensive backstop against the extraction prompt: a generic mailbox ("info@...") or role
-    // string with no attached person name is not a named decision-maker, regardless of what the
-    // model returned. Never surfaced as a contact — real named people are drafted to instead.
+    // Named humans from research only — general inboxes come from Hunter below, not the LLM.
     if (!looksLikePersonName(person.fullName)) continue;
     const alreadyExists = await findExistingContact(org.id, person.email, person.fullName);
     if (alreadyExists) continue;
@@ -48,5 +50,18 @@ export async function runDiscoverContactsStage(
     created += 1;
   }
 
-  return { output: { existingContactCount: existing.length, createdFromResearchCount: created } };
+  let hunterCreated = 0;
+  const afterNamed = created > 0 ? await listContactsForOrganization(org.id) : existing;
+  if (!afterNamed.some((c) => isSendableContact(c))) {
+    const hunted = await discoverEventContactsForOrganization(org);
+    hunterCreated = hunted.created;
+  }
+
+  return {
+    output: {
+      existingContactCount: existing.length,
+      createdFromResearchCount: created,
+      createdFromHunterEventSearch: hunterCreated,
+    },
+  };
 }

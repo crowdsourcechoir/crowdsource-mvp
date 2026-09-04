@@ -3,12 +3,14 @@ import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { getOrganization } from "@/lib/sales/db/organizations";
 import { getOpportunity } from "@/lib/sales/db/opportunities";
 import { getQueueItem } from "@/lib/sales/db/queue";
-import { extractDomain, isPlausibleEmail, looksLikePersonName, normalizeEmail } from "@/lib/sales/dedupe";
+import { extractDomain, genericMailboxLabel, isGenericMailboxEmail, isPlausibleEmail, looksLikePersonName, normalizeEmail } from "@/lib/sales/dedupe";
 import { getHunterAccountCredits } from "@/lib/sales/enrichment/hunter-account";
 import { describeFindQuery, hunterPersonMatchesQuery, parseFindQuery } from "@/lib/sales/enrichment/find-query";
+import { isEventRelatedMailbox } from "@/lib/sales/enrichment/event-contacts";
 import { searchHunterDomain, type HunterDomainSearchPerson } from "@/lib/sales/enrichment/hunter-domain-search";
 import { getEnrichmentConfigStatus } from "@/lib/sales/enrichment/config-status";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import type { QueueItemDetail } from "@/lib/sales/types";
 
@@ -72,8 +74,8 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
 
   const item = await getQueueItem(input.itemId);
   if (!item) throw new Error("Queue item not found.");
-  if (item.status !== "pending") throw new Error("Queue item already decided.");
-  const opportunity = await getOpportunity(item.opportunityId);
+  const actionable = await ensureQueueItemActionable(item);
+  const opportunity = await getOpportunity(actionable.opportunityId);
   if (!opportunity) throw new Error("Opportunity not found.");
   const organization = await getOrganization(opportunity.organizationId);
   if (!organization) throw new Error("Organization not found.");
@@ -82,7 +84,7 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   const emptyCredits = { beforeUsed: null, afterUsed: null, delta: null, available: null };
   if (!domain) {
     return {
-      detail: await assembleQueueItemDetailFromQueueItem(item),
+      detail: await assembleQueueItemDetailFromQueueItem(actionable),
       added: [],
       skippedExisting: 0,
       skippedInvalid: 0,
@@ -122,7 +124,7 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
 
   if (!search.ok) {
     return {
-      detail: await assembleQueueItemDetailFromQueueItem(item),
+      detail: await assembleQueueItemDetailFromQueueItem(actionable),
       added: [],
       skippedExisting: 0,
       skippedInvalid: 0,
@@ -136,9 +138,15 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     };
   }
 
+  const wantsInboxes = parsed.keywords.some((k) =>
+    /event|info|contact|community|ticket|program|partner|inbox|hello/.test(k)
+  );
   const matchesQuery = (p: HunterDomainSearchPerson) => {
-    if (p.type && p.type !== "personal") return false;
     if (!isPlausibleEmail(p.email)) return false;
+    if (isGenericMailboxEmail(p.email)) {
+      return wantsInboxes || isEventRelatedMailbox(p.email);
+    }
+    if (p.type && p.type !== "personal") return false;
     if (!personFullName(p)) return false;
     return hunterPersonMatchesQuery(
       {
@@ -156,21 +164,27 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   let matchedPeople = people.filter(matchesQuery);
 
   if (
-    people.length === 0 &&
-    (parsed.jobTitles.length > 0 || parsed.departments.length > 0)
+    (people.length === 0 || (wantsInboxes && !matchedPeople.some((p) => isGenericMailboxEmail(p.email)))) &&
+    (parsed.jobTitles.length > 0 || parsed.departments.length > 0 || wantsInboxes)
   ) {
     const broad = await searchHunterDomain({
       domain,
       limit: MAX_RESULTS,
-      type: "personal",
-      requiredFields: ["full_name"],
+      type: wantsInboxes ? "generic" : "personal",
+      requiredFields: wantsInboxes ? undefined : ["full_name"],
     });
     const afterBroad = await getHunterAccountCredits();
     credits.afterUsed = afterBroad.creditsUsed;
     credits.delta = creditDelta(credits.beforeUsed, afterBroad.creditsUsed);
     credits.available = afterBroad.creditsAvailable;
     if (broad.ok) {
-      people = broad.people;
+      const merged = [...people, ...broad.people];
+      const seen = new Set<string>();
+      people = merged.filter((p) => {
+        if (seen.has(p.email)) return false;
+        seen.add(p.email);
+        return true;
+      });
       matchedPeople = people.filter(matchesQuery);
     } else if (!search.error) {
       search = broad;
@@ -179,7 +193,7 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
 
   if (!search.ok && people.length === 0) {
     return {
-      detail: await assembleQueueItemDetailFromQueueItem(item),
+      detail: await assembleQueueItemDetailFromQueueItem(actionable),
       added: [],
       skippedExisting: 0,
       skippedInvalid: 0,
@@ -206,9 +220,10 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   let skippedInvalid = 0;
 
   for (const person of matchedPeople) {
-    const fullName = personFullName(person);
-    if (!fullName) continue;
     const email = person.email;
+    const generic = isGenericMailboxEmail(email);
+    const fullName = personFullName(person) ?? (generic ? genericMailboxLabel(email) : null);
+    if (!fullName) continue;
     const nameKey = fullName.toLowerCase();
 
     if (existingEmails.has(email) || existingNames.has(nameKey)) {
@@ -216,32 +231,40 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
       continue;
     }
 
-    const verified = await verifyEmailAddress(email);
-    if (verified.status !== "verified_deliverable") {
-      skippedInvalid += 1;
-      continue;
+    let verificationStatus: "verified_deliverable" | "valid_format" = "valid_format";
+    if (generic) {
+      verificationStatus = "valid_format";
+    } else {
+      const verified = await verifyEmailAddress(email);
+      if (verified.status !== "verified_deliverable") {
+        skippedInvalid += 1;
+        continue;
+      }
+      verificationStatus = "verified_deliverable";
     }
 
     const contact = await createContact({
       organizationId: organization.id,
       fullName,
-      roleTitle: person.position,
+      roleTitle: person.position ?? (generic ? "General event inbox" : null),
       roleCategory: person.department,
       email,
       phone: person.phone,
       linkedinUrl: person.linkedin,
       source: "ai_discovered",
-      emailVerificationStatus: "verified_deliverable",
+      emailVerificationStatus: verificationStatus,
       importMetadata: {
         hunterQuery: query,
         hunterDomainSearch: true,
+        hunterType: person.type,
         hunterConfidence: person.confidence,
         hunterDepartment: person.department,
         hunterSeniority: person.seniority,
-        hunterVerifier: verified.hunterStatus,
-        roleDescription: person.position
-          ? `${person.position} — found via Hunter for “${query}”.`
-          : `Found via Hunter for “${query}”.`,
+        roleDescription: generic
+          ? "General event / org inbox — found via Hunter."
+          : person.position
+            ? `${person.position} — found via Hunter for “${query}”.`
+            : `Found via Hunter for “${query}”.`,
       },
     });
 
@@ -263,8 +286,8 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     });
   }
 
-  const refreshed = await getQueueItem(item.id);
-  const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : await assembleQueueItemDetailFromQueueItem(item);
+  const refreshed = await getQueueItem(actionable.id);
+  const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : await assembleQueueItemDetailFromQueueItem(actionable);
   const who = describeFindQuery(parsed);
   const creditBit = creditPhrase(credits.delta);
 
@@ -283,7 +306,7 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   } else {
     const names = added.map((c) => c.fullName).filter(Boolean).join(", ");
     const bounceNote = skippedInvalid > 0 ? ` Skipped ${skippedInvalid} that would bounce.` : "";
-    message = `Added ${added.length} verified contact${added.length === 1 ? "" : "s"} from Hunter: ${names}.${bounceNote}${creditBit}`;
+    message = `Added ${added.length} contact${added.length === 1 ? "" : "s"} from Hunter: ${names}.${bounceNote}${creditBit}`;
   }
 
   return {
