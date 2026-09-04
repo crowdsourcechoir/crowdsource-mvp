@@ -107,7 +107,7 @@ const settingsGroups: { heading: string; blurb: string; cards: SettingsCard[] }[
       {
         domain: "Appearance",
         title: "Admin chrome",
-        description: "Navigation collapse state is saved in this browser. True-black shell is the system default.",
+        description: "Sidebar open/closed state is saved in this browser. True-black shell is the system default.",
         href: "/admin/settings#appearance",
         status: "Active",
       },
@@ -197,7 +197,7 @@ export default function SettingsPage() {
       <section id="appearance" className="scroll-mt-8 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
         <h2 className="text-base font-semibold text-white">Appearance</h2>
         <p className="mt-2 text-sm text-gray-400">
-          Shell background is solid black. Use the sidebar Collapse control to switch between icon-only and labeled
+          Shell background is solid black. Click the sidebar divider to switch between icon-only and labeled
           navigation; that preference is saved in this browser.
         </p>
       </section>

@@ -7,6 +7,7 @@ import {
   songgardenAudioUrl,
   type SonggardenClip,
 } from "@/data/songgardenClient";
+import { enqueueClipFetch } from "@/lib/songgarden/clip-fetch-queue";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 import { formatClipDuration, resolveClipSourcePrompt } from "@/lib/songgarden/clip-prompt";
 import { wavFilename } from "@/lib/songgarden/sound-pack";
@@ -32,10 +33,10 @@ export default function SoundClipRow({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileCacheRef = useRef<File | null>(null);
   const streamUrl = songgardenAudioUrl(eventId, clip.id, clip.submittedAt);
-  const [src, setSrc] = useState(streamUrl);
+  const [src, setSrc] = useState<string | null>(null);
   const [arrayBuffer, setArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -59,21 +60,26 @@ export default function SoundClipRow({
     let cancelled = false;
     fileCacheRef.current = null;
     setError(false);
-    setSrc(streamUrl);
+    setLoading(true);
+    setSrc(null);
     setArrayBuffer(null);
     setCurrentTime(0);
 
-    void fetchClipFile(eventId, clip)
+    void enqueueClipFetch(() => fetchClipFile(eventId, clip))
       .then(async (file) => {
         if (cancelled) return;
         fileCacheRef.current = file;
         objectUrl = URL.createObjectURL(file);
         setSrc(objectUrl);
+        setError(false);
         const buf = await file.arrayBuffer();
         if (!cancelled) setArrayBuffer(buf);
       })
       .catch(() => {
-        // Stream URL still works for playback / DownloadURL.
+        if (!cancelled) setSrc(streamUrl);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -103,7 +109,7 @@ export default function SoundClipRow({
   }, [playing]);
 
   async function togglePlay() {
-    if (error) return;
+    if (error || !src) return;
     const el = audioRef.current;
     if (!el) return;
     if (playing) {
@@ -158,29 +164,34 @@ export default function SoundClipRow({
         playing ? "border-[#CFFF81]/70" : "border-gray-800"
       } ${dragging ? "opacity-60" : ""} ${error ? "border-red-800/60" : ""}`}
     >
-      <audio
-        ref={audioRef}
-        src={src}
-        preload="metadata"
-        onEnded={() => {
-          setPlaying(false);
-          setCurrentTime(0);
-          onActivate?.(null);
-        }}
-        onPause={() => setPlaying(false)}
-        onLoadedMetadata={() => {
-          if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
-            setAudioDuration(audioRef.current.duration);
-          }
-        }}
-        onError={() => setError(true)}
-      />
+      {src ? (
+        <audio
+          ref={audioRef}
+          src={src}
+          preload="metadata"
+          onEnded={() => {
+            setPlaying(false);
+            setCurrentTime(0);
+            onActivate?.(null);
+          }}
+          onPause={() => setPlaying(false)}
+          onLoadedMetadata={() => {
+            setError(false);
+            if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
+              setAudioDuration(audioRef.current.duration);
+            }
+          }}
+          onLoadedData={() => setError(false)}
+          onCanPlay={() => setError(false)}
+          onError={() => setError(true)}
+        />
+      ) : null}
 
       <div className="flex items-start gap-3">
         <button
           type="button"
           onClick={() => void togglePlay()}
-          disabled={error}
+          disabled={error || !src}
           className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
             playing
               ? "bg-[#CFFF81] text-black"

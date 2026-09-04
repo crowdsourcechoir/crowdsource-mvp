@@ -124,22 +124,6 @@ function IconSettings({ className }: { className?: string }) {
   );
 }
 
-function IconCollapse({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function IconExpand({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 const navItems: AdminNavItem[] = [
   {
     label: "Gardens",
@@ -228,7 +212,7 @@ export default function AdminSideNav() {
 
   return (
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/10 bg-black transition-[width] duration-200 ${
+      className={`relative sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r border-transparent bg-black ${
         collapsed ? "w-[72px]" : "w-[232px]"
       } ${ready ? "opacity-100" : "opacity-0"}`}
       aria-label="Admin navigation"
@@ -252,7 +236,7 @@ export default function AdminSideNav() {
               href={item.href}
               title={collapsed ? `${item.label} — ${item.eyebrow}` : item.eyebrow}
               aria-current={active ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition ${
+              className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
                 collapsed ? "justify-center" : ""
               } ${
                 active
@@ -274,7 +258,7 @@ export default function AdminSideNav() {
           href="/admin/settings"
           title={collapsed ? "Settings" : undefined}
           aria-current={settingsActive ? "page" : undefined}
-          className={`group mb-1 flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition ${
+          className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
             collapsed ? "justify-center" : ""
           } ${
             settingsActive
@@ -287,19 +271,22 @@ export default function AdminSideNav() {
           </span>
           {!collapsed && <span>Settings</span>}
         </Link>
-
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
-          className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium text-gray-400 transition hover:bg-white/5 hover:text-white ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          {collapsed ? <IconExpand className="h-5 w-5" /> : <IconCollapse className="h-5 w-5" />}
-          {!collapsed && <span>Collapse</span>}
-        </button>
       </div>
+
+      {/* Full-height border hit target — no static arrow */}
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        title="Toggle Sidebar"
+        aria-label="Toggle Sidebar"
+        aria-expanded={!collapsed}
+        className="group/rail absolute inset-y-0 right-0 z-20 w-3 translate-x-1/2 cursor-col-resize border-0 bg-transparent p-0"
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10 transition-colors duration-75 group-hover/rail:bg-[#CFFF81]/70 group-focus-visible/rail:bg-[#CFFF81]"
+        />
+      </button>
     </aside>
   );
 }

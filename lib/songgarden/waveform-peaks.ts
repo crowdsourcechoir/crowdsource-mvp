@@ -1,7 +1,22 @@
 /**
- * Peak extraction for SoundCloud-style waveforms. Pure enough to unit-test
- * without Web Audio (pass a mono PCM buffer).
+ * Peak extraction for SoundCloud-style waveforms.
  */
+
+let sharedCtx: AudioContext | null = null;
+
+function getSharedAudioContext(): AudioContext {
+  const Ctx =
+    typeof window !== "undefined"
+      ? window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      : undefined;
+  if (!Ctx) throw new Error("Web Audio is not available.");
+  if (!sharedCtx || sharedCtx.state === "closed") {
+    sharedCtx = new Ctx();
+  }
+  return sharedCtx;
+}
+
 export function peaksFromSamples(samples: Float32Array | number[], barCount: number): number[] {
   const bars = Math.max(8, Math.min(512, Math.floor(barCount)));
   const len = samples.length;
@@ -28,21 +43,14 @@ export async function peaksFromAudioBuffer(
   arrayBuffer: ArrayBuffer,
   barCount: number
 ): Promise<{ peaks: number[]; durationSec: number }> {
-  const Ctx =
-    typeof window !== "undefined"
-      ? window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      : undefined;
-  if (!Ctx) throw new Error("Web Audio is not available.");
-  const ctx = new Ctx();
-  try {
-    const audio = await ctx.decodeAudioData(arrayBuffer.slice(0));
-    const channel = audio.getChannelData(0);
-    return {
-      peaks: peaksFromSamples(channel, barCount),
-      durationSec: audio.duration,
-    };
-  } finally {
-    await ctx.close().catch(() => undefined);
+  const ctx = getSharedAudioContext();
+  if (ctx.state === "suspended") {
+    await ctx.resume().catch(() => undefined);
   }
+  const audio = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  const channel = audio.getChannelData(0);
+  return {
+    peaks: peaksFromSamples(channel, barCount),
+    durationSec: audio.duration,
+  };
 }

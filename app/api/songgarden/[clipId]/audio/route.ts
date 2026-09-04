@@ -50,7 +50,7 @@ export async function GET(
       const full = await supabaseAdmin
         .from("songgarden_clips")
         .select(
-          "filename, mime_type, audio_data, audio_data_original, has_original, audio_storage_path, audio_original_storage_path"
+          "filename, mime_type, has_original, audio_storage_path, audio_original_storage_path, audio_data, audio_data_original"
         )
         .eq("id", clipId)
         .eq("event_id", eventId)
@@ -61,14 +61,35 @@ export async function GET(
       data = (full.data as Record<string, unknown> | null) ?? null;
       error = full.error;
     } else {
-      const playable = await supabaseAdmin
+      // Prefer storage path first so we can redirect without pulling bytea.
+      const light = await supabaseAdmin
         .from("songgarden_clips")
-        .select("filename, mime_type, audio_data, audio_storage_path")
+        .select("filename, mime_type, audio_storage_path")
         .eq("id", clipId)
         .eq("event_id", eventId)
         .single();
-      data = (playable.data as Record<string, unknown> | null) ?? null;
-      error = playable.error;
+      if (!light.error && light.data?.audio_storage_path) {
+        data = light.data as Record<string, unknown>;
+        error = null;
+      } else if (light.error && /audio_storage_path/i.test(light.error.message)) {
+        const legacy = await supabaseAdmin
+          .from("songgarden_clips")
+          .select("filename, mime_type, audio_data")
+          .eq("id", clipId)
+          .eq("event_id", eventId)
+          .single();
+        data = (legacy.data as Record<string, unknown> | null) ?? null;
+        error = legacy.error;
+      } else {
+        const playable = await supabaseAdmin
+          .from("songgarden_clips")
+          .select("filename, mime_type, audio_data, audio_storage_path")
+          .eq("id", clipId)
+          .eq("event_id", eventId)
+          .single();
+        data = (playable.data as Record<string, unknown> | null) ?? null;
+        error = playable.error;
+      }
     }
 
     if (error || !data) return jsonError("Not found.", 404);
