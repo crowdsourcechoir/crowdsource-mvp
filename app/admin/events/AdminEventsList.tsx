@@ -212,7 +212,7 @@ export default function AdminEventsList() {
         <p className="mt-2 text-sm text-gray-400">
           Manage live events, gameday moments, and activations where Gardens come alive.
         </p>
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex gap-1.5">
             {(["upcoming", "past", "all"] as const).map((f) => (
               <button
@@ -231,7 +231,7 @@ export default function AdminEventsList() {
           </div>
           <Link
             href="/admin/events/new"
-            className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e]"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] sm:w-auto"
           >
             + Create Bloom
           </Link>

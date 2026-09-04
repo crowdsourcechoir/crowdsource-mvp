@@ -70,7 +70,10 @@ export default function TopBar({ title }: TopBarProps) {
           </Link>
         )}
 
-        <nav className="flex min-w-0 items-center gap-2 overflow-x-auto" aria-label="Admin sections">
+        <nav
+          className="flex min-w-0 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden"
+          aria-label="Admin sections"
+        >
           {navItems.map((item) => {
             const active = item.isActive(currentPath);
             return (
@@ -78,7 +81,7 @@ export default function TopBar({ title }: TopBarProps) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`shrink-0 rounded-lg px-2.5 py-2 text-sm font-medium transition sm:px-3 ${
                   active ? "bg-gray-800 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
                 }`}
               >
