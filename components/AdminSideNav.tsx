@@ -111,11 +111,20 @@ function IconSales({ className }: { className?: string }) {
 }
 
 function IconSettings({ className }: { className?: string }) {
+  // OCTO — octopus mark for Settings
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
+      <ellipse cx="12" cy="10" rx="5.2" ry="4.6" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="10" cy="9.2" r="0.9" fill="currentColor" />
+      <circle cx="14" cy="9.2" r="0.9" fill="currentColor" />
       <path
-        d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6.1 6.1l1.4 1.4M16.5 16.5l1.4 1.4M17.9 6.1l-1.4 1.4M7.5 16.5l-1.4 1.4"
+        d="M7.2 13.2c-1.6 1.1-2.6 2.8-2.8 4.6M9.2 14.2c-.6 1.6-1 3.4-.8 5.2M12 14.6v5.2M14.8 14.2c.6 1.6 1 3.4.8 5.2M16.8 13.2c1.6 1.1 2.6 2.8 2.8 4.6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.4 8.2c-1.4-.8-2.6-1-3.6-.6M17.6 8.2c1.4-.8 2.6-1 3.6-.6"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
