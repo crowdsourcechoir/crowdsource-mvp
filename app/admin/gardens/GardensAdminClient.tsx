@@ -172,7 +172,7 @@ export default function GardensAdminClient() {
           {gardens.map((g) => (
             <li
               key={g.id}
-              className="flex flex-col gap-3 rounded-xl border border-transparent bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
+              className="flex cursor-default flex-col gap-3 rounded-xl border border-white/10 bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
                 <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:text-[#CFFF81]">
