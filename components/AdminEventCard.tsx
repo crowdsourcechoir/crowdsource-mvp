@@ -111,7 +111,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
             type="button"
             disabled={deleting}
             onClick={() => void handleDelete()}
-            className="rounded-lg border border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+            className="rounded-lg border border-red-700/80 bg-red-950/40 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-900/50 disabled:opacity-50"
           >
             {deleting ? "Deleting…" : "Delete"}
           </button>

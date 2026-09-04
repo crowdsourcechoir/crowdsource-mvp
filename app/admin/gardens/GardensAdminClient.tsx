@@ -230,7 +230,7 @@ export default function GardensAdminClient() {
                   type="button"
                   disabled={deletingId === g.id}
                   onClick={() => void handleDelete(g)}
-                  className="rounded-lg border border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                  className="rounded-lg border border-red-700/80 bg-red-950/40 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-900/50 disabled:opacity-50"
                 >
                   {deletingId === g.id ? "Deleting…" : "Delete"}
                 </button>
