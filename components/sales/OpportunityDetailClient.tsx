@@ -32,7 +32,11 @@ function formatWhen(iso: string | null): string {
 
 function ScoreBadge({ score }: { score: number }) {
   const color =
-    score >= 70 ? "text-emerald-300 border-emerald-700 bg-emerald-950/40" : score >= 45 ? "text-amber-300 border-amber-700 bg-amber-950/30" : "text-gray-300 border-gray-700 bg-gray-900/40";
+    score >= 70
+      ? "text-[#CFFF81] border-[#CFFF81]/40 bg-[#CFFF81]/10"
+      : score >= 45
+        ? "text-amber-300 border-amber-700 bg-amber-950/30"
+        : "text-gray-300 border-gray-700 bg-gray-900/40";
   return (
     <span className={`inline-flex items-baseline gap-1 rounded-lg border px-3 py-1.5 ${color}`}>
       <span className="text-2xl font-semibold tabular-nums">{score.toFixed(0)}</span>
@@ -108,7 +112,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             <span className="rounded-md border border-gray-800 px-2 py-0.5 text-gray-400">{detail.opportunityTypeLabel}</span>
           )}
           {detail.emailSentAt ? (
-            <span className="rounded-md border border-emerald-800 bg-emerald-950/40 px-2 py-0.5 text-emerald-300">
+            <span className="rounded-md border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-2 py-0.5 text-[#CFFF81]">
               Email sent {formatWhen(detail.emailSentAt)}
             </span>
           ) : (
