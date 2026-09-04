@@ -106,6 +106,20 @@ export async function getOrganization(id: string): Promise<Organization | null> 
   return data ? rowToOrganization(data) : null;
 }
 
+export async function listOrganizationsByIds(ids: string[]): Promise<Organization[]> {
+  if (ids.length === 0) return [];
+  const db = requireSupabaseAdmin();
+  const unique = Array.from(new Set(ids));
+  const rows: Organization[] = [];
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    const { data, error } = await db.from("organizations").select("*").in("id", chunk);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []).map(rowToOrganization));
+  }
+  return rows;
+}
+
 /** Finds an existing org by domain first (strongest signal), then normalized name.
  * Uses limit(1) rather than maybeSingle: duplicate domain/normalized_name rows exist in
  * production and maybeSingle throws, which aborted discovery runs. */

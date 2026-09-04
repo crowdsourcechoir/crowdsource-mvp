@@ -60,6 +60,29 @@ export async function getContact(id: string): Promise<Contact | null> {
   return data ? rowToContact(data) : null;
 }
 
+export async function listContactsByIds(ids: string[]): Promise<Contact[]> {
+  if (ids.length === 0) return [];
+  const db = requireSupabaseAdmin();
+  const unique = Array.from(new Set(ids));
+  const rows: Contact[] = [];
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    const { data, error } = await db.from("contacts").select("*").in("id", chunk);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []).map(rowToContact));
+  }
+  return rows;
+}
+
+export async function listContactsByNormalizedEmail(email: string): Promise<Contact[]> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return [];
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db.from("contacts").select("*").eq("normalized_email", normalized);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToContact);
+}
+
 /** Dedupe within an org: by normalized email if present, else by exact full name match.
  * limit(1) instead of maybeSingle — duplicate contact rows must not crash discovery/pipeline. */
 export async function findExistingContact(organizationId: string, email?: string | null, fullName?: string | null): Promise<Contact | null> {

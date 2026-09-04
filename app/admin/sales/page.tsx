@@ -1,4 +1,5 @@
 import SalesOverviewClient from "@/components/sales/SalesOverviewClient";
+import SalesFirstTouchClient from "@/components/sales/SalesFirstTouchClient";
 import DigestClient from "@/components/sales/DigestClient";
 import GmailConnectClient from "@/components/sales/GmailConnectClient";
 import EnrichmentConfigClient from "@/components/sales/EnrichmentConfigClient";
@@ -21,6 +22,7 @@ export default function SalesOverviewPage() {
         <AddOrganizationLauncher />
       </div>
 
+      <SalesFirstTouchClient />
       <SalesOverviewClient />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">

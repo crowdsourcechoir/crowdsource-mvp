@@ -4,7 +4,7 @@ import { syncGmailReplies } from "@/lib/sales/gmail/sync";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Poll Gmail for replies and update funnel / activity timeline. */
+/** Poll Gmail for live replies, auto-replies, and bounces; update funnel / activity timeline. */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
