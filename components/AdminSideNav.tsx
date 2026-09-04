@@ -228,7 +228,7 @@ export default function AdminSideNav() {
 
   return (
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/10 bg-black transition-[width] duration-200 ${
+      className={`relative sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/10 bg-black transition-[width] duration-200 ${
         collapsed ? "w-[72px]" : "w-[232px]"
       } ${ready ? "opacity-100" : "opacity-0"}`}
       aria-label="Admin navigation"
@@ -274,7 +274,7 @@ export default function AdminSideNav() {
           href="/admin/settings"
           title={collapsed ? "Settings" : undefined}
           aria-current={settingsActive ? "page" : undefined}
-          className={`group mb-1 flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition ${
+          className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition ${
             collapsed ? "justify-center" : ""
           } ${
             settingsActive
@@ -287,19 +287,18 @@ export default function AdminSideNav() {
           </span>
           {!collapsed && <span>Settings</span>}
         </Link>
-
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
-          className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium text-gray-400 transition hover:bg-white/5 hover:text-white ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          {collapsed ? <IconExpand className="h-5 w-5" /> : <IconCollapse className="h-5 w-5" />}
-          {!collapsed && <span>Collapse</span>}
-        </button>
       </div>
+
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        title="Toggle Sidebar"
+        aria-label="Toggle Sidebar"
+        aria-expanded={!collapsed}
+        className="absolute top-1/2 right-0 z-20 flex h-8 w-4 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-md border border-white/15 bg-[#111] text-gray-300 shadow-sm transition hover:border-white/30 hover:bg-[#1a1a1a] hover:text-white"
+      >
+        {collapsed ? <IconExpand className="h-3.5 w-3.5" /> : <IconCollapse className="h-3.5 w-3.5" />}
+      </button>
     </aside>
   );
 }
