@@ -135,7 +135,7 @@ export default function ComposerPage() {
             {error}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.08] px-5 py-8 text-sm text-gray-400">
+          <div className="rounded-2xl border border-dashed border-white/10 bg-[#121212] px-5 py-8 text-sm text-gray-400">
             Nothing to compose yet.{" "}
             <Link href="/admin/gardens" className="text-[#CFFF81] hover:underline">
               Create a garden
@@ -233,7 +233,7 @@ export default function ComposerPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/15 bg-white/[0.14] p-5">
+      <section className="rounded-2xl border border-white/10 bg-[#121212] p-5">
         <h2 className="text-lg font-semibold text-white">First-class contribution media</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
           Contributions are not only audio or text. Photos, selfies, submitted videos, and short crowd clips belong in
