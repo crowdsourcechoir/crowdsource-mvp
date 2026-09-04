@@ -212,7 +212,7 @@ export default function AdminSideNav() {
 
   return (
     <aside
-      className={`relative sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r border-transparent bg-black transition-[width] duration-75 ease-out ${
+      className={`relative sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r border-transparent bg-black ${
         collapsed ? "w-[72px]" : "w-[232px]"
       } ${ready ? "opacity-100" : "opacity-0"}`}
       aria-label="Admin navigation"
