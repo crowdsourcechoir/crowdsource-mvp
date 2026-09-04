@@ -5,6 +5,7 @@ import {
   localEventsGetById,
   localEventsUpdate,
 } from "@/lib/local-events-store";
+import { deleteEventById } from "@/lib/event-delete";
 import {
   persistDataUrlMedia,
   resolveHeroImageForStorage,
@@ -213,5 +214,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json(event);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!id?.trim()) {
+    return NextResponse.json({ error: "Event id is required." }, { status: 400 });
+  }
+  try {
+    const deleted = await deleteEventById(id);
+    if (!deleted) return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    return NextResponse.json({ ok: true, deleted });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

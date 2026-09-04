@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  deleteGarden,
   getGardenByIdOrSlug,
   listChapters,
   updateGarden,
@@ -37,6 +38,17 @@ export async function PATCH(request: Request, context: Ctx) {
     const garden = await updateGarden(context.params.id, body);
     if (!garden) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ garden }, NO_STORE);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, context: Ctx) {
+  try {
+    const garden = await deleteGarden(context.params.id);
+    if (!garden) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, deleted: { id: garden.id, title: garden.title } }, NO_STORE);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { isMissingTableError } from "@/lib/supabase-table-errors";
 import { localEventsGetById } from "@/lib/local-events-store";
 import { applyChapterFinale, applyMutation, replayMutationsToState } from "./apply-mutation";
 import { buildGardenSnapshot, resolveContributionWindow } from "./snapshot";
@@ -23,6 +24,8 @@ import {
   localListReadyShelf,
   localPersistMutation,
   localRecentDeviceMutationAts,
+  localDeleteChaptersByEventId,
+  localDeleteGarden,
   localUpdateChapter,
   localUpdateGarden,
   localUpdateReadyItem,
@@ -239,6 +242,47 @@ export async function updateGarden(
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to update garden.");
   return rowToGarden(data as Record<string, unknown>);
+}
+
+async function deleteGardenChildRows(table: string, gardenId: string): Promise<void> {
+  if (!supabaseAdmin) return;
+  const { error } = await supabaseAdmin.from(table).delete().eq("garden_id", gardenId);
+  if (error && !isMissingTableError(error)) {
+    throw new Error(error.message);
+  }
+}
+
+/** Remove chapter links so a bloom can be deleted without leaving dangling garden shows. */
+export async function unlinkChaptersForEvent(eventId: string): Promise<number> {
+  if (USE_LOCAL()) return localDeleteChaptersByEventId(eventId);
+  if (!supabaseAdmin) return 0;
+  const { data, error } = await supabaseAdmin
+    .from("garden_chapters")
+    .delete()
+    .eq("event_id", eventId)
+    .select("id");
+  if (error) {
+    if (isMissingTableError(error)) return 0;
+    throw new Error(error.message);
+  }
+  return data?.length ?? 0;
+}
+
+export async function deleteGarden(idOrSlug: string): Promise<Garden | null> {
+  if (USE_LOCAL()) return localDeleteGarden(idOrSlug);
+  if (!supabaseAdmin) throw new Error("Database not configured.");
+  const existing = await getGardenByIdOrSlug(idOrSlug);
+  if (!existing) return null;
+  // Child tables first in case ON DELETE CASCADE was never applied in prod.
+  await deleteGardenChildRows("garden_orders", existing.id);
+  await deleteGardenChildRows("garden_ready_shelf", existing.id);
+  await deleteGardenChildRows("garden_editions", existing.id);
+  await deleteGardenChildRows("garden_mutations", existing.id);
+  await deleteGardenChildRows("garden_participant_marks", existing.id);
+  await deleteGardenChildRows("garden_chapters", existing.id);
+  const { error } = await supabaseAdmin.from("gardens").delete().eq("id", existing.id);
+  if (error) throw new Error(error.message);
+  return existing;
 }
 
 export async function listChapters(gardenId: string): Promise<GardenChapter[]> {

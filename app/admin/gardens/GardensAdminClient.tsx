@@ -13,6 +13,7 @@ export default function GardensAdminClient() {
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const [seedingBallard, setSeedingBallard] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +80,32 @@ export default function GardensAdminClient() {
       setError(err instanceof Error ? err.message : "Seed failed");
     } finally {
       setSeedingBallard(false);
+    }
+  }
+
+  async function handleDelete(garden: Garden) {
+    if (deletingId) return;
+    const title = garden.title.trim() || "this garden";
+    if (
+      !window.confirm(
+        `Delete “${title}”? This permanently removes the garden and its map, chapters, and merch records. Linked blooms are kept. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(garden.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${encodeURIComponent(garden.id)}`, { method: "DELETE" });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Delete failed");
+      setGardens((prev) => prev.filter((g) => g.id !== garden.id));
+      setNotice(`Deleted ${title}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete garden.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -170,8 +197,11 @@ export default function GardensAdminClient() {
       ) : (
         <ul className="divide-y divide-gray-800 rounded-xl border border-gray-800">
           {gardens.map((g) => (
-            <li key={g.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div>
+            <li
+              key={g.id}
+              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
                 <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:underline">
                   {g.title}
                 </Link>
@@ -189,12 +219,22 @@ export default function GardensAdminClient() {
                   ) : null}
                 </p>
               </div>
-              <Link
-                href={`/admin/gardens/${g.id}`}
-                className="text-xs text-gray-400 underline hover:text-white"
-              >
-                Manage
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={`/admin/gardens/${g.id}`}
+                  className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+                >
+                  Manage
+                </Link>
+                <button
+                  type="button"
+                  disabled={deletingId === g.id}
+                  onClick={() => void handleDelete(g)}
+                  className="rounded-lg border border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                >
+                  {deletingId === g.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </li>
           ))}
         </ul>

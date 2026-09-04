@@ -105,3 +105,12 @@ export function localEventsUpdate(
   persist();
   return next;
 }
+
+export function localEventsDelete(id: string): EventRow | null {
+  ensureLoaded();
+  const index = store.findIndex((e) => e.id === id);
+  if (index === -1) return null;
+  const [removed] = store.splice(index, 1);
+  persist();
+  return removed;
+}

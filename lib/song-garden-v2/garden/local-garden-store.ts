@@ -156,6 +156,31 @@ export function localCreateGarden(input: {
   return garden;
 }
 
+export function localDeleteGarden(idOrSlug: string): Garden | null {
+  const db = ensureLoaded();
+  const garden = db.gardens.find((g) => g.id === idOrSlug || g.slug === idOrSlug) ?? null;
+  if (!garden) return null;
+  const id = garden.id;
+  db.gardens = db.gardens.filter((g) => g.id !== id);
+  db.chapters = db.chapters.filter((c) => c.gardenId !== id);
+  db.mutations = db.mutations.filter((m) => m.gardenId !== id);
+  db.marks = db.marks.filter((m) => m.gardenId !== id);
+  db.editions = db.editions.filter((e) => e.gardenId !== id);
+  db.orders = db.orders.filter((o) => o.gardenId !== id);
+  db.readyShelf = db.readyShelf.filter((i) => i.gardenId !== id);
+  persist();
+  return garden;
+}
+
+export function localDeleteChaptersByEventId(eventId: string): number {
+  const db = ensureLoaded();
+  const before = db.chapters.length;
+  db.chapters = db.chapters.filter((c) => c.eventId !== eventId);
+  const removed = before - db.chapters.length;
+  if (removed > 0) persist();
+  return removed;
+}
+
 export function localUpdateGarden(
   id: string,
   updates: Partial<Pick<Garden, "title" | "kind" | "status" | "brandKit" | "mutationPolicy" | "commerce">>

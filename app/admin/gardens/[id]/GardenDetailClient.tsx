@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Event } from "@/data/mockEvents";
 import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
 import GardenCompositionCanvas from "@/components/song-garden-v2/GardenCompositionCanvas";
@@ -96,6 +97,7 @@ function sponsorsFromGarden(garden: Garden | null): SponsorDraft[] {
 }
 
 export default function GardenDetailClient({ gardenId }: Props) {
+  const router = useRouter();
   const [garden, setGarden] = useState<Garden | null>(null);
   const [chapters, setChapters] = useState<GardenChapter[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -105,6 +107,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [index, setIndex] = useState("1");
   const [label, setLabel] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState<Garden["status"]>("live");
   const [debug, setDebug] = useState<DebugPayload | null>(null);
   const [histAt, setHistAt] = useState("");
@@ -278,6 +281,30 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setError(err instanceof Error ? err.message : "Failed to update");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteGarden() {
+    if (!garden || deleting) return;
+    const title = garden.title.trim() || "this garden";
+    if (
+      !window.confirm(
+        `Delete “${title}”? This permanently removes the garden and its map, chapters, and merch records. Linked blooms are kept. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/gardens/${encodeURIComponent(garden.id)}`, { method: "DELETE" });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Delete failed");
+      router.push("/admin/gardens");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete garden.");
+      setDeleting(false);
     }
   }
 
@@ -1042,12 +1069,27 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <button
             type="button"
             onClick={() => void handleStatusSave()}
-            disabled={saving}
+            disabled={saving || deleting}
             className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-white disabled:opacity-50"
           >
             Save
           </button>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-red-900/50 bg-[#121214] p-4">
+        <h2 className="text-sm font-medium text-red-200">Delete garden</h2>
+        <p className="text-xs text-gray-500">
+          Removes this world and its map, chapters, and merch records. Linked blooms stay in the Blooms list.
+        </p>
+        <button
+          type="button"
+          disabled={deleting || !garden}
+          onClick={() => void handleDeleteGarden()}
+          className="rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete garden"}
+        </button>
       </section>
 
       <section className="space-y-3 rounded-xl border border-gray-800 bg-[#121214] p-4">

@@ -195,6 +195,7 @@ export default function EventDetailPage() {
   const [loadingAgentInterviewSubmissions, setLoadingAgentInterviewSubmissions] = useState(false);
   const [deletingInterviewId, setDeletingInterviewId] = useState<string | null>(null);
   const [wipingAllSubmissions, setWipingAllSubmissions] = useState(false);
+  const [deletingBloom, setDeletingBloom] = useState(false);
   /** Only one MIDI pad plays at a time across the submissions list. */
   const [activeSoundPadId, setActiveSoundPadId] = useState<string | null>(null);
   const [memoryRecord, setMemoryRecord] = useState<EventMemoryRecord | null>(null);
@@ -426,6 +427,30 @@ export default function EventDetailPage() {
     }
   }
 
+  async function handleDeleteBloom() {
+    if (!event || deletingBloom) return;
+    const title = event.title.trim() || "this bloom";
+    if (
+      !window.confirm(
+        `Delete “${title}”? This permanently removes the bloom and its interviews, clips, and submissions. Linked gardens keep their other shows. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingBloom(true);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(event.id)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Delete failed");
+      }
+      router.push("/admin/events");
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not delete bloom.");
+      setDeletingBloom(false);
+    }
+  }
+
   if (!loaded) {
     return (
       <div className="w-full px-4 py-12">
@@ -536,6 +561,14 @@ export default function EventDetailPage() {
             >
               Composition canvas
             </Link>
+            <button
+              type="button"
+              disabled={deletingBloom}
+              onClick={() => void handleDeleteBloom()}
+              className="rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+            >
+              {deletingBloom ? "Deleting…" : "Delete bloom"}
+            </button>
           </div>
         </div>
       </div>
