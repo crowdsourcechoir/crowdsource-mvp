@@ -137,7 +137,8 @@ const navItems: AdminNavItem[] = [
     label: "Gardens",
     eyebrow: "Persistent Worlds",
     href: "/admin/gardens",
-    isActive: (pathname) => pathname.startsWith("/admin/gardens"),
+    isActive: (pathname) =>
+      pathname.startsWith("/admin/gardens") && !pathname.includes("/canvas"),
     icon: <IconGardens className="h-5 w-5" />,
   },
   {
@@ -173,7 +174,8 @@ const navItems: AdminNavItem[] = [
       pathname.startsWith("/admin/composer") ||
       pathname.startsWith("/admin/canvas") ||
       pathname.startsWith("/admin/composition") ||
-      pathname.startsWith("/admin/songgarden/"),
+      pathname.startsWith("/admin/songgarden/") ||
+      /\/admin\/gardens\/[^/]+\/canvas/.test(pathname),
     icon: <IconComposer className="h-5 w-5" />,
   },
   {

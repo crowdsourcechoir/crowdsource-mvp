@@ -1901,7 +1901,16 @@ export default function GardenDetailClient({ gardenId }: Props) {
         ) : null}
       </section>
 
-      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4">
+      <section className="space-y-4 rounded-xl border border-gray-800 bg-[#121214] p-4" id="composition">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-gray-200">Pads / canvas</h2>
+          <Link
+            href={`/admin/gardens/${gardenId}/canvas`}
+            className="text-xs font-medium text-[#CFFF81] hover:underline"
+          >
+            Open full canvas
+          </Link>
+        </div>
         <GardenCompositionCanvas
           gardenId={gardenId}
           gardenTitle={garden?.title || "Garden"}

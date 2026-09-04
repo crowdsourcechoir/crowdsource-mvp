@@ -17,7 +17,8 @@ const navItems: AdminNavItem[] = [
   {
     label: "Gardens",
     href: "/admin/gardens",
-    isActive: (pathname) => pathname.startsWith("/admin/gardens"),
+    isActive: (pathname) =>
+      pathname.startsWith("/admin/gardens") && !pathname.includes("/canvas"),
   },
   {
     label: "Blooms",
@@ -45,7 +46,8 @@ const navItems: AdminNavItem[] = [
       pathname.startsWith("/admin/composer") ||
       pathname.startsWith("/admin/canvas") ||
       pathname.startsWith("/admin/composition") ||
-      pathname.startsWith("/admin/songgarden/"),
+      pathname.startsWith("/admin/songgarden/") ||
+      /\/admin\/gardens\/[^/]+\/canvas/.test(pathname),
   },
   {
     label: "Sales",

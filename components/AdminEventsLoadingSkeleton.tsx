@@ -9,7 +9,7 @@ export default function AdminEventsLoadingSkeleton() {
       {[1, 2, 3, 4].map((i) => (
         <div
           key={i}
-          className="rounded-2xl border border-gray-800 bg-[#141416] p-4 sm:p-5"
+          className="rounded-2xl border border-white/10 bg-[#121212] p-4 sm:p-5"
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1 space-y-3">
