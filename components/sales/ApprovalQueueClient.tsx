@@ -40,7 +40,12 @@ import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
 function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 70 ? "text-emerald-400 border-emerald-700" : score >= 45 ? "text-amber-400 border-amber-700" : "text-gray-400 border-gray-700";
+  const color =
+    score >= 70
+      ? "text-[#CFFF81] border-[#CFFF81]/50"
+      : score >= 45
+        ? "text-amber-400 border-amber-700"
+        : "text-gray-400 border-gray-700";
   return <span className={`rounded-md border px-2 py-0.5 text-sm font-semibold ${color}`}>{score.toFixed(0)}</span>;
 }
 
@@ -834,12 +839,16 @@ export default function ApprovalQueueClient() {
                             <span className="font-medium">
                               {c.fullName ?? "Unnamed"}
                               {sent ? (
-                                <span className="ml-2 text-xs font-medium text-emerald-400">sent</span>
+                                <span className="ml-2 inline-block rounded bg-[#CFFF81] px-1.5 py-px text-[11px] font-semibold leading-4 text-black">
+                                  sent
+                                </span>
                               ) : hasDraft ? (
                                 <span className="ml-2 text-xs text-gray-500">draft</span>
                               ) : null}
                               {c.emailVerificationStatus === "verified_deliverable" ? (
-                                <span className="ml-2 text-xs font-medium text-emerald-400">verified</span>
+                                <span className="ml-2 inline-block rounded border border-[#CFFF81]/45 px-1.5 py-px text-[11px] font-medium leading-4 text-[#CFFF81]">
+                                  verified
+                                </span>
                               ) : c.emailVerificationStatus === "invalid" ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
                               ) : (

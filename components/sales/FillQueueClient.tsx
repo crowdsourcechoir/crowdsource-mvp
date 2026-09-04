@@ -126,7 +126,7 @@ export default function FillQueueClient() {
               <Link href={`/admin/sales/organizations/${c.organizationId}`} className="truncate text-gray-400 hover:underline">
                 {c.organizationName ?? c.organizationId.slice(0, 8)}
               </Link>
-              <span className={c.score >= minScore ? "text-emerald-400" : "text-amber-400"}>
+              <span className={c.score >= minScore ? "text-[#CFFF81]" : "text-amber-400"}>
                 score {c.score.toFixed(0)}
               </span>
             </li>
