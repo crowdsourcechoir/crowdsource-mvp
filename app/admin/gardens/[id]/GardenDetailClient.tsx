@@ -47,6 +47,8 @@ type ZoneDraft = {
   inputPlaceholder: string;
   logoUrl: string;
   hit: ZoneHitRegion | null;
+  engageMode: "pulse" | "journey";
+  journeyEventId: string;
 };
 
 type SponsorDraft = {
@@ -85,6 +87,8 @@ function zonesFromGarden(garden: Garden | null): ZoneDraft[] {
     inputPlaceholder: z.inputPlaceholder ?? "",
     logoUrl: z.logoUrl ?? "",
     hit: z.hit ?? { type: "circle", r: 0.08 },
+    engageMode: z.engageMode === "journey" ? "journey" : "pulse",
+    journeyEventId: z.journeyEventId ?? "",
   }));
 }
 
@@ -423,6 +427,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
         inputPlaceholder: "",
         logoUrl: "",
         hit: { type: "circle", r: 0.08 },
+        engageMode: "pulse",
+        journeyEventId: "",
       },
     ]);
     setSelectedZoneKey(key);
@@ -477,6 +483,11 @@ export default function GardenDetailClient({ gardenId }: Props) {
           inputPlaceholder: z.inputPlaceholder.trim() || null,
           logoUrl: z.logoUrl.trim() || null,
           hit: z.hit,
+          engageMode: z.engageMode === "journey" ? "journey" : "pulse",
+          journeyEventId:
+            z.engageMode === "journey" && z.journeyEventId.trim()
+              ? z.journeyEventId.trim()
+              : null,
         }))
         .filter((z) => z.key && z.label);
 
@@ -1640,9 +1651,74 @@ export default function GardenDetailClient({ gardenId }: Props) {
                         )
                       )
                     }
-                    placeholder="Share your chant"
+                    placeholder={z.engageMode === "journey" ? "Enter the journey" : "Share your chant"}
                   />
                 </label>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="block text-xs text-gray-400">
+                    When fans tap this zone
+                    <select
+                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      value={z.engageMode}
+                      onChange={(e) =>
+                        setZones((prev) =>
+                          prev.map((row) =>
+                            row.key === z.key
+                              ? {
+                                  ...row,
+                                  engageMode: e.target.value === "journey" ? "journey" : "pulse",
+                                }
+                              : row
+                          )
+                        )
+                      }
+                    >
+                      <option value="pulse">Leave a mark (pulse)</option>
+                      <option value="journey">Start a journey</option>
+                    </select>
+                  </label>
+                  {z.engageMode === "journey" ? (
+                    <label className="block text-xs text-gray-400">
+                      Journey (bloom)
+                      <select
+                        className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                        value={z.journeyEventId}
+                        onChange={(e) =>
+                          setZones((prev) =>
+                            prev.map((row) =>
+                              row.key === z.key
+                                ? { ...row, journeyEventId: e.target.value }
+                                : row
+                            )
+                          )
+                        }
+                      >
+                        <option value="">Select a bloom…</option>
+                        {chapters.map((c) => {
+                          const ev = events.find((e) => e.id === c.eventId);
+                          return (
+                            <option key={c.id} value={c.eventId}>
+                              {c.label}
+                              {ev ? ` — ${ev.title}` : ""}
+                            </option>
+                          );
+                        })}
+                        {events
+                          .filter((ev) => !chapters.some((c) => c.eventId === ev.id))
+                          .map((ev) => (
+                            <option key={ev.id} value={ev.id}>
+                              {ev.title} ({ev.slug})
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+                {z.engageMode === "journey" && !z.journeyEventId ? (
+                  <p className="mt-1 text-[11px] text-amber-300/90">
+                    Pick a bloom for this zone, or attach a show above first.
+                  </p>
+                ) : null}
                 <label className="mt-2 block text-xs text-gray-400">
                   Short hint
                   <input

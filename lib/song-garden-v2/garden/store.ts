@@ -925,7 +925,7 @@ export async function getGardenSnapshot(args: {
       ? chapter
       : (await listChapters(garden.id)).find((c) => c.status === "open") ?? null;
 
-  return buildGardenSnapshot({
+  const snapshot = buildGardenSnapshot({
     garden: gardenForSnap,
     chapter,
     eventSlug,
@@ -936,6 +936,31 @@ export async function getGardenSnapshot(args: {
       activeChapter: windowChapter,
     }),
   });
+
+  const journeyIds = [
+    ...new Set(
+      snapshot.zones
+        .map((z) => (z.engageMode === "journey" ? z.journeyEventId : null))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  if (journeyIds.length === 0) return snapshot;
+
+  const slugEntries = await Promise.all(
+    journeyIds.map(async (id) => [id, await resolveEventSlug(id)] as const)
+  );
+  const slugById = Object.fromEntries(slugEntries);
+
+  return {
+    ...snapshot,
+    zones: snapshot.zones.map((z) => ({
+      ...z,
+      journeyEventSlug:
+        z.engageMode === "journey" && z.journeyEventId
+          ? slugById[z.journeyEventId] || null
+          : null,
+    })),
+  };
 }
 
 export async function getEventGardenSnapshot(args: {

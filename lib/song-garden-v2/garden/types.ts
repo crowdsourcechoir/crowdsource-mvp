@@ -118,6 +118,9 @@ export type ZoneHitRegion =
   | { type: "circle"; /** Radius in map-normalized units (0..~0.5) */ r: number }
   | { type: "polygon"; points: ZoneHitPoint[] };
 
+/** How a zone engages fans when tapped on the map. */
+export type ZoneEngageMode = "pulse" | "journey";
+
 export type ZoneDef = {
   key: string;
   label: string;
@@ -143,6 +146,13 @@ export type ZoneDef = {
   ctaLabel?: string | null;
   /** Placeholder for the inline response field */
   inputPlaceholder?: string | null;
+  /**
+   * `pulse` = leave a mark in-place (default).
+   * `journey` = open a guided bloom/journey from this zone.
+   */
+  engageMode?: ZoneEngageMode | null;
+  /** Event (bloom) id to open when engageMode is `journey`. */
+  journeyEventId?: string | null;
 };
 
 export type SponsorDef = {
@@ -325,7 +335,14 @@ export type GardenSnapshot = {
   /** When snapshot was rebuilt for a historical `at` / `version` query. */
   asOf: string | null;
   /** Fans schematic zones from brand kit + live zone vitality from state. */
-  zones: Array<ZoneDef & { runtime: ZoneRuntimeState | null; sponsor: SponsorDef | null }>;
+  zones: Array<
+    ZoneDef & {
+      runtime: ZoneRuntimeState | null;
+      sponsor: SponsorDef | null;
+      /** Resolved when engageMode is journey — public `/e/[slug]` target. */
+      journeyEventSlug?: string | null;
+    }
+  >;
 };
 
 export type WorldMutationIntent = {
@@ -511,6 +528,11 @@ function normalizeZones(zones: ZoneDef[] | null | undefined): ZoneDef[] {
       prompt: z.prompt?.trim() || null,
       ctaLabel: z.ctaLabel?.trim() || null,
       inputPlaceholder: z.inputPlaceholder?.trim() || null,
+      engageMode: z.engageMode === "journey" ? "journey" : "pulse",
+      journeyEventId:
+        z.engageMode === "journey" && z.journeyEventId?.trim()
+          ? z.journeyEventId.trim()
+          : null,
     }))
     .filter((z) => z.key);
 }

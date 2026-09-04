@@ -363,13 +363,23 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
     : null;
   const selectedMeta = zones.find((z) => z.key === selectedZone) ?? null;
   const zoomed = Boolean(selectedMeta);
+  const zoneIsJourney =
+    selectedMeta?.engageMode === "journey" && Boolean(selectedMeta.journeyEventSlug);
+  const journeyHref =
+    zoneIsJourney && selectedMeta?.journeyEventSlug
+      ? `/e/${selectedMeta.journeyEventSlug}?fromGarden=${encodeURIComponent(gardenSlug)}&zone=${encodeURIComponent(selectedMeta.key)}`
+      : null;
   const prompt =
     selectedMeta?.prompt?.trim() ||
     selectedMeta?.blurb?.trim() ||
-    "Leave a mark in this zone.";
+    (zoneIsJourney ? "A journey starts here." : "Leave a mark in this zone.");
   const cta =
     selectedMeta?.ctaLabel?.trim() ||
-    (selectedMeta ? `Leave a mark in ${selectedMeta.label}` : "Leave a mark");
+    (zoneIsJourney
+      ? "Enter the journey"
+      : selectedMeta
+        ? `Leave a mark in ${selectedMeta.label}`
+        : "Leave a mark");
   const placeholder =
     selectedMeta?.inputPlaceholder?.trim() || "Type your response…";
 
@@ -531,6 +541,9 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
                   const logo = z.logoUrl || z.sponsor?.logoUrl || null;
                   const teaser =
                     z.ctaLabel?.trim() ||
+                    (z.engageMode === "journey"
+                      ? "Enter journey"
+                      : null) ||
                     z.blurb?.trim() ||
                     (z.prompt?.trim()
                       ? z.prompt.trim().length > 42
@@ -711,7 +724,15 @@ export default function GardenPresenceClient({ gardenSlug, gardenTitle }: Props)
 
                   <p className="mt-2.5 text-sm leading-snug text-white/90 sm:mt-3">{prompt}</p>
 
-                  {snapshot?.window.canContribute ? (
+                  {journeyHref ? (
+                    <Link
+                      href={journeyHref}
+                      className="mt-2.5 flex min-h-[48px] w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-black sm:mt-3"
+                      style={{ background: world.accentColor }}
+                    >
+                      {cta}
+                    </Link>
+                  ) : snapshot?.window.canContribute ? (
                     <>
                       <label className="sr-only" htmlFor="zone-response">
                         Your response
