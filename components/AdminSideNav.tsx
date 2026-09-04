@@ -111,34 +111,24 @@ function IconSales({ className }: { className?: string }) {
 }
 
 function IconSettings({ className }: { className?: string }) {
-  // OCTO — octopus mark for Settings
+  // OCTO — matches the octopus mark reference (mask so active tint inherits currentColor)
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      {/* head */}
-      <path
-        d="M7.2 10.2c0-3 2.1-5.4 4.8-5.4s4.8 2.4 4.8 5.4c0 1.4-.4 2.6-1.1 3.5H8.3c-.7-.9-1.1-2.1-1.1-3.5Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      {/* eyes */}
-      <circle cx="10.2" cy="9.4" r="1" fill="currentColor" />
-      <circle cx="13.8" cy="9.4" r="1" fill="currentColor" />
-      {/* tentacles */}
-      <path
-        d="M8.4 13.8c-1.8.6-3 2.2-3.4 4.2M10.2 14.2c-.7 1.5-1 3.2-.9 5M12 14.4v5.2M13.8 14.2c.7 1.5 1 3.2.9 5M15.6 13.8c1.8.6 3 2.2 3.4 4.2"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-      {/* side arms */}
-      <path
-        d="M7 8.6C5.4 7.6 4 7.4 3 7.8M17 8.6c1.6-1 3-1.2 4-.8"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
+    <span
+      aria-hidden
+      className={className}
+      style={{
+        display: "inline-block",
+        backgroundColor: "currentColor",
+        WebkitMaskImage: "url(/icons/octopus-settings.svg)",
+        maskImage: "url(/icons/octopus-settings.svg)",
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+    />
   );
 }
 
