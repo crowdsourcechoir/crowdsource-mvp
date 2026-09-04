@@ -72,7 +72,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
 
   async function addContact(e: React.FormEvent) {
     e.preventDefault();
-    if (!contactName.trim()) return;
+    if (!contactName.trim() && !contactEmail.trim()) return;
     setAddingContact(true);
     setContactMessage(null);
     try {
@@ -212,14 +212,13 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           <input
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
-            required
-            placeholder="First and last name"
+            placeholder="Name, or blank for info@ / events@"
             className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
           />
           <input
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
-            placeholder="Email (optional — Hunter)"
+            placeholder="Email (info@ / events@ ok)"
             className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
           />
           <input
@@ -230,7 +229,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           />
           <button
             type="submit"
-            disabled={addingContact || !contactName.trim()}
+            disabled={addingContact || (!contactName.trim() && !contactEmail.trim())}
             className="rounded-md bg-sky-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 sm:col-span-3 w-fit"
           >
             {addingContact ? "Adding…" : "Add contact"}

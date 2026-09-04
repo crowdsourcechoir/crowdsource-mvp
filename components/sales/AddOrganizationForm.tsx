@@ -120,7 +120,7 @@ export default function AddOrganizationForm({
               Add organization
             </h2>
             <p className="mt-1 text-sm text-gray-400">
-              Name + a contact (email optional — Hunter will look it up from the website).
+              Name + a contact. Email optional for a named person (Hunter looks it up). A general inbox like info@ or events@ is enough on its own.
             </p>
           </div>
           <button
@@ -152,13 +152,13 @@ export default function AddOrganizationForm({
           <input
             value={contactFullName}
             onChange={(e) => setContactFullName(e.target.value)}
-            placeholder="Contact first and last name"
+            placeholder="Contact name (or blank for info@ / events@)"
             className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
           />
           <input
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
-            placeholder="Email (optional)"
+            placeholder="Email (info@ / events@ ok)"
             className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
           />
           <input

@@ -50,4 +50,15 @@ assert.match(msae.body, /Michigan Society of Association Executives/);
 assert.doesNotMatch(msae.body, /the the /);
 assert.doesNotMatch(msae.subject, /\+ the annual /);
 
+const inbox = buildCustomizedTemplateDraft({
+  firstName: "there",
+  roleTitle: "General inbox",
+  organizationName: "Fred Hutch Cancer Center",
+  opportunityTitle: "Crowdsource Choir + Fred Hutch Cancer Center",
+  category: "fundraisers",
+});
+assert.match(inbox.body, /Hi there,/);
+assert.match(inbox.subject, /Fred Hutch/);
+assert.doesNotMatch(inbox.body, /Hi Events/);
+
 console.log("custom template drafts ok");

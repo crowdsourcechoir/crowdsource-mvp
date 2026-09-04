@@ -20,7 +20,7 @@ export default function AddContactForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim()) return;
+    if (!fullName.trim() && !email.trim()) return;
     setBusy(true);
     setError(null);
     try {
@@ -60,19 +60,18 @@ export default function AddContactForm({
         </button>
       ) : (
         <form onSubmit={submit} className="rounded-lg border border-gray-800 bg-gray-950 p-3">
-          <p className="text-xs text-gray-500">Leave email blank to let Hunter look it up from this org’s website.</p>
+          <p className="text-xs text-gray-500">Named person, or a general inbox like info@ / events@. Leave email blank to let Hunter look up a person from this org’s website.</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             <input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              required
-              placeholder="First and last name"
+              placeholder="Name, or blank for info@ / events@"
               className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
             />
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email (optional)"
+              placeholder="Email (info@ / events@ ok)"
               className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
             />
             <input
@@ -86,7 +85,7 @@ export default function AddContactForm({
           <div className="mt-2 flex gap-2">
             <button
               type="submit"
-              disabled={busy || !fullName.trim()}
+              disabled={busy || (!fullName.trim() && !email.trim())}
               className="rounded-md bg-sky-700 px-3 py-1 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50"
             >
               {busy ? "Adding…" : "Add contact"}

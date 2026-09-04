@@ -9,6 +9,7 @@ import { draftToEmailHtml, draftToPlainText, coalesceDraftBody, coalesceDraftSub
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import QueueEmailBodyEditor from "@/components/sales/QueueEmailBodyEditor";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
+import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
@@ -862,7 +863,7 @@ export default function ApprovalQueueClient() {
                   const hasDraft = !sent && !outreach?.sentAt && (current.contactDrafts ?? []).some(
                     (d) => d.contactId === c.id && isOpenDraftStatus(d.status)
                   );
-                  const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
+                  const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle, c.email);
                   const source = findingForContact(current.findings ?? [], c);
                   return (
                     <li key={c.id} className="relative">
@@ -893,6 +894,8 @@ export default function ApprovalQueueClient() {
                                 <span className="ml-2 text-xs font-medium text-emerald-400">verified</span>
                               ) : c.emailVerificationStatus === "invalid" ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
+                              ) : isGenericMailboxEmail(c.email) ? (
+                                <span className="ml-2 text-xs font-medium text-sky-300">inbox</span>
                               ) : (
                                 <span className="ml-2 text-xs text-amber-400">unverified</span>
                               )}

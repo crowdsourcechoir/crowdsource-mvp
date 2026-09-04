@@ -8,7 +8,7 @@ import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { getOpportunity } from "@/lib/sales/db/opportunities";
-import { extractDomain, hasVerifiedEmail, isPlausibleEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { extractDomain, isGenericMailboxEmail, isPlausibleEmail, isSendableContact, looksLikeGenericRoleName, looksLikePersonName, genericMailboxLabel, normalizeEmail } from "@/lib/sales/dedupe";
 import { enrichContactEmail } from "@/lib/sales/enrichment";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import {
@@ -24,6 +24,35 @@ export function splitPersonName(fullName: string): { firstName: string; lastName
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length < 2) return null;
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+/** Resolve a typed name + email into a person or a general inbox (info@ / events@). */
+export function parseManualContactInput(
+  fullName: string,
+  email?: string | null
+): { displayName: string | null; email: string | null; isGenericMailbox: boolean } {
+  let name = fullName.trim();
+  let addr = normalizeEmail(email) ?? "";
+  if (!addr && name.includes("@") && isPlausibleEmail(name)) {
+    addr = normalizeEmail(name) ?? "";
+    name = "";
+  }
+  if (addr && isGenericMailboxEmail(addr)) {
+    const display = looksLikePersonName(name) ? name : name || genericMailboxLabel(addr);
+    return { displayName: display, email: addr, isGenericMailbox: true };
+  }
+  if (!name && !addr) return { displayName: null, email: null, isGenericMailbox: false };
+  if (looksLikeGenericRoleName(name) && !addr) {
+    throw new Error("Add the inbox email (e.g. events@organization.org).");
+  }
+  if (!looksLikePersonName(name)) {
+    throw new Error("Use a first and last name, or a general inbox like info@ or events@.");
+  }
+  return {
+    displayName: name,
+    email: addr && isPlausibleEmail(addr) ? addr : null,
+    isGenericMailbox: false,
+  };
 }
 
 export async function hunterFindEmail(
@@ -122,11 +151,12 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
     created = true;
   }
 
-  const contactName = input.contactFullName?.trim() || "";
-  let email = input.contactEmail?.trim().toLowerCase() || "";
+  const parsed = parseManualContactInput(input.contactFullName ?? "", input.contactEmail ?? null);
+  const contactName = parsed.displayName ?? "";
+  let email = parsed.email ?? "";
   let hunter = { attempted: false, found: false, error: null as string | null };
 
-  if (contactName && !email) {
+  if (contactName && !email && looksLikePersonName(contactName) && !parsed.isGenericMailbox) {
     hunter.attempted = true;
     const found = await hunterFindEmail(contactName, websiteUrl);
     hunter.error = found.error;
@@ -138,10 +168,7 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
   }
 
   let contact: Contact | null = null;
-  if (contactName && email && isPlausibleEmail(email)) {
-    if (!looksLikePersonName(contactName)) {
-      throw new Error("Contact needs a first and last name.");
-    }
+  if (email && isPlausibleEmail(email) && (parsed.isGenericMailbox || looksLikePersonName(contactName))) {
     const verified = await verifyEmailAddress(email);
     if (verified.status === "invalid") {
       hunter.error = `Hunter says ${email} will bounce.`;
@@ -149,9 +176,9 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
     } else {
       const upserted = await upsertNamedContact({
         organizationId: organization.id,
-        fullName: contactName,
+        fullName: contactName || genericMailboxLabel(email),
         email,
-        roleTitle: input.contactRoleTitle?.trim() || null,
+        roleTitle: input.contactRoleTitle?.trim() || (parsed.isGenericMailbox ? "General inbox" : null),
         emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
       });
       contact = upserted.contact;
@@ -175,7 +202,7 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
   }
 
   let manualEnqueue: ManualEnqueueResult | null = null;
-  if (contact && hasVerifiedEmail(contact) && looksLikePersonName(contact.fullName)) {
+  if (contact && isSendableContact(contact)) {
     const opportunityTypeKey = initiative
       ? SALES_INITIATIVES[initiative as SalesInitiativeKey].opportunityTypeKeys[0]
       : "fan_engagement_initiative";
@@ -205,7 +232,7 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
       : contact?.email
         ? `${organization.name} saved. ${contact.fullName} is not Hunter-verified as deliverable yet, so they were not queued.`
         : `${organization.name} saved. Add an email (or a website so Hunter can find it) to put this in the queue.`
-    : `${organization.name} saved. Add a named contact to put it in the queue.`;
+    : `${organization.name} saved. Add a named contact or a general inbox like info@ / events@ to put it in the queue.`;
 
   return {
     organization,
@@ -241,14 +268,14 @@ export async function addContactToQueueItem(input: {
   const organization = await getOrganization(opportunity.organizationId);
   if (!organization) throw new Error("Organization not found.");
 
-  const fullName = input.fullName.trim();
-  if (!looksLikePersonName(fullName)) {
-    throw new Error("Use a first and last name.");
+  const parsed = parseManualContactInput(input.fullName, input.email ?? null);
+  if (!parsed.displayName && !parsed.email) {
+    throw new Error("Use a first and last name, or a general inbox like info@ or events@.");
   }
-
-  let email = input.email?.trim().toLowerCase() || "";
+  const fullName = parsed.displayName ?? "";
+  let email = parsed.email ?? "";
   let hunter = { attempted: false, found: false, error: null as string | null };
-  if (!email) {
+  if (!email && looksLikePersonName(fullName) && !parsed.isGenericMailbox) {
     hunter.attempted = true;
     const found = await hunterFindEmail(fullName, organization.websiteUrl ?? organization.domain);
     hunter.error = found.error;
@@ -297,13 +324,13 @@ export async function addContactToQueueItem(input: {
 
   const { contact } = await upsertNamedContact({
     organizationId: organization.id,
-    fullName,
+    fullName: fullName || genericMailboxLabel(email),
     email,
-    roleTitle: input.roleTitle?.trim() || null,
+    roleTitle: input.roleTitle?.trim() || (parsed.isGenericMailbox ? "General inbox" : null),
     emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
   });
 
-  if (verified.status !== "verified_deliverable") {
+  if (!parsed.isGenericMailbox && verified.status !== "verified_deliverable") {
     return {
       contact,
       hunter,

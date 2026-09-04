@@ -8,14 +8,8 @@ import { getQueueItemByOpportunity, getInitialQueueItemByOpportunity } from "./q
 import { getLatestBriefForOpportunity } from "./pipeline";
 import { listActivitiesForOpportunity } from "./activities";
 import { contactOutreachById } from "../outreach/contact-outreach";
-import { hasVerifiedEmail, looksLikePersonName } from "../dedupe";
+import { hasVerifiedEmail, isSelectableContact } from "../dedupe";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
-
-function looksLikeSelectableContact(c: Contact): boolean {
-  if (c.duplicateOfContactId) return false;
-  if (c.emailVerificationStatus === "invalid") return false;
-  return Boolean(looksLikePersonName(c.fullName) && c.email);
-}
 
 function emptyQueueItem(opportunityId: string, createdAt: string): ApprovalQueueItem {
   return {
@@ -142,7 +136,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
 
   const contactsList = orgContacts ?? [];
   const draftsList = allDrafts ?? [];
-  const contacts = contactsList.filter((c) => looksLikeSelectableContact(c));
+  const contacts = contactsList.filter((c) => isSelectableContact(c));
   const contact =
     (draft?.contactId ? contactsList.find((c) => c.id === draft.contactId) ?? null : null) ??
     pickBestContact(contactsList);

@@ -9,6 +9,7 @@ import { listOpportunitiesDueForNudge, updateOpportunityTouchTimestamps } from "
 import { createOutreachDraft, listDraftsForOpportunity } from "../db/outreach";
 import { createNudgeQueueItem, hasPendingNudgeForContact } from "../db/queue";
 import { getLatestBriefForOpportunity } from "../db/pipeline";
+import { contactGreetingName } from "../dedupe";
 import { MAX_NUDGES_PER_OPPORTUNITY, NUDGE_DUE_AFTER_DAYS } from "./constants";
 import { contactIdsDueForNudge, nextPendingFollowUpIso } from "../outreach/nudge-due";
 import { draftToPlainText, coalesceDraftBody } from "../outreach/email-body-format";
@@ -103,7 +104,7 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
         const confidence = estimateDraftConfidence(feedback);
         const priorSubject = prior.editedSubject ?? prior.aiSubject;
         const priorBody = coalesceDraftBody(prior.editedBody, prior.aiBody);
-        const firstName = (contact.fullName ?? "").trim().split(/\s+/)[0] || "there";
+        const firstName = contactGreetingName(contact);
 
         const result = await callStructured({
           schema: NudgeDraftSchema,

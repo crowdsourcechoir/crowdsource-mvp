@@ -1,3 +1,4 @@
+import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
 import type { Contact } from "@/lib/sales/types";
 
 /** Human-facing “what this person does” blurb for queue/comms tweaking. */
@@ -10,7 +11,10 @@ export function contactRoleDescription(contact: Contact | null | undefined): str
 }
 
 /** Build a short role blurb from title when none was seeded (fallback). */
-export function fallbackRoleDescription(roleTitle: string | null | undefined): string {
+export function fallbackRoleDescription(roleTitle: string | null | undefined, email?: string | null): string {
+  if (isGenericMailboxEmail(email)) {
+    return "Shared inbox — a real person may forward this to whoever produces the event or owns programming.";
+  }
   const t = (roleTitle ?? "").toLowerCase();
   if (/coo|chief operating/.test(t)) {
     return "Runs day-to-day business operations; green-lights cross-department initiatives and partners that touch the whole club.";

@@ -12,7 +12,7 @@ import {
   getQueueItem,
   setQueueItemOutreachDraft,
 } from "@/lib/sales/db/queue";
-import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { isSendableContact } from "@/lib/sales/dedupe";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { pickNextRemainingInitialDraft } from "@/lib/sales/outreach/send-guard";
@@ -162,9 +162,8 @@ export async function markContactSent(input: {
     orgContacts
       .filter(
         (c) =>
-          looksLikePersonName(c.fullName) &&
+          isSendableContact(c) &&
           c.email &&
-          hasVerifiedEmail(c) &&
           !isOutboundEmailBlocked(c.email)
       )
       .map((c) => c.id)

@@ -5,7 +5,7 @@ import { findApprovedTemplate, createOutreachDraft, listDraftsForOpportunity } f
 import { resolveIndustrySegmentIdForOrganization } from "../../db/lookups";
 import { estimateDraftConfidence, formatFeedbackFewShots, listRecentAcceptedEditFeedback } from "../../db/feedback";
 import { indexFindingsForPrompt, resolveFindingIds } from "../context";
-import { hasVerifiedEmail } from "../../dedupe";
+import { contactGreetingName, isSendableContact } from "../../dedupe";
 import { PERSONA_STRATEGIES } from "../../outreach/persona";
 import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "../../outreach/bookUrl";
 import { SPORTS_VOICE_REFERENCE_EMAILS } from "../../outreach/sports-voice";
@@ -99,14 +99,9 @@ export async function runDraftStage(
     return { output: { draftId: null, skippedReason: "No contact identified yet — drafting skipped, not blocked." } };
   }
 
-  // Requiring the same verified-email bar as queue entry (see lib/sales/dedupe.ts#hasVerifiedEmail
-  // and run-pipeline.ts) is a deliberate product decision, not just following the queue gate for
-  // its own sake: an AI-written email addressed to a contact we can't confirm is deliverable isn't
-  // something a human can act on today, so spending an LLM call writing it doesn't pay for itself
-  // yet. The alternative (draft anyway, so the body is ready the moment a real email is found) was
-  // considered and rejected for v1 — see docs/sales-platform/ai-workflow.md §8. Once verification
-  // or enrichment clears this contact, a later pipeline re-run drafts it then, same as queueing.
-  if (!hasVerifiedEmail(contact)) {
+  // Named people still need Hunter verified_deliverable. General inboxes (info@ / events@)
+  // are sendable without that bar because catch-all domains usually come back risky/accept_all.
+  if (!isSendableContact(contact)) {
     return {
       output: {
         draftId: null,
@@ -186,7 +181,7 @@ export async function runDraftStage(
     userContent,
   });
 
-  const contactFirstName = (contact.fullName ?? "").split(" ")[0] || "there";
+  const contactFirstName = contactGreetingName(contact);
   // Sanitize before fill so a stale DB template that still says "I've attached..." cannot
   // ship — cold outreach always links to /book (see lib/sales/outreach/bookUrl.ts).
   const body = replaceAttachmentWithBookLink(

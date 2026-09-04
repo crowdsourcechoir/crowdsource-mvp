@@ -4,7 +4,7 @@ import { listOpportunitiesForOrganization } from "../db/opportunities";
 import { createPipelineRun, finishAgentRun, startAgentRun, updatePipelineRun } from "../db/pipeline";
 import { listFindingsForOrganization } from "../db/research";
 import { getLatestScoreForOpportunity } from "../db/scores";
-import { looksLikePersonName, hasVerifiedEmail } from "../dedupe";
+import { looksLikePersonName, isSendableContact } from "../dedupe";
 import { ensureBookLinks } from "../outreach/ensureBookLinks";
 import { claimLooksLikeCalendarDate } from "../research/extractEventDates";
 import type { Contact, PipelineStage } from "../types";
@@ -50,15 +50,15 @@ export type PipelineRunSummary = {
 };
 
 /**
- * Prefers an actual named human being over a generic mailbox, even if that mailbox has a
- * verified-format email — a personalized "Hi Chris," draft is the point, and a human reviewer
- * can always look up/confirm the real send-to address before approving. Email verification
- * status is only the tie-breaker among named people.
+ * Prefers an actual named human being over a generic mailbox. Sendable contacts (Hunter-verified
+ * people, or general inboxes like info@ / events@) outrank contacts we cannot send to, so a
+ * shared inbox can still reach the queue when no named person is verified yet.
  */
 function pickBestContact(contacts: Contact[]): Contact | null {
   const emailRank = (c: Contact) =>
     ({ verified_deliverable: 0, valid_format: 1, risky: 2, unverified: 3, invalid: 4 })[c.emailVerificationStatus] ?? 3;
-  const rank = (c: Contact) => (looksLikePersonName(c.fullName) ? 0 : 10) + emailRank(c);
+  const rank = (c: Contact) =>
+    (isSendableContact(c) ? 0 : 20) + (looksLikePersonName(c.fullName) ? 0 : 10) + emailRank(c);
   const withName = contacts.filter((c) => c.fullName);
   if (withName.length === 0) return null;
   return [...withName].sort((a, b) => rank(a) - rank(b))[0];
@@ -164,12 +164,11 @@ export async function runPipelineForOrganization(
   const UNDECIDED_STATUSES = new Set(["new", "researching", "awaiting_contact", "ready_for_review"]);
   const undecidedOpportunities = opportunities.filter((o) => UNDECIDED_STATUSES.has(o.status));
 
-  // Gate: an opportunity only reaches the human review queue once it has at least one named
-  // contact whose email clears the `hasVerifiedEmail` bar — otherwise the queue just becomes
-  // more research work for the human, defeating the point of the pipeline (see
-  // docs/sales-platform/ai-workflow.md §4/§10). This reuses the exact same `bestContact` the
-  // draft stage uses, so "who we'd draft to" and "who we require to be verified" never diverge.
-  let contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
+  // Gate: an opportunity only reaches the human review queue once it has at least one
+  // sendable contact (a Hunter-verified named person, or a general inbox like info@ / events@).
+  // See docs/sales-platform/ai-workflow.md §4/§10. This reuses the exact same `bestContact`
+  // the draft stage uses, so "who we'd draft to" and "who we require to send" never diverge.
+  let contactIsQueueReady = bestContact !== null && isSendableContact(bestContact);
 
   // Stages 6-10 run per opportunity — an organization can have several.
   for (const opportunity of undecidedOpportunities) {
@@ -220,7 +219,7 @@ export async function runPipelineForOrganization(
         await runStage("verify_contact", { organizationId, afterDeepen: true }, () => runVerifyContactsStage(freshOrg));
         const refreshedContacts = await listContactsForOrganization(organizationId);
         bestContact = pickBestContact(refreshedContacts);
-        contactIsQueueReady = bestContact !== null && hasVerifiedEmail(bestContact);
+        contactIsQueueReady = bestContact !== null && isSendableContact(bestContact);
         const rescored = await runStage("score", { opportunityId: opportunity.id, rescoreAfterDeepen: true }, () =>
           runScoreStage(freshOrg, opportunity, pipelineRun.id)
         );

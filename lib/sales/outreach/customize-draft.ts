@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { callStructured } from "@/lib/sales/openai/client";
 import { SPORTS_VOICE_REFERENCE_EMAILS } from "@/lib/sales/outreach/sports-voice";
+import { contactGreetingName } from "@/lib/sales/dedupe";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { draftToPlainText, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
@@ -72,9 +73,9 @@ export async function customizeOutreachDraft(input: {
 }): Promise<{ subject: string; body: string }> {
   const { detail, sentExamples } = input;
   const contact = detail.contact;
-  const firstName = (contact?.fullName ?? "there").trim().split(/\s+/)[0] || "there";
+  const firstName = contactGreetingName(contact);
   const roleTitle = contact?.roleTitle ?? null;
-  const roleBlurb = contactRoleDescription(contact) ?? fallbackRoleDescription(roleTitle);
+  const roleBlurb = contactRoleDescription(contact) ?? fallbackRoleDescription(roleTitle, contact?.email);
   const currentSubject = coalesceDraftSubject(detail.draft?.editedSubject, detail.draft?.aiSubject);
   const currentBody = draftToPlainText(
     coalesceDraftBody(detail.draft?.editedBody, detail.draft?.aiBody)
@@ -92,7 +93,7 @@ export async function customizeOutreachDraft(input: {
 
 Voice — copy the SENT EMAILS and examples below, not the generic template:
 - First person, plain, warm. No "synergies", "excited to connect", "leverage", "game-changer", "unique fit".
-- Open with Hi {first name}. Introduce as founder of Crowdsource Choir.
+- Open with Hi {first name} for a named person, or Hi there for a general inbox (info@ / events@). Introduce as founder of Crowdsource Choir.
 - Name the real organization and gathering in the body (not a different org from another draft).
 - Give 2–3 concrete possibilities tailored to this gathering (opening / shared anthem / ongoing participation — worded for THIS community, not copy-pasted Seahawks "12s" language unless this really is the Seahawks).
 - One throughline sentence about THIS community's energy.
@@ -112,7 +113,7 @@ ${CONFERENCE_VOICE}`,
     userContent: [
       `Organization: ${detail.organization.name}`,
       `Opportunity / event: ${detail.opportunity.title}`,
-      `Contact: ${firstName} — ${roleTitle ?? "unknown role"}`,
+      `Contact: ${firstName === "there" ? "general inbox" : firstName} — ${roleTitle ?? "unknown role"}`,
       `What this person does: ${roleBlurb}`,
       brief ? `Brief:\n${brief}` : "Brief: (none)",
       findings ? `Findings (only use what's here):\n${findings}` : "Findings: (none)",

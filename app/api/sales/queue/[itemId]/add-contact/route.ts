@@ -6,7 +6,7 @@ import { publicErrorMessage } from "@/lib/sales/http-error";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Add a named contact to the org on this queue item. Hunter finds email if missing. */
+/** Add a named person or a general inbox (info@ / events@) to the org on this queue item. */
 export async function POST(request: Request, { params }: { params: Promise<{ itemId: string }> }) {
   try {
     requireSupabaseAdmin();

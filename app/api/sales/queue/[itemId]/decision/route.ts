@@ -18,7 +18,7 @@ import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { draftToPlainText, coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
-import { hasVerifiedEmail, looksLikePersonName } from "@/lib/sales/dedupe";
+import { isGenericMailboxEmail, isSendableContact } from "@/lib/sales/dedupe";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { pickNextRemainingInitialDraft, shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
@@ -125,19 +125,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
         );
       }
 
+      const genericInbox = isGenericMailboxEmail(contact.email);
       if (contact.emailVerificationStatus !== "verified_deliverable") {
         const check = await verifyEmailAddress(contact.email);
         if (check.status !== "unverified") {
           await updateContactVerification(contact.id, check.status);
         }
         const status = check.status === "unverified" ? "unverified" : check.status;
-        if (status !== "verified_deliverable") {
+        if (status === "invalid") {
           return NextResponse.json(
             {
-              error:
-                status === "invalid"
-                  ? `Hunter says ${contact.email} will bounce — not sent. Find another contact on this org.`
-                  : `Hunter could not confirm ${contact.email} is deliverable (${check.hunterStatus ?? status}). Not sent.`,
+              error: `Hunter says ${contact.email} will bounce — not sent. Find another contact on this org.`,
+            },
+            { status: 409 }
+          );
+        }
+        if (!genericInbox && status !== "verified_deliverable") {
+          return NextResponse.json(
+            {
+              error: `Hunter could not confirm ${contact.email} is deliverable (${check.hunterStatus ?? status}). Not sent.`,
             },
             { status: 409 }
           );
@@ -261,13 +267,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       const orgContacts = await listContactsForOrganization(opportunity.organizationId);
       const readyIds = new Set(
         orgContacts
-          .filter(
-            (c) =>
-              looksLikePersonName(c.fullName) &&
-              c.email &&
-              hasVerifiedEmail(c) &&
-              !isOutboundEmailBlocked(c.email)
-          )
+          .filter((c) => isSendableContact(c) && c.email && !isOutboundEmailBlocked(c.email))
           .map((c) => c.id)
       );
       const drafts = await listDraftsForOpportunity(opportunity.id);

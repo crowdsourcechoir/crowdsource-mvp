@@ -5,7 +5,13 @@ import { createOutreachDraft, listDraftsForOpportunity, updateDraftAiCopy } from
 import { createOrUpdateQueueItem } from "@/lib/sales/db/queue";
 import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
-import { looksLikePersonName, hasVerifiedEmail } from "@/lib/sales/dedupe";
+import {
+  contactGreetingName,
+  emailLocalPart,
+  isGenericMailboxEmail,
+  isSendableContact,
+  thanksSignOff,
+} from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { buildSeahawksEmail } from "@/lib/sales/outreach/sports-voice";
 import { computeTotalScore } from "@/lib/sales/scoring/score";
@@ -25,13 +31,7 @@ export type ManualEnqueueResult = {
 };
 
 function readyContacts(contacts: Contact[]): Contact[] {
-  return contacts.filter(
-    (c) =>
-      looksLikePersonName(c.fullName) &&
-      hasVerifiedEmail(c) &&
-      c.email &&
-      !isOutboundEmailBlocked(c.email)
-  );
+  return contacts.filter((c) => isSendableContact(c) && c.email && !isOutboundEmailBlocked(c.email));
 }
 
 function isConferenceType(opportunityTypeKey?: string | null): boolean {
@@ -55,16 +55,26 @@ function conferenceEventName(orgName: string, eventName?: string | null): string
 }
 
 function conferenceDraft(firstName: string, event: string): { subject: string; body: string } {
+  const thanks = thanksSignOff(firstName);
+  const ask =
+    firstName === "there"
+      ? `If it feels like it could be a fit, I'd love to connect — or please forward this to whoever handles programming. If this year is already set, I'd be glad to talk about next year.`
+      : `If it feels like it could be a fit, I'd love to connect. If this year is already set, I'd be glad to talk about next year — or connect with whoever handles programming.`;
   return {
     subject: `Crowdsource Choir + ${event}`,
-    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nWe create experiences that move people from being an audience to actually creating something together. Attendees contribute their voices and ideas, and we bring those contributions together into an original anthem that the whole room performs.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\nIf it feels like it could be a fit, I'd love to connect. If this year is already set, I'd be glad to talk about next year — or connect with whoever handles programming.\n\nThanks, ${firstName}!\n\nBest,\nJoel`,
+    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nWe create experiences that move people from being an audience to actually creating something together. Attendees contribute their voices and ideas, and we bring those contributions together into an original anthem that the whole room performs.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\n${ask}\n\n${thanks}\n\nBest,\nJoel`,
   };
 }
 
 function fundraiserDraft(firstName: string, orgName: string, event: string): { subject: string; body: string } {
+  const thanks = thanksSignOff(firstName);
+  const ask =
+    firstName === "there"
+      ? `If it feels like it could be a fit, I'd love to connect — or please forward this to whoever produces the event.`
+      : `If it feels like it could be a fit, I'd love to connect — or be pointed to whoever produces the event.`;
   return {
     subject: `Crowdsource Choir + ${event}`,
-    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nFor a room that's already gathered around a cause, this is a way to stop being an audience and actually create something together — an original anthem for ${orgName} that the whole night performs. It can sit as an opening, a live moment mid-program, or a close that people leave humming.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\nIf it feels like it could be a fit, I'd love to connect — or be pointed to whoever produces the event.\n\nThanks, ${firstName}!\n\nBest,\nJoel`,
+    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nFor a room that's already gathered around a cause, this is a way to stop being an audience and actually create something together — an original anthem for ${orgName} that the whole night performs. It can sit as an opening, a live moment mid-program, or a close that people leave humming.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\n${ask}\n\n${thanks}\n\nBest,\nJoel`,
   };
 }
 
@@ -84,7 +94,17 @@ function pickPrimaryContact(
   const ready = readyContacts(contacts);
   if (ready.length === 0) return null;
   const rank = (c: Contact) => {
+    const generic = isGenericMailboxEmail(c.email);
+    const local = emailLocalPart(c.email) ?? "";
     const title = `${c.roleTitle ?? ""} ${c.roleCategory ?? ""}`.toLowerCase();
+    if (generic) {
+      if (isConferenceType(opportunityTypeKey) || isFundraiserType(opportunityTypeKey)) {
+        if (/^events?$/.test(local)) return 20;
+        if (/^(info|contact|programming)$/.test(local)) return 21;
+        return 23;
+      }
+      return 24;
+    }
     if (isConferenceType(opportunityTypeKey)) {
       if (/show director|conference programming|event programming|content and programming|event strategy/.test(title))
         return 0;
@@ -100,12 +120,12 @@ function pickPrimaryContact(
   return [...ready].sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
-function draftCopyForContact(
+export function draftCopyForContact(
   orgName: string,
   contact: Contact,
   opts?: { opportunityTypeKey?: string | null; eventName?: string | null }
 ): { subject: string; body: string } {
-  const firstName = (contact.fullName ?? "there").split(/\s+/)[0];
+  const firstName = contactGreetingName(contact);
   if (/seahawk/i.test(orgName)) {
     return buildSeahawksEmail({ firstName, roleTitle: contact.roleTitle });
   }
@@ -157,7 +177,9 @@ export async function ensureContactDrafts(input: {
   );
   const contacts = readyContacts(await listContactsForOrganization(input.organization.id));
   if (contacts.length === 0) {
-    throw new Error("No named contact with a Hunter-verified deliverable email — cannot enqueue.");
+    throw new Error(
+      "No sendable contact — add a named person with a Hunter-verified email, or a general inbox like info@ / events@."
+    );
   }
   const primary = pickPrimaryContact(contacts, input.opportunityTypeKey) ?? contacts[0];
   const existing = await listDraftsForOpportunity(input.opportunityId);
@@ -254,7 +276,7 @@ export async function enqueueOrgManually(input: {
   const primary = pickPrimaryContact(contacts, input.opportunityTypeKey);
   if (!primary) {
     throw new Error(
-      "No named contact with a Hunter-verified deliverable email (excluding hard-blocked addresses) — cannot enqueue."
+      "No sendable contact — add a named person with a Hunter-verified email, or a general inbox like info@ / events@."
     );
   }
 
