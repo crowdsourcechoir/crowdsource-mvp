@@ -99,9 +99,10 @@ export function buildFirstTouchSnapshot(
       .filter((bounce) => eventMatchesTouch(send, bounce) && bounce.occurredAt >= send.occurredAt)
       .sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
 
+    const bounceFromReply = laterReplies.find((reply) => replyKindFromActivity({ metadata: reply.metadata }) === "bounce");
     const live = laterReplies.find((reply) => replyKindFromActivity({ metadata: reply.metadata }) === "live");
     const auto = laterReplies.find((reply) => replyKindFromActivity({ metadata: reply.metadata }) === "auto");
-    const bounce = laterBounces[0];
+    const bounce = laterBounces[0] ?? bounceFromReply;
     const stage = send.relationshipStage;
 
     let outcome: FirstTouchRow["outcome"] = "awaiting";
@@ -168,9 +169,8 @@ export function buildFirstTouchSnapshot(
     if (activity.activityType === "sent" && sendKindFromMetadata(activity.metadata) === "initial") {
       events.push(toEvent(activity, "sent"));
     } else if (activity.activityType === "replied") {
-      events.push(
-        toEvent(activity, replyKindFromActivity({ metadata: activity.metadata }) === "auto" ? "auto" : "replied")
-      );
+      const kind = replyKindFromActivity({ metadata: activity.metadata });
+      events.push(toEvent(activity, kind === "auto" ? "auto" : kind === "bounce" ? "bounced" : "replied"));
     } else if (activity.activityType === "bounced") {
       events.push(toEvent(activity, "bounced"));
     }
@@ -190,9 +190,10 @@ export function buildFirstTouchSnapshot(
     lost,
     liveReplyRate: rate(liveReplies, firstTouches.length),
     bounceRate: rate(bounceCount, firstTouches.length),
-    liveReplies7d: replies.filter(
-      (a) => inLast7Days(a.occurredAt, nowMs) && replyKindFromActivity({ metadata: a.metadata }) === "live"
-    ).length,
+    liveReplies7d: replies.filter((a) => {
+      if (!inLast7Days(a.occurredAt, nowMs)) return false;
+      return replyKindFromActivity({ metadata: a.metadata }) === "live";
+    }).length,
     events: events.slice(0, 40),
     recentLiveReplies: events.filter((e) => e.kind === "replied").slice(0, 12),
     recentBounces: events.filter((e) => e.kind === "bounced").slice(0, 12),

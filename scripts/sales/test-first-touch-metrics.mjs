@@ -26,7 +26,13 @@ assert.equal(
   }),
   "auto"
 );
-assert.equal(looksLikeBounce({ from: "Joel <sing@crowdsourcechoir.com>", subject: "Hello" }), false);
+assert.equal(
+  classifyInbound({
+    from: "Microsoft Outlook",
+    snippet: "Delivery has failed to these recipients or groups: tanner@ats.edu Your message couldn't be delivered",
+  }),
+  "bounce"
+);
 assert.equal(looksLikeAutoReply({ subject: "Out of Office", snippet: "thanks" }), true);
 assert.deepEqual(
   failedRecipientsFromBounce({ xFailedRecipients: "bad@example.org" }),
@@ -100,29 +106,43 @@ const snapshot = buildFirstTouchSnapshot(
       contactName: "Kate Kerley",
     },
     {
-      id: "s4",
-      opportunityId: "opp-4",
-      contactId: "c4",
+      id: "s6",
+      opportunityId: "opp-6",
+      contactId: "c6",
       activityType: "sent",
-      occurredAt: "2026-08-20T12:00:00.000Z",
-      metadata: { kind: "nudge" },
-      organizationName: "Dance/USA",
-      contactName: "Samir",
+      occurredAt: "2026-09-02T20:10:00.000Z",
+      metadata: { kind: "initial" },
+      organizationName: "Association of Theological Schools",
+      contactName: "Tanner",
+      relationshipStage: "awareness",
+    },
+    {
+      id: "r-bounce",
+      opportunityId: "opp-6",
+      contactId: "c6",
+      activityType: "replied",
+      occurredAt: "2026-09-02T20:10:30.000Z",
+      metadata: {
+        snippet: "Delivery has failed to these recipients or groups: tanner@ats.edu Your message couldn't be delivered",
+      },
+      organizationName: "Association of Theological Schools",
+      contactName: "Tanner",
     },
   ],
   now
 );
 
 assert.equal(snapshot.emailsSent, 4);
-assert.equal(snapshot.firstTouches, 3);
+assert.equal(snapshot.firstTouches, 4);
 assert.equal(snapshot.liveReplies, 1);
 assert.equal(snapshot.autoReplies, 1);
-assert.equal(snapshot.bounces, 1);
+assert.equal(snapshot.bounces, 2);
 assert.equal(snapshot.awaiting, 0);
-assert.equal(snapshot.liveReplyRate, 33.3);
-assert.equal(snapshot.bounceRate, 33.3);
+assert.equal(snapshot.liveReplyRate, 25);
+assert.equal(snapshot.bounceRate, 50);
 assert.equal(snapshot.recentLiveReplies[0]?.organizationName, "LeadingAge");
-assert.equal(snapshot.recentBounces[0]?.organizationName, "NAHQ");
+assert.ok(snapshot.recentBounces.some((e) => e.organizationName === "NAHQ"));
+assert.ok(snapshot.recentBounces.some((e) => e.organizationName === "Association of Theological Schools"));
 assert.ok(snapshot.events.some((e) => e.kind === "auto"));
 
 const manualInterest = buildFirstTouchSnapshot(

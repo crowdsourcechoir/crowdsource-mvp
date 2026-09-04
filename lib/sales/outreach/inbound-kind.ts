@@ -4,6 +4,8 @@ const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 const BOUNCE_FROM_RE =
   /mailer-daemon|postmaster@|mail delivery subsystem|undeliverable/i;
+const BOUNCE_SNIPPET_RE =
+  /delivery has failed|couldn['’]?t be delivered|address not found|recipient rejected|mailbox unavailable|undeliverable|delivery status notification|permanent failure|user unknown/i;
 const BOUNCE_SUBJECT_RE =
   /delivery status notification|undeliverable|mail delivery failed|returned mail|failure notice|delivery failure/i;
 const AUTO_SUBJECT_RE =
@@ -31,11 +33,13 @@ export function extractEmailAddresses(value: string | null | undefined): string[
 export function looksLikeBounce(input: {
   from?: string | null;
   subject?: string | null;
+  snippet?: string | null;
   xFailedRecipients?: string | null;
 }): boolean {
   if (input.xFailedRecipients?.trim()) return true;
   if (input.from && BOUNCE_FROM_RE.test(input.from)) return true;
   if (input.subject && BOUNCE_SUBJECT_RE.test(input.subject)) return true;
+  if (input.snippet && BOUNCE_SNIPPET_RE.test(input.snippet)) return true;
   return false;
 }
 
@@ -83,13 +87,16 @@ export function sendKindFromMetadata(metadata: Record<string, unknown> | null | 
 export function replyKindFromActivity(input: {
   metadata?: Record<string, unknown> | null;
   snippet?: string | null;
-}): "live" | "auto" {
+}): "live" | "auto" | "bounce" {
   const meta = input.metadata ?? {};
-  const stored = meta.replyKind ?? meta.kind;
-  if (stored === "auto") return "auto";
-  if (stored === "live") return "live";
   const snippet =
     input.snippet ?? (typeof meta.snippet === "string" ? meta.snippet : null);
   const subject = typeof meta.subject === "string" ? meta.subject : null;
-  return looksLikeAutoReply({ subject, snippet }) ? "auto" : "live";
+  const from = typeof meta.fromEmail === "string" ? meta.fromEmail : null;
+  const failedEmail = typeof meta.failedEmail === "string" ? meta.failedEmail : null;
+  const classified = classifyInbound({ from, subject, snippet, xFailedRecipients: failedEmail });
+  if (classified === "bounce") return "bounce";
+  const stored = meta.replyKind ?? meta.kind;
+  if (stored === "auto" || classified === "auto") return "auto";
+  return "live";
 }
