@@ -241,7 +241,7 @@ export default function AdminEventsList() {
       {showFullSkeleton ? (
         <AdminEventsLoadingSkeleton />
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-white/10 border-y border-white/10">
           {filtered.map((event) => {
             const theme = event.agentThemeId ? themes.find((t) => t.id === event.agentThemeId) : null;
             const badgeLabel =

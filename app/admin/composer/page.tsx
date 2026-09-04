@@ -106,7 +106,7 @@ export default function ComposerPage() {
             to start composing.
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="divide-y divide-white/10 border-y border-white/10">
             {events.map((event) => {
               const padsHref = `/admin/songgarden/${event.id}`;
               return (
@@ -121,7 +121,7 @@ export default function ComposerPage() {
                     router.push(padsHref);
                   }
                 }}
-                className="flex cursor-pointer flex-col gap-3 rounded-xl border border-white/10 bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
+                className="flex cursor-pointer flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="truncate text-base font-semibold text-white">
