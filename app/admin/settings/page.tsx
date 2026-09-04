@@ -197,8 +197,8 @@ export default function SettingsPage() {
       <section id="appearance" className="scroll-mt-8 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
         <h2 className="text-base font-semibold text-white">Appearance</h2>
         <p className="mt-2 text-sm text-gray-400">
-          Shell background is solid black. Use the edge toggle on the sidebar border to switch between icon-only and
-          labeled navigation; that preference is saved in this browser.
+          Shell background is solid black. Click the sidebar divider to switch between icon-only and labeled
+          navigation; that preference is saved in this browser.
         </p>
       </section>
 
