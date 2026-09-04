@@ -8,6 +8,7 @@ import { formatDateLong, formatTime } from "@/lib/formatDate";
 import { googleMapsSearchUrl } from "./AddressMap";
 import EventHeroThumb from "./EventHeroThumb";
 import QRCodeDisplay from "./QRCodeDisplay";
+import AdminClickableRow, { ADMIN_ROW_ACTION } from "./AdminClickableRow";
 
 type AdminEventCardProps = {
   event: Event;
@@ -17,6 +18,7 @@ type AdminEventCardProps = {
 
 export default function AdminEventCard({ event, baseUrl = "http://localhost:3000", badgeLabel }: AdminEventCardProps) {
   const [showQr, setShowQr] = useState(false);
+  const manageHref = `/admin/events/${event.id}`;
 
   const eventUrl = useMemo(() => {
     return publicEventUrl(baseUrl, event.slug);
@@ -27,10 +29,10 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
   const dateFormatted = formatDateLong(event.date);
 
   return (
-    <article className="rounded-xl border border-gray-800 bg-[#121214] px-4 py-3">
+    <AdminClickableRow href={manageHref} ariaLabel={`Manage ${event.title}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-700/60 bg-[#1a1c22]">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
             <EventHeroThumb src={event.heroImage} title={event.title} />
           </div>
           <div className="min-w-0 flex-1">
@@ -45,22 +47,22 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
                   href={googleMapsSearchUrl(event.venue, event.address)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-gray-200 hover:underline"
+                  className={`${ADMIN_ROW_ACTION} hover:text-gray-200 hover:underline`}
                 >
                   {event.venue}
                 </a>
               </span>
               {badgeLabel && (
-                <span className="mt-1 w-fit rounded-full border border-gray-600/80 bg-[#1b1f28] px-2 py-0.5 text-xs text-gray-300 sm:mt-0">
+                <span className="mt-1 w-fit rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-gray-300 sm:mt-0">
                   {badgeLabel}
                 </span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+        <div className={`${ADMIN_ROW_ACTION} flex flex-wrap items-center gap-2 sm:shrink-0`}>
           <Link
-            href={`/admin/events/${event.id}`}
+            href={manageHref}
             className="rounded-lg bg-[#CFFF81] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#bdf25e]"
           >
             Manage
@@ -69,7 +71,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
             href={eventUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10"
             title={eventUrl}
           >
             Public Link
@@ -77,23 +79,23 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           <button
             type="button"
             onClick={() => setShowQr((v) => !v)}
-            className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-white/10"
           >
             {showQr ? "Hide QR" : "QR"}
           </button>
         </div>
       </div>
       {showQr && (
-        <div className="mt-3 sm:ml-20">
+        <div className={`${ADMIN_ROW_ACTION} mt-3 sm:ml-20`}>
           <QRCodeDisplay
             key={eventUrl}
             url={eventUrl}
             size={96}
-            className="rounded border border-gray-600"
+            className="rounded border border-white/15"
             downloadFilename={`${publicSlug}-qr.png`}
           />
         </div>
       )}
-    </article>
+    </AdminClickableRow>
   );
 }
