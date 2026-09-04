@@ -200,7 +200,12 @@ export default function AdminSideNav() {
 
   useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem(NAV_COLLAPSE_KEY) === "1");
+      const stored = window.localStorage.getItem(NAV_COLLAPSE_KEY);
+      if (stored === "1" || stored === "0") {
+        setCollapsed(stored === "1");
+      } else {
+        setCollapsed(window.matchMedia("(max-width: 767px)").matches);
+      }
     } catch {
       /* ignore */
     }
