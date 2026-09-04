@@ -1,20 +1,37 @@
 /**
  * Peak extraction for SoundCloud-style waveforms.
+ *
+ * Uses OfflineAudioContext so decode does not require a user gesture
+ * (live AudioContext often stays suspended until click — and browsers
+ * limit how many live contexts you can open).
  */
 
-let sharedCtx: AudioContext | null = null;
+type OfflineCtxCtor = new (
+  numberOfChannels: number,
+  length: number,
+  sampleRate: number
+) => OfflineAudioContext;
 
-function getSharedAudioContext(): AudioContext {
+function getOfflineAudioContextCtor(): OfflineCtxCtor {
+  const w = typeof window !== "undefined" ? window : undefined;
   const Ctx =
-    typeof window !== "undefined"
-      ? window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      : undefined;
+    w?.OfflineAudioContext ||
+    (w as unknown as { webkitOfflineAudioContext?: OfflineCtxCtor } | undefined)
+      ?.webkitOfflineAudioContext;
   if (!Ctx) throw new Error("Web Audio is not available.");
-  if (!sharedCtx || sharedCtx.state === "closed") {
-    sharedCtx = new Ctx();
-  }
-  return sharedCtx;
+  return Ctx;
+}
+
+/** Serialize decodes — OfflineAudioContext is cheap, but thrashing 80 at once stalls the main thread. */
+let decodeChain: Promise<unknown> = Promise.resolve();
+
+function enqueueDecode<T>(task: () => Promise<T>): Promise<T> {
+  const run = decodeChain.then(task, task);
+  decodeChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 export function peaksFromSamples(samples: Float32Array | number[], barCount: number): number[] {
@@ -43,14 +60,15 @@ export async function peaksFromAudioBuffer(
   arrayBuffer: ArrayBuffer,
   barCount: number
 ): Promise<{ peaks: number[]; durationSec: number }> {
-  const ctx = getSharedAudioContext();
-  if (ctx.state === "suspended") {
-    await ctx.resume().catch(() => undefined);
-  }
-  const audio = await ctx.decodeAudioData(arrayBuffer.slice(0));
-  const channel = audio.getChannelData(0);
-  return {
-    peaks: peaksFromSamples(channel, barCount),
-    durationSec: audio.duration,
-  };
+  return enqueueDecode(async () => {
+    const Offline = getOfflineAudioContextCtor();
+    // Dummy length/rate — only used so we can call decodeAudioData.
+    const ctx = new Offline(1, 1, 44100);
+    const audio = await ctx.decodeAudioData(arrayBuffer.slice(0));
+    const channel = audio.getChannelData(0);
+    return {
+      peaks: peaksFromSamples(channel, barCount),
+      durationSec: audio.duration,
+    };
+  });
 }
