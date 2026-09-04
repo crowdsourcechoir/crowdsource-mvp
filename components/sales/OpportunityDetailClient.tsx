@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { OpportunityPageDetail, ScoreComponentKey } from "@/lib/sales/types";
 import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
-import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
+import GmailThreadLink from "@/components/sales/GmailThreadLink";
+import FollowUpControls from "@/components/sales/FollowUpControls";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { looksLikeHtml, sanitizeEmailHtml, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
@@ -119,6 +120,23 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
               Reply {formatWhen(detail.emailRepliedAt)}
             </span>
           )}
+        </div>
+        {detail.latestReplySnippet ? (
+          <p className="mt-3 line-clamp-4 rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-sm text-gray-300">
+            {detail.latestReplySnippet}
+          </p>
+        ) : null}
+        {opportunity.gmailThreadId ? (
+          <div className="mt-2">
+            <GmailThreadLink threadId={opportunity.gmailThreadId} />
+          </div>
+        ) : null}
+        <div className="mt-4">
+          <FollowUpControls
+            opportunityId={opportunity.id}
+            nextFollowUpAt={opportunity.nextFollowUpAt}
+            onSaved={() => void load()}
+          />
         </div>
         {opportunity.eventOrInitiativeName && (
           <p className="mt-2 text-sm text-gray-400">
@@ -267,14 +285,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           <p className="mt-2 text-sm text-gray-500">No website links found yet.</p>
         )}
         {opportunity.gmailThreadId && (
-          <a
-            href={gmailThreadUrl(opportunity.gmailThreadId)}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-block text-sm text-sky-400 hover:underline"
-          >
-            Open Gmail thread →
-          </a>
+          <GmailThreadLink threadId={opportunity.gmailThreadId} className="mt-3 inline-block text-sm text-sky-400 hover:underline" />
         )}
       </section>
 
@@ -372,7 +383,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           Back to funnel
         </Link>
         <Link href="/admin/sales/queue" className="text-gray-400 underline hover:text-gray-200">
-          Approval queue
+          Queue
         </Link>
         <Link href={`/admin/sales/organizations/${organization.id}`} className="text-gray-400 underline hover:text-gray-200">
           Organization

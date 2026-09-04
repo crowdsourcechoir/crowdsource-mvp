@@ -14,7 +14,7 @@ export default function SalesOverviewPage() {
             Prospecting Intelligence
           </p>
           <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Sales</h1>
-          <p className="mt-2 text-sm text-gray-400">Dashboard — queue, funnel, wins, and this week’s outreach.</p>
+          <p className="mt-2 text-sm text-gray-400">Dashboard — today’s follow-ups, then the queue.</p>
         </div>
         <AddOrganizationLauncher />
       </div>

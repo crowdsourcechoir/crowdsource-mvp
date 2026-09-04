@@ -7,6 +7,7 @@ import { listFindingsWithSourcesForOpportunity } from "./research";
 import { getQueueItemByOpportunity, getInitialQueueItemByOpportunity } from "./queue";
 import { getLatestBriefForOpportunity } from "./pipeline";
 import { listActivitiesForOpportunity } from "./activities";
+import { contactOutreachById } from "../outreach/contact-outreach";
 import { hasVerifiedEmail, looksLikePersonName } from "../dedupe";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
 
@@ -120,7 +121,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
         .limit(1)
         .maybeSingle();
 
-  const [organization, findings, brief, orgContacts, draft, allDrafts, scoreRes, oppTypeRes] = await Promise.all([
+  const [organization, findings, brief, orgContacts, draft, allDrafts, scoreRes, oppTypeRes, activities] = await Promise.all([
     getOrganization(opportunity.organizationId),
     listFindingsWithSourcesForOpportunity(opportunity.organizationId, opportunity.id),
     getLatestBriefForOpportunity(opportunityId),
@@ -131,6 +132,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     opportunity.opportunityTypeId
       ? db.from("opportunity_types").select("label").eq("id", opportunity.opportunityTypeId).maybeSingle()
       : Promise.resolve({ data: null as { label: string } | null }),
+    listActivitiesForOpportunity(opportunity.id).catch(() => []),
   ]);
   if (!organization) return null;
 
@@ -171,6 +173,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     brief,
     draft,
     findings,
+    contactOutreach: contactOutreachById(activities),
   };
 }
 
@@ -202,6 +205,10 @@ export async function assembleOpportunityPageDetail(opportunityId: string): Prom
 
   const sent = [...activities].reverse().find((a) => a.activityType === "sent");
   const replied = [...activities].reverse().find((a) => a.activityType === "replied");
+  const snippet =
+    typeof replied?.metadata?.snippet === "string" && replied.metadata.snippet.trim()
+      ? replied.metadata.snippet.trim()
+      : null;
 
   const contact =
     detail.contact ??
@@ -214,6 +221,7 @@ export async function assembleOpportunityPageDetail(opportunityId: string): Prom
     contacts,
     emailSentAt: sent?.occurredAt ?? detail.opportunity.lastOutboundAt,
     emailRepliedAt: replied?.occurredAt ?? detail.opportunity.lastInboundAt,
+    latestReplySnippet: snippet,
     links: buildSourceLinks(detail.organization.websiteUrl, detail.findings),
   };
 }

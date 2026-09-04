@@ -249,15 +249,23 @@ export async function searchSalesDatabase(rawQuery: string): Promise<SalesSearch
     if (oppIds.length > 0) {
       const { data: queueRows, error: queueErr } = await db
         .from("approval_queue_items")
-        .select("id, opportunity_id")
-        .eq("status", "pending")
-        .in("opportunity_id", oppIds);
+        .select("id, opportunity_id, status, created_at")
+        .in("opportunity_id", oppIds)
+        .order("created_at", { ascending: false });
       if (queueErr) throw new Error(queueErr.message);
       const oppById = new Map((queuedOpps ?? []).map((row) => [row.id as string, row]));
       for (const row of queueRows ?? []) {
         const opp = oppById.get(row.opportunity_id as string);
         if (!opp) continue;
         const orgId = opp.organization_id as string;
+        const pending = row.status === "pending";
+        if (pending) {
+          queueByOrg.set(orgId, {
+            queueItemId: row.id as string,
+            opportunityTitle: (opp.title as string | null) ?? null,
+          });
+          continue;
+        }
         if (!queueByOrg.has(orgId)) {
           queueByOrg.set(orgId, {
             queueItemId: row.id as string,

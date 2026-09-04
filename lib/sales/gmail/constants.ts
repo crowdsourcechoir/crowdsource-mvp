@@ -29,8 +29,26 @@ export function withSendsEnabledMarker(scopes: string[] | null | undefined, enab
   return next;
 }
 
-export function gmailThreadUrl(threadId: string): string {
-  return `https://mail.google.com/mail/u/0/#inbox/${threadId}`;
+/**
+ * Open the exact thread in Joel’s connected Gmail account.
+ * `u/0` is whichever Google account happens to be first in the browser — that is
+ * what made these links land on a random inbox. `authuser` + `#all/` keeps the
+ * thread even if it left Inbox.
+ */
+export function gmailThreadUrl(
+  threadId: string,
+  accountEmail?: string | null,
+  messageId?: string | null
+): string {
+  const params = new URLSearchParams();
+  const email = accountEmail?.trim();
+  if (email) params.set("authuser", email);
+  const query = params.toString();
+  const hash =
+    messageId && messageId.trim()
+      ? `#search/rfc822msgid:${encodeURIComponent(messageId.trim())}`
+      : `#all/${threadId}`;
+  return `https://mail.google.com/mail/${query ? `?${query}` : ""}${hash}`;
 }
 
 /** Add N calendar days to an ISO timestamp (UTC date arithmetic is fine for v1 cadence). */

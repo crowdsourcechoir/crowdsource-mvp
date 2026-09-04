@@ -127,7 +127,7 @@ export default function BatchRunClient() {
         <p className="mt-3 text-sm text-gray-300">
           Batch complete.{" "}
           <Link href="/admin/sales/queue" className="underline">
-            Go review the approval queue →
+            Go review the queue →
           </Link>
         </p>
       )}

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 type Candidate = { organizationId: string; organizationName?: string; score: number };
 
-export default function FillQueueClient() {
+export default function FillQueueClient({ variant = "full" }: { variant?: "full" | "compact" }) {
   const [solidCount, setSolidCount] = useState<number | null>(null);
   const [nearMissCount, setNearMissCount] = useState<number | null>(null);
   const [minScore, setMinScore] = useState(70);
@@ -49,7 +49,7 @@ export default function FillQueueClient() {
       const s = data.summary;
       setResult(
         `Reprocessed ${s.attempted} of ${s.considered} blocked lead(s). Check the ` +
-          `approval queue — newly verified contacts land there.`
+          `queue — newly verified contacts land there.`
       );
       await load();
     } catch (err) {
@@ -59,8 +59,8 @@ export default function FillQueueClient() {
     }
   }
 
-  return (
-    <div className="mb-6 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4">
+  const body = (
+    <div className={variant === "compact" ? "px-4 pb-4" : ""}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-400/90">Fill the queue</h2>
@@ -135,4 +135,23 @@ export default function FillQueueClient() {
       )}
     </div>
   );
+
+  if (variant === "compact") {
+    return (
+      <details className="mb-4 rounded-xl border border-gray-800 bg-gray-950/40">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm text-gray-300 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-3">
+            <span>
+              Fill the queue
+              {solidCount != null ? <span className="ml-2 text-gray-500">{solidCount} blocked</span> : null}
+            </span>
+            <span className="text-xs text-gray-500">Show</span>
+          </span>
+        </summary>
+        {body}
+      </details>
+    );
+  }
+
+  return <div className="mb-6 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4">{body}</div>;
 }

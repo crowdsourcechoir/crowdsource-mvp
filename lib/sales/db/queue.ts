@@ -2,6 +2,10 @@ import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
 import { readSalesInitiative } from "../initiatives";
+import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
+import { opportunityOutreachKind } from "../outreach/contact-outreach";
+import { loadSalesTodayTasks } from "./follow-ups";
+import type { QueueScope } from "../queue/scope";
 import type { ApprovalQueueItem, ApprovalQueueItemKind, ApprovalQueueItemStatus, QueueSidebarItem } from "../types";
 
 const IN_CHUNK = 150;
@@ -143,11 +147,28 @@ export async function hasPendingNudgeForContact(opportunityId: string, contactId
   return (drafts ?? []).some((row) => row.contact_id === contactId);
 }
 
-export async function listQueueItems(status?: ApprovalQueueItemStatus): Promise<ApprovalQueueItem[]> {
+export async function listQueueItems(status?: ApprovalQueueItemStatus | "all"): Promise<ApprovalQueueItem[]> {
   const db = requireSupabaseAdmin();
+  if (status === "all") {
+    const pageSize = 1000;
+    const out: ApprovalQueueItem[] = [];
+    let from = 0;
+    for (;;) {
+      const { data, error } = await db
+        .from("approval_queue_items")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []).map(rowToQueueItem);
+      out.push(...rows);
+      if (rows.length < pageSize || from > 8000) break;
+      from += pageSize;
+    }
+    return out;
+  }
   let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });
-  if (status) query = query.eq("status", status);
-  else query = query.eq("status", "pending");
+  query = query.eq("status", status ?? "pending");
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToQueueItem);
@@ -159,7 +180,45 @@ export async function listQueueItems(status?: ApprovalQueueItemStatus): Promise<
  * Cloudflare once the D1 seed filled the queue).
  */
 export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): Promise<QueueSidebarItem[]> {
-  const items = await listQueueItems(status);
+  return assembleQueueSidebar(await listQueueItems(status));
+}
+
+export async function listQueueSidebarByScope(scope: QueueScope): Promise<QueueSidebarItem[]> {
+  if (scope === "due") {
+    const today = await loadSalesTodayTasks();
+    const ids = today.tasks.map((task) => task.queueItemId).filter((id): id is string => Boolean(id));
+    if (ids.length === 0) return [];
+    const items = (await Promise.all(ids.map((id) => getQueueItem(id)))).filter((row): row is ApprovalQueueItem => Boolean(row));
+    return assembleQueueSidebar(items);
+  }
+  const items = await listQueueItems(scope === "all" ? "all" : "pending");
+  const sidebar = await assembleQueueSidebar(items);
+  if (scope !== "all") return sidebar;
+  return dedupeSidebarByOrganization(sidebar);
+}
+
+function dedupeSidebarByOrganization(items: QueueSidebarItem[]): QueueSidebarItem[] {
+  const byOrg = new Map<string, QueueSidebarItem>();
+  for (const item of items) {
+    const prev = byOrg.get(item.organizationId);
+    if (!prev) {
+      byOrg.set(item.organizationId, item);
+      continue;
+    }
+    const prevPending = prev.queueItem.status === "pending";
+    const nextPending = item.queueItem.status === "pending";
+    if (nextPending && !prevPending) {
+      byOrg.set(item.organizationId, item);
+      continue;
+    }
+    if (nextPending === prevPending && item.queueItem.createdAt > prev.queueItem.createdAt) {
+      byOrg.set(item.organizationId, item);
+    }
+  }
+  return sortQueueSidebarItems(Array.from(byOrg.values()));
+}
+
+async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSidebarItem[]> {
   if (items.length === 0) return [];
   const db = requireSupabaseAdmin();
 
@@ -167,10 +226,24 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
   const draftIds = items.map((item) => item.outreachDraftId).filter((id): id is string => Boolean(id));
 
   const [opportunities, scoreRows, draftRows, opportunityTypes, organizationTypes] = await Promise.all([
-    fetchInChunks<{ id: string; title: string; organization_id: string; opportunity_type_id: string | null }>(
+    fetchInChunks<{
+      id: string;
+      title: string;
+      organization_id: string;
+      opportunity_type_id: string | null;
+      gmail_thread_id: string | null;
+      next_follow_up_at: string | null;
+      last_inbound_at: string | null;
+      last_outbound_at: string | null;
+    }>(
       items.map((item) => item.opportunityId),
       async (chunk) =>
-        db.from("opportunities").select("id, title, organization_id, opportunity_type_id").in("id", chunk)
+        db
+          .from("opportunities")
+          .select(
+            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at"
+          )
+          .in("id", chunk)
     ),
     scoreIds.length > 0
       ? fetchInChunks<{ id: string; total_score: number }>(scoreIds, async (chunk) =>
@@ -231,6 +304,7 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
       organizationTypeKey,
       salesInitiative: readSalesInitiative(organization.import_metadata),
     });
+    const nextFollowUpAt = opportunity.next_follow_up_at ?? null;
     sidebar.push({
       queueItem,
       organizationId: organization.id,
@@ -244,6 +318,13 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
       category,
       opportunityTypeKey,
       organizationTypeKey,
+      outreachKind: opportunityOutreachKind({
+        lastInboundAt: opportunity.last_inbound_at ?? null,
+        lastOutboundAt: opportunity.last_outbound_at ?? null,
+      }),
+      nextFollowUpAt,
+      gmailThreadId: opportunity.gmail_thread_id ?? null,
+      followUpDue: isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt),
     });
   }
   return sortQueueSidebarItems(sidebar);

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
-import { gmailThreadUrl } from "@/lib/sales/gmail/constants";
+import GmailThreadLink from "@/components/sales/GmailThreadLink";
+import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 
 const STAGES = FUNNEL_STAGES.map((s) => ({
@@ -50,19 +51,21 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
         <p className="mt-1 text-xs text-sky-400">
           Awaiting reply
           {item.opportunity.nextFollowUpAt
-            ? ` · nudge ${new Date(item.opportunity.nextFollowUpAt).toLocaleDateString()}`
+            ? ` · follow up ${formatFollowUpDay(item.opportunity.nextFollowUpAt)}`
             : ""}
         </p>
       )}
+      {item.opportunity.lastInboundAt ? (
+        <p className="mt-1 text-xs text-[#CFFF81]">
+          Replied
+          {item.opportunity.nextFollowUpAt ? ` · follow up ${formatFollowUpDay(item.opportunity.nextFollowUpAt)}` : " · set a follow-up"}
+        </p>
+      ) : null}
       {item.opportunity.gmailThreadId && (
-        <a
-          href={gmailThreadUrl(item.opportunity.gmailThreadId)}
-          target="_blank"
-          rel="noreferrer"
+        <GmailThreadLink
+          threadId={item.opportunity.gmailThreadId}
           className="mt-1 block text-xs text-sky-400 underline"
-        >
-          Open Gmail thread
-        </a>
+        />
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

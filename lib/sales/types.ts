@@ -1,6 +1,8 @@
 // Shared domain types for the Sales Platform. Mirrors docs/sales-platform/database.md.
 // DB rows are snake_case; everything here is camelCase, mapped in lib/sales/db/*.
 
+import type { ContactOutreach, OpportunityOutreachKind } from "./outreach/contact-outreach";
+
 export type PipelineStage =
   | "normalize"
   | "research"
@@ -404,6 +406,10 @@ export type QueueSidebarItem = {
   category: string;
   opportunityTypeKey: string | null;
   organizationTypeKey: string | null;
+  outreachKind: OpportunityOutreachKind;
+  nextFollowUpAt: string | null;
+  gmailThreadId: string | null;
+  followUpDue: boolean;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */
@@ -423,6 +429,7 @@ export type QueueItemDetail = {
   brief: OpportunityBrief | null;
   draft: OutreachDraft | null;
   findings: (ResearchFinding & { sourceUrl: string })[];
+  contactOutreach: Record<string, ContactOutreach>;
 };
 
 /** Opportunity detail page (funnel / deep link) — QueueItemDetail plus CRM context. */
@@ -430,6 +437,7 @@ export type OpportunityPageDetail = QueueItemDetail & {
   contacts: Contact[];
   emailSentAt: string | null;
   emailRepliedAt: string | null;
+  latestReplySnippet: string | null;
   /** Distinct useful links: org site + conference/event research pages. */
   links: { url: string; label: string; kind: "organization" | "conference" | "research" }[];
 };

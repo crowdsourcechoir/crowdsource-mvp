@@ -36,6 +36,11 @@ import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrg
 import AddContactForm from "@/components/sales/AddContactForm";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
+import FollowUpControls from "@/components/sales/FollowUpControls";
+import GmailThreadLink from "@/components/sales/GmailThreadLink";
+import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
+import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
+import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales/queue/scope";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -63,6 +68,8 @@ export default function ApprovalQueueClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const category = parseQueueCategory(searchParams.get("category"));
+  const scope = parseQueueScope(searchParams.get("scope"));
+  const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
   const [loading, setLoading] = useState(true);
@@ -105,7 +112,7 @@ export default function ApprovalQueueClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/sales/queue", { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      const res = await fetch(`/api/sales/queue?scope=${encodeURIComponent(scope)}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load queue"));
       const body = data as { items?: QueueSidebarItem[]; gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean } };
@@ -119,12 +126,13 @@ export default function ApprovalQueueClient() {
       setDetailError(null);
       setSelectedIndex(0);
       setMobileDetailOpen(false);
+      if (deepLinkItem) setJumpToQueueItemId(deepLinkItem);
     } catch (err) {
       setLoadError(publicErrorMessage(err, "Failed to load queue"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope, deepLinkItem]);
 
   useEffect(() => {
     load();
@@ -230,10 +238,15 @@ export default function ApprovalQueueClient() {
           setCategory("all");
           return;
         }
+        if (scope !== "all") {
+          setJumpToQueueItemId(hit.queueItemId);
+          setScope("all");
+          return;
+        }
       }
       router.push(`/admin/sales/organizations/${hit.organizationId}`);
     },
-    [visible, sidebar, selectItem, router]
+    [visible, sidebar, selectItem, router, scope]
   );
 
   useEffect(() => {
@@ -576,12 +589,21 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category]);
+  }, [category, scope]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "all") params.delete("category");
     else params.set("category", next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setScope(next: QueueScope) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "to_send") params.delete("scope");
+    else params.set("scope", next);
+    params.delete("item");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -599,8 +621,26 @@ export default function ApprovalQueueClient() {
   );
 
   const filterBar = (
-    <div className="mb-4 flex items-center gap-2">
-      <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+    <div className="mb-4 flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
+        {QUEUE_SCOPE_CHIPS.map((chip) => {
+          const active = scope === chip.key;
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => setScope(chip.key)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                active ? "bg-[#CFFF81] text-gray-900" : "border border-gray-800 text-gray-300 hover:border-gray-600"
+              }`}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
         {QUEUE_CATEGORY_CHIPS.map((chip) => {
           const active = category === chip.key;
           const count = categoryCounts[chip.key];
@@ -618,9 +658,10 @@ export default function ApprovalQueueClient() {
             </button>
           );
         })}
-      </div>
+        </div>
       <SalesSearchBox onPick={pickFromSearch} />
       <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
+    </div>
     </div>
   );
 
@@ -674,9 +715,13 @@ export default function ApprovalQueueClient() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">
-          {category === "all"
-            ? `${pendingCount} pending`
-            : `${pendingCount} ${queueCategoryLabel(category).toLowerCase()} · ${sidebar.length} total`}
+          {scope === "due"
+            ? `${pendingCount} due today`
+            : scope === "all"
+              ? `${pendingCount} orgs`
+              : category === "all"
+                ? `${pendingCount} to send`
+                : `${pendingCount} ${queueCategoryLabel(category).toLowerCase()} · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
@@ -701,6 +746,8 @@ export default function ApprovalQueueClient() {
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
                     {queueCategoryLabel(parseQueueCategory(item.category))}
+                    {item.outreachKind === "replied" ? " · replied" : item.outreachKind === "sent" ? " · sent" : item.outreachKind === "bounced" ? " · bounced" : ""}
+                    {item.followUpDue ? " · due" : item.nextFollowUpAt ? ` · ${formatFollowUpDay(item.nextFollowUpAt)}` : ""}
                   </span>
                 </span>
                 {item.totalScore != null ? (
@@ -810,7 +857,9 @@ export default function ApprovalQueueClient() {
                   const sent = (current.contactDrafts ?? []).some(
                     (d) => d.contactId === c.id && isSentDraftStatus(d.status)
                   );
-                  const hasDraft = !sent && (current.contactDrafts ?? []).some(
+                  const outreach = current.contactOutreach?.[c.id];
+                  const outreachChip = outreachLabel(outreach);
+                  const hasDraft = !sent && !outreach?.sentAt && (current.contactDrafts ?? []).some(
                     (d) => d.contactId === c.id && isOpenDraftStatus(d.status)
                   );
                   const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle);
@@ -833,7 +882,9 @@ export default function ApprovalQueueClient() {
                           >
                             <span className="font-medium">
                               {c.fullName ?? "Unnamed"}
-                              {sent ? (
+                              {outreachChip ? (
+                                <span className={`ml-2 text-xs font-medium ${outreachChip.className}`}>{outreachChip.text}</span>
+                              ) : sent ? (
                                 <span className="ml-2 text-xs font-medium text-emerald-400">sent</span>
                               ) : hasDraft ? (
                                 <span className="ml-2 text-xs text-gray-500">draft</span>
@@ -868,6 +919,20 @@ export default function ApprovalQueueClient() {
                         >
                           {blurb}
                           <span className="mt-1 block text-gray-400">{c.email}</span>
+                          {outreach?.snippet ? (
+                            <span className="mt-1 block line-clamp-3 text-gray-300">{outreach.snippet}</span>
+                          ) : null}
+                          {outreach?.gmailThreadId || ((sent || outreach?.sentAt) && current.opportunity.gmailThreadId) ? (
+                            <span className="mt-1 block" onClick={(e) => e.stopPropagation()}>
+                              <GmailThreadLink
+                                threadId={outreach?.gmailThreadId || current.opportunity.gmailThreadId || ""}
+                                messageId={outreach?.gmailMessageId}
+                                className="text-sky-400 underline"
+                              >
+                                Open this thread
+                              </GmailThreadLink>
+                            </span>
+                          ) : null}
                           {source?.sourceUrl && (
                             <a
                               href={source.sourceUrl}
@@ -984,6 +1049,21 @@ export default function ApprovalQueueClient() {
               </div>
             )}
           </div>
+
+          {current.opportunity.id ? (
+            <div className="mt-4">
+              <FollowUpControls
+                opportunityId={current.opportunity.id}
+                nextFollowUpAt={current.opportunity.nextFollowUpAt}
+                onSaved={(nextFollowUpAt) => {
+                  replaceDetail(current.queueItem.id, {
+                    ...current,
+                    opportunity: { ...current.opportunity, nextFollowUpAt },
+                  });
+                }}
+              />
+            </div>
+          ) : null}
 
           {current.brief && (
             <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-3">

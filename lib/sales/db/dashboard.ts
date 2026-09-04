@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import type { RelationshipStage } from "../types";
+import { loadSalesTodayTasks, type SalesTodaySnapshot } from "./follow-ups";
 
 export type DashboardWin = {
   id: string;
@@ -13,6 +14,7 @@ export type SalesDashboardBuckets = {
   funnelCount: number;
   funnelByStage: Record<RelationshipStage, number>;
   wins: DashboardWin[];
+  today: SalesTodaySnapshot;
 };
 
 const EMPTY_STAGES: Record<RelationshipStage, number> = {
@@ -22,15 +24,18 @@ const EMPTY_STAGES: Record<RelationshipStage, number> = {
   lost: 0,
 };
 
+const EMPTY_TODAY: SalesTodaySnapshot = { dueCount: 0, overdueCount: 0, repliedCount: 0, tasks: [] };
+
 export async function loadSalesDashboardBuckets(): Promise<SalesDashboardBuckets> {
   const db = requireSupabaseAdmin();
-  const [pendingRes, orgRes, oppRes] = await Promise.all([
+  const [pendingRes, orgRes, oppRes, todaySettled] = await Promise.all([
     db.from("approval_queue_items").select("id", { count: "exact", head: true }).eq("status", "pending"),
     db.from("organizations").select("id", { count: "exact", head: true }),
     db
       .from("opportunities")
       .select("id, organization_id, relationship_stage, stage_updated_at")
       .not("relationship_stage", "is", null),
+    loadSalesTodayTasks().catch(() => EMPTY_TODAY),
   ]);
 
   if (pendingRes.error) throw new Error(pendingRes.error.message);
@@ -73,5 +78,6 @@ export async function loadSalesDashboardBuckets(): Promise<SalesDashboardBuckets
       name: nameByOrgId.get(w.organizationId) ?? "Unknown org",
       updatedAt: w.updatedAt,
     })),
+    today: todaySettled ?? EMPTY_TODAY,
   };
 }

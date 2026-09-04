@@ -174,7 +174,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
                   {o.status === "awaiting_contact" && (
                     <span
                       className="ml-2 rounded-full border border-amber-700 px-2 py-0.5 text-xs font-medium text-amber-400"
-                      title="Scored and briefed, but no contact with a verified email yet — not in the approval queue until one is found."
+                      title="Scored and briefed, but no contact with a verified email yet — not in the queue until one is found."
                     >
                       Blocked: no verified contact
                     </span>

@@ -49,6 +49,18 @@ export function applySentDraft(item: QueueItemDetail, contactId: string): QueueI
           relationshipStage: item.opportunity.relationshipStage ?? "awareness",
         }
       : item.opportunity,
+    contactOutreach: {
+      ...(item.contactOutreach ?? {}),
+      [contactId]: {
+        sentAt: new Date().toISOString(),
+        repliedAt: item.contactOutreach?.[contactId]?.repliedAt ?? null,
+        replyKind: item.contactOutreach?.[contactId]?.replyKind ?? null,
+        bouncedAt: item.contactOutreach?.[contactId]?.bouncedAt ?? null,
+        snippet: item.contactOutreach?.[contactId]?.snippet ?? null,
+        gmailThreadId: item.contactOutreach?.[contactId]?.gmailThreadId ?? item.opportunity?.gmailThreadId ?? null,
+        gmailMessageId: item.contactOutreach?.[contactId]?.gmailMessageId ?? null,
+      },
+    },
   };
 }
 

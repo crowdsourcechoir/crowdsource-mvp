@@ -39,7 +39,7 @@ const settingsGroups: { heading: string; blurb: string; cards: SettingsCard[] }[
       {
         domain: "Sales",
         title: "Hunter enrichment",
-        description: "API key status, credit balance, and find/verify behavior for the approval queue.",
+        description: "API key status, credit balance, and find/verify behavior for the queue.",
         href: "/admin/sales",
         status: "Open Sales",
       },

@@ -136,7 +136,7 @@ async function recordReply(input: {
   if (input.replyKind === "live") {
     await updateOpportunityTouchTimestamps(input.opportunityId, {
       lastInboundAt: occurredAt,
-      nextFollowUpAt: null,
+      nextFollowUpAt: occurredAt,
       gmailThreadId: input.gmailThreadId,
     });
     if (opportunity.relationshipStage === "awareness") {
