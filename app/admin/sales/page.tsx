@@ -8,22 +8,19 @@ import { AddOrganizationLauncher } from "@/components/sales/AddOrganizationForm"
 export default function SalesOverviewPage() {
   return (
     <div className="w-full text-white">
-      <div className="mb-6 sm:mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
-          Prospecting Intelligence
-        </p>
-        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Sales</h1>
-        <p className="mt-2 text-sm text-gray-400">
-          AI-assisted prospecting — discover, research, score, and prepare outreach for human approval.
-        </p>
-      </div>
-
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+            Prospecting Intelligence
+          </p>
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Sales</h1>
+          <p className="mt-2 text-sm text-gray-400">Dashboard — queue, funnel, wins, and this week’s outreach.</p>
+        </div>
         <AddOrganizationLauncher />
       </div>
 
-      <SalesFirstTouchClient />
       <SalesOverviewClient />
+      <SalesFirstTouchClient />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <EnrichmentConfigClient />
