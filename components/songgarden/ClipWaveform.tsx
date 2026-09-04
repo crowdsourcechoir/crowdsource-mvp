@@ -24,21 +24,27 @@ export default function ClipWaveform({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
+  const [peaksFailed, setPeaksFailed] = useState(false);
   const draggingRef = useRef(false);
 
   useEffect(() => {
     if (!arrayBuffer) {
       setPeaks([]);
+      setPeaksFailed(false);
       return;
     }
     let cancelled = false;
+    setPeaksFailed(false);
     const bars = Math.max(80, Math.min(280, Math.floor((wrapRef.current?.clientWidth ?? 480) / 3)));
     void peaksFromAudioBuffer(arrayBuffer, bars)
       .then((result) => {
         if (!cancelled) setPeaks(result.peaks);
       })
       .catch(() => {
-        if (!cancelled) setPeaks([]);
+        if (!cancelled) {
+          setPeaks([]);
+          setPeaksFailed(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -129,7 +135,7 @@ export default function ClipWaveform({
       <canvas ref={canvasRef} className="block w-full rounded-md bg-black/40" />
       {peaks.length === 0 && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-gray-500">
-          Loading waveform…
+          {peaksFailed ? "Waveform unavailable" : arrayBuffer ? "Loading waveform…" : "Waiting for audio…"}
         </p>
       )}
     </div>
