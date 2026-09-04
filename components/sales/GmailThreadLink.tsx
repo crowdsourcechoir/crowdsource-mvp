@@ -6,19 +6,20 @@ import { useGmailAccountEmail } from "@/components/sales/useGmailAccountEmail";
 
 export default function GmailThreadLink({
   threadId,
-  messageId,
+  accountEmail,
   className,
   children,
 }: {
   threadId: string;
-  messageId?: string | null;
+  accountEmail?: string | null;
   className?: string;
   children?: ReactNode;
 }) {
-  const email = useGmailAccountEmail();
+  const fetched = useGmailAccountEmail();
+  const email = accountEmail?.trim() || fetched;
   return (
     <a
-      href={gmailThreadUrl(threadId, email, messageId)}
+      href={gmailThreadUrl(threadId, email)}
       target="_blank"
       rel="noreferrer"
       className={className ?? "text-sm text-sky-400 hover:underline"}

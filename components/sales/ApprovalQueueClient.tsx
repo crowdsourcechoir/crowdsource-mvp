@@ -926,7 +926,7 @@ export default function ApprovalQueueClient() {
                             <span className="mt-1 block" onClick={(e) => e.stopPropagation()}>
                               <GmailThreadLink
                                 threadId={outreach?.gmailThreadId || current.opportunity.gmailThreadId || ""}
-                                messageId={outreach?.gmailMessageId}
+                                accountEmail={gmailEmail}
                                 className="text-sky-400 underline"
                               >
                                 Open this thread

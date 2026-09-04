@@ -34,21 +34,16 @@ export function withSendsEnabledMarker(scopes: string[] | null | undefined, enab
  * `u/0` is whichever Google account happens to be first in the browser — that is
  * what made these links land on a random inbox. `authuser` + `#all/` keeps the
  * thread even if it left Inbox.
+ *
+ * Gmail API message ids are not RFC 822 Message-IDs, so never put them in
+ * `#search/rfc822msgid:`.
  */
-export function gmailThreadUrl(
-  threadId: string,
-  accountEmail?: string | null,
-  messageId?: string | null
-): string {
+export function gmailThreadUrl(threadId: string, accountEmail?: string | null): string {
   const params = new URLSearchParams();
   const email = accountEmail?.trim();
   if (email) params.set("authuser", email);
   const query = params.toString();
-  const hash =
-    messageId && messageId.trim()
-      ? `#search/rfc822msgid:${encodeURIComponent(messageId.trim())}`
-      : `#all/${threadId}`;
-  return `https://mail.google.com/mail/${query ? `?${query}` : ""}${hash}`;
+  return `https://mail.google.com/mail/${query ? `?${query}` : ""}#all/${threadId}`;
 }
 
 /** Add N calendar days to an ISO timestamp (UTC date arithmetic is fine for v1 cadence). */
