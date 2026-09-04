@@ -86,10 +86,18 @@ export default function DraggableAudioClip({
         const buf = await file.arrayBuffer();
         if (!cancelled) setArrayBuffer(buf);
       })
-      .catch(() => {
+      .catch(async () => {
         if (cancelled) return;
-        // Last resort after queued fetch fails.
+        // Last resort after queued fetch fails — stream for playback, still try bytes for waveform.
         setSrc(streamUrl);
+        try {
+          const res = await fetch(streamUrl, { cache: "no-store" });
+          if (!res.ok || cancelled) return;
+          const buf = await res.arrayBuffer();
+          if (!cancelled) setArrayBuffer(buf);
+        } catch {
+          // Playback may still work via <audio src={streamUrl}>.
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

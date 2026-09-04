@@ -75,8 +75,17 @@ export default function SoundClipRow({
         const buf = await file.arrayBuffer();
         if (!cancelled) setArrayBuffer(buf);
       })
-      .catch(() => {
-        if (!cancelled) setSrc(streamUrl);
+      .catch(async () => {
+        if (cancelled) return;
+        setSrc(streamUrl);
+        try {
+          const res = await fetch(streamUrl, { cache: "no-store" });
+          if (!res.ok || cancelled) return;
+          const buf = await res.arrayBuffer();
+          if (!cancelled) setArrayBuffer(buf);
+        } catch {
+          // Playback may still work via <audio src={streamUrl}>.
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
