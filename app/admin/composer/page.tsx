@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getAllEvents } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import { isEventUpcoming } from "@/lib/formatDate";
@@ -19,6 +20,7 @@ const contributionTypes = [
 ];
 
 export default function ComposerPage() {
+  const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,27 +107,39 @@ export default function ComposerPage() {
           </div>
         ) : (
           <ul className="space-y-2">
-            {events.map((event) => (
+            {events.map((event) => {
+              const padsHref = `/admin/songgarden/${event.id}`;
+              return (
               <li
                 key={event.id}
-                className="flex flex-col gap-3 rounded-xl border border-transparent bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(padsHref)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(padsHref);
+                  }
+                }}
+                className="flex cursor-pointer flex-col gap-3 rounded-xl border border-white/10 bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <Link
-                    href={`/admin/events/${event.id}`}
-                    className="block truncate text-base font-semibold text-white hover:text-[#CFFF81]"
-                  >
+                  <p className="truncate text-base font-semibold text-white">
                     {event.title || "Untitled bloom"}
-                  </Link>
+                  </p>
                   <p className="mt-0.5 truncate text-xs text-gray-500">
                     {event.date || "No date"}
                     {event.venue ? ` · ${event.venue}` : ""}
                     {event.slug ? ` · ${event.slug}` : ""}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div
+                  className="flex flex-wrap gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                   <Link
-                    href={`/admin/songgarden/${event.id}`}
+                    href={padsHref}
                     className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white"
                   >
                     Pads / canvas
@@ -145,7 +159,8 @@ export default function ComposerPage() {
                   </Link>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
