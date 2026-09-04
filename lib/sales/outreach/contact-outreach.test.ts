@@ -37,6 +37,33 @@ async function main() {
   assert.equal(opportunityOutreachKind({ lastInboundAt: "x", lastOutboundAt: "y" }), "replied");
   assert.equal(opportunityOutreachKind({ lastInboundAt: null, lastOutboundAt: "y" }), "sent");
   assert.equal(opportunityOutreachKind({ lastInboundAt: null, lastOutboundAt: null, bounced: true }), "bounced");
+
+  const remapped = contactOutreachById(
+    [
+      act({
+        id: "send-peggy",
+        contactId: "peggy",
+        activityType: "sent",
+        occurredAt: "2026-08-18T20:25:01.000Z",
+      }),
+      act({
+        id: "reply-kyle",
+        contactId: "peggy",
+        activityType: "replied",
+        occurredAt: "2026-09-03T20:40:56.000Z",
+        metadata: { fromEmail: "hoob@gonzaga.edu", replyKind: "live", snippet: "Hi Joel, I appreciate the follow up" },
+      }),
+    ],
+    [
+      { id: "peggy", fullName: "Peggy Sue Loroz", email: "loroz@gonzaga.edu" },
+      { id: "kyle", fullName: "Kyle Hoob", email: "hoob@gonzaga.edu" },
+    ]
+  );
+  assert.equal(remapped.peggy?.sentAt?.startsWith("2026-08-18"), true);
+  assert.equal(remapped.peggy?.repliedAt ?? null, null);
+  assert.equal(remapped.kyle?.repliedAt?.startsWith("2026-09-03"), true);
+  assert.equal(outreachLabel(remapped.kyle)?.text, "replied");
+
   console.log("contact outreach tests passed");
 }
 

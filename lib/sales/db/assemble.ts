@@ -1,13 +1,14 @@
 import { requireSupabaseAdmin } from "./client";
 import { getOpportunity, listOpportunitiesInFunnel } from "./opportunities";
 import { getOrganization } from "./organizations";
-import { getContact, listContactsForOrganization } from "./contacts";
+import { getContact, listContactsForOrganization, listContactsForOrganizations } from "./contacts";
 import { getDraft, listDraftsForOpportunity } from "./outreach";
 import { listFindingsWithSourcesForOpportunity } from "./research";
 import { getQueueItemByOpportunity, getInitialQueueItemByOpportunity } from "./queue";
 import { getLatestBriefForOpportunity } from "./pipeline";
-import { listActivitiesForOpportunity } from "./activities";
+import { listActivitiesForOpportunity, listRepliedActivitiesForOpportunities } from "./activities";
 import { contactOutreachById } from "../outreach/contact-outreach";
+import { latestLiveCorrespondent } from "../outreach/reply-correspondent";
 import { hasVerifiedEmail, isSelectableContact } from "../dedupe";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
 
@@ -35,6 +36,24 @@ function pickBestContact(contacts: Contact[]): Contact | null {
     return emailRank(a) - emailRank(b);
   });
   return ranked[0] ?? null;
+}
+
+/** Prefer the person who actually wrote back over the original cold-email draft. */
+function pickActiveContact(
+  contacts: Contact[],
+  draftContactId: string | null | undefined,
+  activities: { activityType: string; occurredAt: string; contactId: string | null; metadata: Record<string, unknown> | null }[]
+): Contact | null {
+  const match = latestLiveCorrespondent(activities, contacts);
+  if (match) {
+    const correspondent = contacts.find((contact) => contact.id === match.contactId);
+    if (correspondent) return correspondent;
+  }
+  if (draftContactId) {
+    const drafted = contacts.find((contact) => contact.id === draftContactId);
+    if (drafted) return drafted;
+  }
+  return pickBestContact(contacts);
 }
 
 function buildSourceLinks(
@@ -137,9 +156,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
   const contactsList = orgContacts ?? [];
   const draftsList = allDrafts ?? [];
   const contacts = contactsList.filter((c) => isSelectableContact(c));
-  const contact =
-    (draft?.contactId ? contactsList.find((c) => c.id === draft.contactId) ?? null : null) ??
-    pickBestContact(contactsList);
+  const contact = pickActiveContact(contactsList, draft?.contactId, activities);
 
   const latestByContact = new Map<string, (typeof draftsList)[number]>();
   const selectableIds = new Set(contacts.map((c) => c.id));
@@ -167,7 +184,7 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     brief,
     draft,
     findings,
-    contactOutreach: contactOutreachById(activities),
+    contactOutreach: contactOutreachById(activities, contactsList),
   };
 }
 
@@ -205,8 +222,8 @@ export async function assembleOpportunityPageDetail(opportunityId: string): Prom
       : null;
 
   const contact =
+    pickActiveContact(contacts, detail.draft?.contactId, activities) ??
     detail.contact ??
-    (detail.draft?.contactId ? contacts.find((c) => c.id === detail.draft!.contactId) ?? null : null) ??
     pickBestContact(contacts);
 
   return {
@@ -237,6 +254,24 @@ function needsNudge(opportunity: {
 /** Everything /admin/sales/funnel needs, for every opportunity with a non-null relationship_stage. */
 export async function assembleFunnelItems(): Promise<FunnelItemDetail[]> {
   const opportunities = await listOpportunitiesInFunnel();
+  const inboundOpps = opportunities.filter((opportunity) => opportunity.lastInboundAt);
+  const [replyActivities, inboundContacts] = await Promise.all([
+    listRepliedActivitiesForOpportunities(inboundOpps.map((opportunity) => opportunity.id)),
+    listContactsForOrganizations(inboundOpps.map((opportunity) => opportunity.organizationId)),
+  ]);
+  const repliesByOpp = new Map<string, typeof replyActivities>();
+  for (const activity of replyActivities) {
+    const list = repliesByOpp.get(activity.opportunityId) ?? [];
+    list.push(activity);
+    repliesByOpp.set(activity.opportunityId, list);
+  }
+  const contactsByOrg = new Map<string, Contact[]>();
+  for (const contact of inboundContacts) {
+    const list = contactsByOrg.get(contact.organizationId) ?? [];
+    list.push(contact);
+    contactsByOrg.set(contact.organizationId, list);
+  }
+
   const details = await Promise.all(
     opportunities.map(async (opportunity): Promise<FunnelItemDetail | null> => {
       const [organization, queueItem] = await Promise.all([
@@ -246,7 +281,11 @@ export async function assembleFunnelItems(): Promise<FunnelItemDetail[]> {
       if (!organization) return null;
 
       const draft = queueItem?.outreachDraftId ? await getDraft(queueItem.outreachDraftId) : null;
-      let contact = draft?.contactId ? await getContact(draft.contactId) : null;
+      const orgContacts = contactsByOrg.get(organization.id);
+      let contact = orgContacts
+        ? pickActiveContact(orgContacts, draft?.contactId, repliesByOpp.get(opportunity.id) ?? [])
+        : null;
+      if (!contact && draft?.contactId) contact = await getContact(draft.contactId);
       if (!contact) {
         contact = pickBestContact(await listContactsForOrganization(organization.id));
       }

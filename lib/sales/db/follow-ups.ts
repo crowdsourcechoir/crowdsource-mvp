@@ -1,5 +1,7 @@
 import { requireSupabaseAdmin } from "./client";
-import { isFollowUpDueOnOrBeforeToday, isFollowUpOverdue } from "../follow-up/calendar";
+import { shouldShowTodayFollowUp, todayFollowUpReason } from "../follow-up/today";
+import { latestLiveCorrespondent } from "../outreach/reply-correspondent";
+import { listContactsForOrganizations } from "./contacts";
 import type { RelationshipStage } from "../types";
 
 export type SalesTodayReason = "overdue" | "replied" | "due";
@@ -8,6 +10,7 @@ export type SalesTodayTask = {
   opportunityId: string;
   organizationId: string;
   organizationName: string;
+  contactName: string | null;
   title: string;
   stage: RelationshipStage;
   reason: SalesTodayReason;
@@ -39,6 +42,13 @@ function decodeSnippet(value: string): string {
     .replace(/&gt;/g, ">");
 }
 
+type ReplyRow = {
+  opportunity_id: string;
+  contact_id: string | null;
+  metadata: Record<string, unknown> | null;
+  occurred_at: string;
+};
+
 export async function loadSalesTodayTasks(now: Date = new Date()): Promise<SalesTodaySnapshot> {
   const db = requireSupabaseAdmin();
   const { data: oppRows, error: oppErr } = await db
@@ -52,10 +62,11 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
   const allOppIds = (oppRows ?? []).map((row) => String(row.id));
   const liveReplyByOpp = new Set<string>();
   const snippetByOpp = new Map<string, string>();
+  const repliesByOpp = new Map<string, ReplyRow[]>();
   if (allOppIds.length > 0) {
     const { data: replyRows, error: replyErr } = await db
       .from("outreach_activities")
-      .select("opportunity_id, metadata, occurred_at")
+      .select("opportunity_id, contact_id, metadata, occurred_at")
       .in("opportunity_id", allOppIds)
       .eq("activity_type", "replied")
       .order("occurred_at", { ascending: false });
@@ -63,6 +74,15 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
     for (const row of replyRows ?? []) {
       const oppId = String(row.opportunity_id);
       const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+      const reply: ReplyRow = {
+        opportunity_id: oppId,
+        contact_id: (row.contact_id as string | null) ?? null,
+        metadata,
+        occurred_at: String(row.occurred_at),
+      };
+      const list = repliesByOpp.get(oppId) ?? [];
+      list.push(reply);
+      repliesByOpp.set(oppId, list);
       const auto = metadata.replyKind === "auto";
       if (!auto) liveReplyByOpp.add(oppId);
       if (auto || snippetByOpp.has(oppId)) continue;
@@ -73,10 +93,11 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
 
   const candidates = (oppRows ?? []).filter((row) => {
     const next = typeof row.next_follow_up_at === "string" ? row.next_follow_up_at : null;
-    const inbound = typeof row.last_inbound_at === "string" ? row.last_inbound_at : null;
-    if (isFollowUpDueOnOrBeforeToday(next, now)) return true;
-    if (inbound && liveReplyByOpp.has(String(row.id)) && !next) return true;
-    return false;
+    return shouldShowTodayFollowUp({
+      hasLiveReply: liveReplyByOpp.has(String(row.id)),
+      nextFollowUpAt: next,
+      now,
+    });
   });
 
   const orgIds = Array.from(new Set(candidates.map((row) => String(row.organization_id))));
@@ -104,6 +125,14 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
     }
   }
 
+  const contacts = await listContactsForOrganizations(orgIds);
+  const contactsByOrg = new Map<string, typeof contacts>();
+  for (const contact of contacts) {
+    const list = contactsByOrg.get(contact.organizationId) ?? [];
+    list.push(contact);
+    contactsByOrg.set(contact.organizationId, list);
+  }
+
   const tasks: SalesTodayTask[] = candidates.map((row) => {
     const next = typeof row.next_follow_up_at === "string" ? row.next_follow_up_at : null;
     const inbound = typeof row.last_inbound_at === "string" ? row.last_inbound_at : null;
@@ -112,16 +141,31 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
     if (inbound && !outbound) inboundAfterSend = true;
     else if (inbound && outbound) inboundAfterSend = new Date(inbound).getTime() >= new Date(outbound).getTime();
     const liveReply = liveReplyByOpp.has(String(row.id));
-    let reason: SalesTodayReason = "due";
-    if (inboundAfterSend && liveReply) reason = "replied";
-    else if (isFollowUpOverdue(next, now)) reason = "overdue";
+    const orgContacts = contactsByOrg.get(String(row.organization_id)) ?? [];
+    const correspondent = latestLiveCorrespondent(
+      (repliesByOpp.get(String(row.id)) ?? []).map((reply) => ({
+        activityType: "replied",
+        occurredAt: reply.occurred_at,
+        contactId: reply.contact_id,
+        metadata: reply.metadata,
+      })),
+      orgContacts
+    );
+    const correspondentName =
+      (correspondent ? orgContacts.find((contact) => contact.id === correspondent.contactId)?.fullName : null) ?? null;
     return {
       opportunityId: String(row.id),
       organizationId: String(row.organization_id),
       organizationName: nameByOrg.get(String(row.organization_id)) ?? "Unknown org",
+      contactName: correspondentName,
       title: String(row.title ?? ""),
       stage: row.relationship_stage as RelationshipStage,
-      reason,
+      reason: todayFollowUpReason({
+        hasLiveReply: liveReply,
+        inboundAfterSend,
+        nextFollowUpAt: next,
+        now,
+      }),
       nextFollowUpAt: next,
       lastInboundAt: inbound,
       snippet: snippetByOpp.get(String(row.id)) ?? null,
@@ -130,11 +174,11 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
     };
   });
 
-  const rank = (reason: SalesTodayReason) => (reason === "overdue" ? 0 : reason === "replied" ? 1 : 2);
+  const rank = (reason: SalesTodayReason) => (reason === "replied" ? 0 : reason === "overdue" ? 1 : 2);
   tasks.sort((a, b) => {
     const r = rank(a.reason) - rank(b.reason);
     if (r !== 0) return r;
-    return (a.nextFollowUpAt ?? "").localeCompare(b.nextFollowUpAt ?? "");
+    return (b.lastInboundAt ?? "").localeCompare(a.lastInboundAt ?? "") || (a.nextFollowUpAt ?? "").localeCompare(b.nextFollowUpAt ?? "");
   });
 
   return {

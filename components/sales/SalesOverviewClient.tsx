@@ -20,14 +20,13 @@ function funnelHint(buckets: SalesDashboardBuckets | null): string {
 }
 
 function taskHref(task: SalesTodayTask): string {
-  if (task.queueItemId) return `/admin/sales/queue?scope=due&item=${encodeURIComponent(task.queueItemId)}`;
   return `/admin/sales/opportunities/${task.opportunityId}`;
 }
 
 function reasonLabel(reason: SalesTodayTask["reason"]): { text: string; className: string } {
   if (reason === "overdue") return { text: "Overdue", className: "text-red-400" };
-  if (reason === "replied") return { text: "Replied", className: "text-[#CFFF81]" };
-  return { text: "Due today", className: "text-amber-300" };
+  if (reason === "replied") return { text: "Wrote back", className: "text-[#CFFF81]" };
+  return { text: "Follow up", className: "text-amber-300" };
 }
 
 export default function SalesOverviewClient() {
@@ -60,24 +59,23 @@ export default function SalesOverviewClient() {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300/90">Today</p>
-            <h2 className="mt-1 text-lg font-semibold text-white">Follow-ups and live replies</h2>
+            <h2 className="mt-1 text-lg font-semibold text-white">Follow-ups after they wrote back</h2>
             <p className="mt-1 text-xs text-gray-500">
-              This is the work list — not the 600 untouched orgs still waiting for a first email.
+              Only people who replied. Cold emails with no reply stay out of this list.
             </p>
           </div>
           <Link href="/admin/sales/queue?scope=due" className="text-sm text-amber-200/90 hover:underline">
-            Open due in queue →
+            Open follow-ups in queue →
           </Link>
         </div>
         {buckets && today ? (
           today.dueCount === 0 ? (
-            <p className="mt-4 text-sm text-gray-400">Nothing due today. Set a follow-up date when someone replies.</p>
+            <p className="mt-4 text-sm text-gray-400">Nobody who wrote back is due today.</p>
           ) : (
             <>
               <p className="mt-3 text-sm text-gray-400">
-                <span className="font-semibold text-white">{today.dueCount}</span> due
+                <span className="font-semibold text-white">{today.dueCount}</span> to follow up
                 {today.overdueCount ? ` · ${today.overdueCount} overdue` : ""}
-                {today.repliedCount ? ` · ${today.repliedCount} with a live reply` : ""}
               </p>
               <ul className="mt-3 divide-y divide-gray-800">
                 {tasks.map((task) => {
@@ -90,6 +88,7 @@ export default function SalesOverviewClient() {
                         </Link>
                         <p className="truncate text-xs text-gray-500">
                           <span className={reason.className}>{reason.text}</span>
+                          {task.contactName ? ` · ${task.contactName}` : ""}
                           {task.nextFollowUpAt ? ` · ${formatFollowUpDay(task.nextFollowUpAt)}` : " · set a date"}
                           {task.snippet ? ` · ${task.snippet}` : ""}
                         </p>

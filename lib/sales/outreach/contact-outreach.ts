@@ -1,4 +1,5 @@
 import type { OutreachActivity } from "../types";
+import { correspondentFromActivity, type CorrespondentContact } from "./reply-correspondent";
 
 export type ContactOutreach = {
   sentAt: string | null;
@@ -36,11 +37,18 @@ function later(iso: string | null, next: string): string {
 }
 
 /** Latest send / reply / bounce per contact (and a fallback keyed by empty string for unmatched rows). */
-export function contactOutreachById(activities: OutreachActivity[]): Record<string, ContactOutreach> {
+export function contactOutreachById(
+  activities: OutreachActivity[],
+  contacts: CorrespondentContact[] = []
+): Record<string, ContactOutreach> {
   const byId: Record<string, ContactOutreach> = {};
   const sorted = [...activities].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
   for (const activity of sorted) {
-    const key = activity.contactId || "";
+    const correspondent =
+      activity.activityType === "replied" && contacts.length > 0
+        ? correspondentFromActivity(activity, contacts)
+        : null;
+    const key = correspondent?.contactId || activity.contactId || "";
     const cur = byId[key] ?? { ...EMPTY };
     if (activity.gmailThreadId) {
       cur.gmailThreadId = activity.gmailThreadId;

@@ -63,6 +63,25 @@ export async function listActivitiesForOpportunity(opportunityId: string): Promi
   return (data ?? []).map(rowToActivity);
 }
 
+export async function listRepliedActivitiesForOpportunities(opportunityIds: string[]): Promise<OutreachActivity[]> {
+  const unique = Array.from(new Set(opportunityIds.filter(Boolean)));
+  if (unique.length === 0) return [];
+  const db = requireSupabaseAdmin();
+  const rows: OutreachActivity[] = [];
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    const { data, error } = await db
+      .from("outreach_activities")
+      .select("*")
+      .in("opportunity_id", chunk)
+      .eq("activity_type", "replied")
+      .order("occurred_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []).map(rowToActivity));
+  }
+  return rows;
+}
+
 export async function listOutreachActivitiesByTypes(
   types: OutreachActivityType[],
   maxRows = 4000

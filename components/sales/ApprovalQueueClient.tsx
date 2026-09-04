@@ -717,7 +717,7 @@ export default function ApprovalQueueClient() {
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">
           {scope === "due"
-            ? `${pendingCount} due today`
+            ? `${pendingCount} follow-ups`
             : scope === "all"
               ? `${pendingCount} orgs`
               : category === "all"

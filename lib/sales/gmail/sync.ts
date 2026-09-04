@@ -1,9 +1,10 @@
 import { createOutreachActivity, findActivityByGmailMessageId, findOpportunityIdByGmailThreadId } from "../db/activities";
-import { getContact, listContactsByNormalizedEmail, updateContactVerification } from "../db/contacts";
+import { getContact, listContactsByNormalizedEmail, listContactsForOrganization, updateContactVerification } from "../db/contacts";
 import { requireSupabaseAdmin } from "../db/client";
 import { getGmailConnection } from "../db/gmail";
 import { getOpportunity, updateOpportunityRelationshipStage, updateOpportunityTouchTimestamps } from "../db/opportunities";
 import { classifyInbound, extractEmailAddresses, failedRecipientsFromBounce } from "../outreach/inbound-kind";
+import { parseFromHeader, resolveCorrespondent } from "../outreach/reply-correspondent";
 import { getGmailClient, persistHistoryId } from "./client";
 import { GMAIL_OWNER_KEY } from "./constants";
 
@@ -52,13 +53,24 @@ async function findOpenOpportunityByContactEmail(email: string): Promise<string 
   return null;
 }
 
-async function resolveContactId(opportunityId: string, fromEmail: string | null): Promise<string | null> {
-  if (fromEmail) {
-    const contacts = await listContactsByNormalizedEmail(fromEmail);
-    const opportunity = await getOpportunity(opportunityId);
-    const match = contacts.find((contact) => contact.organizationId === opportunity?.organizationId);
-    if (match) return match.id;
-  }
+async function resolveContactId(
+  opportunityId: string,
+  fromEmail: string | null,
+  fromName: string | null,
+  snippet: string | null
+): Promise<string | null> {
+  const opportunity = await getOpportunity(opportunityId);
+  if (!opportunity) return null;
+  const orgContacts = await listContactsForOrganization(opportunity.organizationId);
+  const match = resolveCorrespondent({
+    contactId: null,
+    fromEmail,
+    fromName,
+    snippet,
+    contacts: orgContacts,
+  });
+  if (match) return match.contactId;
+
   const db = requireSupabaseAdmin();
   const { data: draft } = await db
     .from("outreach_drafts")
@@ -70,7 +82,10 @@ async function resolveContactId(opportunityId: string, fromEmail: string | null)
   const contactId = (draft?.contact_id as string | null) ?? null;
   if (!contactId) return null;
   const contact = await getContact(contactId);
-  return contact ? contactId : null;
+  if (!contact) return null;
+  const draftEmail = (contact.normalizedEmail || contact.email || "").toLowerCase();
+  if (fromEmail && draftEmail && draftEmail === fromEmail.toLowerCase()) return contactId;
+  return null;
 }
 
 async function findOpportunityForFailedRecipient(
@@ -102,6 +117,7 @@ async function recordReply(input: {
   gmailMessageId: string;
   gmailThreadId: string;
   fromEmail: string | null;
+  fromName: string | null;
   snippet: string | null;
   subject: string | null;
   internalDate: string | null;
@@ -113,7 +129,12 @@ async function recordReply(input: {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return false;
 
-  const contactId = await resolveContactId(input.opportunityId, input.fromEmail);
+  const contactId = await resolveContactId(
+    input.opportunityId,
+    input.fromEmail,
+    input.fromName,
+    input.snippet
+  );
   const occurredAt = input.internalDate
     ? new Date(Number(input.internalDate)).toISOString()
     : new Date().toISOString();
@@ -127,6 +148,7 @@ async function recordReply(input: {
     gmailThreadId: input.gmailThreadId,
     metadata: {
       fromEmail: input.fromEmail,
+      fromName: input.fromName,
       snippet: input.snippet,
       subject: input.subject,
       replyKind: input.replyKind,
@@ -285,11 +307,13 @@ async function processInboundMessage(
   }
   if (!opportunityId) return empty;
 
+  const parsedFrom = parseFromHeader(from);
   const recorded = await recordReply({
     opportunityId,
     gmailMessageId: res.data.id,
     gmailThreadId: threadId,
-    fromEmail: fromEmails[0] ?? null,
+    fromEmail: fromEmails[0] ?? parsedFrom.email,
+    fromName: parsedFrom.name,
     snippet: res.data.snippet ?? null,
     subject,
     internalDate: res.data.internalDate ?? null,

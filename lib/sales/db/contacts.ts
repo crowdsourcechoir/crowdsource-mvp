@@ -53,6 +53,20 @@ export async function listContactsForOrganization(organizationId: string): Promi
   return (data ?? []).map(rowToContact);
 }
 
+export async function listContactsForOrganizations(organizationIds: string[]): Promise<Contact[]> {
+  const unique = Array.from(new Set(organizationIds.filter(Boolean)));
+  if (unique.length === 0) return [];
+  const db = requireSupabaseAdmin();
+  const rows: Contact[] = [];
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    const { data, error } = await db.from("contacts").select("*").in("organization_id", chunk);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []).map(rowToContact));
+  }
+  return rows;
+}
+
 export async function getContact(id: string): Promise<Contact | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db.from("contacts").select("*").eq("id", id).maybeSingle();
