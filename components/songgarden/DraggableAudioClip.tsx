@@ -6,6 +6,7 @@ import {
   songgardenAudioUrl,
   type SonggardenClip,
 } from "@/data/songgardenClient";
+import { enqueueClipFetch } from "@/lib/songgarden/clip-fetch-queue";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 import { formatClipDuration } from "@/lib/songgarden/clip-prompt";
 import { wavFilename } from "@/lib/songgarden/sound-pack";
@@ -35,10 +36,11 @@ export default function DraggableAudioClip({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileCacheRef = useRef<File | null>(null);
   const streamUrl = songgardenAudioUrl(eventId, clip.id, clip.submittedAt);
-  const [src, setSrc] = useState(streamUrl);
+  /** Object URL once fetched — avoid pointing every <audio> at streamUrl up front (N× stampede). */
+  const [src, setSrc] = useState<string | null>(null);
   const [arrayBuffer, setArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -68,21 +70,29 @@ export default function DraggableAudioClip({
     let cancelled = false;
     fileCacheRef.current = null;
     setError(false);
-    setSrc(streamUrl);
+    setLoading(true);
+    setSrc(null);
     setArrayBuffer(null);
     setCurrentTime(0);
+    setPlaying(false);
 
-    void fetchClipFile(eventId, clip)
+    void enqueueClipFetch(() => fetchClipFile(eventId, clip))
       .then(async (file) => {
         if (cancelled) return;
         fileCacheRef.current = file;
         objectUrl = URL.createObjectURL(file);
         setSrc(objectUrl);
+        setError(false);
         const buf = await file.arrayBuffer();
         if (!cancelled) setArrayBuffer(buf);
       })
       .catch(() => {
-        // Stream URL still works for playback / DownloadURL.
+        if (cancelled) return;
+        // Last resort after queued fetch fails.
+        setSrc(streamUrl);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -105,7 +115,7 @@ export default function DraggableAudioClip({
   }, [playing]);
 
   async function togglePlay() {
-    if (error) return;
+    if (error || !src) return;
     const el = audioRef.current;
     if (!el) return;
     if (playing) {
@@ -169,28 +179,33 @@ export default function DraggableAudioClip({
         </span>
       )}
 
-      <audio
-        ref={audioRef}
-        src={src}
-        preload="metadata"
-        onEnded={() => {
-          setPlaying(false);
-          setCurrentTime(0);
-        }}
-        onPause={() => setPlaying(false)}
-        onLoadedMetadata={() => {
-          if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
-            setAudioDuration(audioRef.current.duration);
-          }
-        }}
-        onError={() => setError(true)}
-      />
+      {src ? (
+        <audio
+          ref={audioRef}
+          src={src}
+          preload="metadata"
+          onEnded={() => {
+            setPlaying(false);
+            setCurrentTime(0);
+          }}
+          onPause={() => setPlaying(false)}
+          onLoadedMetadata={() => {
+            setError(false);
+            if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
+              setAudioDuration(audioRef.current.duration);
+            }
+          }}
+          onLoadedData={() => setError(false)}
+          onCanPlay={() => setError(false)}
+          onError={() => setError(true)}
+        />
+      ) : null}
 
       <div className="flex items-start gap-2">
         <button
           type="button"
           onClick={() => void togglePlay()}
-          disabled={error}
+          disabled={error || !src}
           className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
             playing
               ? "bg-[#CFFF81] text-black"
@@ -297,7 +312,7 @@ export async function dragClipsToDesktop(
 ): Promise<void> {
   dataTransfer.effectAllowed = "copy";
   for (const clip of clips) {
-    const source = await fetchClipFile(eventId, clip);
+    const source = await enqueueClipFetch(() => fetchClipFile(eventId, clip));
     const name = wavFilename(clip);
     const file =
       source.name === name ? source : new File([source], name, { type: "audio/wav" });

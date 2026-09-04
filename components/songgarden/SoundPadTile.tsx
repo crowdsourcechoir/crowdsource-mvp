@@ -6,6 +6,7 @@ import {
   songgardenAudioUrl,
   type SonggardenClip,
 } from "@/data/songgardenClient";
+import { enqueueClipFetch } from "@/lib/songgarden/clip-fetch-queue";
 import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 import { wavFilename } from "@/lib/songgarden/sound-pack";
 
@@ -30,9 +31,9 @@ export default function SoundPadTile({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileCacheRef = useRef<File | null>(null);
   const streamUrl = songgardenAudioUrl(eventId, clip.id, clip.submittedAt);
-  const [src, setSrc] = useState(streamUrl);
+  const [src, setSrc] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [dragging, setDragging] = useState(false);
 
@@ -44,17 +45,22 @@ export default function SoundPadTile({
     let cancelled = false;
     fileCacheRef.current = null;
     setError(false);
-    setSrc(streamUrl);
+    setLoading(true);
+    setSrc(null);
 
-    void fetchClipFile(eventId, clip)
+    void enqueueClipFetch(() => fetchClipFile(eventId, clip))
       .then((file) => {
         if (cancelled) return;
         fileCacheRef.current = file;
         objectUrl = URL.createObjectURL(file);
         setSrc(objectUrl);
+        setError(false);
       })
       .catch(() => {
-        // Keep stream URL for playback / DownloadURL.
+        if (!cancelled) setSrc(streamUrl);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -73,7 +79,7 @@ export default function SoundPadTile({
   }, [activePadId, clip.id, playing]);
 
   async function togglePlay() {
-    if (error) return;
+    if (error || !src) return;
     const el = audioRef.current;
     if (!el) return;
     if (playing) {
@@ -134,17 +140,21 @@ export default function SoundPadTile({
           : "border-white/15 bg-gradient-to-br from-[#2a2a30] to-[#16161a] text-gray-200 hover:border-white/35 hover:from-[#32323a]"
       } ${dragging ? "opacity-50" : ""} ${error ? "border-red-800/60" : ""}`}
     >
-      <audio
-        ref={audioRef}
-        src={src}
-        preload="metadata"
-        onEnded={() => {
-          setPlaying(false);
-          onActivate?.(null);
-        }}
-        onPause={() => setPlaying(false)}
-        onError={() => setError(true)}
-      />
+      {src ? (
+        <audio
+          ref={audioRef}
+          src={src}
+          preload="metadata"
+          onEnded={() => {
+            setPlaying(false);
+            onActivate?.(null);
+          }}
+          onPause={() => setPlaying(false)}
+          onLoadedData={() => setError(false)}
+          onCanPlay={() => setError(false)}
+          onError={() => setError(true)}
+        />
+      ) : null}
 
       <span
         className={`pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b ${
