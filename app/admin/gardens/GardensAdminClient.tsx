@@ -168,11 +168,11 @@ export default function GardensAdminClient() {
       ) : gardens.length === 0 ? (
         <p className="text-sm text-gray-500">No gardens yet.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-white/10 border-y border-white/10">
           {gardens.map((g) => (
             <li
               key={g.id}
-              className="flex cursor-default flex-col gap-3 rounded-xl border border-white/10 bg-transparent px-4 py-4 transition-colors hover:border-[#CFFF81] sm:flex-row sm:items-center sm:justify-between"
+              className="flex cursor-default flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
                 <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:text-[#CFFF81]">
