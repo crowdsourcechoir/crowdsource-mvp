@@ -44,6 +44,7 @@ import {
   buildSoundPackLayout,
   soundPackReadme,
 } from "@/lib/songgarden/sound-pack";
+import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
 type InterviewAnswer = {
   createdAt: string;
@@ -429,14 +430,7 @@ export default function EventDetailPage() {
 
   async function handleDeleteBloom() {
     if (!event || deletingBloom) return;
-    const title = event.title.trim() || "this bloom";
-    if (
-      !window.confirm(
-        `Delete “${title}”? This permanently removes the bloom and its interviews, clips, and submissions. Linked gardens keep their other shows. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    if (!confirmRareDelete("bloom", event.title)) return;
     setDeletingBloom(true);
     try {
       const res = await fetch(`/api/events/${encodeURIComponent(event.id)}`, { method: "DELETE" });
@@ -561,17 +555,24 @@ export default function EventDetailPage() {
             >
               Composition canvas
             </Link>
-            <button
-              type="button"
-              disabled={deletingBloom}
-              onClick={() => void handleDeleteBloom()}
-              className="rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
-            >
-              {deletingBloom ? "Deleting…" : "Delete bloom"}
-            </button>
           </div>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-red-900/50 bg-[#18181b] p-6">
+        <h2 className="text-lg font-semibold text-red-200">Delete bloom</h2>
+        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+          Rare. Removes this bloom and its interviews, clips, and submissions. You will be asked twice.
+        </p>
+        <button
+          type="button"
+          disabled={deletingBloom}
+          onClick={() => void handleDeleteBloom()}
+          className="mt-4 rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+        >
+          {deletingBloom ? "Deleting…" : "Delete bloom"}
+        </button>
+      </section>
 
       {(transcriptOutput || transcriptError) && (
         <section className="rounded-2xl border border-gray-700/60 bg-[#18181b] p-6">

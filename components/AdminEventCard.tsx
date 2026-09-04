@@ -13,12 +13,10 @@ type AdminEventCardProps = {
   event: Event;
   baseUrl?: string;
   badgeLabel?: string;
-  onDeleted?: (eventId: string) => void;
 };
 
-export default function AdminEventCard({ event, baseUrl = "http://localhost:3000", badgeLabel, onDeleted }: AdminEventCardProps) {
+export default function AdminEventCard({ event, baseUrl = "http://localhost:3000", badgeLabel }: AdminEventCardProps) {
   const [showQr, setShowQr] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const eventUrl = useMemo(() => {
     return publicEventUrl(baseUrl, event.slug);
@@ -27,30 +25,6 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
 
   const timeFormatted = formatTime(event.time);
   const dateFormatted = formatDateLong(event.date);
-
-  async function handleDelete() {
-    if (deleting) return;
-    const title = event.title.trim() || "this bloom";
-    if (
-      !window.confirm(
-        `Delete “${title}”? This permanently removes the bloom and its interviews, clips, and submissions. Linked gardens keep their other shows. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/events/${encodeURIComponent(event.id)}`, { method: "DELETE" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as { error?: string }).error || "Delete failed");
-      }
-      onDeleted?.(event.id);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not delete bloom.");
-      setDeleting(false);
-    }
-  }
 
   return (
     <article className="rounded-xl border border-gray-800 bg-[#121214] px-4 py-3">
@@ -106,14 +80,6 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
             className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
           >
             {showQr ? "Hide QR" : "QR"}
-          </button>
-          <button
-            type="button"
-            disabled={deleting}
-            onClick={() => void handleDelete()}
-            className="rounded-lg border border-red-700/80 bg-red-950/40 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-900/50 disabled:opacity-50"
-          >
-            {deleting ? "Deleting…" : "Delete"}
           </button>
         </div>
       </div>

@@ -26,6 +26,7 @@ import {
   MAP_PLATE_VARIANT_LABELS,
 } from "@/lib/song-garden-v2/garden/types";
 import FileDropZone from "@/components/ui/FileDropZone";
+import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
 type Props = { gardenId: string };
 
@@ -286,14 +287,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
 
   async function handleDeleteGarden() {
     if (!garden || deleting) return;
-    const title = garden.title.trim() || "this garden";
-    if (
-      !window.confirm(
-        `Delete “${title}”? This permanently removes the garden and its map, chapters, and merch records. Linked blooms are kept. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    if (!confirmRareDelete("garden", garden.title)) return;
     setDeleting(true);
     setError(null);
     setNotice(null);
@@ -1080,7 +1074,8 @@ export default function GardenDetailClient({ gardenId }: Props) {
       <section className="space-y-3 rounded-xl border border-red-900/50 bg-[#121214] p-4">
         <h2 className="text-sm font-medium text-red-200">Delete garden</h2>
         <p className="text-xs text-gray-500">
-          Removes this world and its map, chapters, and merch records. Linked blooms stay in the Blooms list.
+          Rare. Removes this world and its map, chapters, and merch records. Linked blooms stay in
+          the Blooms list. You will be asked twice.
         </p>
         <button
           type="button"

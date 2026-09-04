@@ -251,13 +251,7 @@ export default function AdminEventsList() {
                   ? "Fundraiser"
                   : "Other";
             return (
-              <AdminEventCard
-                key={event.id}
-                event={event}
-                baseUrl={baseUrl}
-                badgeLabel={badgeLabel}
-                onDeleted={(id) => setEvents((prev) => prev.filter((e) => e.id !== id))}
-              />
+              <AdminEventCard key={event.id} event={event} baseUrl={baseUrl} badgeLabel={badgeLabel} />
             );
           })}
         </div>
