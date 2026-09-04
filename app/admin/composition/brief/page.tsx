@@ -5,7 +5,7 @@ export default function CompositionBriefPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#0c0c0e] text-gray-500">
+        <div className="flex min-h-screen items-center justify-center bg-black text-gray-500">
           Loading…
         </div>
       }

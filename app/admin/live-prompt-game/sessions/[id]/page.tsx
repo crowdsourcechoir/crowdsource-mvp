@@ -451,7 +451,7 @@ export default function HostControlRoomPage({
 
   if (!sessionId || !session) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0c0c0e] text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-black text-gray-500">
         Loading…
       </div>
     );
@@ -470,7 +470,7 @@ export default function HostControlRoomPage({
       : null;
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white">
+    <div className="text-white">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">Host Control Room</h1>

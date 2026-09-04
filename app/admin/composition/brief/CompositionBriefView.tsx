@@ -250,7 +250,7 @@ export default function CompositionBriefView({
   };
 
   return (
-    <div className={embedded ? "text-white" : "min-h-screen bg-[#0c0c0e] text-white"}>
+    <div className={embedded ? "text-white" : "text-white"}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           {!embedded && (

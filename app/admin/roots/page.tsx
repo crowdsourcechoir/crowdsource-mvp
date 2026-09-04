@@ -81,7 +81,7 @@ export default function RootsPage() {
               "Recognition and reward moments",
               "Belonging and escalation design",
             ].map((item) => (
-              <div key={item} className="rounded-lg border border-gray-800 bg-[#0c0c0e] px-4 py-3 text-sm text-gray-300">
+              <div key={item} className="rounded-lg border border-gray-800 bg-black px-4 py-3 text-sm text-gray-300">
                 {item}
               </div>
             ))}

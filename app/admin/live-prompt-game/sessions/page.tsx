@@ -28,7 +28,7 @@ export default function LivePromptGameSessionsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white">
+    <div className="text-white">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-white sm:text-3xl">Sessions — Past Sessions</h1>
         <Link
