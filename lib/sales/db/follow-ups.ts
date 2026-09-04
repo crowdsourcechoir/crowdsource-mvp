@@ -30,6 +30,15 @@ function snippetOf(metadata: Record<string, unknown> | null | undefined): string
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function decodeSnippet(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 export async function loadSalesTodayTasks(now: Date = new Date()): Promise<SalesTodaySnapshot> {
   const db = requireSupabaseAdmin();
   const { data: oppRows, error: oppErr } = await db
@@ -40,11 +49,33 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
     .in("relationship_stage", ["awareness", "interest"]);
   if (oppErr) throw new Error(oppErr.message);
 
+  const allOppIds = (oppRows ?? []).map((row) => String(row.id));
+  const liveReplyByOpp = new Set<string>();
+  const snippetByOpp = new Map<string, string>();
+  if (allOppIds.length > 0) {
+    const { data: replyRows, error: replyErr } = await db
+      .from("outreach_activities")
+      .select("opportunity_id, metadata, occurred_at")
+      .in("opportunity_id", allOppIds)
+      .eq("activity_type", "replied")
+      .order("occurred_at", { ascending: false });
+    if (replyErr) throw new Error(replyErr.message);
+    for (const row of replyRows ?? []) {
+      const oppId = String(row.opportunity_id);
+      const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+      const auto = metadata.replyKind === "auto";
+      if (!auto) liveReplyByOpp.add(oppId);
+      if (auto || snippetByOpp.has(oppId)) continue;
+      const snippet = snippetOf(metadata);
+      if (snippet) snippetByOpp.set(oppId, decodeSnippet(snippet));
+    }
+  }
+
   const candidates = (oppRows ?? []).filter((row) => {
     const next = typeof row.next_follow_up_at === "string" ? row.next_follow_up_at : null;
     const inbound = typeof row.last_inbound_at === "string" ? row.last_inbound_at : null;
     if (isFollowUpDueOnOrBeforeToday(next, now)) return true;
-    if (inbound && !next) return true;
+    if (inbound && liveReplyByOpp.has(String(row.id)) && !next) return true;
     return false;
   });
 
@@ -52,7 +83,6 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
   const oppIds = candidates.map((row) => String(row.id));
   const nameByOrg = new Map<string, string>();
   const queueByOpp = new Map<string, string>();
-  const snippetByOpp = new Map<string, string>();
 
   if (orgIds.length > 0) {
     const { data, error } = await db.from("organizations").select("id, name").in("id", orgIds);
@@ -72,30 +102,18 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
       if (queueByOpp.has(oppId)) continue;
       queueByOpp.set(oppId, String(row.id));
     }
-
-    const { data: replyRows, error: replyErr } = await db
-      .from("outreach_activities")
-      .select("opportunity_id, metadata, occurred_at")
-      .in("opportunity_id", oppIds)
-      .eq("activity_type", "replied")
-      .order("occurred_at", { ascending: false });
-    if (replyErr) throw new Error(replyErr.message);
-    for (const row of replyRows ?? []) {
-      const oppId = String(row.opportunity_id);
-      if (snippetByOpp.has(oppId)) continue;
-      const snippet = snippetOf(row.metadata as Record<string, unknown> | null);
-      if (snippet) snippetByOpp.set(oppId, snippet);
-    }
   }
 
   const tasks: SalesTodayTask[] = candidates.map((row) => {
     const next = typeof row.next_follow_up_at === "string" ? row.next_follow_up_at : null;
     const inbound = typeof row.last_inbound_at === "string" ? row.last_inbound_at : null;
     const outbound = typeof row.last_outbound_at === "string" ? row.last_outbound_at : null;
-    const inboundAfterSend =
-      Boolean(inbound) && (!outbound || new Date(inbound!).getTime() >= new Date(outbound).getTime());
+    let inboundAfterSend = false;
+    if (inbound && !outbound) inboundAfterSend = true;
+    else if (inbound && outbound) inboundAfterSend = new Date(inbound).getTime() >= new Date(outbound).getTime();
+    const liveReply = liveReplyByOpp.has(String(row.id));
     let reason: SalesTodayReason = "due";
-    if (inboundAfterSend) reason = "replied";
+    if (inboundAfterSend && liveReply) reason = "replied";
     else if (isFollowUpOverdue(next, now)) reason = "overdue";
     return {
       opportunityId: String(row.id),
