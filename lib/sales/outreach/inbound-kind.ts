@@ -11,7 +11,7 @@ const BOUNCE_SUBJECT_RE =
 const AUTO_SUBJECT_RE =
   /^(auto:|automatic reply|out of office|ooo\b|autoreply|auto-reply)/i;
 const AUTO_SNIPPET_RE =
-  /out of (the )?office|automatic reply|auto-?reply|on leave until|away from (the office|email)|this is an automated/i;
+  /out of (the )?office|automatic reply|auto-?reply|on leave until|away from (the office|email)|this is an automated|parental leave|no longer (work|with)|last day with|i have retired|i am currently away/i;
 
 export type InboundKind = "live" | "auto" | "bounce";
 

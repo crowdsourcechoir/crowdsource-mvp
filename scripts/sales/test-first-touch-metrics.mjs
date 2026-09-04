@@ -33,7 +33,14 @@ assert.equal(
   }),
   "bounce"
 );
-assert.equal(looksLikeAutoReply({ subject: "Out of Office", snippet: "thanks" }), true);
+assert.equal(
+  classifyInbound({
+    from: "Deneen <deneen@example.org>",
+    subject: "Re: Crowdsource Choir",
+    snippet: "Hello, Thank you for reaching out to me. I am currently away on parental leave celebrating the birth of my daughter.",
+  }),
+  "auto"
+);
 assert.deepEqual(
   failedRecipientsFromBounce({ xFailedRecipients: "bad@example.org" }),
   ["bad@example.org"]
