@@ -138,7 +138,7 @@ function ComposerPageInner() {
                   <li key={garden.id}>
                     <Link
                       href={`/admin/gardens/${encodeURIComponent(garden.id)}`}
-                      className="flex items-center justify-between gap-3 px-4 py-4 transition-colors hover:bg-white/[0.03]"
+                      className="flex cursor-pointer items-center justify-between gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1"
                     >
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">{garden.title}</p>
@@ -176,13 +176,18 @@ function ComposerPageInner() {
                   return (
                     <li
                       key={event.id}
-                      className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(padsHref)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(padsHref);
+                        }
+                      }}
+                      className="flex cursor-pointer flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <button
-                        type="button"
-                        onClick={() => router.push(padsHref)}
-                        className="min-w-0 flex-1 text-left"
-                      >
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-base font-semibold text-white">
                           {event.title || "Untitled bloom"}
                         </p>
@@ -190,17 +195,21 @@ function ComposerPageInner() {
                           {event.date || "No date"}
                           {event.venue ? ` · ${event.venue}` : ""}
                         </p>
-                      </button>
-                      <div className="flex flex-wrap gap-2">
+                      </div>
+                      <div
+                        className="flex flex-wrap gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
                         <Link
                           href={padsHref}
-                          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-[#CFFF81] hover:text-white"
+                          className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white"
                         >
                           Song Garden
                         </Link>
                         <Link
                           href={`/admin/events/${event.id}`}
-                          className="rounded-lg border border-[#CFFF81]/40 px-3 py-1.5 text-xs font-medium text-[#CFFF81] hover:bg-[#CFFF81]/10"
+                          className="rounded-lg border border-[#CFFF81]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[#CFFF81] transition-colors hover:border-[#CFFF81] hover:bg-[#CFFF81]/10"
                         >
                           Bloom
                         </Link>
