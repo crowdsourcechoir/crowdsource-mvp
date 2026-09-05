@@ -108,7 +108,7 @@ export default function ComposerPage() {
         ) : (
           <ul className="divide-y divide-white/10 border-y border-white/10">
             {events.map((event) => {
-              const padsHref = `/admin/songgarden/${event.id}`;
+              const padsHref = `/admin/songgarden/${encodeURIComponent(event.slug || event.id)}`;
               return (
               <li
                 key={event.id}

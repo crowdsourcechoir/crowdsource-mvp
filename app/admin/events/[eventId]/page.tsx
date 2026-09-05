@@ -550,7 +550,7 @@ export default function EventDetailPage() {
               Open public link
             </Link>
             <Link
-              href={`/admin/songgarden/${event.id}`}
+              href={`/admin/songgarden/${encodeURIComponent(event.slug || event.id)}`}
               className="rounded-lg border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
             >
               Composition canvas
