@@ -15,7 +15,7 @@ export function useSonggardenPoll({
   enabled = true,
 }: UseSonggardenPollOptions) {
   const [clips, setClips] = useState<SonggardenClip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled && Boolean(eventId));
   const [error, setError] = useState<string | null>(null);
   const [newClipIds, setNewClipIds] = useState<Set<string>>(new Set());
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -58,7 +58,10 @@ export function useSonggardenPoll({
   }, [eventId]);
 
   useEffect(() => {
-    if (!enabled || !eventId) return;
+    if (!enabled || !eventId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     void refresh(true);
   }, [enabled, eventId, refresh]);

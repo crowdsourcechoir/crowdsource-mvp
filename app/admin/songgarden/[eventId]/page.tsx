@@ -65,14 +65,11 @@ export default function SonggardenAdminPage() {
       <div>
         <p className="text-gray-400">Song Garden not found.</p>
         <p className="mt-2 max-w-md text-sm text-gray-500">
-          Pick a bloom or garden from Composer to open its composition library.
+          Open a bloom&apos;s Song Garden from the bloom page, or use Master Composer for the full library.
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <Link href="/admin/composer" className="font-medium text-[#CFFF81] hover:underline">
-            Open Composer
-          </Link>
-          <Link href="/admin/events" className="text-gray-400 hover:underline">
-            Back to blooms
+            ← Composer
           </Link>
         </div>
       </div>
@@ -82,9 +79,11 @@ export default function SonggardenAdminPage() {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-        <Link href={`/admin/events/${event.id}`} className="text-gray-400 hover:text-white">
-          ← {event.title}
+        <Link href="/admin/composer" className="text-gray-400 hover:text-white">
+          ← Composer
         </Link>
+        <span className="text-gray-600">·</span>
+        <span className="text-gray-300">{event.title}</span>
         <span className="text-gray-600">·</span>
         <Link
           href={publicEventPath(event.slug)}

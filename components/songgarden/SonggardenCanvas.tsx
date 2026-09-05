@@ -33,9 +33,11 @@ type VideoItem = {
 };
 
 type Props = {
-  eventId: string;
-  eventTitle: string;
-  eventSlug: string;
+  /** When omitted, canvas runs as Master Composer only. */
+  eventId?: string;
+  eventTitle?: string;
+  eventSlug?: string;
+  initialScope?: ComposerScope;
 };
 
 function pillClass(active: boolean): string {
@@ -48,7 +50,13 @@ function normalizeName(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Props) {
+export default function SonggardenCanvas({
+  eventId = "",
+  eventTitle = "Master Composer",
+  eventSlug = "",
+  initialScope,
+}: Props) {
+  const masterOnly = !eventId;
   const {
     clips: bloomClips,
     loading: bloomLoading,
@@ -56,9 +64,11 @@ export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Pro
     newClipIds,
     clearNewHighlight,
     refresh: refreshBloom,
-  } = useSonggardenPoll({ eventId });
+  } = useSonggardenPoll({ eventId, enabled: !masterOnly });
 
-  const [scope, setScope] = useState<ComposerScope>("bloom");
+  const [scope, setScope] = useState<ComposerScope>(
+    initialScope ?? (masterOnly ? "master" : "bloom")
+  );
   const [contentView, setContentView] = useState<ContentView>("sounds");
   const [categoryFilter, setCategoryFilter] = useState<SonggardenCategoryId | "all">("all");
   const [bloomFilterEventId, setBloomFilterEventId] = useState("all");
@@ -78,6 +88,11 @@ export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Pro
   const [responsesLoading, setResponsesLoading] = useState(false);
 
   useEffect(() => {
+    if (!eventId) {
+      setGarden(null);
+      setChapters([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -151,7 +166,7 @@ export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Pro
     if (!needsResponses) return;
 
     const fromClips = (scope === "master" ? masterClips : gardenClips).map((c) => c.eventId);
-    const eventIds =
+    const rawIds =
       scope === "bloom"
         ? [eventId]
         : scope === "garden"
@@ -159,6 +174,7 @@ export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Pro
             ? chapters.map((c) => c.eventId)
             : [eventId]
           : Array.from(new Set([...fromClips, eventId])).slice(0, 40);
+    const eventIds = rawIds.filter(Boolean);
 
     let cancelled = false;
     setResponsesLoading(true);
@@ -403,24 +419,28 @@ export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Pro
         <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
         <div className="flex max-w-3xl flex-1 flex-col items-stretch gap-2 sm:max-w-none sm:items-end">
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <button
-              type="button"
-              onClick={() => setScope("bloom")}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "bloom")}`}
-            >
-              This bloom
-            </button>
-            <button
-              type="button"
-              disabled={!garden}
-              title={garden ? garden.title : "Attach this bloom to a Song Garden to enable"}
-              onClick={() => {
-                if (garden) setScope("garden");
-              }}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${pillClass(scope === "garden")}`}
-            >
-              Song Garden
-            </button>
+            {!masterOnly ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setScope("bloom")}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "bloom")}`}
+                >
+                  This bloom
+                </button>
+                <button
+                  type="button"
+                  disabled={!garden}
+                  title={garden ? garden.title : "Attach this bloom to a Song Garden to enable"}
+                  onClick={() => {
+                    if (garden) setScope("garden");
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${pillClass(scope === "garden")}`}
+                >
+                  Song Garden
+                </button>
+              </>
+            ) : null}
             <button
               type="button"
               onClick={() => setScope("master")}
@@ -452,7 +472,17 @@ export default function SonggardenCanvas({ eventId, eventTitle, eventSlug }: Pro
                 draggable
                 onDragStart={async (event) => {
                   try {
-                    await dragClipsToDesktop(eventId, selectedClips, event.dataTransfer);
+                    // Use each clip's event when batch-dragging from master/garden.
+                    const byEvent = new Map<string, SonggardenClip[]>();
+                    for (const clip of selectedClips) {
+                      const id = clip.eventId || eventId;
+                      const list = byEvent.get(id) ?? [];
+                      list.push(clip);
+                      byEvent.set(id, list);
+                    }
+                    for (const [id, clips] of Array.from(byEvent.entries())) {
+                      await dragClipsToDesktop(id, clips, event.dataTransfer);
+                    }
                   } catch {
                     event.preventDefault();
                   }
