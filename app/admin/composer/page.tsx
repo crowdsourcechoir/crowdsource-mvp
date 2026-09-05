@@ -8,17 +8,6 @@ import type { Event } from "@/data/mockEvents";
 import { isEventUpcoming } from "@/lib/formatDate";
 import CompositionBriefView from "@/app/admin/composition/brief/CompositionBriefView";
 
-const contributionTypes = [
-  "Voice",
-  "Words",
-  "Sounds",
-  "Photos",
-  "Selfies",
-  "Videos",
-  "Chants",
-  "Ambient moments",
-];
-
 export default function ComposerPage() {
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
@@ -72,20 +61,11 @@ export default function ComposerPage() {
           Musical Formation
         </p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Composer</h1>
-        <p className="mt-2 max-w-3xl text-sm text-gray-400">
-          Where living inputs become musical compositions. Pick a Bloom to open its pads, composition canvas, or
-          creative brief — with the room, not instead of it.
-        </p>
       </div>
 
       <section>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Blooms to compose</h2>
-            <p className="mt-1 text-sm text-gray-400">
-              Open pads, canvas, or brief for each event. Upcoming blooms first.
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-white">Blooms to compose</h2>
           <Link href="/admin/events" className="text-sm font-medium text-[#CFFF81] hover:underline">
             All Blooms →
           </Link>
@@ -163,25 +143,6 @@ export default function ComposerPage() {
             })}
           </ul>
         )}
-      </section>
-
-      <section className="rounded-xl border border-white/10 bg-transparent p-5">
-        <h2 className="text-lg font-semibold text-white">First-class contribution media</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-          Contributions are not only audio or text. Photos, selfies, submitted videos, and short crowd clips belong in
-          the same living archive so they can become show visuals, gameday moments, sponsor activations, and
-          post-event memories.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          {contributionTypes.map((type) => (
-            <span
-              key={type}
-              className="rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-sm text-gray-200"
-            >
-              {type}
-            </span>
-          ))}
-        </div>
       </section>
 
       {briefEventId && (
