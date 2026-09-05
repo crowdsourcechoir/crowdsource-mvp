@@ -11,6 +11,7 @@ import type {
   Garden,
   GardenChapter,
   GardenEdition,
+  GardenKind,
   GardenMutationRecord,
   GardenOrder,
   MapPlateVariant,
@@ -115,6 +116,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState<Garden["status"]>("live");
+  const [kind, setKind] = useState<GardenKind>("series");
   const [debug, setDebug] = useState<DebugPayload | null>(null);
   const [histAt, setHistAt] = useState("");
   const [histPreview, setHistPreview] = useState<string | null>(null);
@@ -186,6 +188,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
       setGarden(gBody.garden ?? null);
       setChapters(gBody.chapters ?? []);
       setStatus(gBody.garden?.status ?? "live");
+      setKind(gBody.garden?.kind ?? "series");
       setZones(zonesFromGarden(gBody.garden ?? null));
       setSponsors(sponsorsFromGarden(gBody.garden ?? null));
       setMapImageUrl(gBody.garden?.brandKit?.heroArtworkUrl ?? "");
@@ -281,7 +284,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
     }
   }
 
-  async function handleStatusSave() {
+  async function handleSettingsSave() {
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -289,12 +292,14 @@ export default function GardenDetailClient({ gardenId }: Props) {
       const res = await fetch(`/api/gardens/${gardenId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, kind }),
       });
       const body = (await res.json().catch(() => ({}))) as { garden?: Garden; error?: string };
       if (!res.ok) throw new Error(body.error || "Failed to update");
       setGarden(body.garden ?? null);
-      setNotice("Status saved.");
+      if (body.garden?.kind) setKind(body.garden.kind);
+      if (body.garden?.status) setStatus(body.garden.status);
+      setNotice("Garden settings saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update");
     } finally {
@@ -1045,25 +1050,34 @@ export default function GardenDetailClient({ gardenId }: Props) {
   const publicHref = garden?.slug ? `/g/${garden.slug}` : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-gray-100">
-      <div>
-        <Link href="/admin/gardens" className="text-xs text-gray-500 hover:underline">
-          ← Gardens
-        </Link>
-        <h1 className="mt-2 text-xl font-semibold text-white">{garden?.title ?? "Garden"}</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          Live world · energy {(garden?.worldState?.energy ?? 0).toFixed(2)} ·{" "}
-          {garden?.worldState?.totals?.contributions ?? 0} marks
-        </p>
-        {publicHref ? (
-          <p className="mt-3">
-            <Link
-              href={publicHref}
-              className="inline-flex rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black"
-            >
-              Open public garden
-            </Link>
+    <div className="w-full space-y-8 text-gray-100">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Link href="/admin/gardens" className="text-sm text-gray-400 hover:text-white">
+            ← Song Gardens
+          </Link>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+            Song Garden
           </p>
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">
+            {garden?.title ?? "Garden"}
+          </h1>
+          <p className="mt-2 text-sm text-gray-400">
+            <span className="capitalize">{kind}</span>
+            {" · "}
+            <span className="capitalize">{status}</span>
+            {" · "}
+            energy {(garden?.worldState?.energy ?? 0).toFixed(2)} ·{" "}
+            {garden?.worldState?.totals?.contributions ?? 0} marks
+          </p>
+        </div>
+        {publicHref ? (
+          <Link
+            href={publicHref}
+            className="rounded-lg border border-[#CFFF81]/40 px-4 py-2.5 text-sm font-medium text-[#CFFF81] transition-colors hover:bg-[#CFFF81]/10"
+          >
+            Open public garden
+          </Link>
         ) : null}
       </div>
 
@@ -1072,72 +1086,90 @@ export default function GardenDetailClient({ gardenId }: Props) {
         <p className="rounded-lg bg-[#CFFF81]/10 px-3 py-2 text-sm text-[#CFFF81]">{notice}</p>
       ) : null}
 
-      <section className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
-        <h2 className="text-sm font-medium text-gray-200">Status</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            className="rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as Garden["status"])}
-          >
-            <option value="draft">draft</option>
-            <option value="live">live</option>
-            <option value="archived">archived</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => void handleStatusSave()}
-            disabled={saving || deleting}
-            className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Save
-          </button>
-        </div>
-      </section>
-
-      <section className="space-y-3 rounded-xl border border-red-900/50 bg-transparent p-4">
-        <h2 className="text-sm font-medium text-red-200">Delete garden</h2>
-        <p className="text-xs text-gray-500">
-          Rare. Removes this world and its map, chapters, and merch records. Linked blooms stay in
-          the Blooms list. You will be asked twice.
-        </p>
-        <button
-          type="button"
-          disabled={deleting || !garden}
-          onClick={() => void handleDeleteGarden()}
-          className="rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
-        >
-          {deleting ? "Deleting…" : "Delete garden"}
-        </button>
-      </section>
-
-      <section className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <section className="rounded-xl border border-white/10 p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-sm font-medium text-gray-200">Blooms in this garden</h2>
+            <h2 className="text-sm font-medium text-white">Garden settings</h2>
             <p className="mt-1 text-xs text-gray-500">
-              Create a bloom here, or attach an existing one. Blooms grow this shared world.
+              Kind shapes how this world is framed. Status controls whether fans can open it.
             </p>
           </div>
-          <Link
-            href={`/admin/gardens/${gardenId}/blooms/new`}
-            className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-black"
+          <button
+            type="button"
+            onClick={() => void handleSettingsSave()}
+            disabled={saving || deleting}
+            className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
           >
-            + Create bloom
-          </Link>
+            {saving ? "Saving…" : "Save settings"}
+          </button>
         </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="block text-xs text-gray-400">
+            Kind
+            <select
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as GardenKind)}
+            >
+              <option value="series">Series</option>
+              <option value="season">Season</option>
+              <option value="evergreen">Evergreen</option>
+            </select>
+          </label>
+          <label className="block text-xs text-gray-400">
+            Status
+            <select
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Garden["status"])}
+            >
+              <option value="draft">Draft (not public yet)</option>
+              <option value="live">Live</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-[#CFFF81]/25 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium text-white">Blooms in this garden</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Step 2 of create: add a bloom (show / journey) inside this Song Garden.
+            </p>
+          </div>
+          {chapters.length > 0 ? (
+            <Link
+              href={`/admin/gardens/${gardenId}/blooms/new`}
+              className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black"
+            >
+              + Create bloom
+            </Link>
+          ) : null}
+        </div>
+
         {chapters.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No blooms yet. Create the first bloom for this Song Garden.
-          </p>
+          <div className="mt-4 rounded-xl border border-dashed border-[#CFFF81]/35 bg-[#CFFF81]/5 px-5 py-8 text-center">
+            <p className="text-sm font-medium text-white">No blooms yet</p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-400">
+              Create the first bloom to give fans a journey inside this world.
+            </p>
+            <Link
+              href={`/admin/gardens/${gardenId}/blooms/new`}
+              className="mt-5 inline-flex rounded-lg bg-[#CFFF81] px-5 py-2.5 text-sm font-semibold text-black"
+            >
+              + Create first bloom
+            </Link>
+          </div>
         ) : (
-          <ul className="space-y-2 text-sm">
+          <ul className="mt-4 space-y-2 text-sm">
             {chapters.map((c) => {
               const ev = events.find((e) => e.id === c.eventId);
               return (
                 <li
                   key={c.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2.5"
                 >
                   <span>
                     <span className="text-white">{c.label}</span>
@@ -1146,7 +1178,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                       · {ev?.title ?? c.eventId} · {c.status}
                     </span>
                   </span>
-                  <span className="flex items-center gap-3">
+                  <span className="flex flex-wrap items-center gap-3">
                     {ev?.id ? (
                       <Link
                         href={`/admin/events/${ev.id}`}
@@ -1179,56 +1211,58 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </ul>
         )}
 
-        <form onSubmit={handleAttach} className="mt-4 space-y-3 border-t border-white/10 pt-4">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">
+        <details className="mt-4 border-t border-white/10 pt-4">
+          <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-gray-500 hover:text-gray-300">
             Or attach an existing bloom
-          </h3>
-          <label className="block text-xs text-gray-400">
-            Event
-            <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-              value={eventId}
-              onChange={(e) => setEventId(e.target.value)}
-              required
-            >
-              <option value="">Select event…</option>
-              {availableEvents.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.title} ({ev.slug})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
+          </summary>
+          <form onSubmit={handleAttach} className="mt-3 space-y-3">
             <label className="block text-xs text-gray-400">
-              Show number
-              <input
-                type="number"
-                min={1}
+              Event
+              <select
                 className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-                value={index}
-                onChange={(e) => setIndex(e.target.value)}
+                value={eventId}
+                onChange={(e) => setEventId(e.target.value)}
                 required
-              />
+              >
+                <option value="">Select event…</option>
+                {availableEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title} ({ev.slug})
+                  </option>
+                ))}
+              </select>
             </label>
-            <label className="block text-xs text-gray-400">
-              Label
-              <input
-                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="Show 1"
-              />
-            </label>
-          </div>
-          <button
-            type="submit"
-            disabled={saving || !eventId}
-            className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Attach bloom"}
-          </button>
-        </form>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs text-gray-400">
+                Show number
+                <input
+                  type="number"
+                  min={1}
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                  value={index}
+                  onChange={(e) => setIndex(e.target.value)}
+                  required
+                />
+              </label>
+              <label className="block text-xs text-gray-400">
+                Label
+                <input
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="Show 1"
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={saving || !eventId}
+              className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Attach bloom"}
+            </button>
+          </form>
+        </details>
       </section>
 
       {garden?.worldState?.landmarks?.length ? (
@@ -2347,6 +2381,20 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </div>
         </div>
       </details>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <p className="text-xs text-gray-500">
+          Delete this Song Garden (rare). Blooms stay in the Blooms list.
+        </p>
+        <button
+          type="button"
+          disabled={deleting || !garden}
+          onClick={() => void handleDeleteGarden()}
+          className="text-xs font-medium text-red-300/90 underline hover:text-red-200 disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete garden"}
+        </button>
+      </div>
     </div>
   );
 }

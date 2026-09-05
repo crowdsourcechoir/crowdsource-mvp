@@ -123,7 +123,7 @@ export default function NewGardenBloomPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full">
       <div className="mb-6">
         <Link
           href={`/admin/gardens/${garden.id}`}

@@ -80,7 +80,7 @@ export default function NewEventPage() {
 
   if (standalone) {
     return (
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="w-full">
         <div className="mb-4 rounded-lg border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
           <p className="font-medium">Standalone bloom (no Song Garden yet)</p>
           <p className="mt-1 text-amber-200/80">
@@ -103,7 +103,7 @@ export default function NewEventPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 text-white">
+    <div className="w-full space-y-6 text-white">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">Create</p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Create bloom in a Song Garden</h1>
