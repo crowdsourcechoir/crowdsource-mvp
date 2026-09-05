@@ -132,7 +132,7 @@ export default function ClipWaveform({
         draggingRef.current = false;
       }}
     >
-      <canvas ref={canvasRef} className="block w-full rounded-md bg-black/40" />
+      <canvas ref={canvasRef} className="block w-full rounded-md bg-transparent" />
       {peaks.length === 0 && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-gray-500">
           {peaksFailed ? "Waveform unavailable" : arrayBuffer ? "Loading waveform…" : "Waiting for audio…"}
