@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Garden } from "@/lib/song-garden-v2/garden/types";
 
 export default function GardensAdminClient() {
@@ -9,9 +9,6 @@ export default function GardensAdminClient() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [slug, setSlug] = useState("");
-  const [title, setTitle] = useState("");
-  const [creating, setCreating] = useState(false);
   const [seedingBallard, setSeedingBallard] = useState(false);
 
   const load = useCallback(async () => {
@@ -33,30 +30,6 @@ export default function GardensAdminClient() {
     void load();
   }, [load]);
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch("/api/gardens", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, title, status: "live", kind: "series" }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { garden?: Garden; error?: string };
-      if (!res.ok) throw new Error(body.error || "Create failed");
-      setSlug("");
-      setTitle("");
-      setNotice("Garden created.");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
-    } finally {
-      setCreating(false);
-    }
-  }
-
   async function seedBallardFc() {
     setSeedingBallard(true);
     setError(null);
@@ -65,7 +38,6 @@ export default function GardensAdminClient() {
       const res = await fetch("/api/gardens/demos/ballard-fc", { method: "POST" });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
-        publicPath?: string;
         created?: boolean;
       };
       if (!res.ok) throw new Error(body.error || "Could not seed Ballard FC demo");
@@ -86,14 +58,22 @@ export default function GardensAdminClient() {
 
   return (
     <div className="w-full space-y-8 text-gray-100">
-      <div className="mb-6 sm:mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
-          Persistent Worlds
-        </p>
-        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Song Gardens</h1>
-        <p className="mt-2 text-sm text-gray-400">
-          Persistent worlds where voices, words, sounds, photos, selfies, videos, and memories keep growing.
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+            Persistent Worlds
+          </p>
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Song Gardens</h1>
+          <p className="mt-2 max-w-2xl text-sm text-gray-400">
+            Create a Song Garden first. Then add blooms (shows / journeys) inside it.
+          </p>
+        </div>
+        <Link
+          href="/admin/gardens/new"
+          className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black"
+        >
+          + Create Song Garden
+        </Link>
       </div>
 
       <section className="space-y-3 rounded-xl border border-[#CFFF81]/25 bg-transparent p-4">
@@ -126,39 +106,6 @@ export default function GardensAdminClient() {
         </div>
       </section>
 
-      <form onSubmit={handleCreate} className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
-        <h2 className="text-sm font-medium text-gray-200">Create garden</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-xs text-gray-400">
-            Slug
-            <input
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="ethglobal-2026"
-              required
-            />
-          </label>
-          <label className="block text-xs text-gray-400">
-            Title
-            <input
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="ETHGlobal Garden 2026"
-              required
-            />
-          </label>
-        </div>
-        <button
-          type="submit"
-          disabled={creating}
-          className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {creating ? "Creating…" : "Create blank garden"}
-        </button>
-      </form>
-
       {error && <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
       {notice && (
         <p className="rounded-lg bg-[#CFFF81]/10 px-3 py-2 text-sm text-[#CFFF81]">{notice}</p>
@@ -166,7 +113,13 @@ export default function GardensAdminClient() {
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
       ) : gardens.length === 0 ? (
-        <p className="text-sm text-gray-500">No gardens yet.</p>
+        <div className="rounded-xl border border-dashed border-white/15 px-5 py-8 text-sm text-gray-400">
+          No Song Gardens yet.{" "}
+          <Link href="/admin/gardens/new" className="text-[#CFFF81] hover:underline">
+            Create one
+          </Link>{" "}
+          to start, then add blooms inside it.
+        </div>
       ) : (
         <ul className="divide-y divide-white/10 border-y border-white/10">
           {gardens.map((g) => (
@@ -175,11 +128,14 @@ export default function GardensAdminClient() {
               className="flex cursor-default flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:text-[#CFFF81]">
+                <Link
+                  href={`/admin/gardens/${g.id}`}
+                  className="font-medium text-white hover:text-[#CFFF81]"
+                >
                   {g.title}
                 </Link>
                 <p className="text-xs text-gray-500">
-                  /{g.slug} · {g.status} · v{g.worldVersion} · energy{" "}
+                  /g/{g.slug} · {g.status} · v{g.worldVersion} · energy{" "}
                   {(g.worldState?.energy ?? 0).toFixed(2)}
                   {g.status === "live" ? (
                     <>
@@ -192,12 +148,20 @@ export default function GardensAdminClient() {
                   ) : null}
                 </p>
               </div>
-              <Link
-                href={`/admin/gardens/${g.id}`}
-                className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
-              >
-                Manage
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/admin/gardens/${g.id}/blooms/new`}
+                  className="rounded-lg border border-[#CFFF81]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[#CFFF81] transition-colors hover:bg-[#CFFF81]/10"
+                >
+                  + Bloom
+                </Link>
+                <Link
+                  href={`/admin/gardens/${g.id}`}
+                  className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
+                >
+                  Manage
+                </Link>
+              </div>
             </li>
           ))}
         </ul>
