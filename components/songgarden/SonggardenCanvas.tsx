@@ -140,8 +140,13 @@ export default function SonggardenCanvas({
           if (!cancelled) setGardenClips(Array.isArray(data.clips) ? data.clips : []);
         } else {
           const res = await fetch("/api/admin/composer/library", { cache: "no-store" });
-          if (!res.ok) throw new Error("Could not load master library.");
-          const data = (await res.json()) as { clips?: SonggardenClip[] };
+          const data = (await res.json().catch(() => ({}))) as {
+            clips?: SonggardenClip[];
+            error?: string;
+          };
+          if (!res.ok) {
+            throw new Error(data.error || "Could not load master library.");
+          }
           if (!cancelled) setMasterClips(Array.isArray(data.clips) ? data.clips : []);
         }
       } catch (err) {
@@ -380,10 +385,12 @@ export default function SonggardenCanvas({
         }
       } else if (scope === "master") {
         const res = await fetch("/api/admin/composer/library", { cache: "no-store" });
-        if (res.ok) {
-          const data = (await res.json()) as { clips?: SonggardenClip[] };
-          setMasterClips(Array.isArray(data.clips) ? data.clips : []);
-        }
+        const data = (await res.json().catch(() => ({}))) as {
+          clips?: SonggardenClip[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(data.error || "Could not load master library.");
+        setMasterClips(Array.isArray(data.clips) ? data.clips : []);
       }
     } finally {
       setScopeLoading(false);

@@ -9,6 +9,29 @@ export const dynamic = "force-dynamic";
 
 const USE_LOCAL = process.env.USE_LOCAL_EVENTS === "true";
 
+const CLIP_SELECT =
+  "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, trim_lead_ms, trim_trail_ms, trim_status, has_original";
+const CLIP_SELECT_LEGACY =
+  "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at";
+
+/** Map legacy / seed labels onto current category ids. */
+function normalizeCategory(raw: unknown): SonggardenCategoryId {
+  const value = String(raw ?? "other").toLowerCase();
+  if (
+    value === "ambient" ||
+    value === "foley" ||
+    value === "percussion" ||
+    value === "vocal" ||
+    value === "texture" ||
+    value === "other"
+  ) {
+    return value;
+  }
+  if (value === "percussive" || value === "drums" || value === "beat") return "percussion";
+  if (value === "melody" || value === "harmony" || value === "musical") return "texture";
+  return "other";
+}
+
 function rowToClip(row: Record<string, unknown>): SonggardenClip {
   const trimStatus =
     row.trim_status === "trimmed" || row.trim_status === "skipped" || row.trim_status === "none"
@@ -19,7 +42,7 @@ function rowToClip(row: Record<string, unknown>): SonggardenClip {
     eventId: String(row.event_id),
     contributorName: row.contributor_name != null ? String(row.contributor_name) : null,
     label: row.label != null ? String(row.label) : null,
-    category: row.category as SonggardenCategoryId,
+    category: normalizeCategory(row.category),
     filename: String(row.filename),
     mimeType: String(row.mime_type ?? "audio/wav"),
     durationMs: row.duration_ms != null ? Number(row.duration_ms) : null,
@@ -33,9 +56,12 @@ function rowToClip(row: Record<string, unknown>): SonggardenClip {
   };
 }
 
+function isTrimSchemaMissing(message: string): boolean {
+  return /trim_lead_ms|trim_trail_ms|trim_status|has_original|audio_data_original/i.test(message);
+}
+
 /**
- * Master Composer library — all Song Garden sounds across blooms/gardens.
- * Admin composer only; keep payload bounded.
+ * Master Composer library — every Song Garden sound across blooms/gardens.
  */
 export async function GET() {
   try {
@@ -44,7 +70,12 @@ export async function GET() {
       const clips: SonggardenClip[] = [];
       for (const ev of events.slice(0, 80)) {
         const list = await localSonggardenList(String(ev.id));
-        clips.push(...list);
+        clips.push(
+          ...list.map((clip) => ({
+            ...clip,
+            category: normalizeCategory(clip.category),
+          }))
+        );
       }
       const gardens = await listGardens();
       return NextResponse.json({
@@ -59,23 +90,42 @@ export async function GET() {
     }
 
     if (!supabaseAdmin) {
-      return NextResponse.json({ clips: [], gardens: [], events: [] });
+      return NextResponse.json(
+        { clips: [], gardens: [], events: [], error: "Database not configured." },
+        { status: 503 }
+      );
     }
 
-    const { data, error } = await supabaseAdmin
+    let data: Record<string, unknown>[] | null = null;
+    let error: { message: string } | null = null;
+
+    const primary = await supabaseAdmin
       .from("songgarden_clips")
-      .select(
-        "id, event_id, contributor_name, label, category, filename, mime_type, duration_ms, device_id, session_token, submitted_at, trim_lead_ms, trim_trail_ms, trim_status, has_original"
-      )
+      .select(CLIP_SELECT)
       .order("submitted_at", { ascending: false })
       .limit(2000);
+    data = (primary.data as Record<string, unknown>[] | null) ?? null;
+    error = primary.error;
+
+    if (error && isTrimSchemaMissing(error.message)) {
+      const legacy = await supabaseAdmin
+        .from("songgarden_clips")
+        .select(CLIP_SELECT_LEGACY)
+        .order("submitted_at", { ascending: false })
+        .limit(2000);
+      data = (legacy.data as Record<string, unknown>[] | null) ?? null;
+      error = legacy.error;
+    }
 
     if (error) {
       console.warn("[composer/library]", error.message);
-      return NextResponse.json({ clips: [], gardens: [], events: [] });
+      return NextResponse.json(
+        { clips: [], gardens: [], events: [], error: error.message },
+        { status: 500 }
+      );
     }
 
-    const clips = (data ?? []).map((r) => rowToClip(r as Record<string, unknown>));
+    const clips = (data ?? []).map((r) => rowToClip(r));
     const gardens = await listGardens();
     const { data: eventRows } = await supabaseAdmin
       .from("events")
@@ -94,6 +144,14 @@ export async function GET() {
     });
   } catch (err) {
     console.warn("[composer/library]", err);
-    return NextResponse.json({ clips: [], gardens: [], events: [] });
+    return NextResponse.json(
+      {
+        clips: [],
+        gardens: [],
+        events: [],
+        error: err instanceof Error ? err.message : "Library failed.",
+      },
+      { status: 500 }
+    );
   }
 }
