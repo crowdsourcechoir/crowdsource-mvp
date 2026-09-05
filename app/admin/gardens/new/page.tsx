@@ -60,7 +60,7 @@ export default function NewGardenPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 text-white">
+    <div className="w-full space-y-6 text-white">
       <div>
         <Link href="/admin/gardens" className="text-sm text-gray-400 hover:text-white">
           ← Song Gardens
