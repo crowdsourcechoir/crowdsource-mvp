@@ -210,7 +210,8 @@ export default function AdminEventsList() {
         </p>
         <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Blooms</h1>
         <p className="mt-2 text-sm text-gray-400">
-          Manage live events, gameday moments, and activations where Gardens come alive.
+          Blooms live inside Song Gardens. Create a garden first, then add the bloom — or manage
+          existing blooms here.
         </p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex gap-1.5">
@@ -233,7 +234,7 @@ export default function AdminEventsList() {
             href="/admin/events/new"
             className="inline-flex w-full items-center justify-center rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] sm:w-auto"
           >
-            + Create Bloom
+            + Create bloom in garden
           </Link>
         </div>
       </div>

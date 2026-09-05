@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Event } from "@/data/mockEvents";
 import ZoneMapEditor from "@/components/song-garden-v2/ZoneMapEditor";
 import GardenCompositionCanvas from "@/components/song-garden-v2/GardenCompositionCanvas";
@@ -103,6 +103,7 @@ function sponsorsFromGarden(garden: Garden | null): SponsorDraft[] {
 
 export default function GardenDetailClient({ gardenId }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [garden, setGarden] = useState<Garden | null>(null);
   const [chapters, setChapters] = useState<GardenChapter[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -235,6 +236,18 @@ export default function GardenDetailClient({ gardenId }: Props) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const bloomCreated = searchParams.get("bloomCreated");
+    const justCreated = searchParams.get("created");
+    if (bloomCreated) {
+      setNotice("Bloom created and attached to this Song Garden.");
+      router.replace(`/admin/gardens/${gardenId}`, { scroll: false });
+    } else if (justCreated === "1") {
+      setNotice("Song Garden created. Add your first bloom when you’re ready.");
+      router.replace(`/admin/gardens/${gardenId}`, { scroll: false });
+    }
+  }, [searchParams, gardenId, router]);
+
   const zoneOptions = useMemo(
     () => zones.filter((z) => z.key.trim() && z.label.trim()),
     [zones]
@@ -259,7 +272,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(body.error || "Failed to attach chapter");
       setLabel("");
-      setNotice("Event attached.");
+      setNotice("Bloom attached.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to attach");
@@ -1099,10 +1112,24 @@ export default function GardenDetailClient({ gardenId }: Props) {
       </section>
 
       <section className="space-y-3 rounded-xl border border-white/10 bg-transparent p-4">
-        <h2 className="text-sm font-medium text-gray-200">Shows (chapters)</h2>
-        <p className="text-xs text-gray-500">Link live events so contributions grow this shared garden.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium text-gray-200">Blooms in this garden</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Create a bloom here, or attach an existing one. Blooms grow this shared world.
+            </p>
+          </div>
+          <Link
+            href={`/admin/gardens/${gardenId}/blooms/new`}
+            className="rounded-lg bg-[#CFFF81] px-3 py-2 text-xs font-semibold text-black"
+          >
+            + Create bloom
+          </Link>
+        </div>
         {chapters.length === 0 ? (
-          <p className="text-sm text-gray-500">No shows attached yet.</p>
+          <p className="text-sm text-gray-500">
+            No blooms yet. Create the first bloom for this Song Garden.
+          </p>
         ) : (
           <ul className="space-y-2 text-sm">
             {chapters.map((c) => {
@@ -1120,9 +1147,17 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     </span>
                   </span>
                   <span className="flex items-center gap-3">
+                    {ev?.id ? (
+                      <Link
+                        href={`/admin/events/${ev.id}`}
+                        className="text-xs text-gray-400 underline hover:text-white"
+                      >
+                        Manage bloom
+                      </Link>
+                    ) : null}
                     {ev?.slug ? (
                       <Link href={publicEventPath(ev.slug)} className="text-xs text-[#CFFF81] underline">
-                        Open event
+                        Open public
                       </Link>
                     ) : null}
                     {c.status !== "closed" ? (
@@ -1145,7 +1180,9 @@ export default function GardenDetailClient({ gardenId }: Props) {
         )}
 
         <form onSubmit={handleAttach} className="mt-4 space-y-3 border-t border-white/10 pt-4">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">Attach a show</h3>
+          <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            Or attach an existing bloom
+          </h3>
           <label className="block text-xs text-gray-400">
             Event
             <select
@@ -1189,7 +1226,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             disabled={saving || !eventId}
             className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Attach show"}
+            {saving ? "Saving…" : "Attach bloom"}
           </button>
         </form>
       </section>
