@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { getAllEvents } from "@/data/eventsClient";
+import { getAllEvents, getEventById, getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import { isEventUpcoming } from "@/lib/formatDate";
 import SonggardenCanvas from "@/components/songgarden/SonggardenCanvas";
 
-type ComposerView = "master" | "browse";
+type ComposerView = "master" | "browse" | "garden" | "bloom";
 type GardenRow = { id: string; slug: string; title: string };
 
 function pillClass(active: boolean): string {
@@ -17,11 +17,85 @@ function pillClass(active: boolean): string {
     : "border border-white/15 text-gray-300 hover:border-[#CFFF81]/50 hover:text-white";
 }
 
+function rowClassName(): string {
+  return "flex cursor-pointer flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between";
+}
+
+function BloomComposer({ bloomKey }: { bloomKey: string }) {
+  const [event, setEvent] = useState<Event | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    (async () => {
+      try {
+        let next = await getEventBySlug(bloomKey);
+        if (!next) next = await getEventById(bloomKey);
+        if (!cancelled) {
+          setEvent(next);
+          if (!next) setError("Bloom not found.");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setEvent(null);
+          setError(err instanceof Error ? err.message : "Could not load bloom.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bloomKey]);
+
+  if (loading) return <p className="text-sm text-gray-500">Loading bloom sounds…</p>;
+  if (error || !event) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-rose-300">{error || "Bloom not found."}</p>
+        <Link href="/admin/composer?view=browse" className="text-sm text-[#CFFF81] hover:underline">
+          ← Blooms & Gardens
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Link
+        href="/admin/composer?view=browse"
+        className="inline-block text-sm text-gray-400 hover:text-white"
+      >
+        ← Blooms & Gardens
+      </Link>
+      <SonggardenCanvas
+        eventId={event.id}
+        eventTitle={event.title}
+        eventSlug={event.slug}
+        initialScope="bloom"
+      />
+    </div>
+  );
+}
+
 function ComposerPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewParam = searchParams.get("view");
-  const view: ComposerView = viewParam === "browse" ? "browse" : "master";
+  const gardenParam = searchParams.get("garden");
+  const bloomParam = searchParams.get("bloom");
+
+  const view: ComposerView = gardenParam
+    ? "garden"
+    : bloomParam
+      ? "bloom"
+      : viewParam === "browse"
+        ? "browse"
+        : "master";
 
   const [events, setEvents] = useState<Event[]>([]);
   const [gardens, setGardens] = useState<GardenRow[]>([]);
@@ -72,9 +146,20 @@ function ComposerPageInner() {
   const upcoming = useMemo(() => events.filter((e) => isEventUpcoming(e.date)), [events]);
   const past = useMemo(() => events.filter((e) => !isEventUpcoming(e.date)), [events]);
 
-  function setView(next: ComposerView) {
-    const url = next === "browse" ? "/admin/composer?view=browse" : "/admin/composer";
-    router.replace(url);
+  function openMaster() {
+    router.replace("/admin/composer");
+  }
+
+  function openBrowse() {
+    router.replace("/admin/composer?view=browse");
+  }
+
+  function openGardenComposer(garden: GardenRow) {
+    router.push(`/admin/composer?garden=${encodeURIComponent(garden.slug || garden.id)}`);
+  }
+
+  function openBloomComposer(event: Event) {
+    router.push(`/admin/composer?bloom=${encodeURIComponent(event.slug || event.id)}`);
   }
 
   return (
@@ -89,24 +174,40 @@ function ComposerPageInner() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setView("master")}
+            onClick={openMaster}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold ${pillClass(view === "master")}`}
           >
             Master — all sounds
           </button>
           <button
             type="button"
-            onClick={() => setView("browse")}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${pillClass(view === "browse")}`}
+            onClick={openBrowse}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${pillClass(
+              view === "browse" || view === "garden" || view === "bloom"
+            )}`}
           >
             Blooms & Gardens
           </button>
         </div>
       </div>
 
-      {view === "master" ? (
-        <SonggardenCanvas initialScope="master" />
-      ) : (
+      {view === "master" ? <SonggardenCanvas initialScope="master" /> : null}
+
+      {view === "garden" && gardenParam ? (
+        <div className="space-y-4">
+          <Link
+            href="/admin/composer?view=browse"
+            className="inline-block text-sm text-gray-400 hover:text-white"
+          >
+            ← Blooms & Gardens
+          </Link>
+          <SonggardenCanvas gardenId={gardenParam} initialScope="garden" />
+        </div>
+      ) : null}
+
+      {view === "bloom" && bloomParam ? <BloomComposer bloomKey={bloomParam} /> : null}
+
+      {view === "browse" ? (
         <div className="space-y-8">
           {browseLoading ? <p className="text-sm text-gray-500">Loading…</p> : null}
           {browseError ? (
@@ -122,7 +223,7 @@ function ComposerPageInner() {
                 href="/admin/gardens"
                 className="text-sm font-medium text-[#CFFF81] hover:underline"
               >
-                All Gardens →
+                Manage gardens →
               </Link>
             </div>
             {!browseLoading && gardens.length === 0 ? (
@@ -136,16 +237,17 @@ function ComposerPageInner() {
               <ul className="divide-y divide-white/10 border-y border-white/10">
                 {gardens.map((garden) => (
                   <li key={garden.id}>
-                    <Link
-                      href={`/admin/gardens/${encodeURIComponent(garden.id)}`}
-                      className="flex cursor-pointer items-center justify-between gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1"
+                    <button
+                      type="button"
+                      onClick={() => openGardenComposer(garden)}
+                      className={`w-full text-left ${rowClassName()}`}
                     >
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">{garden.title}</p>
                         <p className="mt-0.5 truncate text-xs text-gray-500">{garden.slug}</p>
                       </div>
-                      <span className="shrink-0 text-xs text-[#CFFF81]">Open →</span>
-                    </Link>
+                      <span className="shrink-0 text-xs text-[#CFFF81]">Open composer →</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -159,7 +261,7 @@ function ComposerPageInner() {
                 href="/admin/events"
                 className="text-sm font-medium text-[#CFFF81] hover:underline"
               >
-                All Blooms →
+                Manage blooms →
               </Link>
             </div>
             {!browseLoading && events.length === 0 ? (
@@ -171,21 +273,12 @@ function ComposerPageInner() {
               </div>
             ) : (
               <ul className="divide-y divide-white/10 border-y border-white/10">
-                {[...upcoming, ...past].map((event) => {
-                  const padsHref = `/admin/songgarden/${encodeURIComponent(event.slug || event.id)}`;
-                  return (
-                    <li
-                      key={event.id}
-                      role="link"
-                      tabIndex={0}
-                      onClick={() => router.push(padsHref)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          router.push(padsHref);
-                        }
-                      }}
-                      className="flex cursor-pointer flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between"
+                {[...upcoming, ...past].map((event) => (
+                  <li key={event.id}>
+                    <button
+                      type="button"
+                      onClick={() => openBloomComposer(event)}
+                      className={`w-full text-left ${rowClassName()}`}
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-base font-semibold text-white">
@@ -196,32 +289,15 @@ function ComposerPageInner() {
                           {event.venue ? ` · ${event.venue}` : ""}
                         </p>
                       </div>
-                      <div
-                        className="flex flex-wrap gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      >
-                        <Link
-                          href={padsHref}
-                          className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white"
-                        >
-                          Song Garden
-                        </Link>
-                        <Link
-                          href={`/admin/events/${event.id}`}
-                          className="rounded-lg border border-[#CFFF81]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[#CFFF81] transition-colors hover:border-[#CFFF81] hover:bg-[#CFFF81]/10"
-                        >
-                          Bloom
-                        </Link>
-                      </div>
-                    </li>
-                  );
-                })}
+                      <span className="shrink-0 text-xs text-[#CFFF81]">Open composer →</span>
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </section>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

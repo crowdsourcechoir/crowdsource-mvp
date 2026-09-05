@@ -33,10 +33,12 @@ type VideoItem = {
 };
 
 type Props = {
-  /** When omitted, canvas runs as Master Composer only. */
+  /** Bloom event id — when set, bloom-scoped sounds are available. */
   eventId?: string;
   eventTitle?: string;
   eventSlug?: string;
+  /** Garden id or slug — opens garden composition without leaving Composer. */
+  gardenId?: string;
   initialScope?: ComposerScope;
 };
 
@@ -54,9 +56,11 @@ export default function SonggardenCanvas({
   eventId = "",
   eventTitle = "Master Composer",
   eventSlug = "",
+  gardenId = "",
   initialScope,
 }: Props) {
-  const masterOnly = !eventId;
+  const gardenOnly = Boolean(gardenId) && !eventId;
+  const masterOnly = !eventId && !gardenId;
   const {
     clips: bloomClips,
     loading: bloomLoading,
@@ -64,10 +68,10 @@ export default function SonggardenCanvas({
     newClipIds,
     clearNewHighlight,
     refresh: refreshBloom,
-  } = useSonggardenPoll({ eventId, enabled: !masterOnly });
+  } = useSonggardenPoll({ eventId, enabled: Boolean(eventId) });
 
   const [scope, setScope] = useState<ComposerScope>(
-    initialScope ?? (masterOnly ? "master" : "bloom")
+    initialScope ?? (gardenOnly ? "garden" : masterOnly ? "master" : "bloom")
   );
   const [contentView, setContentView] = useState<ContentView>("sounds");
   const [categoryFilter, setCategoryFilter] = useState<SonggardenCategoryId | "all">("all");
@@ -88,12 +92,59 @@ export default function SonggardenCanvas({
   const [responsesLoading, setResponsesLoading] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (gardenId) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/gardens/${encodeURIComponent(gardenId)}`, {
+            cache: "no-store",
+          });
+          if (!res.ok || cancelled) return;
+          const data = (await res.json()) as {
+            garden?: GardenLink & { title?: string };
+            chapters?: Array<{
+              id: string;
+              eventId?: string;
+              event_id?: string;
+              label?: string;
+              title?: string;
+              index?: number;
+            }>;
+          };
+          if (cancelled || !data.garden) return;
+          setGarden({
+            id: data.garden.id,
+            slug: data.garden.slug,
+            title: data.garden.title ?? data.garden.slug,
+          });
+          setChapters(
+            (data.chapters ?? []).map((ch, index) => ({
+              id: ch.id,
+              eventId: String(ch.eventId ?? ch.event_id ?? ""),
+              label: String(ch.label ?? ch.title ?? `Chapter ${index + 1}`),
+              index: ch.index ?? index,
+            }))
+          );
+          setScope((prev) => (prev === "bloom" && gardenOnly ? "garden" : prev));
+        } catch {
+          if (!cancelled) {
+            setGarden(null);
+            setChapters([]);
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!eventId) {
       setGarden(null);
       setChapters([]);
       return;
     }
-    let cancelled = false;
+
     (async () => {
       try {
         const res = await fetch(
@@ -118,7 +169,7 @@ export default function SonggardenCanvas({
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, gardenId, gardenOnly]);
 
   useEffect(() => {
     if (scope === "bloom") return;
@@ -426,7 +477,7 @@ export default function SonggardenCanvas({
         <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
         <div className="flex max-w-3xl flex-1 flex-col items-stretch gap-2 sm:max-w-none sm:items-end">
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {!masterOnly ? (
+            {!masterOnly && !gardenOnly ? (
               <>
                 <button
                   type="button"
@@ -447,6 +498,15 @@ export default function SonggardenCanvas({
                   Song Garden
                 </button>
               </>
+            ) : null}
+            {gardenOnly ? (
+              <button
+                type="button"
+                onClick={() => setScope("garden")}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "garden")}`}
+              >
+                This garden
+              </button>
             ) : null}
             <button
               type="button"
