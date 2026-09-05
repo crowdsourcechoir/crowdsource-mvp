@@ -169,8 +169,8 @@ export default function SoundClipRow({
 
   return (
     <div
-      className={`rounded-xl border bg-transparent p-3 ${
-        playing ? "border-[#CFFF81]/70" : "border-white/10"
+      className={`rounded-xl border bg-transparent p-3 transition-colors ${
+        playing ? "border-[#CFFF81]/70" : "border-white/10 hover:border-[#CFFF81]/55"
       } ${dragging ? "opacity-60" : ""} ${error ? "border-red-800/60" : ""}`}
     >
       {src ? (

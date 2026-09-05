@@ -173,10 +173,10 @@ export default function DraggableAudioClip({
 
   return (
     <div
-      className={`relative rounded-xl border bg-transparent p-3 ${
+      className={`relative rounded-xl border bg-transparent p-3 transition-colors ${
         playing || selected
           ? "border-[#CFFF81]/70"
-          : "border-white/10"
+          : "border-white/10 hover:border-[#CFFF81]/55"
       } ${dragging ? "opacity-60" : ""} ${error ? "border-red-800/60" : ""} ${
         isNew ? "animate-pulse" : ""
       }`}
