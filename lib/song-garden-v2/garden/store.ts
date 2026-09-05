@@ -937,13 +937,13 @@ export async function getGardenSnapshot(args: {
     }),
   });
 
-  const journeyIds = [
-    ...new Set(
+  const journeyIds = Array.from(
+    new Set(
       snapshot.zones
         .map((z) => (z.engageMode === "journey" ? z.journeyEventId : null))
         .filter((id): id is string => Boolean(id))
-    ),
-  ];
+    )
+  );
   if (journeyIds.length === 0) return snapshot;
 
   const slugEntries = await Promise.all(

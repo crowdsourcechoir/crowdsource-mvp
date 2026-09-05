@@ -483,7 +483,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           inputPlaceholder: z.inputPlaceholder.trim() || null,
           logoUrl: z.logoUrl.trim() || null,
           hit: z.hit,
-          engageMode: z.engageMode === "journey" ? "journey" : "pulse",
+          engageMode: z.engageMode === "journey" ? ("journey" as const) : ("pulse" as const),
           journeyEventId:
             z.engageMode === "journey" && z.journeyEventId.trim()
               ? z.journeyEventId.trim()

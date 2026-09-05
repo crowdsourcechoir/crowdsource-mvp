@@ -528,7 +528,7 @@ function normalizeZones(zones: ZoneDef[] | null | undefined): ZoneDef[] {
       prompt: z.prompt?.trim() || null,
       ctaLabel: z.ctaLabel?.trim() || null,
       inputPlaceholder: z.inputPlaceholder?.trim() || null,
-      engageMode: z.engageMode === "journey" ? "journey" : "pulse",
+      engageMode: z.engageMode === "journey" ? ("journey" as const) : ("pulse" as const),
       journeyEventId:
         z.engageMode === "journey" && z.journeyEventId?.trim()
           ? z.journeyEventId.trim()
