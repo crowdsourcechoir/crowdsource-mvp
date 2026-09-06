@@ -4,12 +4,13 @@ import { assembleQueueItemDetail } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
 import { renderDigestEmail } from "./render";
 import { getDigestMinScore, getDigestTargetCount } from "./config";
+import { resolveDigestSettings } from "./settings";
 import { filterDigestQualifyingItems, sortByScoreDesc } from "./qualify";
 import { siteUrl } from "@/lib/site-url";
 import type { ApprovalQueueItem, QueueItemDetail } from "../types";
 
 export type DigestSendResult = {
-  status: "succeeded" | "failed" | "skipped_no_provider";
+  status: "succeeded" | "failed" | "skipped_no_provider" | "skipped_disabled";
   itemCount: number;
   minScore: number;
   error?: string;
@@ -96,9 +97,13 @@ export async function sendDailyDigest(
   trigger: "manual" | "cron" = "cron",
   options?: { items?: QueueItemDetail[]; sinceIso?: string; backlogCount?: number; minScore?: number }
 ): Promise<DigestSendResult> {
+  const digestSettings = await resolveDigestSettings();
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.SALES_DIGEST_TO_EMAIL;
-  const minScore = options?.minScore ?? getDigestMinScore();
+  const to = digestSettings.recipient;
+  const minScore = options?.minScore ?? digestSettings.minScore;
+  if (!digestSettings.enabled) {
+    return { status: "skipped_disabled", itemCount: 0, minScore };
+  }
   if (!apiKey || !to) {
     return { status: "skipped_no_provider", itemCount: 0, minScore };
   }
@@ -118,7 +123,7 @@ export async function sendDailyDigest(
     );
 
     const resend = new Resend(apiKey);
-    const from = process.env.SALES_DIGEST_FROM_EMAIL || DEFAULT_FROM;
+    const from = digestSettings.fromEmail || DEFAULT_FROM;
     const { data, error } = await resend.emails.send({ from, to, subject, html, text });
     if (error) throw new Error(typeof error === "string" ? error : error.message);
 

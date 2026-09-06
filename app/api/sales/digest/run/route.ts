@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureDigestTarget } from "@/lib/sales/digest/ensure";
-import { getDigestMinScore } from "@/lib/sales/digest/config";
+import { resolveDigestSettings } from "@/lib/sales/digest/settings";
 import { loadAllPendingDigestItems, sendDailyDigest } from "@/lib/sales/digest/send";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,13 @@ export async function POST(request: Request) {
   try {
     const force = new URL(request.url).searchParams.get("force") === "1";
     if (force) {
-      const minScore = getDigestMinScore();
+      const digestSettings = await resolveDigestSettings();
+      const minScore = digestSettings.minScore;
+      if (!digestSettings.enabled) {
+        return NextResponse.json({
+          result: { status: "skipped_disabled", itemCount: 0, minScore },
+        });
+      }
       const loaded = await loadAllPendingDigestItems(minScore);
       if (loaded.items.length === 0) {
         return NextResponse.json({

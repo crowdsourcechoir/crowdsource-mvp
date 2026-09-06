@@ -4,6 +4,7 @@ import { siteUrl } from "@/lib/site-url";
 import { encryptSecret } from "@/lib/sales/gmail/crypto";
 import { exchangeCodeForTokens, verifyOAuthState } from "@/lib/sales/gmail/oauth";
 import { upsertGmailConnection } from "@/lib/sales/db/gmail";
+import { GMAIL_RETURN_COOKIE, sanitizeGmailReturnPath } from "@/lib/sales/gmail/return-path";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const oauthError = searchParams.get("error");
-  const redirectBase = `${siteUrl()}/admin/sales`;
+  const redirectBase = `${siteUrl()}${sanitizeGmailReturnPath(cookies().get(GMAIL_RETURN_COOKIE)?.value)}`;
 
   if (oauthError) {
     return failRedirect(
@@ -73,6 +74,7 @@ export async function GET(request: Request) {
 
     const res = NextResponse.redirect(`${redirectBase}?gmail=connected`);
     res.cookies.set("gmail_oauth_state", "", { httpOnly: true, path: "/", maxAge: 0 });
+    res.cookies.set(GMAIL_RETURN_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
     return res;
   } catch (err) {
     const message = err instanceof Error && err.message.trim() ? err.message : "Gmail connect failed";

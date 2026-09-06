@@ -1,6 +1,7 @@
 import { listContactsForOrganization, updateContactVerification } from "../../db/contacts";
 import { isPlausibleEmail, extractDomain } from "../../dedupe";
 import { verifyEmailAddress } from "../../enrichment/verify-email";
+import { MAX_HUNTER_VERIFY_PER_RUN } from "../../enrichment/policy";
 import type { Contact, Organization } from "../../types";
 
 export type VerifyContactsStageOutput = {
@@ -12,8 +13,6 @@ export type VerifyContactsStageOutput = {
   noEmail: number;
   hunterAttempted: number;
 };
-
-const MAX_HUNTER_VERIFY_PER_RUN = 5;
 
 /** True when email domain matches the org domain or a parent/child (conference.shrm.org ↔ shrm.org). */
 export function emailDomainMatchesOrg(contactDomain: string | null, orgDomain: string | null): boolean {

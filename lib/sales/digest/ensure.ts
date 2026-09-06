@@ -6,16 +6,18 @@ import { assembleQueueItemDetail } from "../db/assemble";
 import { runPipelineBatch, type PipelineBatchSummary } from "../pipeline/run-pipeline-batch";
 import { runPipelineForOrganization } from "../pipeline/run-pipeline";
 import { DEEPEN_MAX_SCORE, DEEPEN_MIN_SCORE } from "../pipeline/stages/deepenResearch";
-import {
-  getDigestAlreadySentWindowMs,
-  getDigestMinScore,
-  getDigestTargetCount,
-  getDigestTopupTimeBudgetMs,
-} from "./config";
+import { getDigestAlreadySentWindowMs, getDigestTopupTimeBudgetMs } from "./config";
+import { resolveDigestSettings } from "./settings";
 import { loadQualifyingDigestItems, sendDailyDigest, type DigestSendResult } from "./send";
 
 export type DigestEnsureResult = {
-  status: "succeeded" | "deferred" | "already_sent" | "skipped_no_provider" | "failed";
+  status:
+    | "succeeded"
+    | "deferred"
+    | "already_sent"
+    | "skipped_no_provider"
+    | "skipped_disabled"
+    | "failed";
   qualifyingCount: number;
   targetCount: number;
   minScore: number;
@@ -75,10 +77,26 @@ async function listNearMissOrganizationIds(limit: number): Promise<string[]> {
  * do NOT advance the "new since" cutoff.
  */
 export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): Promise<DigestEnsureResult> {
-  const minScore = getDigestMinScore();
-  const targetCount = getDigestTargetCount();
+  const digestSettings = await resolveDigestSettings();
+  const minScore = digestSettings.minScore;
+  const targetCount = digestSettings.targetCount;
   const alreadySentWindowMs = getDigestAlreadySentWindowMs();
   const topupBudgetMs = getDigestTopupTimeBudgetMs();
+
+  if (!digestSettings.enabled) {
+    return {
+      status: "skipped_disabled",
+      qualifyingCount: 0,
+      targetCount,
+      minScore,
+      topupBatches: 0,
+      discoveryRuns: 0,
+      nearMissReprocesses: 0,
+      awaitingContactReprocesses: 0,
+      pipelineSummaries: [],
+      error: "Daily digest is turned off in Settings.",
+    };
+  }
 
   const lastSucceeded = await getLastSucceededDigestRun();
   if (

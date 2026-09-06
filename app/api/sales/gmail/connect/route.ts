@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { buildConnectUrl, gmailConfigured, signOAuthState } from "@/lib/sales/gmail/oauth";
+import { GMAIL_RETURN_COOKIE, sanitizeGmailReturnPath } from "@/lib/sales/gmail/return-path";
 
 export const dynamic = "force-dynamic";
 
 /** Starts the Google OAuth flow; redirects the browser to Google's consent screen. */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     if (!gmailConfigured()) {
       return NextResponse.json(
@@ -21,6 +22,14 @@ export async function GET() {
     const url = buildConnectUrl(state);
     const res = NextResponse.redirect(url);
     res.cookies.set("gmail_oauth_state", state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 1800,
+    });
+    const returnPath = sanitizeGmailReturnPath(new URL(request.url).searchParams.get("returnTo"));
+    res.cookies.set(GMAIL_RETURN_COOKIE, returnPath, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
