@@ -39,6 +39,20 @@ export type WorkspaceSettingsRead = {
 
 let cache: { value: WorkspaceSettingsRead; expiresAt: number } | null = null;
 
+/**
+ * Nothing saved yet is the normal first-run state, not a failure. Supabase reports it
+ * inconsistently (404 status, "Object not found", or an empty error body), so anything
+ * without a real message is treated as "no settings written yet".
+ */
+function storageReadError(error: unknown): string | null {
+  const err = (error ?? {}) as { message?: string; status?: number; statusCode?: string | number };
+  const status = Number(err.status ?? err.statusCode);
+  if (status === 404 || status === 400) return null;
+  const message = typeof err.message === "string" ? err.message.trim() : "";
+  if (!message || message === "{}") return null;
+  return /not found|does not exist/i.test(message) ? null : message;
+}
+
 function coerceNumber(raw: unknown, min: number, max: number): number | null {
   if (raw === null || raw === undefined || raw === "") return null;
   const parsed = Number(raw);
@@ -90,10 +104,7 @@ export async function readWorkspaceSettings(): Promise<WorkspaceSettingsRead> {
   try {
     const { data, error } = await supabaseAdmin.storage.from(BUCKET).download(OBJECT_PATH);
     if (error) {
-      // A missing object is the normal first-run state, not a failure.
-      const message = error.message ?? "";
-      const missing = /not found|does not exist|404/i.test(message);
-      result = { ...result, error: missing ? null : message };
+      result = { ...result, error: storageReadError(error) };
     } else if (data) {
       const parsed = JSON.parse(await data.text());
       result = { settings: normalizeWorkspaceSettings(parsed), persisted: true, error: null };
