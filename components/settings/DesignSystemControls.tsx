@@ -55,16 +55,13 @@ export default function DesignSystemControls() {
   }
 
   return (
-    <section
-      id="design-system"
-      className="scroll-mt-8 space-y-6 rounded-xl border border-white/10 bg-transparent p-5"
-    >
+    <section className="space-y-6 rounded-xl border border-white/10 bg-transparent p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="csc-eyebrow">Master chrome</p>
-          <h2 className="mt-2 text-base font-semibold text-white">Design system</h2>
+          <h2 className="mt-2 text-base font-semibold text-white">Tokens</h2>
           <p className="mt-2 max-w-2xl text-sm text-gray-400">
-            These tokens drive list rows, links, circular controls, and the accent across admin. New pages should use{" "}
+            These drive list rows, links, circular controls, and the accent across admin. New pages should use{" "}
             <code className="text-[11px] text-gray-300">.csc-list</code>,{" "}
             <code className="text-[11px] text-gray-300">.csc-list-row</code>,{" "}
             <code className="text-[11px] text-gray-300">.csc-link</code>, and{" "}

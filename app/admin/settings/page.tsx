@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import DesignSystemControls from "@/components/settings/DesignSystemControls";
 
 type SettingsCard = {
   title: string;
@@ -21,14 +20,14 @@ const settingsGroups: { heading: string; blurb: string; cards: SettingsCard[] }[
         domain: "Identity",
         title: "Profile",
         description: "Display name, contact email, and how you appear on outreach and facilitation tools.",
-        href: "/admin/settings#profile",
+        href: "/admin/settings",
         status: "Coming next",
       },
       {
         domain: "Security",
         title: "Sign-in & access",
         description: "Password / magic-link preferences and session controls for admin access.",
-        href: "/admin/settings#access",
+        href: "/admin/settings",
         status: "Coming next",
       },
     ],
@@ -110,21 +109,21 @@ const settingsGroups: { heading: string; blurb: string; cards: SettingsCard[] }[
         title: "Design system",
         description:
           "Master CSS chrome: lime accent, transparent flush rows, hover outlines, circular buttons, and link color.",
-        href: "/admin/settings#design-system",
+        href: "/admin/settings/design-system",
         status: "Edit tokens",
       },
       {
         domain: "Appearance",
         title: "Admin chrome",
         description: "Sidebar open/closed state is saved in this browser. Shell background follows Design system.",
-        href: "/admin/settings#appearance",
+        href: "/admin/settings/design-system",
         status: "Active",
       },
       {
         domain: "Safety",
         title: "Danger zone",
         description: "Rare destructive actions (wipe submissions, disconnect integrations) stay confirm-gated.",
-        href: "/admin/settings#danger",
+        href: "/admin/settings",
         status: "Policy",
       },
     ],
@@ -177,8 +176,6 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <DesignSystemControls />
-
       {settingsGroups.map((group) => (
         <Section key={group.heading} heading={group.heading} blurb={group.blurb}>
           {group.cards.map((card) => (
@@ -186,41 +183,6 @@ export default function SettingsPage() {
           ))}
         </Section>
       ))}
-
-      <section id="profile" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
-        <h2 className="text-base font-semibold text-white">Profile</h2>
-        <p className="mt-2 text-sm text-gray-400">
-          Account profile editing lands next. For now, Sales outreach identity comes from the connected Gmail account,
-          and facilitator presence is per Bloom / Live session.
-        </p>
-      </section>
-
-      <section id="access" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
-        <h2 className="text-base font-semibold text-white">Sign-in & access</h2>
-        <p className="mt-2 text-sm text-gray-400">
-          Admin auth stays on the existing gate. Multi-user roles and invite flows can live here when the workspace grows
-          beyond a single operator.
-        </p>
-      </section>
-
-      <section id="appearance" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
-        <h2 className="text-base font-semibold text-white">Appearance</h2>
-        <p className="mt-2 text-sm text-gray-400">
-          Shell background, accent, and list chrome are controlled in{" "}
-          <a href="#design-system" className="csc-link">
-            Design system
-          </a>
-          . Sidebar collapse preference is saved in this browser.
-        </p>
-      </section>
-
-      <section id="danger" className="scroll-mt-8 rounded-xl border border-red-900/40 bg-transparent p-5">
-        <h2 className="text-base font-semibold text-red-200">Danger zone</h2>
-        <p className="mt-2 text-sm text-gray-400">
-          Destructive actions (event submission wipes, garden deletes, Gmail disconnect) remain confirm-gated on their
-          own pages so Settings never becomes a shortcut to irreversible ops.
-        </p>
-      </section>
     </div>
   );
 }
