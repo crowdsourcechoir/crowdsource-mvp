@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import vercelConfig from "@/vercel.json";
 import { resolveDigestSettings } from "@/lib/sales/digest/settings";
+import { chooseDigestTransport } from "@/lib/sales/digest/transport";
+import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { writeWorkspaceSettings } from "@/lib/settings/store";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +14,21 @@ function digestCronSchedules(): string[] {
 
 async function payload() {
   const settings = await resolveDigestSettings();
+  const gmail = await getGmailConnectionStatus().catch(() => ({ connected: false, email: null }));
+  const transport = chooseDigestTransport({
+    resendApiKey: process.env.RESEND_API_KEY,
+    resendFrom: settings.fromEmail,
+    configuredTo: settings.recipient,
+    gmailConnected: gmail.connected,
+    gmailEmail: gmail.email,
+  });
   return {
     ...settings,
+    providerConfigured: transport.transport !== "none",
+    transport: transport.transport,
+    transportReason: transport.reason ?? null,
+    effectiveRecipient: transport.to,
+    gmailEmail: gmail.email,
     resendConfigured: Boolean(process.env.RESEND_API_KEY),
     cronSchedules: digestCronSchedules(),
   };

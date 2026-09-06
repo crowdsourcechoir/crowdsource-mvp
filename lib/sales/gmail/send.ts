@@ -78,6 +78,46 @@ export async function sendGmailMessage(input: {
   return { messageId, threadId };
 }
 
+/**
+ * Mail the operator sends to their own connected mailbox (the morning digest).
+ *
+ * The Resume-sending pause exists to stop prospect outreach, so it does not gate this path;
+ * the recipient is forced to the connected account, so nothing can reach a prospect here.
+ * SALES_GMAIL_SENDS_ENABLED=false still kills every Gmail API send.
+ */
+export async function sendSelfEmailViaGmail(input: {
+  subject: string;
+  text: string;
+  html: string;
+}): Promise<GmailSendResult & { to: string }> {
+  if (process.env.SALES_GMAIL_SENDS_ENABLED?.trim() === "false") {
+    throw new Error("Gmail sends are disabled by SALES_GMAIL_SENDS_ENABLED=false.");
+  }
+
+  const bundle = await getGmailClient();
+  if (!bundle) {
+    throw new Error("Gmail is not connected. Connect Gmail on the Sales overview page first.");
+  }
+
+  const raw = encodeRawMessage(
+    buildGmailMime({
+      from: bundle.email,
+      to: bundle.email,
+      subject: input.subject,
+      body: input.text,
+      htmlBody: input.html,
+    })
+  );
+
+  const res = await bundle.gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+  const messageId = res.data.id;
+  const threadId = res.data.threadId;
+  if (!messageId || !threadId) {
+    throw new Error("Gmail send succeeded but returned no message/thread id.");
+  }
+  return { messageId, threadId, to: bundle.email };
+}
+
 /** Best-effort RFC Message-ID header from a sent message — used for In-Reply-To on nudges. */
 export async function getGmailRfcMessageId(gmailMessageId: string): Promise<string | null> {
   const bundle = await getGmailClient();
