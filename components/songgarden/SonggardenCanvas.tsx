@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import DraggableAudioClip, { dragClipsToDesktop } from "./DraggableAudioClip";
 import ClipDetailPanel from "./ClipDetailPanel";
 import { useSonggardenPoll } from "./useSonggardenPoll";
@@ -40,6 +40,8 @@ type Props = {
   /** Garden id or slug — opens garden composition without leaving Composer. */
   gardenId?: string;
   initialScope?: ComposerScope;
+  /** Compact library switcher (Master / gardens / blooms). Replaces scope pills. */
+  libraryPicker?: ReactNode;
 };
 
 function pillClass(active: boolean): string {
@@ -58,6 +60,7 @@ export default function SonggardenCanvas({
   eventSlug = "",
   gardenId = "",
   initialScope,
+  libraryPicker,
 }: Props) {
   const gardenOnly = Boolean(gardenId) && !eventId;
   const masterOnly = !eventId && !gardenId;
@@ -477,45 +480,54 @@ export default function SonggardenCanvas({
         <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
         <div className="flex max-w-3xl flex-1 flex-col items-stretch gap-2 sm:max-w-none sm:items-end">
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {!masterOnly && !gardenOnly ? (
+            {libraryPicker ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setScope("bloom")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "bloom")}`}
-                >
-                  This bloom
-                </button>
-                <button
-                  type="button"
-                  disabled={!garden}
-                  title={garden ? garden.title : "Attach this bloom to a Song Garden to enable"}
-                  onClick={() => {
-                    if (garden) setScope("garden");
-                  }}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${pillClass(scope === "garden")}`}
-                >
-                  Song Garden
-                </button>
+                {libraryPicker}
+                <span className="mx-0.5 hidden h-4 w-px bg-white/15 sm:block" aria-hidden />
               </>
-            ) : null}
-            {gardenOnly ? (
-              <button
-                type="button"
-                onClick={() => setScope("garden")}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "garden")}`}
-              >
-                This garden
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setScope("master")}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "master")}`}
-            >
-              Master
-            </button>
-            <span className="mx-0.5 hidden h-4 w-px bg-white/15 sm:block" aria-hidden />
+            ) : (
+              <>
+                {!masterOnly && !gardenOnly ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setScope("bloom")}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "bloom")}`}
+                    >
+                      This bloom
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!garden}
+                      title={garden ? garden.title : "Attach this bloom to a Song Garden to enable"}
+                      onClick={() => {
+                        if (garden) setScope("garden");
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${pillClass(scope === "garden")}`}
+                    >
+                      Song Garden
+                    </button>
+                  </>
+                ) : null}
+                {gardenOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => setScope("garden")}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "garden")}`}
+                  >
+                    This garden
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setScope("master")}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "master")}`}
+                >
+                  Master
+                </button>
+                <span className="mx-0.5 hidden h-4 w-px bg-white/15 sm:block" aria-hidden />
+              </>
+            )}
             {(
               [
                 ["sounds", "Sounds"],
