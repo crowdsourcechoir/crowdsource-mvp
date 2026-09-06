@@ -41,6 +41,26 @@ assert.equal(
   }),
   "auto"
 );
+assert.equal(
+  classifyInbound({
+    snippet: "Your message wasn't delivered to tanner@ats.edu because the address couldn't be found.",
+  }),
+  "bounce"
+);
+assert.equal(
+  classifyInbound({
+    from: "Former staff <person@example.org>",
+    subject: "Re: Crowdsource Choir",
+    snippet: "He's no longer checking this email address.",
+  }),
+  "auto"
+);
+assert.equal(
+  classifyInbound({
+    snippet: "Dear colleague, I retired from the American Association of Community Colleges (AACC) on June 30.",
+  }),
+  "auto"
+);
 assert.deepEqual(
   failedRecipientsFromBounce({ xFailedRecipients: "bad@example.org" }),
   ["bad@example.org"]

@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import { shouldShowTodayFollowUp, todayFollowUpReason } from "../follow-up/today";
+import { replyKindFromActivity } from "../outreach/inbound-kind";
 import { latestLiveCorrespondent } from "../outreach/reply-correspondent";
 import { listContactsForOrganizations } from "./contacts";
 import type { RelationshipStage } from "../types";
@@ -83,9 +84,9 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
       const list = repliesByOpp.get(oppId) ?? [];
       list.push(reply);
       repliesByOpp.set(oppId, list);
-      const auto = metadata.replyKind === "auto";
-      if (!auto) liveReplyByOpp.add(oppId);
-      if (auto || snippetByOpp.has(oppId)) continue;
+      const kind = replyKindFromActivity({ metadata });
+      if (kind === "live") liveReplyByOpp.add(oppId);
+      if (kind !== "live" || snippetByOpp.has(oppId)) continue;
       const snippet = snippetOf(metadata);
       if (snippet) snippetByOpp.set(oppId, decodeSnippet(snippet));
     }

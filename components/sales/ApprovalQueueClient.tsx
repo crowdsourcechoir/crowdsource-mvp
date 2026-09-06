@@ -41,6 +41,7 @@ import FollowUpControls from "@/components/sales/FollowUpControls";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
+import { isExternalSentDraft } from "@/lib/sales/outreach/external-sent";
 import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales/queue/scope";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -616,6 +617,20 @@ export default function ApprovalQueueClient() {
         (d) => d.contactId === current.contact?.id && isSentDraftStatus(d.status)
       )
   );
+  const conversationThreadId =
+    (current?.contact?.id ? current.contactOutreach?.[current.contact.id]?.gmailThreadId : null) ||
+    current?.opportunity.gmailThreadId ||
+    null;
+  const conversationSnippet =
+    (current?.contact?.id ? current.contactOutreach?.[current.contact.id]?.snippet : null) ||
+    null;
+  const externalSentDraft = isExternalSentDraft(current?.draft);
+  const showSendableDraft = Boolean(
+    current?.draft &&
+      !externalSentDraft &&
+      current.queueItem.status === "pending" &&
+      !selectedAlreadySent
+  );
 
   const addOrgModal = (
     <AddOrganizationForm open={addOrgOpen} onClose={() => setAddOrgOpen(false)} onQueued={() => void load()} />
@@ -1053,6 +1068,32 @@ export default function ApprovalQueueClient() {
             )}
           </div>
 
+          {conversationThreadId ? (
+            <div className="mt-4 rounded-xl border border-sky-800/70 bg-sky-950/20 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">Gmail thread</h3>
+                  {conversationSnippet ? (
+                    <p className="mt-2 line-clamp-4 text-sm text-gray-200">{conversationSnippet}</p>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-400">
+                      {current.contact?.fullName
+                        ? `Conversation with ${current.contact.fullName}`
+                        : "Open the thread in Gmail to review and reply."}
+                    </p>
+                  )}
+                </div>
+                <GmailThreadLink
+                  threadId={conversationThreadId}
+                  accountEmail={gmailEmail}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+                >
+                  Open in Gmail
+                </GmailThreadLink>
+              </div>
+            </div>
+          ) : null}
+
           {current.opportunity.id ? (
             <div className="mt-4">
               <FollowUpControls
@@ -1074,6 +1115,7 @@ export default function ApprovalQueueClient() {
             </div>
           )}
 
+          {showSendableDraft ? (
           <div className="mt-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
@@ -1117,8 +1159,23 @@ export default function ApprovalQueueClient() {
               <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
             )}
           </div>
+          ) : conversationThreadId ? (
+            <p className="mt-4 text-sm text-gray-500">
+              Reply in Gmail on that thread — this contact was already emailed.
+            </p>
+          ) : externalSentDraft ? (
+            <p className="mt-4 text-sm text-gray-500">
+              Recorded as already emailed outside this app. No Gmail thread is stored for this contact, so there is nothing to open here.
+            </p>
+          ) : (
+          <div className="mt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
+            <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
+          </div>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
+            {showSendableDraft ? (
             <button
               type="button"
               disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
@@ -1127,6 +1184,7 @@ export default function ApprovalQueueClient() {
             >
               Send
             </button>
+            ) : null}
             {copyStatus && <span className="text-xs text-emerald-400">{copyStatus}</span>}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
               Organization

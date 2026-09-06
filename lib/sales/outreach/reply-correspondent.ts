@@ -1,4 +1,5 @@
 import { normalizeEmail } from "../dedupe";
+import { replyKindFromActivity } from "./inbound-kind";
 
 export type CorrespondentContact = {
   id: string;
@@ -88,7 +89,7 @@ export function metadataString(metadata: Record<string, unknown> | null | undefi
 }
 
 export function isLiveReplyMetadata(metadata: Record<string, unknown> | null | undefined): boolean {
-  return metadata?.replyKind !== "auto";
+  return replyKindFromActivity({ metadata }) === "live";
 }
 
 /** Who actually wrote this inbound — not whoever we originally emailed. */

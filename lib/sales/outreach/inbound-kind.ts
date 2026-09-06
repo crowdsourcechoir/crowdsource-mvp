@@ -5,13 +5,13 @@ const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const BOUNCE_FROM_RE =
   /mailer-daemon|postmaster@|mail delivery subsystem|undeliverable/i;
 const BOUNCE_SNIPPET_RE =
-  /delivery has failed|couldn['’]?t be delivered|address not found|recipient rejected|mailbox unavailable|undeliverable|delivery status notification|permanent failure|user unknown/i;
+  /delivery has failed|couldn['’]?t be delivered|wasn['’]?t delivered|address not found|recipient rejected|mailbox unavailable|undeliverable|delivery status notification|permanent failure|user unknown/i;
 const BOUNCE_SUBJECT_RE =
   /delivery status notification|undeliverable|mail delivery failed|returned mail|failure notice|delivery failure/i;
 const AUTO_SUBJECT_RE =
   /^(auto:|automatic reply|out of office|ooo\b|autoreply|auto-reply)/i;
 const AUTO_SNIPPET_RE =
-  /out of (the )?office|automatic reply|auto-?reply|on leave until|away from (the office|email)|this is an automated|parental leave|no longer (work|with)|last day with|i have retired|i am currently away/i;
+  /out of (the )?office|automatic reply|auto-?reply|on leave until|away from (the office|email)|this is an automated|parental leave|no longer (work|with|checking)|last day with|i have retired|i retired from|retired from (my|the)|i am currently away|taking (some )?vacation|out on the road/i;
 
 export type InboundKind = "live" | "auto" | "bounce";
 

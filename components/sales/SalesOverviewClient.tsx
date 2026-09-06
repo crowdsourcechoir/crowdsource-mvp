@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { SalesDashboardBuckets } from "@/lib/sales/db/dashboard";
 import type { SalesTodayTask } from "@/lib/sales/db/follow-ups";
-import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 
@@ -19,15 +18,12 @@ function funnelHint(buckets: SalesDashboardBuckets | null): string {
   return parts.length > 0 ? parts.join(" · ") : "Awareness → Interest → Won";
 }
 
-function taskHref(task: SalesTodayTask): string {
+function queueHref(task: SalesTodayTask): string {
+  if (task.queueItemId) return `/admin/sales/queue?scope=due&item=${encodeURIComponent(task.queueItemId)}`;
   return `/admin/sales/opportunities/${task.opportunityId}`;
 }
 
-function reasonLabel(reason: SalesTodayTask["reason"]): { text: string; className: string } {
-  if (reason === "overdue") return { text: "Overdue", className: "text-red-400" };
-  if (reason === "replied") return { text: "Wrote back", className: "text-[#CFFF81]" };
-  return { text: "Follow up", className: "text-amber-300" };
-}
+const PREVIEW = 4;
 
 export default function SalesOverviewClient() {
   const [buckets, setBuckets] = useState<SalesDashboardBuckets | null>(null);
@@ -49,67 +45,71 @@ export default function SalesOverviewClient() {
 
   const wins = buckets?.wins ?? [];
   const today = buckets?.today;
-  const tasks = today?.tasks.slice(0, 12) ?? [];
+  const tasks = today?.tasks.slice(0, PREVIEW) ?? [];
+  const extra = Math.max(0, (today?.dueCount ?? 0) - tasks.length);
 
   return (
     <div className="mb-6">
       {error ? <p className="mb-3 text-sm text-red-400">{error}</p> : null}
 
-      <section className="mb-6 rounded-xl border border-amber-900/50 bg-amber-950/10 p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
+      <section className="mb-4 rounded-xl border border-amber-900/50 bg-amber-950/10 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300/90">Today</p>
-            <h2 className="mt-1 text-lg font-semibold text-white">Follow-ups after they wrote back</h2>
-            <p className="mt-1 text-xs text-gray-500">
-              Only people who replied. Cold emails with no reply stay out of this list.
-            </p>
+            {buckets && today ? (
+              today.dueCount === 0 ? (
+                <p className="mt-1 text-sm text-gray-400">No live replies waiting.</p>
+              ) : (
+                <p className="mt-1 text-sm text-gray-300">
+                  <span className="font-semibold text-white">{today.dueCount}</span> wrote back
+                  {today.overdueCount ? ` · ${today.overdueCount} overdue` : ""}
+                  <span className="text-gray-500"> — open the Gmail thread to reply</span>
+                </p>
+              )
+            ) : (
+              <p className="mt-1 text-sm text-gray-500">Loading…</p>
+            )}
           </div>
-          <Link href="/admin/sales/queue?scope=due" className="text-sm text-amber-200/90 hover:underline">
-            Open follow-ups in queue →
+          <Link href="/admin/sales/queue?scope=due" className="shrink-0 text-sm text-amber-200/90 hover:underline">
+            Follow-ups in queue →
           </Link>
         </div>
-        {buckets && today ? (
-          today.dueCount === 0 ? (
-            <p className="mt-4 text-sm text-gray-400">Nobody who wrote back is due today.</p>
-          ) : (
-            <>
-              <p className="mt-3 text-sm text-gray-400">
-                <span className="font-semibold text-white">{today.dueCount}</span> to follow up
-                {today.overdueCount ? ` · ${today.overdueCount} overdue` : ""}
-              </p>
-              <ul className="mt-3 divide-y divide-gray-800">
-                {tasks.map((task) => {
-                  const reason = reasonLabel(task.reason);
-                  return (
-                    <li key={task.opportunityId} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <Link href={taskHref(task)} className="truncate font-medium text-white hover:underline">
-                          {task.organizationName}
-                        </Link>
-                        <p className="truncate text-xs text-gray-500">
-                          <span className={reason.className}>{reason.text}</span>
-                          {task.contactName ? ` · ${task.contactName}` : ""}
-                          {task.nextFollowUpAt ? ` · ${formatFollowUpDay(task.nextFollowUpAt)}` : " · set a date"}
-                          {task.snippet ? ` · ${task.snippet}` : ""}
-                        </p>
-                      </div>
-                      {task.gmailThreadId ? (
-                        <GmailThreadLink
-                          threadId={task.gmailThreadId}
-                          className="shrink-0 text-xs text-sky-400 hover:underline"
-                        >
-                          Thread
-                        </GmailThreadLink>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )
-        ) : (
-          <p className="mt-4 text-sm text-gray-500">Loading today’s tasks…</p>
-        )}
+        {tasks.length > 0 ? (
+          <ul className="mt-2 divide-y divide-gray-800/80">
+            {tasks.map((task) => (
+              <li key={task.opportunityId} className="flex items-center justify-between gap-3 py-1.5">
+                <Link href={queueHref(task)} className="min-w-0 truncate text-sm text-white hover:underline">
+                  {task.organizationName}
+                  {task.contactName ? (
+                    <span className="text-gray-500"> · {task.contactName}</span>
+                  ) : null}
+                </Link>
+                {task.gmailThreadId ? (
+                  <GmailThreadLink
+                    threadId={task.gmailThreadId}
+                    className="shrink-0 rounded-md bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500"
+                  >
+                    Open Gmail
+                  </GmailThreadLink>
+                ) : (
+                  <Link
+                    href={queueHref(task)}
+                    className="shrink-0 text-xs text-gray-500 hover:underline"
+                  >
+                    Open
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {extra > 0 ? (
+          <p className="mt-2 text-xs text-gray-500">
+            <Link href="/admin/sales/queue?scope=due" className="text-amber-200/80 hover:underline">
+              +{extra} more in queue
+            </Link>
+          </p>
+        ) : null}
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
