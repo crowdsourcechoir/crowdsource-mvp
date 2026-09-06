@@ -145,3 +145,12 @@ Use one persistent thread or agent per major living-system domain:
 
 Implementation agents can be short-lived and task-specific, but this document
 should remain the source of truth for workspace language.
+
+### Agent briefs
+
+Each domain agent has a handoff brief in `docs/agent-briefs/`. The brief holds
+that domain's scope and boundaries, code map, honest state of play, gotchas, and
+open threads — so a chat can be archived and a fresh agent can take the domain
+over without losing context.
+
+Start here: `docs/agent-briefs/README.md`.

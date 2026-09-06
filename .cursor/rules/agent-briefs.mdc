@@ -1,0 +1,57 @@
+---
+description: Every living-system domain has a handoff brief — read it first, update it before the chat is archived
+alwaysApply: true
+---
+
+# Agent briefs (mandatory)
+
+Joel runs one long-lived chat per living-system domain and archives it when it gets too long.
+The domain's brief in `docs/agent-briefs/` is what survives that archive. It is the only
+memory a replacement agent gets.
+
+## At the start of a chat
+
+1. Work out which domain this chat belongs to.
+2. Read `docs/agent-briefs/<domain>.md` — especially **Scope**, **Rules and gotchas**, and
+   **Open threads**.
+3. Read `docs/octo-living-system-workspace.md` for the shared vocabulary.
+
+| Domain | Brief | Admin home |
+|--------|-------|------------|
+| OCTO — coherence, architecture, shared infra | `docs/agent-briefs/octo.md` | `/admin/settings` |
+| GARDEN — persistent participatory worlds | `docs/agent-briefs/garden.md` | `/admin/gardens` |
+| BLOOM — live events and activations | `docs/agent-briefs/bloom.md` | `/admin/events` |
+| ROOTS — hidden participation system | `docs/agent-briefs/roots.md` | `/admin/roots` |
+| LIVE — runtime tools for active Blooms | `docs/agent-briefs/live.md` | `/admin/live` |
+| COMPOSER — participation into music | `docs/agent-briefs/composer.md` | `/admin/composer` |
+| SALES — commercial distribution | `docs/agent-briefs/sales.md` | `/admin/sales` |
+
+If the chat is a short one-off task, still skim the brief for the domain you are touching.
+The **Rules and gotchas** section is where the expensive mistakes are listed.
+
+## Stay in your domain
+
+When a request belongs to another domain, say which domain owns it instead of quietly
+reaching across. Each brief's **Scope → Does not own** table is the boundary. Cross-domain
+work is OCTO's.
+
+## Before the chat is archived
+
+When Joel says he is wrapping up, archiving, or starting fresh — and whenever you finish
+substantial work — update your brief:
+
+1. Move finished items from **Open threads** into **State of play → Working**.
+2. Revise **Open threads** with what you learned and what you would do next.
+3. Fix anything in the code map your own work made stale.
+4. Append one dated entry to the **Handoff log**: what changed, what you learned, what to
+   watch out for.
+5. Run `node scripts/check-agent-briefs.mjs`.
+6. Commit and push, per `.cursor/rules/always-deploy-live.mdc`.
+
+## Writing rules for briefs
+
+- Record what a competent agent would **get wrong**, not what the code already says plainly.
+- Be honest in **State of play**. Call a prototype a prototype. An overstated brief is worse
+  than no brief.
+- Cite real paths in backticks; the checker verifies they exist.
+- Never delete a **Handoff log** entry. It is append-only history.
