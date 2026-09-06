@@ -1152,7 +1152,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         {chapters.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-[#CFFF81]/35 bg-[#CFFF81]/5 px-5 py-8 text-center">
             <p className="text-sm font-medium text-white">No blooms yet</p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-400">
+            <p className="mt-2 max-w-md text-sm text-gray-400">
               Create the first bloom to give fans a journey inside this world.
             </p>
             <Link

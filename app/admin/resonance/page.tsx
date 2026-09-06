@@ -52,7 +52,7 @@ export default function ResonanceAdminPage() {
 
   return (
     <main className="text-white">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
+      <div className="flex w-full max-w-5xl flex-col gap-8">
         <section>
           <p className="text-xs uppercase tracking-[0.34em] text-white/40">
             resonance signal

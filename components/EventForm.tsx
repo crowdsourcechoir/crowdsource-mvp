@@ -1270,7 +1270,7 @@ export default function EventForm({
     "rounded-md border border-gray-700 bg-[#1a1a1a] px-2 py-0.5 text-[11px] font-medium text-gray-300 hover:bg-[#252525] disabled:opacity-40";
 
   return (
-    <form noValidate onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl space-y-3">
+    <form noValidate onSubmit={handleSubmit} className="w-full max-w-3xl space-y-3">
       {submitError && (
         <div className="rounded-lg border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
           {submitError}
