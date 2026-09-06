@@ -40,7 +40,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           router.push(manageHref);
         }
       }}
-      className="csc-list-row"
+      className="csc-list-row !flex-col !items-stretch"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -69,13 +69,13 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           </div>
         </div>
         <div
-          className="flex flex-wrap items-center gap-2 sm:shrink-0"
+          className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
           <Link
             href={manageHref}
-            className="rounded-lg bg-[#CFFF81] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#bdf25e]"
+            className="rounded-lg bg-[var(--csc-accent)] px-3 py-1.5 text-xs font-semibold text-black hover:opacity-90"
           >
             Manage
           </Link>
@@ -83,7 +83,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
             href={eventUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
+            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
             title={eventUrl}
           >
             Public Link
@@ -91,19 +91,19 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           <button
             type="button"
             onClick={() => setShowQr((v) => !v)}
-            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
+            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
           >
             {showQr ? "Hide QR" : "QR"}
           </button>
         </div>
       </div>
       {showQr ? (
-        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-3 w-fit" onClick={(e) => e.stopPropagation()}>
           <QRCodeDisplay
             key={eventUrl}
             url={eventUrl}
             size={96}
-            className="rounded border border-white/15"
+            className="rounded border border-white/15 p-2"
             downloadFilename={`${publicSlug}-qr.png`}
           />
         </div>
