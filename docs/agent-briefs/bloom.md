@@ -185,7 +185,7 @@ Known slugs: `csc-aug21` is the shortened-journey test Bloom from the architectu
 
 ## 5. State of play
 
-### Working
+### Alive now
 
 - Bloom CRUD, garden-first create, chapter attach
 - `/e/[slug]` running WorldJourney with world stage, celebrations, and haptics
@@ -194,7 +194,7 @@ Known slugs: `csc-aug21` is the shortened-journey test Bloom from the architectu
 - Zone-to-Bloom handoff from a garden map
 - List timeout mitigations: no data-URI heroes in the list select
 
-### Partial or prototype
+### Growing now
 
 - Storyboard generation is one synchronous request with `maxDuration=300`. It should be a
   background job
@@ -203,10 +203,10 @@ Known slugs: `csc-aug21` is the shortened-journey test Bloom from the architectu
 - Parts of `docs/song-garden-v2/architecture.md` still describe V1 as the public path; §7 is
   the correct account of the cutover
 
-### Not built
+### Growing into
 
-- Admin live preview of the participant world
-- Any participant identity beyond an anonymous device id and optional display name
+- Admin live preview of the participant world while configuring
+- Richer participant identity beyond an anonymous device id and optional display name
 
 ## 6. Rules and gotchas
 

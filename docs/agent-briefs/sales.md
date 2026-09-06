@@ -190,7 +190,7 @@ curl -s https://app.crowdsourcechoir.com/api/sales/enrichment/credits   # free
 
 ## 5. State of play
 
-### Working
+### Alive now
 
 - All ten pipeline stages, org and opportunity admin, approval queue, funnel
 - Hunter enrichment, verification, and domain search
@@ -201,21 +201,27 @@ curl -s https://app.crowdsourcechoir.com/api/sales/enrichment/credits   # free
 As of 2026-09-06, production reports Gmail connected as `sing@crowdsourcechoir.com` with
 sending enabled, and Hunter ready.
 
-### Paused or retired
+### Held back on purpose
 
 - **Stage 0 discovery is off.** `activeSearchProvider()` always returns `null`; the manual
-  route returns 409 and the cron skips. Tavily and Serper clients are unused. Do not re-enable
-  without an explicit product decision
+  route returns 409 and the cron skips. Tavily and Serper clients are unused. Revive only with
+  an explicit product decision
 - **Apollo is unused** even if a key is present
 - **HubSpot** exists only as an unused table; there is no HubSpot module or route at all
-- `/admin/sales/settings` is referenced in docs but not built
+- `/admin/sales/settings` is referenced in older docs but lives under OCTO Settings now
 
-### Roadmap open items
+### Growing into
 
-From `docs/sales-platform/roadmap.md`, Phase 3: batch multi-select queue actions,
-keyboard-only review, a scoring-weight UI. Phase 4, unscoped: multi-user auth, two-way
-HubSpot if ever needed, assisted org and contact merge. Also still open: the CSV upload UI
-from Phase 2, and a personal-connection line library that is curated rather than AI-invented.
+From `docs/sales-platform/roadmap.md`, and the safety threads this brief owns:
+
+- Batch multi-select queue actions and keyboard-only review (Phase 3)
+- Scoring-weight UI in Settings (OCTO catalog + this domain's weights)
+- CSV upload UI (Phase 2 leftover)
+- Personal-connection line library — curated, never AI-invented
+- Widen the send guard beyond one opportunity
+- Make Pause authoritative, or surface the env override clearly
+- Refresh stale sales docs (`README.md`, `architecture.md`, `ai-workflow.md`) so the north star
+  matches Hunter-only and discovery-off reality
 
 ### Documentation drift to know about
 
@@ -296,7 +302,7 @@ These are the ones with real-world consequences. Read them before touching the s
 | Batch queue actions and keyboard review | Phase 3; the queue is the daily surface and is click-heavy | `components/sales/ApprovalQueueClient.tsx` |
 | Scoring-weight UI | Weights are code-only; tuning needs a deploy | `lib/sales/scoring/`, plus a Settings card per the OCTO contract |
 | Refresh the stale sales docs | README says planning-only; architecture diagrams retired systems | `docs/sales-platform/README.md`, `architecture.md` |
-| Decide discovery's future | Stage 0 is hard-disabled; either revive it deliberately or delete the dead clients | `lib/sales/discovery/search/` |
+| Grow discovery deliberately or delete the dead clients | Stage 0 is hard-off on purpose; revive only with an explicit product decision | `lib/sales/discovery/search/` |
 | Delete the HubSpot leftovers | An unused table implies a feature that does not exist | `hubspot_sync_records` |
 | Personal-connection line library | Curated lines, never AI-invented, per the roadmap | `lib/sales/outreach/` |
 | Widen the send guard beyond one opportunity | Two opportunities at one org can each send an initial to the same person | `app/api/sales/queue/[itemId]/decision/route.ts` — the guard needs org-wide activity, not `listActivitiesForOpportunity` |

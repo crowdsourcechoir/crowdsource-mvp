@@ -119,32 +119,33 @@ RLS is enabled with no anon policies via `supabase/security-enable-rls-public-ta
 
 ## 5. State of play
 
-### Working
+### Alive now
 
 - **Game prompt sessions**: launch, QR, submit, reveal, vote, moderate, export — the full loop
 - Pre-populated song-shape question queues (genre, mood, tempo, energy, style, theme)
 - The display page as a join screen
 - **Resonance**: field selection, hold interaction, haptics with graceful fallbacks
 
-### Partial or prototype
+### Growing now
 
-- **Fishbowl is a label.** It uses the Game host UI unchanged, and because the Signal panel is
-  gated on the name, choosing Fishbowl also hides Signal
-- **Signal ships one harmonic round, but six presets already exist.**
-  `data/signalPromptCatalog.ts` defines rounds across harmonic, rhythm, energy, bass, FX, and
-  vocal layers with grouping helpers, and **is imported by nothing** — the host still hardcodes
-  the single harmonic block. Shipping the rest is a UI change, not new modeling. The Ableton
-  trigger ids in `data/signalPromptBlock.ts` are stubs; there is no DAW wiring and no OSC
-- **Conductor is an offline cheat sheet**, per-browser, not synced, not cueing or playback
-- **Display has no data layer at all.** `app/live/[slug]/display/page.tsx` never fetches the
-  session — it builds a join URL and renders one QR code. It is not a results board with
-  results switched off
+- **Fishbowl** — same Game host flow today; next step is its own facilitation controls (and
+  picking Fishbowl currently hides Signal, which is worth knowing)
+- **Signal** — one harmonic round ships; six layer presets already live in
+  `data/signalPromptCatalog.ts` waiting to be wired into the host UI. Ableton trigger ids are
+  named stubs until a transport is chosen (`Protocols/tech-mapping-spec.md`)
+- **Conductor** — strong facilitation guidance per Bloom; next step is shared state across
+  operator devices (today: per-browser `localStorage`)
+- **Room display** — join QR works; next step is a projection board. The ranked payload already
+  exists at `/phrase-cards`; `app/live/[slug]/display/page.tsx` just needs a session fetch and
+  a board that follows WAITING → RESPONDING → VOTING
 
-### Not built
+### Growing into
 
-- Cueing engine, playback control, projection surfaces
+- Cueing, playback, and full projection surfaces for the room
 - Moderation beyond hide and lock
-- Any realtime transport
+- Realtime transport under the poll layer (sub-second collective response)
+- Dedicated Resonance tables (today: intentionally shared with prompt-game under `resonance-live`)
+- DAW / Ableton wiring for Signal winners
 
 ## 6. Rules and gotchas
 

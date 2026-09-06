@@ -166,7 +166,7 @@ node scripts/generate-reference-tones.mjs   # regenerates public/tones/*.wav
 
 ## 5. State of play
 
-### Working
+### Alive now
 
 - Composer as the domain home; `/admin/canvas` redirects in
 - Master all-sounds library plus garden and bloom scopes, with content views for sounds,
@@ -177,17 +177,17 @@ node scripts/generate-reference-tones.mjs   # regenerates public/tones/*.wav
 - Song seed generation including Whisper fallback and Suno prompts
 - Composition brief generation, caching, and Markdown or JSON export
 
-### Partial or prototype
+### Growing now
 
 - The brief and seed pipelines are older and stable but have no evaluation loop — nothing
   checks whether output is good
 - No arrangement persistence: the canvas is for inspection and drag-out, not for saving an
   arrangement
 
-### Not built
+### Growing into
 
-- Any Suno API integration. Prompts are copy-paste
-- Chant candidate curation as a first-class artifact, despite the vocabulary naming it
+- Optional Suno API integration (today: paste-ready prompts a human owns)
+- Chant candidate curation as a first-class Composition artifact
 
 ## 6. Rules and gotchas
 

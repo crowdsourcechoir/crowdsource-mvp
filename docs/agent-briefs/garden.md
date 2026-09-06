@@ -157,7 +157,7 @@ npx tsx scripts/test-silence-trim.mjs
 
 ## 5. State of play
 
-### Working
+### Alive now
 
 - Garden CRUD, garden-first Bloom create, chapter linking
 - Contribution to mutation pipeline covering clips, interview turns, and pulses
@@ -168,7 +168,7 @@ npx tsx scripts/test-silence-trim.mjs
 - Clip pipeline with Storage uploads, silence trim, and originals kept for restore
 - Memory finalize and list
 
-### Partial or prototype
+### Growing now
 
 - **Commerce is stubs.** `createStubOrder` writes `status: "stub"`. Printful and Shopify are
   deliberately deferred per the spec
@@ -176,10 +176,10 @@ npx tsx scripts/test-silence-trim.mjs
 - No websockets anywhere; `/g` and presence poll at roughly 25 seconds
 - `aiArtworkPrompt` in `world-config.ts` is reserved and unused
 
-### Not built
+### Growing into
 
-- Real fulfillment for editions
-- Any garden-level auth or per-garden visibility control
+- Real fulfillment for editions (orders freeze the print contract today as stubs)
+- Per-garden auth and visibility controls
 
 ## 6. Rules and gotchas
 

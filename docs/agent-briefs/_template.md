@@ -71,11 +71,11 @@ Before this chat is archived, update your brief per docs/agent-briefs/README.md.
 
 ## 5. State of play
 
-### Working
+### Alive now
 
-### Partial or prototype
+### Growing now
 
-### Not built
+### Growing into
 
 ## 6. Rules and gotchas
 

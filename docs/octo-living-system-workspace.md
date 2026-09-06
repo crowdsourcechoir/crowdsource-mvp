@@ -135,7 +135,8 @@ Every media contribution should eventually carry consent and usage metadata:
 
 Use one persistent thread or agent per major living-system domain:
 
-- OCTO Core Agent: coherence, philosophy, architecture
+- OCTO Core Agent: system coherence — vocabulary, architecture, shared chrome, and
+  cross-system verification after changes
 - Garden Agent: public Song Garden product, worlds, contributions, persistence
 - Roots Agent: participation methodology and musical intelligence
 - Bloom Agent: event/gameday activation design
@@ -143,14 +144,17 @@ Use one persistent thread or agent per major living-system domain:
 - Composer Agent: musical formation — inputs into compositions, songs, and show material
 - Sales Agent: offers, partnerships, sponsors, pitches
 
+Domain agents deepen their piece. OCTO makes sure the whole still holds — run the System
+coherence pass in `docs/agent-briefs/octo.md` after meaningful changes.
+
 Implementation agents can be short-lived and task-specific, but this document
 should remain the source of truth for workspace language.
 
 ### Agent briefs
 
 Each domain agent has a handoff brief in `docs/agent-briefs/`. The brief holds
-that domain's scope and boundaries, code map, honest state of play, gotchas, and
-open threads — so a chat can be archived and a fresh agent can take the domain
-over without losing context.
+that domain's scope and boundaries, code map, north star and maturity (Alive /
+Growing / Growing into), gotchas, and open threads — so a chat can be archived
+and a fresh agent can take the domain over without losing context.
 
 Start here: `docs/agent-briefs/README.md`.

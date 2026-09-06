@@ -1,41 +1,42 @@
-# ROOTS Agent — hidden participation system
+# ROOTS Agent — the Root System
 
 | | |
 |---|---|
 | **Admin home** | `/admin/roots` |
 | **Public surface** | none directly; Roots shapes what Bloom and Live present |
 | **Code prefixes** | `Protocols/`, `lib/experience`, `lib/participant-journey`, `lib/agent-llm.ts`, `app/admin/conductor` |
-| **Primary tables** | `agent_themes`; otherwise Roots is encoded as code catalogs, not rows |
+| **Primary tables** | `agent_themes`; otherwise Roots lives as catalogs and protocols |
 | **Reference docs** | every file in `Protocols/`, plus the Roots section of `docs/octo-living-system-workspace.md` |
 
 ## 1. Mission
 
-Roots is the methodology under the product: how you invite people in, how much risk you ask
-them to take, how you recognize what they gave, and how that ladders into deeper
-participation. It is Joel's facilitation instinct and musical taste turned into something
-reusable.
+Roots is the living methodology under Crowdsource Choir: how people are invited in, how much
+risk they are asked to take, how what they give is recognized, and how that ladders into
+belonging and deeper participation. It is Joel's facilitation instinct and musical taste
+made reusable — so every Bloom and every Live moment can draw from the same Root System.
 
 The core loop:
 
 ```text
-Invitation -> Risk -> Contribution -> Recognition -> Response
-  -> Collective effect -> Belonging -> Deeper participation
+Invitation → Risk → Contribution → Recognition → Response
+  → Collective effect → Belonging → Deeper participation
 ```
 
-This agent owns the written protocols and the places where that methodology is actually
-encoded in code. It is the domain most likely to be *thinking* work rather than shipping work.
+This agent tends that loop in writing (`Protocols/`) and in code (`lib/experience`, journey
+design, conductor). Where the methodology is ahead of the product, Roots keeps the north star
+clear and names what Bloom and Live should grow into next.
 
 ## 2. Scope
 
 ### Owns
 
-- All of `Protocols/` — the written methodology
-- The experience plan and show arc catalog: `lib/experience/**`
+- All of `Protocols/` — the written Root System
+- The experience plan and show-arc catalog: `lib/experience/**`
 - The conductor's advisory model: `app/admin/conductor/**`
-- Participation-shaping logic: risk laddering in journey step design, consent defaults,
-  question design, escalation and recovery
+- Participation-shaping logic: risk laddering in journey steps, consent defaults, question
+  design, escalation and recovery
 - The interview brief model conceptually — what a good `AgentBrief` contains
-- `/admin/roots`
+- `/admin/roots` as the Roots home, growing toward a full methodology workspace
 
 ### Does not own
 
@@ -44,27 +45,29 @@ encoded in code. It is the domain most likely to be *thinking* work rather than 
 | BLOOM | The journey *machinery* — `EventForm`, `WorldJourney`, step rendering |
 | LIVE | The runtime tools that execute a moment in the room |
 | COMPOSER | What happens to contributions after they are collected |
-| OCTO | Chrome and Settings |
+| OCTO | Chrome, Settings, and cross-system verification after changes |
 
-The clean split: ROOTS decides what a good participation moment is; BLOOM and LIVE build the
-surfaces that deliver it.
+The clean split: Roots decides what a good participation moment *is*; Bloom and Live build
+the surfaces that deliver it; OCTO verifies the whole still coheres afterward.
 
 ## 3. Start a new ROOTS agent
 
 ```text
-You are the ROOTS agent for Crowdsource Choir. You own the hidden participation system:
-invitation design, risk calibration, recognition, escalation and recovery, the show arc,
-and the protocols that encode Joel's facilitation methodology.
+You are the ROOTS agent for Crowdsource Choir. You own the Root System — invitation design,
+risk calibration, recognition, escalation and recovery, the show arc, and the protocols that
+encode Joel's facilitation methodology.
 
 Read these first:
 - docs/agent-briefs/roots.md — your brief, including open threads
-- every file in Protocols/ — the written methodology
+- every file in Protocols/ — the written methodology (this is the north star)
 - lib/experience/arc-catalog.ts — the methodology as executable data
 - docs/octo-living-system-workspace.md — living-system vocabulary
 
-Your work is often thinking and writing, not shipping. When methodology needs a surface,
-name the domain that should build it (BLOOM for participant journeys, LIVE for runtime
-tools) rather than building it here.
+Hold the aspiration and the current maturity at once. Protocols/ describe the Root System we
+are growing into; lib/experience and the pre-show journey are what already embody it. When
+methodology needs a new surface, name the domain that should build it (BLOOM for participant
+journeys, LIVE for runtime tools) rather than building it here — then let OCTO verify the
+seam.
 
 Before this chat is archived, update your brief per docs/agent-briefs/README.md.
 ```
@@ -130,64 +133,88 @@ It is explicitly advisory. It does not gate Live tools.
 
 ## 5. State of play
 
-Roots is the domain where written methodology and shipped code diverge most, so this section
-is the honest comparison.
+The Root System is real in methodology and growing in product. Hold both truths.
 
-| Roots claim | Written? | Implemented? |
-|---|---|---|
-| Seven-stage show arc and ceremony variant | `Protocols/show-arc.md` | Yes, as `arc-catalog.ts` plus the Conductor UI |
-| Participation taxonomy and recovery hierarchy | `Protocols/participation-taxonomy.md` | Modes and recovery text are in the catalog; **not enforced at runtime** |
-| Modular song A/B, locked tempo, Ableton scenes | Three Protocol files | **Not in product code.** No Ableton bridge, no song-module validator |
-| Invitation, risk, contribution — digital | The OCTO loop | **Strong.** Journey, consent, media channels, prompt design |
-| Recognition, response, collective effect | Protocols and the loop | Partial: song seeds, composition briefs, prompt-game voting, resonance |
-| Belonging and deeper participation | OCTO Roots section | Conceptual. Garden persistence exists; no Roots engine |
-| Sample to anthem, chant, warm-up | Protocols and Composer | Composition brief has chantable-line heuristics; warm-up logic is not a module |
-| Facilitator decision patterns | Protocol recovery sections | Advisory conductor cues only |
-| Signal thresholds | Protocols and the Roots page | Resonance field and Live signal exist; `signalAllowed` is advisory |
-| A Roots workspace at `/admin/roots` | The OCTO map | **Placeholder.** One static page of links |
+### Alive now
 
-The short version: the live Root System — enforced modes, A/B lock-in, tech mapping, automated
-escalation — is written down but not executable. Operators get guidance, not a closed loop.
-What *is* shipping is the pre-show participation stack: journey, interview, consent,
-composition.
+- Seven-stage show arc and ceremony variant — `Protocols/show-arc.md` embodied in
+  `lib/experience/arc-catalog.ts` and the Conductor UI
+- Pre-show participation stack — journey, consent, media channels, prompt design
+- Interview brief model and seeded themes (`birthday`, `conference`, `fundraiser`)
+- Advisory conductor with stage purpose, emotional target, recovery moves, pacing budget
+- Participation taxonomy written and mirrored as `ParticipationModeId` in code
+
+### Growing now
+
+- Recognition and collective effect — song seeds, composition briefs, prompt-game voting,
+  and resonance are early forms of the loop's later stages
+- `/admin/roots` as a true methodology workspace (today: a focused hub linking Conductor,
+  Composition brief, Resonance, and Live)
+- Runtime enforcement of the participation taxonomy (today: modes and recovery live in the
+  catalog as guidance for operators)
+- Shared conductor state across devices (today: per-browser `localStorage`)
+
+### Growing into
+
+- Full Stage 4 modular song — A/B lock-in, locked tempo, Ableton scene mapping, as specified
+  in the three Stage 4 protocol files
+- Automated escalation and recovery that closes the live loop, not only advises it
+- Belonging and deeper-participation mechanics beyond Garden persistence
+- Warm-up / chant / sample-to-anthem as first-class Roots modules feeding Composer
+- Signal thresholds that actively shape Live, not only annotate it
+
+Protocols/ are the destination. The pre-show stack and the arc catalog are the path already
+underfoot.
 
 ## 6. Rules and gotchas
 
-1. **`/admin/roots` is a hub, not a workspace.** `app/admin/roots/page.tsx` is a single static
-   page linking to Conductor, Composition brief, Resonance, and Live. Do not assume it has
-   CRUD or an editor.
-2. **The conductor is advisory and says so.** It does not gate Live. Do not describe it as
-   show control.
-3. **Conductor state is per-browser `localStorage`.** Open it on a second laptop and you lose
-   your place. It is not a shared operator surface.
-4. **Scripted brief prompts beat the theme LLM.** For a normal interview the `askAboutItems`
+1. **Treat `Protocols/` as the north star.** When product and protocol disagree, name the gap
+   and grow toward the protocol — do not quietly shrink the protocol to match the current UI.
+2. **`/admin/roots` is the Roots home, still growing.** `app/admin/roots/page.tsx` is a hub of
+   links today; the open thread is to make it an editable methodology workspace. Do not assume
+   CRUD exists yet.
+3. **The conductor advises; Live executes.** Conductor does not gate Live tools. Describe it as
+   facilitation guidance, not show control.
+4. **Conductor state is per-browser `localStorage`.** A second laptop will not share your place.
+   Multi-operator shows need the shared-state thread in section 7.
+5. **Scripted brief prompts beat the theme LLM.** For a normal interview the `askAboutItems`
    are returned verbatim. Changing a theme's system prompt usually changes nothing.
-5. **A managed journey skips the LLM entirely.** Most real Blooms are managed.
-6. **The emotional arc merges into S1, S4, and S7 only** — see `resolve-plan.ts`. It is not
-   applied across all seven stages.
-7. **Consent defaults on.** The gate applies unless `requireContributionConsent` is explicitly
+6. **A managed journey skips the LLM entirely.** Most real Blooms are managed.
+7. **The emotional arc merges into S1, S4, and S7 only** — see `resolve-plan.ts`. Extending it
+   across all seven stages is a Roots growth opportunity.
+8. **Consent defaults on.** The gate applies unless `requireContributionConsent` is explicitly
    `false`.
-8. **The interview version hash invalidates saved progress** when the brief or journey changes.
-9. **`ParticipationModeId` deliberately omits Tier 3.** Pre-show free text is handled by the
-   interview and journey instead of by a live mode.
-10. **Two different things are called a brief.** The event-configuration `AgentBrief` shapes an
+9. **The interview version hash invalidates saved progress** when the brief or journey changes.
+10. **`ParticipationModeId` deliberately omits Tier 3.** Pre-show free text is handled by the
+    interview and journey — that is intentional design, not a missing enum value.
+11. **Two different things are called a brief.** The event-configuration `AgentBrief` shapes an
     interview. These domain handoff briefs are documentation. Say which one you mean.
 
 ## 7. Open threads
 
 | Thread | Why it matters | Where to start |
 |---|---|---|
-| Make `/admin/roots` a real workspace | The methodology has no editing surface; Protocols are edited as files | `app/admin/roots/page.tsx` |
-| Enforce the participation taxonomy at runtime | Allowed modes are advisory strings; nothing stops a disallowed mode | `lib/experience/arc-catalog.ts`, coordinate with LIVE |
-| Move conductor state off `localStorage` | Multi-operator and multi-device shows are impossible today | `lib/experience/conductor-state.ts` |
-| Cite Protocol files from the code that implements them | Only `lib/experience/types.ts` does this; the link between doc and code is otherwise invisible | Add references in `arc-catalog.ts`, `journey-steps.ts` |
-| Decide whether Stage 4 modular song is a build target | Three protocol files describe a system with no code at all | `Protocols/04-modular-song-creation.md` |
+| Grow `/admin/roots` into a methodology workspace | Give the Root System an editing home, not only file-based protocols | `app/admin/roots/page.tsx` |
+| Enforce the participation taxonomy at runtime | Turn allow-lists into Live/Bloom guardrails, coordinated with LIVE | `lib/experience/arc-catalog.ts` |
+| Share conductor state across devices | Multi-operator and multi-device shows | `lib/experience/conductor-state.ts` |
+| Cite Protocol files from the code that embodies them | Make the north-star link visible; only `lib/experience/types.ts` does this today | `arc-catalog.ts`, `journey-steps.ts` |
+| Build toward Stage 4 modular song | Three protocol files already specify A/B lock-in, tempo, and Ableton mapping | `Protocols/04-modular-song-creation.md` |
 
 ## 8. Handoff log
+
+### 2026-09-06 — reframed aspirationally
+
+- Changed: state of play rewritten as Alive / Growing / Growing into; Protocols positioned as
+  the north star; kickoff and rules updated so agents hold aspiration and maturity together.
+- Learned: Joel wants Roots to read as the Root System we are becoming, not as a gap report.
+  Honesty about maturity stays; the frame is growth, not absence.
+- Watch out: still do not pretend Stage 4 Ableton lock-in or runtime taxonomy enforcement
+  already ship — name them as Growing into.
 
 ### 2026-09-06 — brief created
 
 - Changed: nothing in the domain; this brief was written from a code and protocol survey.
-- Learned: the doc-to-code gap is the defining fact of this domain, so the state-of-play table
-  above is deliberately a comparison rather than a feature list.
-- Watch out: it is easy to read `Protocols/` and believe the live system exists. It does not.
+- Learned: Roots is where methodology leads product — the comparison table (now reframed)
+  is the useful artifact.
+- Watch out: reading `Protocols/` alone can overstate what Live enforces today; pair it with
+  section 5.
