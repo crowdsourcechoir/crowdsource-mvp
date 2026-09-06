@@ -20,6 +20,10 @@ type DigestSettings = {
   recipient: string | null;
   fromEmail: string;
   providerConfigured: boolean;
+  transport: "resend" | "gmail" | "none";
+  transportReason: string | null;
+  effectiveRecipient: string | null;
+  gmailEmail: string | null;
   resendConfigured: boolean;
   envDefaults: { minScore: number; targetCount: number; recipient: string | null };
   overrides: { enabled: boolean | null; minScore: number | null; targetCount: number | null; recipient: string | null };
@@ -119,7 +123,7 @@ export default function DigestSettingsClient() {
             : r.status === "skipped_disabled"
               ? "Digest is turned off."
               : r.status === "skipped_no_provider"
-                ? "No Resend key or recipient configured."
+                ? r.error ?? "No mailer configured — connect Gmail or set a verified Resend sender."
                 : r.status === "skipped_empty"
                   ? "Nothing qualifies right now."
                   : r.error ?? `Run finished: ${r.status ?? "unknown"}`
@@ -171,10 +175,14 @@ export default function DigestSettingsClient() {
           disabled={busy || !settings}
           onChange={(next) => void patch({ enabled: next }, next ? "Digest turned on." : "Digest turned off.")}
         />
-        {settings && !settings.resendConfigured ? (
-          <InlineNote tone="warn">
-            <code className="text-xs text-gray-300">RESEND_API_KEY</code> is not set — sends will report “no provider”.
+        {settings && settings.transport === "gmail" ? (
+          <InlineNote>
+            Delivered from your connected Gmail ({settings.gmailEmail}) to itself. Resend needs a verified domain, so it
+            is not used.
           </InlineNote>
+        ) : null}
+        {settings && settings.transport === "none" ? (
+          <InlineNote tone="warn">{settings.transportReason ?? "No mailer configured — sends will be skipped."}</InlineNote>
         ) : null}
         {settings && !settings.persisted ? (
           <InlineNote tone="warn">
@@ -225,13 +233,21 @@ export default function DigestSettingsClient() {
           </div>
         </div>
         <StatGrid>
-          <Stat label="From" value={settings?.fromEmail ?? "—"} hint="SALES_DIGEST_FROM_EMAIL" />
+          <Stat
+            label="From"
+            value={(settings?.transport === "gmail" ? settings.gmailEmail : settings?.fromEmail) ?? "—"}
+            hint={settings?.transport === "gmail" ? "Connected Gmail" : "SALES_DIGEST_FROM_EMAIL"}
+          />
           <Stat
             label="Schedule"
             value={settings?.cronSchedules.length ? `${settings.cronSchedules.length} cron ticks` : "—"}
             hint="Vercel cron, UTC"
           />
-          <Stat label="Provider" value={settings?.resendConfigured ? "Resend" : "Not configured"} />
+          <Stat
+            label="Sent via"
+            value={settings?.transport === "gmail" ? "Gmail" : settings?.transport === "resend" ? "Resend" : "Not configured"}
+            hint={settings?.effectiveRecipient ?? undefined}
+          />
         </StatGrid>
       </SettingsPanel>
 

@@ -72,7 +72,8 @@ export default function DigestClient() {
       />
       <SalesOverlay open={open} title="Morning digest" onClose={() => setOpen(false)}>
         <p className="mb-4 text-xs text-gray-500">
-          Internal email of new 70+ queue leads (Resend). Test send uses whatever currently qualifies.
+          Internal email of new 70+ queue leads, delivered from your connected Gmail to itself. Test send uses whatever
+          currently qualifies.
         </p>
 
         <button
@@ -87,8 +88,7 @@ export default function DigestClient() {
 
         {noProviderConfigured && (
           <p className="mb-3 text-xs text-gray-500">
-            Digest provider not fully configured (Resend domain / from address). Outreach itself uses Gmail, not this
-            list.
+            No mailer for the digest yet — connect Gmail on the Sales overview, or set a verified Resend sender.
           </p>
         )}
 
