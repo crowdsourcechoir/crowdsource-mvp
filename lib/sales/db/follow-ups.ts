@@ -94,8 +94,14 @@ export async function loadSalesTodayTasks(now: Date = new Date()): Promise<Sales
 
   const candidates = (oppRows ?? []).filter((row) => {
     const next = typeof row.next_follow_up_at === "string" ? row.next_follow_up_at : null;
+    const inbound = typeof row.last_inbound_at === "string" ? row.last_inbound_at : null;
+    const outbound = typeof row.last_outbound_at === "string" ? row.last_outbound_at : null;
+    let inboundAfterSend = false;
+    if (inbound && !outbound) inboundAfterSend = true;
+    else if (inbound && outbound) inboundAfterSend = new Date(inbound).getTime() >= new Date(outbound).getTime();
     return shouldShowTodayFollowUp({
       hasLiveReply: liveReplyByOpp.has(String(row.id)),
+      inboundAfterSend,
       nextFollowUpAt: next,
       now,
     });

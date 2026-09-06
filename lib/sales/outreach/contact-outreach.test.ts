@@ -64,6 +64,30 @@ async function main() {
   assert.equal(remapped.kyle?.repliedAt?.startsWith("2026-09-03"), true);
   assert.equal(outreachLabel(remapped.kyle)?.text, "replied");
 
+  
+  const afterReply = contactOutreachById([
+    act({
+      id: "3",
+      activityType: "replied",
+      occurredAt: "2026-09-02T12:00:00.000Z",
+      metadata: { snippet: "I&#39;ve passed your email &lt;events@example.com&gt;", replyKind: "live" },
+    }),
+    act({
+      id: "4",
+      activityType: "sent",
+      occurredAt: "2026-09-03T12:00:00.000Z",
+    }),
+  ]);
+  assert.equal(afterReply.c1?.snippet, "I've passed your email <events@example.com>");
+  assert.equal(outreachLabel(afterReply.c1)?.text, "sent");
+  assert.equal(
+    opportunityOutreachKind({
+      lastInboundAt: "2026-09-02T12:00:00.000Z",
+      lastOutboundAt: "2026-09-03T12:00:00.000Z",
+    }),
+    "sent"
+  );
+
   console.log("contact outreach tests passed");
 }
 

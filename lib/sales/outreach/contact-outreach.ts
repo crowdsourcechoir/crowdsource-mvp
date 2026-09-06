@@ -1,4 +1,5 @@
 import type { OutreachActivity } from "../types";
+import { decodeHtmlEntities } from "./email-body-format";
 import { correspondentFromActivity, type CorrespondentContact } from "./reply-correspondent";
 
 export type ContactOutreach = {
@@ -23,7 +24,8 @@ const EMPTY: ContactOutreach = {
 
 function snippetOf(metadata: Record<string, unknown> | null): string | null {
   const value = metadata?.snippet;
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  return decodeHtmlEntities(value.trim());
 }
 
 function replyKindOf(metadata: Record<string, unknown> | null): "live" | "auto" | null {
@@ -73,6 +75,11 @@ export function contactOutreachById(
 export function outreachLabel(row: ContactOutreach | null | undefined): { text: string; className: string } | null {
   if (!row) return null;
   if (row.bouncedAt) return { text: "bounced", className: "text-red-400" };
+  const sentAfterReply =
+    Boolean(row.sentAt) &&
+    Boolean(row.repliedAt) &&
+    new Date(row.sentAt!).getTime() >= new Date(row.repliedAt!).getTime();
+  if (sentAfterReply) return { text: "sent", className: "text-sky-300" };
   if (row.repliedAt && row.replyKind === "auto") return { text: "auto-reply", className: "text-amber-300" };
   if (row.repliedAt) return { text: "replied", className: "text-[#CFFF81]" };
   if (row.sentAt) return { text: "sent", className: "text-sky-300" };
@@ -87,7 +94,15 @@ export function opportunityOutreachKind(input: {
   bounced?: boolean;
 }): OpportunityOutreachKind {
   if (input.bounced) return "bounced";
-  if (input.lastInboundAt) return "replied";
+  if (input.lastInboundAt) {
+    if (
+      input.lastOutboundAt &&
+      new Date(input.lastOutboundAt).getTime() >= new Date(input.lastInboundAt).getTime()
+    ) {
+      return "sent";
+    }
+    return "replied";
+  }
   if (input.lastOutboundAt) return "sent";
   return "none";
 }

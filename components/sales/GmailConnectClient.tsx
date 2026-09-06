@@ -111,7 +111,7 @@ export default function GmailConnectClient() {
       setMessage(
         r?.skippedReason
           ? r.skippedReason
-          : `Inbox scan done — ${r?.repliesRecorded ?? 0} live replies, ${r?.autoRepliesRecorded ?? 0} auto-replies, ${r?.bouncesRecorded ?? 0} bounces.`
+          : `Inbox scan done — ${r?.repliesRecorded ?? 0} live replies, ${r?.outboundsRecorded ?? 0} sent by you, ${r?.autoRepliesRecorded ?? 0} auto-replies, ${r?.bouncesRecorded ?? 0} bounces.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");

@@ -117,7 +117,7 @@ export default function GmailSettingsClient({
       setMessage(
         r.skippedReason
           ? String(r.skippedReason)
-          : `Inbox scan done — ${r.repliesRecorded ?? 0} replies, ${r.autoRepliesRecorded ?? 0} auto-replies, ${r.bouncesRecorded ?? 0} bounces.`
+          : `Inbox scan done — ${r.repliesRecorded ?? 0} replies, ${r.outboundsRecorded ?? 0} sent by you, ${r.autoRepliesRecorded ?? 0} auto-replies, ${r.bouncesRecorded ?? 0} bounces.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");

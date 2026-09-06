@@ -470,13 +470,17 @@ export default function ApprovalQueueClient() {
           });
           const data = await readApiJson(res);
           if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not move funnel"));
+          // Lost / Won leave Follow-ups; refresh the due list so the card disappears.
+          if (scope === "due" && stage !== "awareness" && stage !== "interest") {
+            void load();
+          }
         } catch (err) {
           replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: previous } });
           setActionError(publicErrorMessage(err, "Could not move funnel"));
         }
       })();
     },
-    [current, showCopyStatus, replaceDetail]
+    [current, showCopyStatus, replaceDetail, scope, load]
   );
 
   const markContactSent = useCallback(
@@ -860,6 +864,28 @@ export default function ApprovalQueueClient() {
                 <p className="text-sm text-gray-500">No score yet</p>
               )}
             </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Funnel</span>
+            {FUNNEL_STAGES.map((s) => {
+              const active = current.opportunity.relationshipStage === s.key;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  disabled={busy || active}
+                  onClick={() => void moveFunnel(s.key)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    active
+                      ? "bg-[#CFFF81] text-gray-900"
+                      : "border border-gray-700 text-gray-300 hover:border-gray-500"
+                  } disabled:opacity-60`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="mt-4">

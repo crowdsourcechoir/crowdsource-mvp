@@ -11,6 +11,7 @@ import { contactOutreachById } from "../outreach/contact-outreach";
 import { latestLiveCorrespondent } from "../outreach/reply-correspondent";
 import { hasVerifiedEmail, isSelectableContact } from "../dedupe";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
+import { decodeHtmlEntities } from "../outreach/email-body-format";
 
 function emptyQueueItem(opportunityId: string, createdAt: string): ApprovalQueueItem {
   return {
@@ -232,7 +233,7 @@ export async function assembleOpportunityPageDetail(opportunityId: string): Prom
     contacts,
     emailSentAt: sent?.occurredAt ?? detail.opportunity.lastOutboundAt,
     emailRepliedAt: replied?.occurredAt ?? detail.opportunity.lastInboundAt,
-    latestReplySnippet: snippet,
+    latestReplySnippet: snippet ? decodeHtmlEntities(snippet) : snippet,
     links: buildSourceLinks(detail.organization.websiteUrl, detail.findings),
   };
 }

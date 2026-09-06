@@ -6,18 +6,19 @@ import { getOpportunity, updateOpportunityRelationshipStage, updateOpportunityTo
 import { classifyInbound, extractEmailAddresses, failedRecipientsFromBounce } from "../outreach/inbound-kind";
 import { parseFromHeader, resolveCorrespondent } from "../outreach/reply-correspondent";
 import { getGmailClient, persistHistoryId } from "./client";
-import { GMAIL_OWNER_KEY } from "./constants";
+import { GMAIL_OWNER_KEY, NUDGE_DUE_AFTER_DAYS, addDaysIso } from "./constants";
 
 export type GmailSyncResult = {
   skippedReason: string | null;
   historyProcessed: boolean;
   repliesRecorded: number;
   autoRepliesRecorded: number;
+  outboundsRecorded: number;
   bouncesRecorded: number;
   errors: string[];
 };
 
-type ProcessResult = { reply: boolean; auto: boolean; bounce: boolean };
+type ProcessResult = { reply: boolean; auto: boolean; bounce: boolean; outbound: boolean };
 
 function headerValue(
   headers: { name?: string | null; value?: string | null }[] | undefined,
@@ -215,12 +216,61 @@ async function recordBounce(input: {
   return true;
 }
 
+
+async function recordOutbound(input: {
+  opportunityId: string;
+  gmailMessageId: string;
+  gmailThreadId: string;
+  toEmails: string[];
+  snippet: string | null;
+  subject: string | null;
+  internalDate: string | null;
+}): Promise<boolean> {
+  const existing = await findActivityByGmailMessageId(input.gmailMessageId);
+  if (existing) return false;
+
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity) return false;
+
+  let contactId: string | null = null;
+  for (const email of input.toEmails) {
+    contactId = await resolveContactId(input.opportunityId, email, null, input.snippet);
+    if (contactId) break;
+  }
+
+  const occurredAt = input.internalDate
+    ? new Date(Number(input.internalDate)).toISOString()
+    : new Date().toISOString();
+
+  await createOutreachActivity({
+    opportunityId: input.opportunityId,
+    contactId,
+    activityType: "sent",
+    occurredAt,
+    gmailMessageId: input.gmailMessageId,
+    gmailThreadId: input.gmailThreadId,
+    metadata: {
+      via: "gmail_sync_outbound",
+      toEmails: input.toEmails,
+      snippet: input.snippet,
+      subject: input.subject,
+    },
+  });
+
+  await updateOpportunityTouchTimestamps(input.opportunityId, {
+    lastOutboundAt: occurredAt,
+    nextFollowUpAt: addDaysIso(occurredAt, NUDGE_DUE_AFTER_DAYS),
+    gmailThreadId: input.gmailThreadId,
+  });
+  return true;
+}
+
 async function processInboundMessage(
   gmail: Awaited<ReturnType<typeof getGmailClient>>,
   messageId: string,
   ourEmail: string
 ): Promise<ProcessResult> {
-  const empty: ProcessResult = { reply: false, auto: false, bounce: false };
+  const empty: ProcessResult = { reply: false, auto: false, bounce: false, outbound: false };
   if (!gmail) return empty;
   const res = await gmail.gmail.users.messages.get({
     userId: "me",
@@ -241,8 +291,26 @@ async function processInboundMessage(
   const from = headerValue(headers, "From");
   const subject = headerValue(headers, "Subject");
   const fromEmails = extractEmailAddresses(from);
-  if (fromEmails.some((email) => email === ourEmail.toLowerCase())) {
-    return empty;
+  const toEmails = extractEmailAddresses(headerValue(headers, "To"));
+  const threadId = res.data.threadId;
+  const isFromUs = fromEmails.some((email) => email === ourEmail.toLowerCase());
+  const isSentOnly =
+    Boolean(res.data.labelIds?.includes("SENT")) && !res.data.labelIds?.includes("INBOX");
+
+  // Joel replied (or sent) from Gmail itself — count it as outbound on a known thread.
+  if ((isFromUs || isSentOnly) && threadId && res.data.id) {
+    const opportunityId = await findOpportunityIdByGmailThreadId(threadId);
+    if (!opportunityId) return empty;
+    const recorded = await recordOutbound({
+      opportunityId,
+      gmailMessageId: res.data.id,
+      gmailThreadId: threadId,
+      toEmails,
+      snippet: res.data.snippet ?? null,
+      subject,
+      internalDate: res.data.internalDate ?? null,
+    });
+    return { reply: false, auto: false, bounce: false, outbound: recorded };
   }
 
   const kind = classifyInbound({
@@ -255,11 +323,6 @@ async function processInboundMessage(
     xFailedRecipients: headerValue(headers, "X-Failed-Recipients"),
   });
 
-  if (kind !== "bounce" && res.data.labelIds?.includes("SENT") && !res.data.labelIds?.includes("INBOX")) {
-    return empty;
-  }
-
-  const threadId = res.data.threadId;
   if (!threadId || !res.data.id) return empty;
 
   if (kind === "bounce") {
@@ -295,7 +358,7 @@ async function processInboundMessage(
       subject,
       internalDate: res.data.internalDate ?? null,
     });
-    return { reply: false, auto: false, bounce: recorded };
+    return { reply: false, auto: false, bounce: recorded, outbound: false };
   }
 
   let opportunityId = await findOpportunityIdByGmailThreadId(threadId);
@@ -320,7 +383,7 @@ async function processInboundMessage(
     replyKind: kind,
   });
   if (!recorded) return empty;
-  return { reply: kind === "live", auto: kind === "auto", bounce: false };
+  return { reply: kind === "live", auto: kind === "auto", bounce: false, outbound: false };
 }
 
 /**
@@ -333,6 +396,7 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
     historyProcessed: false,
     repliesRecorded: 0,
     autoRepliesRecorded: 0,
+    outboundsRecorded: 0,
     bouncesRecorded: 0,
     errors,
   };
@@ -407,14 +471,30 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
     errors.push(err instanceof Error ? err.message : String(err));
   }
 
+  // Recent sends on known CRM threads (Joel replying in Gmail after a prospect wrote back).
+  try {
+    const sent = await bundle.gmail.users.messages.list({
+      userId: "me",
+      q: "in:sent newer_than:14d",
+      maxResults: 40,
+    });
+    for (const m of sent.data.messages ?? []) {
+      if (m.id) candidateMessageIds.add(m.id);
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : String(err));
+  }
+
   let repliesRecorded = 0;
   let autoRepliesRecorded = 0;
+  let outboundsRecorded = 0;
   let bouncesRecorded = 0;
   for (const messageId of Array.from(candidateMessageIds)) {
     try {
       const recorded = await processInboundMessage(bundle, messageId, bundle.email);
       if (recorded.reply) repliesRecorded += 1;
       if (recorded.auto) autoRepliesRecorded += 1;
+      if (recorded.outbound) outboundsRecorded += 1;
       if (recorded.bounce) bouncesRecorded += 1;
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
@@ -426,6 +506,7 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
     historyProcessed,
     repliesRecorded,
     autoRepliesRecorded,
+    outboundsRecorded,
     bouncesRecorded,
     errors,
   };
