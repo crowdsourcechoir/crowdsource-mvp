@@ -56,20 +56,6 @@ function IconBlooms({ className }: { className?: string }) {
   );
 }
 
-function IconRoots({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M12 3v8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path
-        d="M12 11c-2.5 1.2-4 3.2-4.5 6M12 11c2.5 1.2 4 3.2 4.5 6M12 13.5c-1.4 1.8-1.8 3.6-1.8 5.5M12 13.5c1.4 1.8 1.8 3.6 1.8 5.5"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function IconLive({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -148,16 +134,6 @@ const navItems: AdminNavItem[] = [
     icon: <IconBlooms className="h-5 w-5" />,
   },
   {
-    label: "Roots",
-    eyebrow: "Root System",
-    href: "/admin/roots",
-    isActive: (pathname) =>
-      pathname.startsWith("/admin/roots") ||
-      pathname.startsWith("/admin/conductor") ||
-      pathname.startsWith("/admin/resonance"),
-    icon: <IconRoots className="h-5 w-5" />,
-  },
-  {
     label: "Live",
     eyebrow: "Runtime Tools",
     href: "/admin/live",
@@ -216,7 +192,10 @@ export default function AdminSideNav() {
     });
   }
 
-  const settingsActive = pathname.startsWith("/admin/settings");
+  const settingsActive =
+    pathname.startsWith("/admin/settings") ||
+    pathname.startsWith("/admin/roots") ||
+    pathname.startsWith("/admin/resonance");
 
   return (
     <aside

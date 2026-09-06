@@ -8,7 +8,7 @@ function SettingsCardView({ card }: { card: SettingsCard }) {
   return (
     <Link
       href={card.href}
-      className="rounded-xl border border-transparent bg-transparent p-5 transition-[outline-color] hover:outline hover:outline-[length:var(--csc-outline-width)] hover:outline-[var(--csc-accent)] hover:-outline-offset-1"
+      className="rounded-xl border border-[var(--csc-row-divider)] bg-transparent p-5 transition-[outline-color] hover:outline hover:outline-[length:var(--csc-outline-width)] hover:outline-[var(--csc-accent)] hover:-outline-offset-1"
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">{card.domain}</p>
       <h3 className="mt-2 text-base font-semibold text-white">{card.title}</h3>

@@ -166,20 +166,6 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         ],
       },
       {
-        id: "roots",
-        domain: "Roots",
-        title: "Participation loop",
-        description:
-          "Invitation → recognition → response thresholds that protect the loop during Blooms.",
-        href: "/admin/roots",
-        statusLabel: "Open Roots",
-        status: "legacy_deeplink",
-        controls: [
-          "Existing presence / recognition thresholds (honest, code-backed only)",
-          "Optional loop stage requirements for new Blooms",
-        ],
-      },
-      {
         id: "live",
         domain: "Live",
         title: "Runtime defaults",
@@ -205,6 +191,39 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Preferred garden / bloom",
           "Brief defaults (sections / tone) when productized",
         ],
+      },
+    ],
+  },
+  {
+    id: "root-system",
+    heading: "Root system",
+    blurb:
+      "The participation methodology behind Blooms — moved out of the main nav so it lives with the system controls.",
+    cards: [
+      {
+        id: "roots",
+        domain: "Roots",
+        title: "Participation loop",
+        description:
+          "Invitation → risk → contribution → recognition → response: the loop Roots protects during a Bloom.",
+        href: "/admin/roots",
+        statusLabel: "Open Roots",
+        status: "legacy_deeplink",
+        controls: [
+          "Loop principles reference",
+          "Roots-facing tools (conductor, brief, resonance, live)",
+          "Presence / recognition thresholds (code-backed only)",
+        ],
+      },
+      {
+        id: "resonance",
+        domain: "Roots",
+        title: "Resonance signal",
+        description: "Prototype for real-time sensing — the listening side of the Root System.",
+        href: "/admin/resonance",
+        statusLabel: "Open resonance",
+        status: "legacy_deeplink",
+        controls: ["Signal prototype entry point"],
       },
     ],
   },
