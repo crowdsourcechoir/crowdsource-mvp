@@ -58,6 +58,7 @@ import { pulseHaptic } from "@/lib/song-garden-v2/haptics";
 import { requestTiltPermission } from "@/lib/song-garden-v2/tilt";
 import { isTurnstileClientConfigured, TURNSTILE_SITE_KEY } from "@/lib/turnstile";
 import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
+import { resolveBrandOverlays } from "@/lib/song-garden-v2/brand-overlays";
 import { worldConfigFromBrand } from "@/lib/song-garden-v2/garden/snapshot";
 import { useGardenSnapshot } from "@/lib/song-garden-v2/garden/use-garden-snapshot";
 import { writeWorldThemeCache, firstWorldSceneUrl } from "@/lib/song-garden-v2/world-theme-cache";
@@ -73,6 +74,7 @@ import {
   WELCOME_MOMENT_LABEL,
 } from "@/lib/song-garden-v2/moment-labels";
 import WorldStage from "./WorldStage";
+import BrandOverlayLayer from "./BrandOverlayLayer";
 import MomentOverlay from "./MomentOverlay";
 import WorldPresenceTicker from "./WorldPresenceTicker";
 import WorldBloomLogo from "./WorldBloomLogo";
@@ -660,6 +662,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       soundtrackUnlocked={worldUnlocked}
       growthNodes={growthNodes}
     >
+      <BrandOverlayLayer
+        brand={{
+          logoUrl: world.logoUrl,
+          overlays: world.brandOverlays?.length
+            ? world.brandOverlays
+            : gardenSnap.snapshot?.brand.overlays ?? [],
+        }}
+      />
       <header className="mx-auto w-full max-w-lg px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
         <p
           className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"

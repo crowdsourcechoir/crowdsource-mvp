@@ -87,11 +87,39 @@ export const MAP_PLATE_VARIANT_LABELS: Record<MapPlateVariantKey, string> = {
   night: "Night match",
 };
 
+export type BrandOverlayAnchor =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "middle-left"
+  | "middle-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
+/** Client logo or graphic overlaid on the public garden / journey UI. */
+export type BrandOverlay = {
+  id: string;
+  url: string;
+  label?: string | null;
+  anchor: BrandOverlayAnchor;
+  /** Fine-tune position in px from the anchor corner/center. */
+  offsetX: number;
+  offsetY: number;
+  /** Max width in px; height scales proportionally. */
+  maxWidthPx: number;
+  /** 0..1 */
+  opacity: number;
+  enabled?: boolean;
+};
+
 export type BrandKit = {
   title: string;
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  /** Logos and brand graphics shown on top of the live garden UI. */
+  overlays: BrandOverlay[];
   /** Pinned season map plate (or manual map URL). Public `/g` reads this. */
   heroArtworkUrl: string | null;
   animationPreset: "particles" | "aurora" | "glow" | "none";
@@ -486,6 +514,7 @@ export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
     logoUrl: partial?.logoUrl?.trim() || null,
     primaryColor: partial?.primaryColor?.trim() || DEFAULT_BRAND_PRIMARY,
     accentColor: partial?.accentColor?.trim() || DEFAULT_BRAND_ACCENT,
+    overlays: normalizeBrandOverlays(partial?.overlays),
     heroArtworkUrl: partial?.heroArtworkUrl?.trim() || null,
     animationPreset: partial?.animationPreset || "particles",
     ambientSoundtrackUrl: partial?.ambientSoundtrackUrl?.trim() || null,
@@ -494,6 +523,42 @@ export function defaultBrandKit(partial?: Partial<BrandKit>): BrandKit {
     sponsors: normalizeSponsors(partial?.sponsors),
     mapPlate: defaultMapPlate(partial?.mapPlate),
   };
+}
+
+function normalizeBrandOverlays(overlays: BrandOverlay[] | null | undefined): BrandOverlay[] {
+  if (!Array.isArray(overlays)) return [];
+  const anchors = new Set<BrandOverlayAnchor>([
+    "top-left",
+    "top-center",
+    "top-right",
+    "middle-left",
+    "middle-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+  ]);
+  const out: BrandOverlay[] = [];
+  const seen = new Set<string>();
+  for (const raw of overlays) {
+    if (!raw || typeof raw !== "object") continue;
+    const url = raw.url?.trim();
+    if (!url) continue;
+    let id = raw.id?.trim() || `ov_${out.length + 1}`;
+    while (seen.has(id)) id = `${id}_${out.length}`;
+    seen.add(id);
+    out.push({
+      id,
+      url,
+      label: raw.label?.trim() || null,
+      anchor: anchors.has(raw.anchor) ? raw.anchor : "top-left",
+      offsetX: Math.max(-120, Math.min(120, Number(raw.offsetX) || 0)),
+      offsetY: Math.max(-120, Math.min(120, Number(raw.offsetY) || 0)),
+      maxWidthPx: Math.max(24, Math.min(480, Number(raw.maxWidthPx) || 120)),
+      opacity: Math.max(0.05, Math.min(1, Number(raw.opacity) || 0.95)),
+      enabled: raw.enabled !== false,
+    });
+  }
+  return out;
 }
 
 /** Shallow brand patch with deep-merge for `mapPlate` (keeps refs/draft when pinning). */
