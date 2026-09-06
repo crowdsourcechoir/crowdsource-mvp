@@ -18,11 +18,6 @@ import {
   type GenerateSongSeedError,
 } from "@/data/agentInterview";
 import { compositionBriefAdminUrl } from "@/data/compositionClient";
-import {
-  finalizeEventMemory,
-  getEventMemory,
-  type EventMemoryRecord,
-} from "@/data/memoryClient";
 import type { SongSeedTranscriptIssue } from "@/types/song-seed";
 import type { Event } from "@/data/mockEvents";
 import JSZip from "jszip";
@@ -141,7 +136,7 @@ function SubmissionVideoPlayer({ dataUrl }: { dataUrl: string }) {
             type="button"
             onClick={handleConvertAndPlay}
             disabled={converting}
-            className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+            className="rounded-lg bg-[var(--csc-accent)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
           >
             {converting ? "Converting…" : "Convert & play"}
           </button>
@@ -199,9 +194,6 @@ export default function EventDetailPage() {
   const [deletingBloom, setDeletingBloom] = useState(false);
   /** Only one MIDI pad plays at a time across the submissions list. */
   const [activeSoundPadId, setActiveSoundPadId] = useState<string | null>(null);
-  const [memoryRecord, setMemoryRecord] = useState<EventMemoryRecord | null>(null);
-  const [loadingMemory, setLoadingMemory] = useState(false);
-  const [memoryError, setMemoryError] = useState<string | null>(null);
 
   useEffect(() => {
     getEventById(eventId)
@@ -210,7 +202,6 @@ export default function EventDetailPage() {
           setEvent(e);
           getSubmissionsForEvent(e.slug).then(setSubmissions);
           if (e.agentThemeId) getSongSeedForEvent(e.id).then(setSongSeed).catch(() => setSongSeed(null));
-          getEventMemory(e.id).then(setMemoryRecord).catch(() => setMemoryRecord(null));
 
           // Always load interviews + Song Garden clips so person cards can show both.
           setLoadingAgentInterviewSubmissions(true);
@@ -411,11 +402,9 @@ export default function EventDetailPage() {
       setAgentInterviewSubmissions([]);
       setSonggardenClips([]);
       setSongSeed(null);
-      setMemoryRecord(null);
       setTranscriptOutput(null);
       setTranscriptError(null);
       setSongSeedError(null);
-      setMemoryError(null);
       const deleted = (data as { deleted?: Record<string, number> }).deleted;
       const summary = deleted
         ? `Removed ${deleted.agentInterviews ?? 0} interview(s), ${deleted.songgardenClips ?? 0} Song Garden clip(s), ${deleted.songSeeds ?? 0} song seed(s), ${deleted.memoryRecords ?? 0} memory record(s), ${deleted.liveSessions ?? 0} live session(s).`
@@ -482,102 +471,86 @@ export default function EventDetailPage() {
   }
 
   return (
-    <div className="w-full space-y-10">
-      {/* Public-style event card */}
-      <div className="overflow-hidden rounded-2xl border border-gray-700/60 bg-transparent">
-        <div className="border-b border-gray-700/60">
-          <div className="relative h-40 w-full bg-gray-900">
-            {event.heroImage ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={event.heroImage}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-gray-600">No hero image</div>
-            )}
-          </div>
-          <div className="px-6 py-4">
-            <h1 className="text-xl font-semibold text-white">{event.title}</h1>
-            <p className="mt-0.5 text-sm text-gray-400">
-              {event.date} · {event.time}
-            </p>
+    <div className="w-full space-y-8 text-gray-100">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <Link href="/admin/events" className="csc-link text-sm font-medium">
+            ← Blooms
+          </Link>
+          <p className="csc-eyebrow mt-4">Bloom</p>
+          <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">{event.title}</h1>
+          <p className="mt-2 text-sm text-gray-400">
+            {event.date} · {event.time}
+            {" · "}
             <a
               href={googleMapsSearchUrl(event.venue, event.address)}
               target="_blank"
               rel="noopener noreferrer"
-              className="block text-sm text-gray-500 hover:text-gray-400 hover:underline"
+              className="csc-link"
             >
               {event.venue}
             </a>
-            {event.address && (
-              <a
-                href={googleMapsSearchUrl(event.venue, event.address)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-0.5 block text-xs text-gray-500 hover:text-gray-400 hover:underline"
-              >
-                {event.address}
-              </a>
-            )}
-          </div>
-        </div>
-        <div className="px-6 py-4">
-          <p className="text-sm text-gray-400">
-            <span className="font-medium text-gray-500">Prompt:</span>{" "}
-            {event.prompt ? displayPrompt(event.prompt) : "—"}
+            {event.address ? (
+              <>
+                {" · "}
+                <a
+                  href={googleMapsSearchUrl(event.venue, event.address)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-500 hover:text-gray-300 hover:underline"
+                >
+                  {event.address}
+                </a>
+              </>
+            ) : null}
           </p>
-          {event.description && (
-            <p className="mt-1 text-sm text-gray-400">
-              <span className="font-medium text-gray-500">Description:</span>{" "}
-              {event.description}
+          {event.prompt ? (
+            <p className="mt-3 text-sm text-gray-400">
+              <span className="text-gray-500">Prompt:</span> {displayPrompt(event.prompt)}
             </p>
-          )}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          ) : null}
+          {event.description ? (
+            <p className="mt-1 text-sm text-gray-400">
+              <span className="text-gray-500">Description:</span> {event.description}
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Link
               href={`/admin/events/${event.id}/edit`}
-              className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e]"
+              className="rounded-lg bg-[var(--csc-accent)] px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
             >
-              Edit event
+              Edit bloom
             </Link>
             <Link
               href={publicEventPath(event.slug)}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-4 py-3 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/20"
+              className="rounded-lg border border-[var(--csc-accent)]/40 px-4 py-2 text-sm font-medium text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/10"
             >
               Open public link
             </Link>
             <Link
               href={`/admin/songgarden/${encodeURIComponent(event.slug || event.id)}`}
-              className="rounded-lg border border-gray-600 bg-transparent px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-800 active:bg-gray-700"
+              className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
             >
               Composition canvas
             </Link>
           </div>
         </div>
+        {event.heroImage ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={event.heroImage}
+            alt=""
+            className="h-28 w-44 shrink-0 rounded-lg border border-white/10 object-cover sm:h-32 sm:w-52"
+          />
+        ) : null}
       </div>
 
-      <section className="rounded-2xl border border-red-900/50 bg-transparent p-6">
-        <h2 className="text-lg font-semibold text-red-200">Delete bloom</h2>
-        <p className="mt-1 max-w-2xl text-sm text-gray-500">
-          Rare. Removes this bloom and its interviews, clips, and submissions. You will be asked twice.
-        </p>
-        <button
-          type="button"
-          disabled={deletingBloom}
-          onClick={() => void handleDeleteBloom()}
-          className="mt-4 rounded-lg border border-red-800/60 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900/40 disabled:opacity-50"
-        >
-          {deletingBloom ? "Deleting…" : "Delete bloom"}
-        </button>
-      </section>
-
       {(transcriptOutput || transcriptError) && (
-        <section className="rounded-2xl border border-gray-700/60 bg-transparent p-6">
+        <section className="border-y border-[var(--csc-row-divider)] py-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-white">Transcript output</h2>
+            <h2 className="text-sm font-medium text-white">Transcript output</h2>
             <div className="flex flex-wrap items-center gap-2">
               {transcriptOutput && (
                 <button
@@ -723,13 +696,18 @@ export default function EventDetailPage() {
       )}
 
       {event.agentThemeId && (
-        <section className="rounded-2xl border border-gray-700/60 bg-transparent p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-white">Song Seed (from Agent Interviews)</h2>
+        <section className="border-y border-[var(--csc-row-divider)] py-5">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-medium text-white">Song Seed</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                From agent interview transcripts. Participants need completed interviews first.
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={compositionBriefAdminUrl({ eventId: event.id })}
-                className="rounded-xl border border-violet-700/60 bg-violet-950/40 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/40"
+                className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
               >
                 Composition Brief →
               </Link>
@@ -751,7 +729,7 @@ export default function EventDetailPage() {
                     setLoadingSongSeed(false);
                   }
                 }}
-                className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+                className="rounded-lg bg-[var(--csc-accent)] px-4 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
               >
                 {loadingSongSeed ? "Generating…" : "Generate Song Seed"}
               </button>
@@ -869,186 +847,18 @@ export default function EventDetailPage() {
               )}
             </div>
           )}
-          {!songSeed && !loadingSongSeed && !songSeedError && (
-            <p className="text-sm text-gray-500">
-              Generate a Song Seed from agent interview transcripts. Participants must have completed interviews first.
-            </p>
-          )}
+          {!songSeed && !loadingSongSeed && !songSeedError ? (
+            <p className="text-sm text-gray-500">No seed yet — generate when interviews are ready.</p>
+          ) : null}
         </section>
       )}
 
-      <section className="rounded-2xl border border-emerald-900/40 bg-transparent p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Memory Archive</h2>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              Layer 4 — consent-scoped snapshot of this event for future shows. Finalize when the live
-              experience is complete.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {memoryRecord && (
-              <button
-                type="button"
-                onClick={() => {
-                  const blob = new Blob([JSON.stringify(memoryRecord, null, 2)], {
-                    type: "application/json",
-                  });
-                  downloadBlob(blob, `memory-${event.slug}-v${memoryRecord.version}.json`);
-                }}
-                className="rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700"
-              >
-                Export JSON
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={loadingMemory}
-              onClick={async () => {
-                setLoadingMemory(true);
-                setMemoryError(null);
-                try {
-                  const record = await finalizeEventMemory(event.id);
-                  setMemoryRecord(record);
-                } catch (err) {
-                  setMemoryError(err instanceof Error ? err.message : "Finalize failed");
-                } finally {
-                  setLoadingMemory(false);
-                }
-              }}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {loadingMemory
-                ? "Archiving…"
-                : memoryRecord
-                  ? "Regenerate archive"
-                  : "Finalize archive"}
-            </button>
-          </div>
-        </div>
-
-        {memoryError && (
-          <div className="mb-4 rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-sm text-red-200">
-            {memoryError}
-          </div>
-        )}
-
-        {memoryRecord ? (
-          <div className="space-y-6">
-            <p className="text-xs text-gray-500">
-              Version {memoryRecord.version} · Finalized {formatDate(memoryRecord.finalizedAt)}
-            </p>
-
-            {memoryRecord.emotionalProfile.summary && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-gray-300">Emotional summary</h3>
-                <p className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
-                  {memoryRecord.emotionalProfile.summary}
-                </p>
-              </div>
-            )}
-
-            {memoryRecord.emotionalProfile.themes.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-gray-300">Themes</h3>
-                <p className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
-                  {memoryRecord.emotionalProfile.themes.join(" · ")}
-                </p>
-              </div>
-            )}
-
-            {memoryRecord.anthemFragments.hooks.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-gray-300">Hook candidates (reusable)</h3>
-                <ul className="list-inside list-disc space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
-                  {memoryRecord.anthemFragments.hooks.map((line, i) => (
-                    <li key={i}>
-                      &quot;{line.text}&quot;
-                      <span className="ml-2 text-xs text-gray-500">({line.tier})</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {memoryRecord.anthemFragments.chantableLines.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-gray-300">Chantable lines</h3>
-                <ul className="list-inside list-disc space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
-                  {memoryRecord.anthemFragments.chantableLines.map((line, i) => (
-                    <li key={i}>&quot;{line.text}&quot;</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {memoryRecord.signalProfile.resolutions.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-gray-300">Signal profile</h3>
-                <ul className="space-y-1 rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200">
-                  {memoryRecord.signalProfile.resolutions.map((r) => (
-                    <li key={r.roundId}>
-                      {r.layer}: <span className="text-emerald-300/90">{r.label}</span>
-                      <span className="text-gray-500"> ({r.voteCount} votes)</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {memoryRecord.compositionArtifacts.sunoPrompts.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-gray-300">Suno prompts</h3>
-                <div className="space-y-3">
-                  {memoryRecord.compositionArtifacts.sunoPrompts.map((prompt, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg border border-gray-700/60 bg-[#1f1f1f] p-4 text-sm text-gray-200"
-                    >
-                      <p className="whitespace-pre-wrap">{prompt}</p>
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(prompt)}
-                        className="mt-2 text-xs text-amber-400 hover:underline"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-lg border border-gray-700/40 bg-[#1a1a1a] p-4 text-xs text-gray-500">
-              <p>
-                Reusable export: {memoryRecord.reusableExport.length} lines · Internal transcript refs:{" "}
-                {memoryRecord.voiceSamples.transcriptRefs.length} · Media refs (internal only):{" "}
-                {memoryRecord.voiceSamples.mediaRefs.length}
-              </p>
-              <p className="mt-1">
-                Sources — interviews: {memoryRecord.sourceCounts.interviewTurns}, live:{" "}
-                {memoryRecord.sourceCounts.liveSubmissions}, signal rounds:{" "}
-                {memoryRecord.sourceCounts.signalRounds}
-              </p>
-            </div>
-          </div>
-        ) : (
-          !loadingMemory &&
-          !memoryError && (
-            <p className="text-sm text-gray-500">
-              No archive yet. Finalize after interviews, live sessions, or composition work is complete.
-            </p>
-          )
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-gray-700/60 bg-transparent p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="border-t border-[var(--csc-row-divider)] pt-5">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-white">Submissions</h2>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              Agent interviews are saved on the server and appear under &quot;Agent interviews&quot; below. Older &quot;browser-stored&quot;
-              clips are legacy and only exist on the device that recorded them.
+            <h2 className="text-sm font-medium text-white">Submissions</h2>
+            <p className="mt-1 max-w-2xl text-xs text-gray-500">
+              Agent interviews sync from the server. Older browser-only clips stay on the device that recorded them.
             </p>
             <button
               type="button"
@@ -1160,7 +970,7 @@ export default function EventDetailPage() {
                   setTranscribeAllStatus(null);
                 }
               }}
-              className="rounded-lg bg-[#CFFF81] px-3 py-2 text-sm font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
+              className="rounded-lg bg-[var(--csc-accent)] px-3 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
             >
               {transcribeAllStatus ?? "Transcribe all & generate"}
             </button>
@@ -1218,7 +1028,7 @@ export default function EventDetailPage() {
                 type="button"
                 disabled={loadingSoundPack || songgardenClips.length === 0}
                 onClick={() => void handleExportSoundPack()}
-                className="rounded-lg border border-[#CFFF81]/40 bg-[#CFFF81]/10 px-3 py-2 text-sm font-medium text-[#CFFF81] hover:bg-[#CFFF81]/15 disabled:opacity-50"
+                className="rounded-lg border border-[var(--csc-accent)]/40 bg-[var(--csc-accent)]/10 px-3 py-2 text-sm font-medium text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/15 disabled:opacity-50"
               >
                 {loadingSoundPack
                   ? "Building pack…"
@@ -1498,6 +1308,20 @@ export default function EventDetailPage() {
           <p className="text-sm text-gray-500">No submissions yet.</p>
         )}
       </section>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--csc-row-divider)] pt-4">
+        <p className="text-xs text-gray-500">
+          Delete this bloom (rare). Interviews, clips, and submissions are removed.
+        </p>
+        <button
+          type="button"
+          disabled={deletingBloom}
+          onClick={() => void handleDeleteBloom()}
+          className="text-xs font-medium text-red-300/90 underline hover:text-red-200 disabled:opacity-50"
+        >
+          {deletingBloom ? "Deleting…" : "Delete bloom"}
+        </button>
+      </div>
     </div>
   );
 }

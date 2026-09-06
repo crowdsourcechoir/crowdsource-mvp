@@ -32,7 +32,7 @@ export default function GardensAdminClient() {
     <div className="w-full space-y-8 text-gray-100">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+          <p className="csc-eyebrow">
             Persistent Worlds
           </p>
           <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Song Gardens</h1>
@@ -42,7 +42,7 @@ export default function GardensAdminClient() {
         </div>
         <Link
           href="/admin/gardens/new"
-          className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black"
+          className="rounded-lg bg-[var(--csc-accent)] px-4 py-2.5 text-sm font-semibold text-black"
         >
           + Create Song Garden
         </Link>
@@ -57,7 +57,7 @@ export default function GardensAdminClient() {
       ) : gardens.length === 0 ? (
         <div className="rounded-xl border border-dashed border-white/15 px-5 py-8 text-sm text-gray-400">
           No Song Gardens yet.{" "}
-          <Link href="/admin/gardens/new" className="text-[#CFFF81] hover:underline">
+          <Link href="/admin/gardens/new" className="text-[var(--csc-accent)] hover:underline">
             Create one
           </Link>{" "}
           to start, then add blooms inside it.
