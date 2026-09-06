@@ -243,6 +243,13 @@ These are the ones with real-world consequences. Read them before touching the s
    loop from the 2026-08-15 incident; it does **not** stop a second cold email to someone
    contacted four days ago. **There is no send cooldown anywhere in the system.** For a
    recent contact the right move is an in-thread nudge, not a new initial.
+
+   Two further limits on how much the guard can see. It is **opportunity-scoped** — the
+   decision route feeds it `listActivitiesForOpportunity` and `listDraftsForOpportunity`,
+   both filtered by `opportunity_id`, so a second opportunity at the same organization sees
+   an empty history and will not block even for a stale draft. And it keys strictly on
+   `contactId`, so two contact rows for the same human bypass it entirely. Timing is not the
+   only way past this guard.
 3. **After a send, the queue must not advance to the person just emailed.** That is what
    `pickNextRemainingInitialDraft` is for.
 4. **Reconnecting Gmail does not resume sending.** `sends_enabled` stays off until Joel clicks
@@ -275,8 +282,12 @@ These are the ones with real-world consequences. Read them before touching the s
     prompt injection is a live risk in the research stage.
 14. **The 42 crons are retry slots, not 42 jobs.** Four logical jobs spread across repeated
     time windows to work within plan limits. Do not "tidy" them into four entries.
-15. **Emergency off, in order of speed**: Pause sending in the UI, Disconnect Gmail, or set
-    `SALES_GMAIL_SENDS_ENABLED=false` in Vercel.
+15. **Emergency off — read rule 4 before trusting the Pause button.** If
+    `SALES_GMAIL_SENDS_ENABLED` is set to `true` in Vercel, Pause does nothing, and you cannot
+    tell from outside: `/api/sales/gmail/status` reports `sendsEnabled: true` whether that
+    comes from a resumed connection or from the env override. The authoritative stop is
+    setting that variable to `false` in Vercel. Disconnecting Gmail also works. Pause alone is
+    reliable only when the variable is unset or `false`.
 
 ## 7. Open threads
 
@@ -288,6 +299,8 @@ These are the ones with real-world consequences. Read them before touching the s
 | Decide discovery's future | Stage 0 is hard-disabled; either revive it deliberately or delete the dead clients | `lib/sales/discovery/search/` |
 | Delete the HubSpot leftovers | An unused table implies a feature that does not exist | `hubspot_sync_records` |
 | Personal-connection line library | Curated lines, never AI-invented, per the roadmap | `lib/sales/outreach/` |
+| Widen the send guard beyond one opportunity | Two opportunities at one org can each send an initial to the same person | `app/api/sales/queue/[itemId]/decision/route.ts` — the guard needs org-wide activity, not `listActivitiesForOpportunity` |
+| Make Pause authoritative, or surface the override | Today Pause silently does nothing when the env flag is `true`, and the status endpoint cannot distinguish the two sources | `lib/sales/outreach/send-guard.ts#gmailSendsAllowed`, `lib/sales/db/gmail.ts` |
 
 ## 8. Handoff log
 
@@ -304,3 +317,7 @@ These are the ones with real-world consequences. Read them before touching the s
   force sending on, and that no per-day or per-organization volume cap exists anywhere.
 - Watch out: `ai-workflow.md` is the second doc a new agent reads and it is wrong about the
   two facts this domain cares most about — discovery and Apollo. Section 5 now says so.
+- Also found on a second pass: the send guard is opportunity-scoped, so two opportunities at
+  one organization can each send an initial to the same person, and the Pause button is
+  unreliable while `SALES_GMAIL_SENDS_ENABLED=true`. Both are now in section 6. Neither has
+  been fixed in code — they are open threads.

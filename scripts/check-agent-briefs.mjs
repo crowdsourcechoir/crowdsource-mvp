@@ -58,10 +58,15 @@ function looksLikeRepoPath(token) {
 
 /**
  * Dynamic route segments are real on disk in Next.js ([id]), so paths resolve
- * directly. Glob-ish suffixes used for brevity in prose are trimmed first.
+ * directly. Trimmed first: glob-ish suffixes used for brevity in prose, and the
+ * `file.ts#symbol` notation the sales docs already use to point at a function.
  */
 function normalize(token) {
-  return token.replace(/\/\*\*$/, "").replace(/\/\*$/, "").replace(/[.,;:)]+$/, "");
+  return token
+    .replace(/#.*$/, "")
+    .replace(/\/\*\*$/, "")
+    .replace(/\/\*$/, "")
+    .replace(/[.,;:)]+$/, "");
 }
 
 const failures = [];
