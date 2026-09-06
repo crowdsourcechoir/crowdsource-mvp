@@ -180,12 +180,9 @@ export default function GmailSettingsClient({
                 Disconnect
               </SettingsButton>
             ) : (
-              <a
-                href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail"
-                className="rounded-lg border border-[var(--csc-accent)] px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)] hover:text-black"
-              >
+              <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
                 Connect Gmail
-              </a>
+              </SettingsButton>
             )}
           </>
         }

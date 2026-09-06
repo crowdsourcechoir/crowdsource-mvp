@@ -10,6 +10,7 @@ import {
   writeStoredDesignTokens,
   type DesignSystemTokens,
 } from "@/lib/design-system/tokens";
+import { SettingsButton } from "@/components/settings/ui";
 
 const DIVIDER_PRESETS: { label: string; value: string }[] = [
   { label: "Faint (default)", value: "rgba(255, 255, 255, 0.10)" },
@@ -70,13 +71,7 @@ export default function DesignSystemControls() {
         </div>
         <div className="flex items-center gap-2">
           {savedFlash ? <span className="text-xs font-medium text-[var(--csc-accent)]">Saved</span> : null}
-          <button
-            type="button"
-            onClick={() => commit(DEFAULT_DESIGN_TOKENS)}
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
-          >
-            Reset defaults
-          </button>
+          <SettingsButton onClick={() => commit(DEFAULT_DESIGN_TOKENS)}>Reset defaults</SettingsButton>
         </div>
       </div>
 
@@ -202,12 +197,7 @@ export default function DesignSystemControls() {
               <p className="truncate text-base font-semibold text-white">Second row</p>
               <p className="mt-0.5 truncate text-xs text-gray-500">Same height rhythm as Composer / Blooms</p>
             </div>
-            <button
-              type="button"
-              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
-            >
-              Chip
-            </button>
+            <SettingsButton>Chip</SettingsButton>
           </div>
         </div>
       </div>
