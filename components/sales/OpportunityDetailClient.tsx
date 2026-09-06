@@ -91,7 +91,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   const otherContacts = contacts.filter((c) => c.id !== contact?.id);
 
   return (
-    <div className="w-full max-w-3xl space-y-5">
+    <div className="w-full space-y-5">
       <div>
         <Link href="/admin/sales/funnel" className="text-sm text-gray-500 hover:text-gray-300 hover:underline">
           ← Funnel

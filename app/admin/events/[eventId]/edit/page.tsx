@@ -173,7 +173,7 @@ export default function EditEventPage() {
   }
 
   return (
-    <div className="w-full max-w-3xl">
+    <div className="w-full">
       <h2 className="mb-4 text-xl font-semibold text-white">Edit Event</h2>
       {draftNotice && (
         <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
