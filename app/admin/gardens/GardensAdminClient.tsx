@@ -63,17 +63,11 @@ export default function GardensAdminClient() {
           to start, then add blooms inside it.
         </div>
       ) : (
-        <ul className="divide-y divide-white/10 border-y border-white/10">
+        <ul className="csc-list">
           {gardens.map((g) => (
-            <li
-              key={g.id}
-              className="flex cursor-default flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between"
-            >
+            <li key={g.id} className="csc-list-row !cursor-default">
               <div className="min-w-0">
-                <Link
-                  href={`/admin/gardens/${g.id}`}
-                  className="font-medium text-white hover:text-[#CFFF81]"
-                >
+                <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:text-[var(--csc-accent)]">
                   {g.title}
                 </Link>
                 <p className="text-xs text-gray-500">
@@ -83,7 +77,7 @@ export default function GardensAdminClient() {
                     <>
                       {" "}
                       ·{" "}
-                      <Link href={`/g/${g.slug}`} className="text-[#CFFF81] underline">
+                      <Link href={`/g/${g.slug}`} className="csc-link underline">
                         public
                       </Link>
                     </>
@@ -93,7 +87,7 @@ export default function GardensAdminClient() {
               <div className="flex flex-wrap gap-2">
                 <Link
                   href={`/admin/gardens/${g.id}/blooms/new`}
-                  className="rounded-lg border border-[#CFFF81]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[#CFFF81] transition-colors hover:bg-[#CFFF81]/10"
+                  className="rounded-lg border border-[var(--csc-accent)]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
                 >
                   + Bloom
                 </Link>

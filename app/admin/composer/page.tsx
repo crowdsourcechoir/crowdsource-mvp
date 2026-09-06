@@ -18,7 +18,7 @@ function pillClass(active: boolean): string {
 }
 
 function rowClassName(): string {
-  return "flex cursor-pointer flex-col gap-3 bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1 sm:flex-row sm:items-center sm:justify-between";
+  return "csc-list-row";
 }
 
 function BloomComposer({ bloomKey }: { bloomKey: string }) {
@@ -234,7 +234,7 @@ function ComposerPageInner() {
                 </Link>
               </div>
             ) : (
-              <ul className="divide-y divide-white/10 border-y border-white/10">
+              <ul className="csc-list">
                 {gardens.map((garden) => (
                   <li key={garden.id}>
                     <button
@@ -272,7 +272,7 @@ function ComposerPageInner() {
                 </Link>
               </div>
             ) : (
-              <ul className="divide-y divide-white/10 border-y border-white/10">
+              <ul className="csc-list">
                 {[...upcoming, ...past].map((event) => (
                   <li key={event.id}>
                     <button

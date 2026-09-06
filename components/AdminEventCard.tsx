@@ -40,7 +40,7 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           router.push(manageHref);
         }
       }}
-      className="cursor-pointer bg-transparent px-4 py-4 transition-[outline-color] hover:outline hover:outline-1 hover:outline-[#CFFF81] hover:-outline-offset-1"
+      className="csc-list-row"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
