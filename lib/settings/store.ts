@@ -135,9 +135,13 @@ export async function writeWorkspaceSettings(
   });
 
   const body = new Blob([JSON.stringify(merged, null, 2)], { type: "application/json" });
-  const { error } = await supabaseAdmin.storage
-    .from(BUCKET)
-    .upload(OBJECT_PATH, body, { upsert: true, contentType: "application/json" });
+  const { error } = await supabaseAdmin.storage.from(BUCKET).upload(OBJECT_PATH, body, {
+    upsert: true,
+    contentType: "application/json",
+    // Storage caches object bodies by default, which let other instances read a stale
+    // settings file for a while after a save.
+    cacheControl: "0",
+  });
 
   if (error) {
     return { settings: merged, persisted: false, error: error.message };
