@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { getAllEvents, getEventById, getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
 import SonggardenCanvas from "@/components/songgarden/SonggardenCanvas";
+import ComposerBloomMaterials from "@/components/songgarden/ComposerBloomMaterials";
 import ComposerLibraryPicker, {
   type LibraryGardenNode,
   type LibraryTarget,
@@ -289,28 +290,41 @@ function ComposerPageInner() {
 
       {!resolving && !resolveError ? (
         bloomParam && resolvedBloom ? (
-          <SonggardenCanvas
-            key={canvasKey}
-            eventId={resolvedBloom.id}
-            eventTitle={resolvedBloom.title}
-            eventSlug={resolvedBloom.slug}
-            initialScope="bloom"
-            libraryPicker={picker}
-          />
+          <div className="space-y-8">
+            <SonggardenCanvas
+              key={canvasKey}
+              eventId={resolvedBloom.id}
+              eventTitle={resolvedBloom.title}
+              eventSlug={resolvedBloom.slug}
+              initialScope="bloom"
+              libraryPicker={picker}
+            />
+            <ComposerBloomMaterials event={resolvedBloom} />
+          </div>
         ) : gardenParam && resolvedGarden ? (
-          <SonggardenCanvas
-            key={canvasKey}
-            gardenId={resolvedGarden.id}
-            eventTitle={resolvedGarden.title}
-            initialScope="garden"
-            libraryPicker={picker}
-          />
+          <div className="space-y-6">
+            <SonggardenCanvas
+              key={canvasKey}
+              gardenId={resolvedGarden.id}
+              eventTitle={resolvedGarden.title}
+              initialScope="garden"
+              libraryPicker={picker}
+            />
+            <p className="text-sm text-gray-500">
+              Select a bloom in the library to work with Song Seed and submissions.
+            </p>
+          </div>
         ) : !bloomParam && !gardenParam ? (
-          <SonggardenCanvas
-            key={canvasKey}
-            initialScope="master"
-            libraryPicker={picker}
-          />
+          <div className="space-y-6">
+            <SonggardenCanvas
+              key={canvasKey}
+              initialScope="master"
+              libraryPicker={picker}
+            />
+            <p className="text-sm text-gray-500">
+              Select a bloom in the library to work with Song Seed and submissions.
+            </p>
+          </div>
         ) : null
       ) : null}
     </div>
