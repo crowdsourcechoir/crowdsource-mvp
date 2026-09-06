@@ -15,7 +15,7 @@ type AdminEventCardProps = {
   badgeLabel?: string;
 };
 
-/** Bloom list row — same height/spacing as Composer; faint border; click opens Manage. */
+/** Bloom list row — same layout as Song Gardens list (text left, actions right). */
 export default function AdminEventCard({ event, baseUrl = "http://localhost:3000", badgeLabel }: AdminEventCardProps) {
   const router = useRouter();
   const [showQr, setShowQr] = useState(false);
@@ -40,70 +40,68 @@ export default function AdminEventCard({ event, baseUrl = "http://localhost:3000
           router.push(manageHref);
         }
       }}
-      className="csc-list-row"
+      className={`csc-list-row${showQr ? " !flex-wrap" : ""}`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-white">{event.title}</h3>
-          <div className="mt-0.5 flex flex-col gap-0.5 text-xs text-gray-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-            <span>
-              {dateFormatted} · {timeFormatted}
+      <div className="min-w-0">
+        <h3 className="truncate text-base font-semibold text-white">{event.title}</h3>
+        <div className="mt-0.5 flex flex-col gap-0.5 text-xs text-gray-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+          <span>
+            {dateFormatted} · {timeFormatted}
+          </span>
+          <span className="inline-flex items-center gap-1 truncate">
+            📍
+            <a
+              href={googleMapsSearchUrl(event.venue, event.address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate hover:text-gray-300 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {event.venue}
+            </a>
+          </span>
+          {badgeLabel ? (
+            <span className="w-fit rounded-full border border-white/15 bg-transparent px-2 py-0.5 text-xs text-gray-400">
+              {badgeLabel}
             </span>
-            <span className="inline-flex items-center gap-1 truncate">
-              📍
-              <a
-                href={googleMapsSearchUrl(event.venue, event.address)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="truncate hover:text-gray-300 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {event.venue}
-              </a>
-            </span>
-            {badgeLabel ? (
-              <span className="w-fit rounded-full border border-white/15 bg-transparent px-2 py-0.5 text-xs text-gray-400">
-                {badgeLabel}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-2 sm:shrink-0"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <Link
-            href={manageHref}
-            className="rounded-lg bg-[#CFFF81] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#bdf25e]"
-          >
-            Manage
-          </Link>
-          <a
-            href={eventUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
-            title={eventUrl}
-          >
-            Public Link
-          </a>
-          <button
-            type="button"
-            onClick={() => setShowQr((v) => !v)}
-            className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white"
-          >
-            {showQr ? "Hide QR" : "QR"}
-          </button>
+          ) : null}
         </div>
       </div>
+      <div
+        className="flex flex-wrap gap-2"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Link
+          href={manageHref}
+          className="rounded-lg border border-[var(--csc-accent)]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
+        >
+          Manage
+        </Link>
+        <a
+          href={eventUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
+          title={eventUrl}
+        >
+          Public Link
+        </a>
+        <button
+          type="button"
+          onClick={() => setShowQr((v) => !v)}
+          className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
+        >
+          {showQr ? "Hide QR" : "QR"}
+        </button>
+      </div>
       {showQr ? (
-        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-1 w-full basis-full" onClick={(e) => e.stopPropagation()}>
           <QRCodeDisplay
             key={eventUrl}
             url={eventUrl}
             size={96}
-            className="rounded border border-white/15"
+            className="w-fit rounded border border-white/15 p-2"
             downloadFilename={`${publicSlug}-qr.png`}
           />
         </div>
