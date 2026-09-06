@@ -1,0 +1,47 @@
+---
+description: Admin Settings + Design system are the master chrome/control contract — do not reinvent
+alwaysApply: true
+---
+
+# Admin Settings & Design system (mandatory)
+
+Joel’s OCTO admin has one visual system and one place for master app controls.
+
+## Before any admin UI work
+
+1. Read `docs/octo-settings-contract.md` and `lib/settings/catalog.ts`.
+2. Use Design system tokens / CSS vars — never invent a second palette, gray card shell, or one-off hover style.
+3. Put **master controls** under `/admin/settings/<id>` registered in the catalog. Do **not** recreate the same knobs on Sales / Gardens / Blooms / etc. Feature pages may *use* settings; Settings *owns* them.
+
+## Design system — required primitives
+
+Source: `lib/design-system/tokens.ts`, applied via `components/DesignSystemProvider.tsx`, classes in `app/globals.css`.
+
+| Use | Do this | Don’t |
+|-----|---------|--------|
+| Accent / links | `var(--csc-accent)`, `.csc-link` | New hex accents or purple/indigo themes |
+| Shell background | `var(--csc-shell-bg)` / true black | Gray page fills, cream themes |
+| Lists | `.csc-list` + `.csc-list-row` | `space-y` gaps, gray card rows, custom hover borders |
+| Circular actions | `.csc-btn-circle` | One-off rounded buttons with new sizes/colors |
+| Section labels | `.csc-eyebrow` | Random uppercase styles |
+
+Editable tokens live at **Settings → Design system** (`/admin/settings/design-system`). New pages must consume those tokens so Settings edits apply app-wide.
+
+## Settings hub pattern
+
+- `/admin/settings` = **cards only** (from `SETTINGS_GROUPS` in `lib/settings/catalog.ts`).
+- Each implemented section = `/admin/settings/<id>` using `components/settings/SettingsSubpage.tsx` (text **← Settings** back link).
+- Card copy + intended controls are listed on each catalog entry — implement those; update the catalog when the product changes.
+- Status `legacy_deeplink` means controls still live on a feature page — **migrate into Settings**, don’t deepen the deep-link.
+
+## When adding a feature
+
+- Need a toggle/default/API-key status/credits/schedule? → Settings card + subpage first (or extend an existing card’s `controls` list).
+- Need a new list or button look? → Design system classes/tokens only.
+- Exception: entity-specific editors (one Bloom’s journey, one Garden’s zones) stay on that entity’s admin page — **defaults for new entities** belong in Settings.
+
+## Forbidden
+
+- Parallel “theme” or “appearance” panels outside Design system.
+- New admin pages with gray cards, purple accents, or non-token hover outlines.
+- Opening Sales/Gardens as a substitute for building Settings master controls when the user asked for Settings.
