@@ -1,6 +1,6 @@
 import { Resend } from "resend";
-import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems } from "../db/queue";
-import { assembleQueueItemDetail } from "../db/assemble";
+import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems, scoresByQueueItemId } from "../db/queue";
+import { assembleQueueItemDetailFromQueueItem } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
 import { getGmailConnectionStatus } from "../db/gmail";
 import { sendSelfEmailViaGmail } from "../gmail/send";
@@ -22,11 +22,38 @@ export type DigestSendResult = {
 
 const DEFAULT_FALLBACK_LOOKBACK_HOURS = 24;
 const DEFAULT_FROM = "Crowdsource Sales <onboarding@resend.dev>";
+/** Leads listed in one email. The backlog total is reported separately, so this is a readability cap. */
+const MAX_DIGEST_ITEMS = 25;
+/** Each assemble is ~10 queries; fanning all of them out at once times out against Supabase. */
+const ASSEMBLE_CONCURRENCY = 4;
 
-async function assembleMany(queueItems: ApprovalQueueItem[]): Promise<QueueItemDetail[]> {
-  return (await Promise.all(queueItems.map((qi) => assembleQueueItemDetail(qi.opportunityId)))).filter(
-    (d): d is QueueItemDetail => d !== null
-  );
+/**
+ * Rank by score with one batched query, then assemble details only for the leads that will
+ * actually appear in the email. Assembling the whole pending backlog first is what made the
+ * digest time out before it could send.
+ */
+async function assembleQualifying(
+  queueItems: ApprovalQueueItem[],
+  minScore: number,
+  limit: number
+): Promise<QueueItemDetail[]> {
+  if (queueItems.length === 0 || limit <= 0) return [];
+  const scores = await scoresByQueueItemId(queueItems);
+  const shortlist = queueItems
+    .map((item) => ({ item, score: scores.get(item.id) ?? -1 }))
+    .filter((entry) => entry.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+
+  const details: QueueItemDetail[] = [];
+  for (let i = 0; i < shortlist.length; i += ASSEMBLE_CONCURRENCY) {
+    const batch = await Promise.all(
+      shortlist.slice(i, i + ASSEMBLE_CONCURRENCY).map((item) => assembleQueueItemDetailFromQueueItem(item))
+    );
+    details.push(...batch.filter((d): d is QueueItemDetail => d !== null));
+  }
+  return sortByScoreDesc(filterDigestQualifyingItems(details, minScore));
 }
 
 /**
@@ -49,21 +76,15 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   const targetCount = getDigestTargetCount();
 
   const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
-  let items = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(newQueueItems), minScore));
+  let items = await assembleQualifying(newQueueItems, minScore, MAX_DIGEST_ITEMS);
   let backfilled = false;
 
   const shouldBackfill = items.length < targetCount && (!lastSucceeded || lastSucceeded.itemCount === 0);
   if (shouldBackfill) {
-    const allPending = await listQueueItems("pending");
-    const older = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
     const seen = new Set(items.map((i) => i.queueItem.id));
-    const merged = [...items];
-    for (const item of older) {
-      if (seen.has(item.queueItem.id)) continue;
-      seen.add(item.queueItem.id);
-      merged.push(item);
-    }
-    items = merged;
+    const allPending = (await listQueueItems("pending")).filter((item) => !seen.has(item.id));
+    const older = await assembleQualifying(allPending, minScore, MAX_DIGEST_ITEMS - items.length);
+    items = [...items, ...older];
     backfilled = items.length > 0;
   }
 
@@ -83,7 +104,7 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
   ]);
   const sinceIso =
     lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
-  const items = sortByScoreDesc(filterDigestQualifyingItems(await assembleMany(allPending), minScore));
+  const items = await assembleQualifying(allPending, minScore, MAX_DIGEST_ITEMS);
   return { items, sinceIso, backlogCount };
 }
 

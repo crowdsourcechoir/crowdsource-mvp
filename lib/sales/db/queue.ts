@@ -330,6 +330,27 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
   return sortQueueSidebarItems(sidebar);
 }
 
+/**
+ * Batched score lookup keyed by queue item id. Callers that only need to rank or filter by score
+ * must not assemble every pending item first — that N+1 fans out into thousands of queries and
+ * times out once the backlog is large (it is what stalled the morning digest).
+ */
+export async function scoresByQueueItemId(items: ApprovalQueueItem[]): Promise<Map<string, number>> {
+  const scoreIds = items.map((item) => item.prospectScoreId).filter((id): id is string => Boolean(id));
+  if (scoreIds.length === 0) return new Map();
+  const db = requireSupabaseAdmin();
+  const rows = await fetchInChunks<{ id: string; total_score: number }>(scoreIds, async (chunk) =>
+    db.from("prospect_scores").select("id, total_score").in("id", chunk)
+  );
+  const byScoreId = new Map(rows.map((row) => [row.id, Number(row.total_score)]));
+  const byQueueItem = new Map<string, number>();
+  for (const item of items) {
+    const score = item.prospectScoreId ? byScoreId.get(item.prospectScoreId) : undefined;
+    if (score !== undefined && Number.isFinite(score)) byQueueItem.set(item.id, score);
+  }
+  return byQueueItem;
+}
+
 /** Pending queue items created at/after `sinceIso` — the "what's new since the last digest" query. */
 export async function listQueueItemsCreatedSince(sinceIso: string): Promise<ApprovalQueueItem[]> {
   const db = requireSupabaseAdmin();
