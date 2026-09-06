@@ -7,6 +7,7 @@ import { listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import { isGenericMailboxEmail, isSendableContact, looksLikePersonName } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const contactId = typeof body?.contactId === "string" ? body.contactId : "";
     if (!contactId) return NextResponse.json({ error: "contactId is required" }, { status: 400 });
 
-    const item = await getQueueItem(itemId);
-    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    const loaded = await getQueueItem(itemId);
+    if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    let item;
+    try {
+      item = await ensureQueueItemActionable(loaded);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status ?? 500;
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status });
     }
 
     const opportunity = await getOpportunity(item.opportunityId);

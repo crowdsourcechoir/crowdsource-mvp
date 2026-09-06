@@ -3,6 +3,7 @@ import { getQueueItem } from "@/lib/sales/db/queue";
 import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { runPipelineForOrganization } from "@/lib/sales/pipeline/run-pipeline";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -14,10 +15,14 @@ export const maxDuration = 300;
 export async function POST(_request: Request, { params }: { params: Promise<{ itemId: string }> }) {
   try {
     const { itemId } = await params;
-    const item = await getQueueItem(itemId);
-    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    const loaded = await getQueueItem(itemId);
+    if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    let item;
+    try {
+      item = await ensureQueueItemActionable(loaded);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status ?? 500;
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status });
     }
     const opportunity = await getOpportunity(item.opportunityId);
     if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });

@@ -17,7 +17,8 @@ import {
   withSalesInitiative,
   type SalesInitiativeKey,
 } from "@/lib/sales/initiatives";
-import { enqueueOrgManually, ensureContactDrafts, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
+import { ensureContactDrafts, enqueueOrgManually, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
 import type { Contact, Organization, QueueItemDetail } from "@/lib/sales/types";
 
 export function splitPersonName(fullName: string): { firstName: string; lastName: string } | null {
@@ -262,8 +263,8 @@ export async function addContactToQueueItem(input: {
 }): Promise<AddQueueContactResult> {
   const item = await getQueueItem(input.itemId);
   if (!item) throw new Error("Queue item not found.");
-  if (item.status !== "pending") throw new Error("Queue item already decided.");
-  const opportunity = await getOpportunity(item.opportunityId);
+  const actionable = await ensureQueueItemActionable(item);
+  const opportunity = await getOpportunity(actionable.opportunityId);
   if (!opportunity) throw new Error("Opportunity not found.");
   const organization = await getOrganization(opportunity.organizationId);
   if (!organization) throw new Error("Organization not found.");
@@ -298,7 +299,7 @@ export async function addContactToQueueItem(input: {
       contact,
       hunter,
       selected: false,
-      detail: await assembleQueueItemDetailFromQueueItem(item),
+      detail: await assembleQueueItemDetailFromQueueItem(actionable),
       message: hunter.error ?? "Contact saved without an email — add one to draft outreach.",
     };
   }
@@ -317,7 +318,7 @@ export async function addContactToQueueItem(input: {
       contact,
       hunter,
       selected: false,
-      detail: await assembleQueueItemDetailFromQueueItem(item),
+      detail: await assembleQueueItemDetailFromQueueItem(actionable),
       message: `Saved ${fullName} but Hunter says ${email} will bounce — not added to the send list.`,
     };
   }
@@ -335,7 +336,7 @@ export async function addContactToQueueItem(input: {
       contact,
       hunter,
       selected: false,
-      detail: await assembleQueueItemDetailFromQueueItem(item),
+      detail: await assembleQueueItemDetailFromQueueItem(actionable),
       message: `Saved ${contact.fullName} (${email}) but Hunter could not confirm deliverability (${verified.hunterStatus ?? verified.status}) — not queued to send.`,
     };
   }
@@ -346,8 +347,8 @@ export async function addContactToQueueItem(input: {
     pipelineRunId: null,
   });
   const draft = created.drafts.find((d) => d.contactId === contact.id) ?? created.primaryDraft;
-  await setQueueItemOutreachDraft(item.id, draft.id);
-  const refreshed = await getQueueItem(item.id);
+  await setQueueItemOutreachDraft(actionable.id, draft.id);
+  const refreshed = await getQueueItem(actionable.id);
   const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : null;
 
   return {

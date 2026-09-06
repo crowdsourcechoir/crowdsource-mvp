@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getQueueItem } from "@/lib/sales/db/queue";
 import { getDraft, updateDraftEdits } from "@/lib/sales/db/outreach";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       return NextResponse.json({ error: "editedSubject and editedBody are required." }, { status: 400 });
     }
 
-    const item = await getQueueItem(itemId);
-    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    const loaded = await getQueueItem(itemId);
+    if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    let item;
+    try {
+      item = await ensureQueueItemActionable(loaded);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status ?? 500;
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status });
     }
     if (!item.outreachDraftId) {
       return NextResponse.json({ error: "No draft on this queue item." }, { status: 400 });

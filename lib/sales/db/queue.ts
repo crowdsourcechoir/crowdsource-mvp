@@ -412,6 +412,24 @@ export async function retractPendingQueueItemForOpportunity(opportunityId: strin
   return (data ?? []).length > 0;
 }
 
+export async function reopenQueueItem(id: string): Promise<ApprovalQueueItem> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .update({
+      status: "pending",
+      decision_notes: null,
+      decided_by: null,
+      decided_at: null,
+      deferred_until: null,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToQueueItem(data);
+}
+
 export async function decideQueueItem(
   id: string,
   input: { status: ApprovalQueueItemStatus; decisionNotes?: string | null; decidedBy?: string; deferredUntil?: string | null }

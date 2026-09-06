@@ -98,12 +98,10 @@ function pickPrimaryContact(
     const local = emailLocalPart(c.email) ?? "";
     const title = `${c.roleTitle ?? ""} ${c.roleCategory ?? ""}`.toLowerCase();
     if (generic) {
-      if (isConferenceType(opportunityTypeKey) || isFundraiserType(opportunityTypeKey)) {
-        if (/^events?$/.test(local)) return 20;
-        if (/^(info|contact|programming)$/.test(local)) return 21;
-        return 23;
-      }
-      return 24;
+      if (/^events?$/.test(local)) return 20;
+      if (/^(community|tickets|programming|experience|partnerships?)$/.test(local)) return 21;
+      if (/^(info|contact|hello)$/.test(local)) return 22;
+      return 23;
     }
     if (isConferenceType(opportunityTypeKey)) {
       if (/show director|conference programming|event programming|content and programming|event strategy/.test(title))

@@ -1,5 +1,6 @@
 import { createOutreachActivity, listActivitiesForOpportunity } from "@/lib/sales/db/activities";
-import { getContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
+import { getContact } from "@/lib/sales/db/contacts";
+import { getOrganization } from "@/lib/sales/db/organizations";
 import {
   getOpportunity,
   updateOpportunityRelationshipStage,
@@ -7,15 +8,10 @@ import {
   updateOpportunityTouchTimestamps,
 } from "@/lib/sales/db/opportunities";
 import { listDraftsForOpportunity, updateDraftDecision, createOutreachDraft } from "@/lib/sales/db/outreach";
-import {
-  decideQueueItem,
-  getQueueItem,
-  setQueueItemOutreachDraft,
-} from "@/lib/sales/db/queue";
-import { isSendableContact } from "@/lib/sales/dedupe";
+import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
-import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
-import { pickNextRemainingInitialDraft } from "@/lib/sales/outreach/send-guard";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
+import { resolveRemainingAfterSend } from "@/lib/sales/outreach/remaining-contacts";
 import { EXTERNAL_SENT_BODY, EXTERNAL_SENT_SUBJECT } from "@/lib/sales/outreach/external-sent";
 import { soonestFollowUpIso } from "@/lib/sales/outreach/nudge-due";
 import type { OutreachDraft } from "@/lib/sales/types";
@@ -49,17 +45,13 @@ export async function markContactSent(input: {
   editedSubject?: string | null;
   editedBody?: string | null;
 }): Promise<MarkContactSentResult> {
-  const item = await getQueueItem(input.itemId);
-  if (!item) {
+  const loaded = await getQueueItem(input.itemId);
+  if (!loaded) {
     const err = new Error("Not found");
     (err as Error & { status: number }).status = 404;
     throw err;
   }
-  if (item.status !== "pending") {
-    const err = new Error("Queue item already decided.");
-    (err as Error & { status: number }).status = 409;
-    throw err;
-  }
+  const item = await ensureQueueItemActionable(loaded);
 
   const opportunity = await getOpportunity(item.opportunityId);
   if (!opportunity) {
@@ -68,15 +60,13 @@ export async function markContactSent(input: {
     throw err;
   }
 
-  const [contact, draftsRaw, activitiesRaw, orgContactsRaw] = await Promise.all([
+  const [contact, draftsRaw, activitiesRaw] = await Promise.all([
     getContact(input.contactId),
     listDraftsForOpportunity(opportunity.id),
     listActivitiesForOpportunity(opportunity.id),
-    listContactsForOrganization(opportunity.organizationId),
   ]);
   const drafts = draftsRaw ?? [];
   const activities = activitiesRaw ?? [];
-  const orgContacts = orgContactsRaw ?? [];
 
   if (!contact) {
     const err = new Error("Contact not found");
@@ -158,29 +148,16 @@ export async function markContactSent(input: {
   );
   await Promise.all(writes);
 
-  const readyIds = new Set(
-    orgContacts
-      .filter(
-        (c) =>
-          isSendableContact(c) &&
-          c.email &&
-          !isOutboundEmailBlocked(c.email)
-      )
-      .map((c) => c.id)
-  );
-  const next = pickNextRemainingInitialDraft({
-    drafts,
-    readyContactIds: readyIds,
+  const organization = await getOrganization(opportunity.organizationId);
+  const afterSend = await resolveRemainingAfterSend({
+    item,
+    opportunity,
+    organization,
     justSentDraftId: draft.id,
     justSentContactId: input.contactId,
   });
-  const nextDraft = next ? drafts.find((d) => d.id === next.id) ?? null : null;
-
-  const markedCurrent = item.outreachDraftId === draft.id;
-  let remaining = item.kind !== "initial" || Boolean(nextDraft);
-  if (item.kind === "initial" && nextDraft && markedCurrent) {
-    await setQueueItemOutreachDraft(input.itemId, nextDraft.id);
-  } else if (item.kind === "initial" && !nextDraft) {
+  let remaining = item.kind !== "initial" || afterSend.remaining;
+  if (item.kind === "initial" && !afterSend.remaining) {
     remaining = false;
     await decideQueueItem(input.itemId, {
       status: "approved",
@@ -195,7 +172,7 @@ export async function markContactSent(input: {
     nextFollowUpAt,
     alreadySent,
     contactId: input.contactId,
-    nextContactId: nextDraft?.contactId ?? null,
-    nextDraftId: nextDraft?.id ?? null,
+    nextContactId: afterSend.nextDraft?.contactId ?? null,
+    nextDraftId: afterSend.nextDraft?.id ?? null,
   };
 }

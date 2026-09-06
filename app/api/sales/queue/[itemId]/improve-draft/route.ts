@@ -5,6 +5,7 @@ import { getOpportunity } from "@/lib/sales/db/opportunities";
 import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
 import { improveOutreachDraft } from "@/lib/sales/outreach/improve-draft";
+import { ensureQueueItemActionable } from "@/lib/sales/outreach/queue-actionable";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { draftToPlainText, coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
 import { readSalesInitiative } from "@/lib/sales/initiatives";
@@ -19,10 +20,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
   try {
     const { itemId } = await params;
     const body = await request.json().catch(() => ({}));
-    const item = await getQueueItem(itemId);
-    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+    const loaded = await getQueueItem(itemId);
+    if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    let item;
+    try {
+      item = await ensureQueueItemActionable(loaded);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status ?? 500;
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status });
     }
     if (!item.outreachDraftId) {
       return NextResponse.json({ error: "No draft on this queue item." }, { status: 400 });

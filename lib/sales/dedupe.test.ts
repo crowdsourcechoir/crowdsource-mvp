@@ -37,14 +37,26 @@ function contact(partial: Partial<Contact> & Pick<Contact, "fullName" | "email" 
 async function main() {
   assert.equal(looksLikePersonName("Thomas Sheehan"), true);
   assert.equal(looksLikePersonName("Events Contact"), false);
+  assert.equal(looksLikePersonName("Community & Social Impact team"), false);
+  assert.equal(looksLikePersonName("Marketing Team Lead"), true);
   assert.equal(looksLikePersonName("info@fredhutch.org"), false);
   assert.equal(looksLikeGenericRoleName("Events Contact"), true);
+  assert.equal(looksLikeGenericRoleName("Community & Social Impact team"), true);
 
   assert.equal(isGenericMailboxEmail("events@fredhutch.org"), true);
   assert.equal(isGenericMailboxEmail("info@org.org"), true);
   assert.equal(isGenericMailboxEmail("EVENTS+gala@FredHutch.org"), true);
   assert.equal(isGenericMailboxEmail("tsheehan@fredhutch.org"), false);
   assert.equal(genericMailboxLabel("events@fredhutch.org"), "Events inbox");
+
+  const eventsInbox = contact({
+    fullName: "Community & Social Impact team",
+    email: "community@stormbasketball.com",
+    emailVerificationStatus: "unverified",
+  });
+  assert.equal(isSelectableContact(eventsInbox), true);
+  assert.equal(isSendableContact(eventsInbox), true);
+  assert.equal(contactGreetingName(eventsInbox), "there");
 
   const events = contact({
     fullName: "Events Contact",

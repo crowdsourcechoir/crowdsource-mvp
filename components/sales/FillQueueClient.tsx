@@ -47,9 +47,14 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Fill queue failed");
       const s = data.summary;
+      const hunted = s.eventContactsAdded ?? 0;
+      const credits = s.credits?.delta;
+      const creditBit =
+        credits == null ? "" : credits === 0 ? " Hunter used 0 credits." : credits === 1 ? " Hunter used 1 credit." : ` Hunter used ${credits} credits.`;
       setResult(
-        `Reprocessed ${s.attempted} of ${s.considered} blocked lead(s). Check the ` +
-          `queue — newly verified contacts land there.`
+        `Reprocessed ${s.attempted} of ${s.considered} blocked lead(s)` +
+          (hunted ? ` · added ${hunted} event contact${hunted === 1 ? "" : "s"}` : "") +
+          `. Check the queue — event inboxes and verified people land there.${creditBit}`
       );
       await load();
     } catch (err) {
@@ -65,9 +70,9 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-400/90">Fill the queue</h2>
           <p className="mt-1 text-xs text-gray-400">
-            Re-runs pipeline on high-scoring leads stuck at <span className="text-gray-300">awaiting contact</span>{" "}
-            (score ≥{minScore}). Enrichment retries + leadership deepen can clear the verified-email gate without
-            lowering quality.
+            Hunter looks for event-team people and general event inboxes (events@, community@, tickets@, info@) on
+            high-scoring leads stuck at <span className="text-gray-300">awaiting contact</span> (score ≥{minScore}),
+            then re-runs the pipeline so those doorways can land in the queue.
           </p>
           <p className="mt-2 text-sm text-gray-300">
             {solidCount === null ? (
