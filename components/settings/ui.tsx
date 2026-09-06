@@ -75,22 +75,41 @@ export function SettingsButton({
   variant = "ghost",
   type = "button",
   title,
+  href,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  /** primary = selected/accent lime; ghost = idle gray pill; danger = destructive */
   variant?: "ghost" | "primary" | "danger";
   type?: "button" | "submit";
   title?: string;
+  /** When set, renders as a same-styled link (e.g. Connect Gmail). */
+  href?: string;
 }) {
+  // Match StatusPill: full pill, caps, tracked — selected stays lime, idle stays gray.
   const base =
-    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors disabled:cursor-not-allowed disabled:opacity-50";
   const styles =
     variant === "primary"
-      ? "border border-[var(--csc-accent)] text-[var(--csc-accent)] hover:bg-[var(--csc-accent)] hover:text-black"
+      ? "border-[var(--csc-accent)] text-[var(--csc-accent)] hover:bg-[var(--csc-accent)] hover:text-black"
       : variant === "danger"
-        ? "border border-red-500/50 text-red-200 hover:border-red-400 hover:text-red-100"
-        : "border border-white/15 text-gray-300 hover:border-[var(--csc-accent)] hover:text-white";
+        ? "border-red-500/50 text-red-200 hover:border-red-400 hover:text-red-100"
+        : "border-white/20 text-gray-300 hover:border-white/40 hover:text-white";
+
+  if (href) {
+    return (
+      <a
+        href={disabled ? undefined : href}
+        title={title}
+        aria-disabled={disabled || undefined}
+        className={`${base} ${styles} ${disabled ? "pointer-events-none opacity-50" : ""}`}
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
     <button type={type} onClick={onClick} disabled={disabled} title={title} className={`${base} ${styles}`}>
       {children}
