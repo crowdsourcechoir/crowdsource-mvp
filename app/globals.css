@@ -2,16 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Master chrome tokens — editable from Settings → Design system */
+  --crowdsource-accent: #cfff81;
+  --csc-accent: var(--crowdsource-accent);
+  --csc-shell-bg: #000000;
+  --csc-row-divider: rgba(255, 255, 255, 0.1);
+  --csc-row-padding-y: 16px;
+  --csc-outline-width: 1px;
+  --csc-circle-size: 32px;
+  --csc-link: var(--csc-accent);
+}
+
 html,
 body {
   min-height: 100%;
-  background: #000000;
+  background: var(--csc-shell-bg, #000000);
 }
 
 body {
   min-height: 100dvh;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ——— Admin design-system primitives (use these instead of reinventing) ——— */
+
+.csc-link {
+  color: var(--csc-link, #cfff81);
+  text-decoration: none;
+}
+.csc-link:hover {
+  text-decoration: underline;
+}
+
+.csc-btn-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--csc-circle-size, 32px);
+  height: var(--csc-circle-size, 32px);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: inherit;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.csc-btn-circle:hover {
+  border-color: var(--csc-accent, #cfff81);
+  color: var(--csc-accent, #cfff81);
+}
+
+.csc-list {
+  border-top: 1px solid var(--csc-row-divider);
+  border-bottom: 1px solid var(--csc-row-divider);
+}
+.csc-list > * + * {
+  border-top: 1px solid var(--csc-row-divider);
+}
+
+.csc-list-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: transparent;
+  padding: var(--csc-row-padding-y, 16px) 1rem;
+  cursor: pointer;
+  outline: var(--csc-outline-width, 1px) solid transparent;
+  outline-offset: calc(var(--csc-outline-width, 1px) * -1);
+  transition: outline-color 120ms ease;
+}
+@media (min-width: 640px) {
+  .csc-list-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.csc-list-row:hover,
+.csc-list-row:focus-visible {
+  outline-color: var(--csc-accent, #cfff81);
+}
+
+.csc-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--csc-accent, #cfff81);
 }
 
 button,

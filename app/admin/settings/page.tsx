@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import DesignSystemControls from "@/components/settings/DesignSystemControls";
 
 type SettingsCard = {
   title: string;
@@ -106,8 +107,16 @@ const settingsGroups: { heading: string; blurb: string; cards: SettingsCard[] }[
     cards: [
       {
         domain: "Appearance",
+        title: "Design system",
+        description:
+          "Master CSS chrome: lime accent, transparent flush rows, hover outlines, circular buttons, and link color.",
+        href: "/admin/settings#design-system",
+        status: "Edit tokens",
+      },
+      {
+        domain: "Appearance",
         title: "Admin chrome",
-        description: "Sidebar open/closed state is saved in this browser. True-black shell is the system default.",
+        description: "Sidebar open/closed state is saved in this browser. Shell background follows Design system.",
         href: "/admin/settings#appearance",
         status: "Active",
       },
@@ -126,14 +135,12 @@ function SettingsCardView({ card }: { card: SettingsCard }) {
   return (
     <Link
       href={card.href}
-      className="rounded-xl border border-transparent bg-transparent p-5 transition-colors hover:border-[#CFFF81]"
+      className="rounded-xl border border-transparent bg-transparent p-5 transition-[outline-color] hover:outline hover:outline-[length:var(--csc-outline-width)] hover:outline-[var(--csc-accent)] hover:-outline-offset-1"
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">{card.domain}</p>
       <h3 className="mt-2 text-base font-semibold text-white">{card.title}</h3>
       <p className="mt-2 text-sm leading-6 text-gray-400">{card.description}</p>
-      {card.status ? (
-        <span className="mt-4 inline-flex text-xs font-medium text-[#CFFF81]">{card.status} →</span>
-      ) : null}
+      {card.status ? <span className="csc-link mt-4 inline-flex text-xs font-medium">{card.status} →</span> : null}
     </Link>
   );
 }
@@ -162,13 +169,15 @@ export default function SettingsPage() {
   return (
     <div className="w-full space-y-10 text-white">
       <div className="mb-2 sm:mb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">OCTO Control</p>
+        <p className="csc-eyebrow">OCTO Control</p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Settings</h1>
         <p className="mt-2 max-w-3xl text-sm text-gray-400">
-          One place to steer account identity, integrations, and the living-system defaults that keep Sales,
-          Composer, Gardens, Blooms, Roots, and Live coherent.
+          One place to steer account identity, integrations, living-system defaults, and the shared visual chrome that
+          keeps every admin page aligned.
         </p>
       </div>
+
+      <DesignSystemControls />
 
       {settingsGroups.map((group) => (
         <Section key={group.heading} heading={group.heading} blurb={group.blurb}>
@@ -181,24 +190,27 @@ export default function SettingsPage() {
       <section id="profile" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-base font-semibold text-white">Profile</h2>
         <p className="mt-2 text-sm text-gray-400">
-          Account profile editing lands next. For now, Sales outreach identity comes from the connected Gmail
-          account, and facilitator presence is per Bloom / Live session.
+          Account profile editing lands next. For now, Sales outreach identity comes from the connected Gmail account,
+          and facilitator presence is per Bloom / Live session.
         </p>
       </section>
 
       <section id="access" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-base font-semibold text-white">Sign-in & access</h2>
         <p className="mt-2 text-sm text-gray-400">
-          Admin auth stays on the existing gate. Multi-user roles and invite flows can live here when the workspace
-          grows beyond a single operator.
+          Admin auth stays on the existing gate. Multi-user roles and invite flows can live here when the workspace grows
+          beyond a single operator.
         </p>
       </section>
 
       <section id="appearance" className="scroll-mt-8 rounded-xl border border-white/10 bg-transparent p-5">
         <h2 className="text-base font-semibold text-white">Appearance</h2>
         <p className="mt-2 text-sm text-gray-400">
-          Shell background is solid black. Click the sidebar divider to switch between icon-only and labeled
-          navigation; that preference is saved in this browser.
+          Shell background, accent, and list chrome are controlled in{" "}
+          <a href="#design-system" className="csc-link">
+            Design system
+          </a>
+          . Sidebar collapse preference is saved in this browser.
         </p>
       </section>
 

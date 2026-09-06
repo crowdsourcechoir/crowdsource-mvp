@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import AdminShell from "./AdminShell";
+import DesignSystemProvider from "./DesignSystemProvider";
 
 type AdminLayoutClientProps = {
   children: React.ReactNode;
@@ -29,5 +30,9 @@ function titleFromPath(pathname: string): string {
 export default function AdminLayoutClient({ children }: AdminLayoutClientProps) {
   const pathname = usePathname();
   const title = titleFromPath(pathname ?? "");
-  return <AdminShell title={title}>{children}</AdminShell>;
+  return (
+    <DesignSystemProvider>
+      <AdminShell title={title}>{children}</AdminShell>
+    </DesignSystemProvider>
+  );
 }
