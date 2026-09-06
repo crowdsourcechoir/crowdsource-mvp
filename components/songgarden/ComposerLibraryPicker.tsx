@@ -35,6 +35,16 @@ function pillClass(active: boolean): string {
     : "border border-gray-600 text-gray-300 hover:bg-gray-800";
 }
 
+const GROUP_LABEL_CLASS =
+  "px-3 pb-1 pt-2 text-[9px] font-semibold uppercase tracking-[0.28em] text-gray-500";
+
+function rowClass(active: boolean, muted = false): string {
+  const base =
+    "flex w-full items-center gap-2 rounded-lg text-left transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#CFFF81]/60";
+  if (active) return `${base} bg-[#CFFF81]/15 text-[#CFFF81]`;
+  return `${base} ${muted ? "text-gray-400" : "text-gray-200"} hover:bg-[#CFFF81]/10 hover:text-white`;
+}
+
 function currentLabel(current: LibraryTarget): string {
   if (current.type === "master") return "Master";
   if (current.type === "garden") return current.title || "Garden";
@@ -110,7 +120,9 @@ export default function ComposerLibraryPicker({
         disabled={loading}
         title={label}
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex max-w-[14rem] items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 ${pillClass(true)}`}
+        className={`inline-flex max-w-[14rem] items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-shadow disabled:opacity-50 ${pillClass(
+          true
+        )} ${open ? "ring-2 ring-[#CFFF81]/30" : ""}`}
       >
         <span className="truncate">{loading ? "Library…" : label}</span>
         <svg
@@ -127,23 +139,24 @@ export default function ComposerLibraryPicker({
           id={menuId}
           role="listbox"
           aria-label="Composer library"
-          className="absolute right-0 z-50 mt-1.5 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/15 bg-[#0c0c0e] shadow-xl shadow-black/50"
+          className="absolute right-0 z-50 mt-1.5 w-[min(17rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl shadow-black/70"
         >
-          <div className="max-h-72 overflow-y-auto py-1 text-[12px]">
+          <div className="max-h-72 overflow-y-auto p-1 text-[11px]">
             <button
               type="button"
               role="option"
               aria-selected={current.type === "master"}
               onClick={() => pick({ type: "master" })}
-              className={`flex w-full items-center px-3 py-2 text-left hover:bg-white/5 ${
-                current.type === "master" ? "text-[#CFFF81]" : "text-gray-200"
-              }`}
+              className={`${rowClass(current.type === "master")} px-2.5 py-1.5 font-medium`}
             >
-              Master — all sounds
+              <span className="truncate">Master — all sounds</span>
             </button>
 
             {gardens.length > 0 ? (
-              <div className="my-1 border-t border-white/10" />
+              <>
+                <div className="mx-2 mt-1 border-t border-white/10" />
+                <p className={GROUP_LABEL_CLASS}>Song Gardens</p>
+              </>
             ) : null}
 
             {gardens.map((garden) => {
@@ -157,17 +170,15 @@ export default function ComposerLibraryPicker({
               const isOpen = expanded[garden.id] ?? true;
               return (
                 <div key={garden.id}>
-                  <div className="flex items-stretch">
+                  <div className="flex items-stretch gap-0.5">
                     <button
                       type="button"
                       role="option"
                       aria-selected={gardenActive}
                       onClick={() => pick(gardenTarget)}
-                      className={`min-w-0 flex-1 truncate px-3 py-2 text-left hover:bg-white/5 ${
-                        gardenActive ? "text-[#CFFF81]" : "text-gray-200"
-                      }`}
+                      className={`${rowClass(gardenActive)} min-w-0 flex-1 px-2.5 py-1.5 font-medium`}
                     >
-                      {garden.title}
+                      <span className="truncate">{garden.title}</span>
                     </button>
                     {garden.blooms.length > 0 ? (
                       <button
@@ -176,7 +187,7 @@ export default function ComposerLibraryPicker({
                         onClick={() =>
                           setExpanded((prev) => ({ ...prev, [garden.id]: !isOpen }))
                         }
-                        className="px-2.5 text-gray-500 hover:text-white"
+                        className="rounded-lg px-2 text-gray-500 transition-colors hover:bg-[#CFFF81]/10 hover:text-[#CFFF81] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#CFFF81]/60"
                       >
                         <svg
                           viewBox="0 0 12 12"
@@ -206,11 +217,15 @@ export default function ComposerLibraryPicker({
                             role="option"
                             aria-selected={active}
                             onClick={() => pick(bloomTarget)}
-                            className={`flex w-full items-center truncate py-1.5 pl-7 pr-3 text-left hover:bg-white/5 ${
-                              active ? "text-[#CFFF81]" : "text-gray-400"
-                            }`}
+                            className={`${rowClass(active, true)} py-1 pl-3 pr-2.5`}
                           >
-                            {bloom.title}
+                            <span
+                              className={`ml-1 h-3 w-px shrink-0 ${
+                                active ? "bg-[#CFFF81]" : "bg-white/15"
+                              }`}
+                              aria-hidden
+                            />
+                            <span className="truncate">{bloom.title}</span>
                           </button>
                         );
                       })
@@ -221,10 +236,8 @@ export default function ComposerLibraryPicker({
 
             {looseBlooms.length > 0 ? (
               <>
-                <div className="my-1 border-t border-white/10" />
-                <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">
-                  Blooms
-                </p>
+                <div className="mx-2 mt-1 border-t border-white/10" />
+                <p className={GROUP_LABEL_CLASS}>Blooms</p>
                 {looseBlooms.map((bloom) => {
                   const bloomTarget: LibraryTarget = {
                     type: "bloom",
@@ -240,11 +253,9 @@ export default function ComposerLibraryPicker({
                       role="option"
                       aria-selected={active}
                       onClick={() => pick(bloomTarget)}
-                      className={`flex w-full items-center truncate px-3 py-2 text-left hover:bg-white/5 ${
-                        active ? "text-[#CFFF81]" : "text-gray-200"
-                      }`}
+                      className={`${rowClass(active)} px-2.5 py-1.5`}
                     >
-                      {bloom.title}
+                      <span className="truncate">{bloom.title}</span>
                     </button>
                   );
                 })}
@@ -252,7 +263,7 @@ export default function ComposerLibraryPicker({
             ) : null}
 
             {!loading && gardens.length === 0 && looseBlooms.length === 0 ? (
-              <p className="px-3 py-2 text-gray-500">No gardens or blooms yet.</p>
+              <p className="px-2.5 py-2 text-gray-500">No gardens or blooms yet.</p>
             ) : null}
           </div>
         </div>
