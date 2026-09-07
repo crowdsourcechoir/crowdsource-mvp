@@ -204,13 +204,10 @@ export default function AdminSideNav() {
       } ${ready ? "opacity-100" : "opacity-0"}`}
       aria-label="Admin navigation"
     >
-      <div className={`flex items-center gap-3 px-3 py-4 ${collapsed ? "justify-center" : "px-4"}`}>
-        <Link href="/admin/gardens" className="flex min-w-0 items-center gap-3" title="Crowdsource Choir">
+      <div className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "px-4"}`}>
+        <Link href="/admin/gardens" className="flex shrink-0 items-center" title="Crowdsource Choir">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Crowdsource Choir" className="h-8 w-auto shrink-0" />
-          {!collapsed && (
-            <span className="truncate text-sm font-semibold tracking-wide text-white">Crowdsource</span>
-          )}
         </Link>
       </div>
 
