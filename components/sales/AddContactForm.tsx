@@ -54,31 +54,31 @@ export default function AddContactForm({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-md border border-dashed border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:border-gray-500 hover:text-white"
+          className="rounded-lg border border-[var(--csc-accent)]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
         >
           + Add contact
         </button>
       ) : (
-        <form onSubmit={submit} className="rounded-lg border border-gray-800 bg-gray-950 p-3">
+        <form onSubmit={submit} className="rounded-lg border border-white/15 bg-black p-3">
           <p className="text-xs text-gray-500">Named person, or a general inbox like info@ / events@. Leave email blank to let Hunter look up a person from this org’s website.</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             <input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Name, or blank for info@ / events@"
-              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
+              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
             />
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email (info@ / events@ ok)"
-              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
+              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
             />
             <input
               value={roleTitle}
               onChange={(e) => setRoleTitle(e.target.value)}
               placeholder="Role (optional)"
-              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-white placeholder:text-gray-500"
+              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
             />
           </div>
           {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
@@ -86,7 +86,7 @@ export default function AddContactForm({
             <button
               type="submit"
               disabled={busy || (!fullName.trim() && !email.trim())}
-              className="rounded-md bg-sky-700 px-3 py-1 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+              className="rounded-lg bg-[var(--csc-accent)] px-3 py-1 text-xs font-semibold text-black hover:opacity-90 disabled:opacity-50"
             >
               {busy ? "Adding…" : "Add contact"}
             </button>
@@ -96,7 +96,7 @@ export default function AddContactForm({
                 setOpen(false);
                 setError(null);
               }}
-              className="rounded-md border border-gray-700 px-3 py-1 text-xs text-gray-300 hover:bg-gray-800"
+              className="rounded-lg border border-white/15 px-3 py-1 text-xs text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
             >
               Cancel
             </button>

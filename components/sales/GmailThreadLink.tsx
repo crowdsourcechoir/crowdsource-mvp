@@ -22,7 +22,7 @@ export default function GmailThreadLink({
       href={gmailThreadUrl(threadId, email)}
       target="_blank"
       rel="noreferrer"
-      className={className ?? "text-sm text-sky-400 hover:underline"}
+      className={className ?? "csc-link text-sm hover:underline"}
     >
       {children ?? "Open this thread →"}
     </a>

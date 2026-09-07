@@ -79,10 +79,10 @@ export function outreachLabel(row: ContactOutreach | null | undefined): { text: 
     Boolean(row.sentAt) &&
     Boolean(row.repliedAt) &&
     new Date(row.sentAt!).getTime() >= new Date(row.repliedAt!).getTime();
-  if (sentAfterReply) return { text: "sent", className: "text-sky-300" };
+  if (sentAfterReply) return { text: "sent", className: "text-[var(--csc-accent)]" };
   if (row.repliedAt && row.replyKind === "auto") return { text: "auto-reply", className: "text-amber-300" };
-  if (row.repliedAt) return { text: "replied", className: "text-[#CFFF81]" };
-  if (row.sentAt) return { text: "sent", className: "text-sky-300" };
+  if (row.repliedAt) return { text: "replied", className: "text-[var(--csc-accent)]" };
+  if (row.sentAt) return { text: "sent", className: "text-[var(--csc-accent)]" };
   return null;
 }
 

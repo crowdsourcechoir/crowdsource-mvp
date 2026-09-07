@@ -57,7 +57,7 @@ export default function FollowUpControls({
   }
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+    <div className="rounded-lg border border-white/10 bg-black p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow up</p>
         <p className="text-sm text-white">{value ? formatFollowUpDay(value) : "Not set"}</p>
@@ -69,7 +69,7 @@ export default function FollowUpControls({
             type="button"
             disabled={busy}
             onClick={() => void save({ preset: preset.key })}
-            className="rounded-full border border-gray-700 px-2.5 py-1 text-xs text-gray-200 hover:border-gray-500 disabled:opacity-50"
+            className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
           >
             {preset.label}
           </button>
@@ -78,7 +78,7 @@ export default function FollowUpControls({
           type="button"
           disabled={busy || !value}
           onClick={() => void save({ clear: true })}
-          className="rounded-full border border-gray-800 px-2.5 py-1 text-xs text-gray-500 hover:border-gray-600 disabled:opacity-50"
+          className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-gray-500 hover:border-white/20 disabled:opacity-50"
         >
           Clear
         </button>
@@ -93,7 +93,7 @@ export default function FollowUpControls({
             setCustom(e.target.value);
             if (e.target.value) void save({ date: e.target.value });
           }}
-          className="rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-xs text-white disabled:opacity-50"
+          className="rounded-lg border border-white/15 bg-black px-2 py-1 text-xs text-white [color-scheme:dark] focus:border-[var(--csc-accent)] focus:outline-none disabled:opacity-50"
         />
       </label>
       {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}

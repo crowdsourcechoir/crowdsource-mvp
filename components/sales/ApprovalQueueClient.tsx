@@ -937,13 +937,16 @@ export default function ApprovalQueueClient() {
                 <button
                   key={s.key}
                   type="button"
-                  disabled={busy || active}
-                  onClick={() => void moveFunnel(s.key)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  disabled={busy}
+                  aria-pressed={active}
+                  onClick={() => {
+                    if (!active) void moveFunnel(s.key);
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                     active
-                      ? "bg-[#CFFF81] text-[#1a1530]"
-                      : "border border-gray-600 text-gray-300 hover:bg-gray-800"
-                  } disabled:opacity-60`}
+                      ? "bg-[var(--csc-accent)] text-black"
+                      : "border border-white/15 bg-transparent text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {s.label}
                 </button>
@@ -974,8 +977,8 @@ export default function ApprovalQueueClient() {
                       <div
                         className={`rounded-lg border px-3 py-2 text-sm ${
                           selected
-                            ? "border-sky-600 bg-sky-950/40 text-white"
-                            : "border-gray-800 bg-gray-900/40 text-gray-200"
+                            ? "border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 text-white"
+                            : "border-white/10 bg-black text-gray-200"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -999,7 +1002,7 @@ export default function ApprovalQueueClient() {
                               ) : c.emailVerificationStatus === "invalid" ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
                               ) : isGenericMailboxEmail(c.email) ? (
-                                <span className="ml-2 text-xs font-medium text-sky-300">inbox</span>
+                                <span className="ml-2 text-xs font-medium text-[var(--csc-accent)]">inbox</span>
                               ) : (
                                 <span className="ml-2 text-xs text-amber-400">unverified</span>
                               )}
@@ -1034,7 +1037,7 @@ export default function ApprovalQueueClient() {
                               <GmailThreadLink
                                 threadId={outreach?.gmailThreadId || current.opportunity.gmailThreadId || ""}
                                 accountEmail={gmailEmail}
-                                className="text-sky-400 underline"
+                                className="csc-link underline"
                               >
                                 Open this thread
                               </GmailThreadLink>
@@ -1119,49 +1122,47 @@ export default function ApprovalQueueClient() {
             ) : (
               <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
             )}
-            {current.queueItem.status === "pending" && (
-              <div className="mt-3 flex flex-wrap items-start gap-2">
-                <AddContactForm
-                  itemId={current.queueItem.id}
-                  onAdded={(detail, message) => {
-                    if (detail) {
-                      replaceDetail(current.queueItem.id, detail);
-                      const d = detail.draft;
-                      if (d) {
-                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
-                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
-                      }
+            <div className="mt-3 flex flex-wrap items-start gap-2">
+              <AddContactForm
+                itemId={current.queueItem.id}
+                onAdded={(detail, message) => {
+                  if (detail) {
+                    replaceDetail(current.queueItem.id, detail);
+                    const d = detail.draft;
+                    if (d) {
+                      setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                      setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
                     }
-                    showCopyStatus(message);
-                  }}
-                />
-                <FindMoreContactsForm
-                  itemId={current.queueItem.id}
-                  orgName={current.organization.name}
-                  domainHint={current.organization.domain ?? current.organization.websiteUrl}
-                  open={findContactsOpen}
-                  onOpenChange={setFindContactsOpen}
-                  onFound={(detail, message) => {
-                    if (detail) {
-                      replaceDetail(current.queueItem.id, detail);
-                      const d = detail.draft;
-                      if (d) {
-                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
-                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
-                      }
+                  }
+                  showCopyStatus(message);
+                }}
+              />
+              <FindMoreContactsForm
+                itemId={current.queueItem.id}
+                orgName={current.organization.name}
+                domainHint={current.organization.domain ?? current.organization.websiteUrl}
+                open={findContactsOpen}
+                onOpenChange={setFindContactsOpen}
+                onFound={(detail, message) => {
+                  if (detail) {
+                    replaceDetail(current.queueItem.id, detail);
+                    const d = detail.draft;
+                    if (d) {
+                      setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                      setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
                     }
-                    showCopyStatus(message);
-                  }}
-                />
-              </div>
-            )}
+                  }
+                  showCopyStatus(message);
+                }}
+              />
+            </div>
           </div>
 
           {conversationThreadId ? (
-            <div className="mt-4 rounded-xl border border-sky-800/70 bg-sky-950/20 p-4">
+            <div className="mt-4 rounded-xl border border-[var(--csc-accent)]/30 bg-black p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">Gmail thread</h3>
+                  <h3 className="csc-eyebrow">Gmail thread</h3>
                   {conversationSnippet ? (
                     <p className="mt-2 line-clamp-4 text-sm text-gray-200">{conversationSnippet}</p>
                   ) : (
@@ -1175,9 +1176,9 @@ export default function ApprovalQueueClient() {
                 <GmailThreadLink
                   threadId={conversationThreadId}
                   accountEmail={gmailEmail}
-                  className="inline-flex shrink-0 items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:border-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/10"
                 >
-                  Open in Gmail
+                  Open Gmail
                 </GmailThreadLink>
               </div>
             </div>
@@ -1301,7 +1302,7 @@ export default function ApprovalQueueClient() {
               {current.contact?.email ? (
                 <>
                   {" "}
-                  at <span className="text-sky-300">{current.contact.email}</span>
+                  at <span className="text-[var(--csc-accent)]">{current.contact.email}</span>
                 </>
               ) : null}
               {gmailConnected && gmailSendEnabled
