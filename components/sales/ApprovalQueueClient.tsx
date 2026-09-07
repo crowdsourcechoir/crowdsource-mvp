@@ -27,7 +27,6 @@ import {
   QUEUE_FUNNEL_OPTIONS,
   matchesQueueFunnel,
   parseQueueFunnel,
-  queueFunnelLabel,
   type QueueFunnelFilter,
 } from "@/lib/sales/queue/funnel";
 import {
@@ -809,7 +808,7 @@ export default function ApprovalQueueClient() {
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
-            No {queueCategoryLabel(category).toLowerCase()} in the queue.
+            No matches for these filters.
           </p>
         ) : (
         <ul className="max-h-[75vh] overflow-y-auto overscroll-contain">
