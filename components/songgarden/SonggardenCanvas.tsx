@@ -6,6 +6,7 @@ import ClipDetailPanel from "./ClipDetailPanel";
 import { useSonggardenPoll } from "./useSonggardenPoll";
 import { SONGGARDEN_CATEGORIES } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
+import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 
 type ComposerScope = "bloom" | "garden" | "master";
 type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
@@ -43,12 +44,6 @@ type Props = {
   /** Compact library switcher (Master / gardens / blooms). Replaces scope pills. */
   libraryPicker?: ReactNode;
 };
-
-function pillClass(active: boolean): string {
-  return active
-    ? "bg-[#CFFF81] text-[#1a1530]"
-    : "border border-gray-600 text-gray-300 hover:bg-gray-800";
-}
 
 function normalizeName(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -479,79 +474,105 @@ export default function SonggardenCanvas({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
         <div className="flex max-w-3xl flex-1 flex-col items-stretch gap-2 sm:max-w-none sm:items-end">
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {libraryPicker ? (
-              <>
-                {libraryPicker}
-                <span className="mx-0.5 hidden h-4 w-px bg-white/15 sm:block" aria-hidden />
-              </>
+              libraryPicker
             ) : (
               <>
                 {!masterOnly && !gardenOnly ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setScope("bloom")}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "bloom")}`}
-                    >
-                      This bloom
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!garden}
-                      title={garden ? garden.title : "Attach this bloom to a Song Garden to enable"}
-                      onClick={() => {
-                        if (garden) setScope("garden");
-                      }}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${pillClass(scope === "garden")}`}
-                    >
-                      Song Garden
-                    </button>
-                  </>
+                  <QueueFilterSelect
+                    label="Scope"
+                    value={scope}
+                    options={[
+                      { key: "bloom", label: "This bloom" },
+                      {
+                        key: "garden",
+                        label: garden ? "Song Garden" : "Song Garden (n/a)",
+                      },
+                      { key: "master", label: "Master" },
+                    ]}
+                    onChange={(next) => {
+                      if (next === "garden" && !garden) return;
+                      setScope(next);
+                    }}
+                  />
                 ) : null}
-                {gardenOnly ? (
-                  <button
-                    type="button"
-                    onClick={() => setScope("garden")}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "garden")}`}
-                  >
-                    This garden
-                  </button>
+                {gardenOnly || masterOnly ? (
+                  <QueueFilterSelect
+                    label="Scope"
+                    value={scope}
+                    options={
+                      gardenOnly
+                        ? [
+                            { key: "garden", label: "This garden" },
+                            { key: "master", label: "Master" },
+                          ]
+                        : [{ key: "master", label: "Master" }]
+                    }
+                    onChange={setScope}
+                  />
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => setScope("master")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(scope === "master")}`}
-                >
-                  Master
-                </button>
-                <span className="mx-0.5 hidden h-4 w-px bg-white/15 sm:block" aria-hidden />
               </>
             )}
-            {(
-              [
-                ["sounds", "Sounds"],
-                ["sounds_lyrics", "Sounds + lyrics"],
-                ["text", "Text"],
-                ["video", "Video"],
-                ["all", "All"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setContentView(id)}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(contentView === id)}`}
-              >
-                {label}
-              </button>
-            ))}
+
+            <QueueFilterSelect
+              label="Content"
+              value={contentView}
+              options={[
+                { key: "sounds", label: "Sounds" },
+                { key: "sounds_lyrics", label: "Sounds + lyrics" },
+                { key: "text", label: "Text" },
+                { key: "video", label: "Video" },
+                { key: "all", label: "All" },
+              ]}
+              onChange={setContentView}
+            />
+
+            {showSounds ? (
+              <QueueFilterSelect
+                label="Category"
+                value={categoryFilter}
+                options={[
+                  { key: "all", label: "All", count: scopedClips.length },
+                  ...SONGGARDEN_CATEGORIES.map((category) => ({
+                    key: category.id as SonggardenCategoryId | "all",
+                    label: category.label,
+                    count: scopedClips.filter((clip) => clip.category === category.id)
+                      .length,
+                  })),
+                ]}
+                onChange={setCategoryFilter}
+              />
+            ) : null}
+
+            {scope === "garden" && chapters.length > 1 ? (
+              <QueueFilterSelect
+                label="Bloom"
+                value={bloomFilterEventId}
+                options={[
+                  { key: "all", label: "All blooms" },
+                  ...chapters.map((chapter) => ({
+                    key: chapter.eventId,
+                    label: chapter.label,
+                  })),
+                ]}
+                onChange={setBloomFilterEventId}
+              />
+            ) : null}
+
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search…"
+              className="w-36 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white placeholder:text-gray-500 sm:w-44"
+            />
+
             {selectedClips.length > 0 ? (
               <div
                 draggable
                 onDragStart={async (event) => {
                   try {
-                    // Use each clip's event when batch-dragging from master/garden.
                     const byEvent = new Map<string, SonggardenClip[]>();
                     for (const clip of selectedClips) {
                       const id = clip.eventId || eventId;
@@ -566,68 +587,12 @@ export default function SonggardenCanvas({
                     event.preventDefault();
                   }
                 }}
-                className="cursor-grab rounded-full border border-[#CFFF81]/50 bg-[#CFFF81]/10 px-2.5 py-1 text-[11px] font-medium text-[#CFFF81] active:cursor-grabbing"
+                className="cursor-grab rounded-lg border border-[var(--csc-accent)]/40 bg-[var(--csc-accent)]/10 px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] active:cursor-grabbing"
               >
                 Drag {selectedClips.length}
               </div>
             ) : null}
           </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search…"
-              className="w-36 rounded-full border border-gray-700 bg-black/40 px-3 py-1 text-[11px] text-white placeholder:text-gray-500 sm:w-44"
-            />
-            {showSounds ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setCategoryFilter("all")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(categoryFilter === "all")}`}
-                >
-                  All ({scopedClips.length})
-                </button>
-                {SONGGARDEN_CATEGORIES.map((category) => {
-                  const count = scopedClips.filter((clip) => clip.category === category.id).length;
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => setCategoryFilter(category.id)}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(categoryFilter === category.id)}`}
-                    >
-                      {category.label} ({count})
-                    </button>
-                  );
-                })}
-              </>
-            ) : null}
-          </div>
-
-          {scope === "garden" && chapters.length > 1 ? (
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
-              <button
-                type="button"
-                onClick={() => setBloomFilterEventId("all")}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(bloomFilterEventId === "all")}`}
-              >
-                All blooms
-              </button>
-              {chapters.map((chapter) => (
-                <button
-                  key={chapter.id}
-                  type="button"
-                  onClick={() => setBloomFilterEventId(chapter.eventId)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pillClass(bloomFilterEventId === chapter.eventId)}`}
-                >
-                  {chapter.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
       </div>
 
