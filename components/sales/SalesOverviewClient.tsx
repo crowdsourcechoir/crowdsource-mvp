@@ -52,10 +52,10 @@ export default function SalesOverviewClient() {
     <div className="mb-6">
       {error ? <p className="mb-3 text-sm text-red-400">{error}</p> : null}
 
-      <section className="mb-4 rounded-xl border border-amber-900/50 bg-amber-950/10 px-4 py-3 sm:px-5">
+      <section className="mb-4 rounded-xl border border-[var(--csc-accent)]/30 bg-black px-4 py-3 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300/90">Today</p>
+            <p className="csc-eyebrow">Today</p>
             {buckets && today ? (
               today.dueCount === 0 ? (
                 <p className="mt-1 text-sm text-gray-400">No live replies waiting.</p>
@@ -70,12 +70,12 @@ export default function SalesOverviewClient() {
               <p className="mt-1 text-sm text-gray-500">Loading…</p>
             )}
           </div>
-          <Link href="/admin/sales/queue?scope=due" className="shrink-0 text-sm text-amber-200/90 hover:underline">
+          <Link href="/admin/sales/queue?scope=due" className="csc-link shrink-0 text-sm hover:underline">
             Follow-ups in queue →
           </Link>
         </div>
         {tasks.length > 0 ? (
-          <ul className="mt-2 divide-y divide-gray-800/80">
+          <ul className="mt-2 divide-y divide-[var(--csc-row-divider)]">
             {tasks.map((task) => (
               <li key={task.opportunityId} className="flex items-center justify-between gap-3 py-1.5">
                 <Link href={queueHref(task)} className="min-w-0 truncate text-sm text-white hover:underline">
@@ -87,7 +87,7 @@ export default function SalesOverviewClient() {
                 {task.gmailThreadId ? (
                   <GmailThreadLink
                     threadId={task.gmailThreadId}
-                    className="shrink-0 rounded-md bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500"
+                    className="shrink-0 rounded-md bg-[var(--csc-accent)] px-2.5 py-1 text-xs font-semibold text-black hover:opacity-90"
                   >
                     Open Gmail
                   </GmailThreadLink>
@@ -105,7 +105,7 @@ export default function SalesOverviewClient() {
         ) : null}
         {extra > 0 ? (
           <p className="mt-2 text-xs text-gray-500">
-            <Link href="/admin/sales/queue?scope=due" className="text-amber-200/80 hover:underline">
+            <Link href="/admin/sales/queue?scope=due" className="csc-link hover:underline">
               +{extra} more in queue
             </Link>
           </p>

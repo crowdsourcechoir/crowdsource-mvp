@@ -98,6 +98,10 @@ input[type="checkbox"] {
   touch-action: manipulation;
 }
 
+input[type="checkbox"] {
+  accent-color: var(--csc-accent, #cfff81);
+}
+
 /* Indeterminate bar for event-style loading shell */
 @keyframes crowdsource-indeterminate-bar {
   0% {

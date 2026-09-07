@@ -1545,7 +1545,7 @@ export default function EventForm({
                     },
                   }))
                 }
-                className="mt-0.5 h-4 w-4 rounded border-gray-600 bg-[#1f1f1f]"
+                className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
               />
               <span className="text-sm text-gray-300">Show button on closing screen</span>
             </label>
@@ -1555,7 +1555,7 @@ export default function EventForm({
               type="checkbox"
               checked={values.agentBrief?.requireContributionConsent !== false}
               onChange={(e) => setBrief("requireContributionConsent", e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-gray-600 bg-[#1f1f1f]"
+              className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
             />
             <span className="text-sm text-gray-300">Require contribution consent on landing</span>
           </label>
@@ -2187,7 +2187,7 @@ export default function EventForm({
             type="checkbox"
             checked={values.worldConfig?.presenceSimulationEnabled ?? true}
             onChange={(e) => setWorldConfigField("presenceSimulationEnabled", e.target.checked)}
-            className="mt-0.5 h-4 w-4"
+            className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
           />
           <span className="text-sm text-gray-300">Show ambient &quot;others are here&quot; activity</span>
         </label>

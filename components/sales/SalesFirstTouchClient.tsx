@@ -16,10 +16,10 @@ function pct(value: number | null): string {
 }
 
 function kindLabel(kind: FirstTouchEvent["kind"]): { text: string; className: string } {
-  if (kind === "replied") return { text: "Live reply", className: "text-[#CFFF81]" };
+  if (kind === "replied") return { text: "Live reply", className: "text-[var(--csc-accent)]" };
   if (kind === "auto") return { text: "Auto-reply", className: "text-amber-300" };
   if (kind === "bounced") return { text: "Bounced", className: "text-red-400" };
-  return { text: "Sent", className: "text-sky-300" };
+  return { text: "Sent", className: "text-[var(--csc-accent)]" };
 }
 
 function decodeSnippet(value: string): string {
@@ -66,7 +66,7 @@ function StatCard({
 function EventRow({ event, showSnippet }: { event: FirstTouchEvent; showSnippet: boolean }) {
   const kind = kindLabel(event.kind);
   return (
-    <li className="grid grid-cols-[4.5rem_5.5rem_1fr] items-start gap-2 border-t border-gray-800 py-2 text-sm first:border-t-0 sm:grid-cols-[6rem_7rem_1fr]">
+    <li className="grid grid-cols-[4.5rem_5.5rem_1fr] items-start gap-2 border-t border-[var(--csc-row-divider)] py-2 text-sm first:border-t-0 sm:grid-cols-[6rem_7rem_1fr]">
       <span className="text-gray-500">{formatDay(event.occurredAt)}</span>
       <span className={kind.className}>{kind.text}</span>
       <div className="min-w-0">
@@ -87,14 +87,16 @@ function CollapsedList({
   count,
   empty,
   events,
+  showSnippet = true,
 }: {
   title: string;
   count: number;
   empty: string;
   events: FirstTouchEvent[];
+  showSnippet?: boolean;
 }) {
   return (
-    <details className="group rounded-xl border border-gray-800">
+    <details className="group rounded-xl border border-[var(--csc-row-divider)] bg-black">
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-3">
           <span>
@@ -105,13 +107,13 @@ function CollapsedList({
           <span className="hidden text-xs font-normal text-gray-500 group-open:inline">Hide</span>
         </span>
       </summary>
-      <div className="border-t border-gray-800 px-4 pb-3 pt-1">
+      <div className="border-t border-[var(--csc-row-divider)] px-4 pb-3 pt-1">
         {events.length === 0 ? (
           <p className="py-2 text-xs text-gray-500">{empty}</p>
         ) : (
           <ul>
             {events.map((event) => (
-              <EventRow key={event.id} event={event} showSnippet />
+              <EventRow key={`${event.kind}-${event.id}`} event={event} showSnippet={showSnippet} />
             ))}
           </ul>
         )}
@@ -219,7 +221,7 @@ export default function SalesFirstTouchClient() {
     <section className="mb-6 rounded-xl border border-gray-800 bg-gray-950/30 p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">Outreach</p>
+          <p className="csc-eyebrow">Outreach</p>
           <h2 className="mt-1 text-lg font-semibold text-white">This week and first-touch rates</h2>
           <p className="mt-1 max-w-2xl text-xs text-gray-500">
             Success is a real person writing back after the first email. Refresh pulls Gmail; nothing is sent.
@@ -229,14 +231,14 @@ export default function SalesFirstTouchClient() {
           type="button"
           onClick={() => void refreshFromGmail()}
           disabled={syncing}
-          className="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+          className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
         >
           {syncing ? "Scanning Gmail…" : "Refresh from Gmail"}
         </button>
       </div>
 
       {error ? <p className="mb-3 text-sm text-red-400">{error}</p> : null}
-      {syncNote ? <p className="mb-3 text-sm text-[#CFFF81]/90">{syncNote}</p> : null}
+      {syncNote ? <p className="mb-3 text-sm text-[var(--csc-accent)]/90">{syncNote}</p> : null}
 
       {loading && !snapshot ? (
         <p className="text-sm text-gray-500">Loading outreach numbers…</p>
@@ -275,32 +277,28 @@ export default function SalesFirstTouchClient() {
             />
           </div>
 
-          <div className="mt-4 rounded-xl border border-gray-800 p-4">
-            <h3 className="mb-2 text-sm font-semibold text-white">{weekLabel}</h3>
-            {weekEvents.length === 0 ? (
-              <p className="text-xs text-gray-500">Send from the queue and this timeline will fill in.</p>
-            ) : (
-              <ul>
-                {weekEvents.map((event) => (
-                  <EventRow key={`${event.kind}-${event.id}`} event={event} showSnippet={false} />
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="mt-4 space-y-3">
             <CollapsedList
-              title="Live replies"
-              count={snapshot.liveReplies}
-              empty="None recorded yet. If you already have threads in Gmail, click Refresh from Gmail."
-              events={snapshot.recentLiveReplies}
+              title={weekLabel}
+              count={weekEvents.length}
+              empty="Send from the queue and this timeline will fill in."
+              events={weekEvents}
+              showSnippet={false}
             />
-            <CollapsedList
-              title="Bounces"
-              count={snapshot.bounces}
-              empty="No Gmail bounce notices matched to a sent first touch."
-              events={snapshot.recentBounces}
-            />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <CollapsedList
+                title="Live replies"
+                count={snapshot.liveReplies}
+                empty="None recorded yet. If you already have threads in Gmail, click Refresh from Gmail."
+                events={snapshot.recentLiveReplies}
+              />
+              <CollapsedList
+                title="Bounces"
+                count={snapshot.bounces}
+                empty="No Gmail bounce notices matched to a sent first touch."
+                events={snapshot.recentBounces}
+              />
+            </div>
           </div>
         </>
       ) : null}
