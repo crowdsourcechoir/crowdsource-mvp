@@ -49,7 +49,7 @@ export default function EmailLaunchLink({
           <path d="M5 15V5a2 2 0 0 1 2-2h10" />
         </svg>
       </button>
-      {status && <span className="text-xs text-emerald-400">{status}</span>}
+      {status && <span className="text-xs text-[var(--csc-accent)]">{status}</span>}
     </span>
   );
 }

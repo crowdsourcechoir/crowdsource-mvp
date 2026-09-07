@@ -1280,7 +1280,7 @@ export default function ApprovalQueueClient() {
               Send
             </button>
             ) : null}
-            {copyStatus && <span className="text-xs text-emerald-400">{copyStatus}</span>}
+            {copyStatus && <span className="text-xs text-[var(--csc-accent)]">{copyStatus}</span>}
             <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
               Organization
             </Link>
