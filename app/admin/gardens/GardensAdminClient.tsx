@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { Garden } from "@/lib/song-garden-v2/garden/types";
 
 export default function GardensAdminClient() {
+  const router = useRouter();
   const [gardens, setGardens] = useState<Garden[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,42 +66,63 @@ export default function GardensAdminClient() {
         </div>
       ) : (
         <ul className="csc-list">
-          {gardens.map((g) => (
-            <li key={g.id} className="csc-list-row !cursor-default">
-              <div className="min-w-0">
-                <Link href={`/admin/gardens/${g.id}`} className="font-medium text-white hover:text-[var(--csc-accent)]">
-                  {g.title}
-                </Link>
-                <p className="text-xs text-gray-500">
-                  /g/{g.slug} · {g.status} · v{g.worldVersion} · energy{" "}
-                  {(g.worldState?.energy ?? 0).toFixed(2)}
-                  {g.status === "live" ? (
-                    <>
-                      {" "}
-                      ·{" "}
-                      <Link href={`/g/${g.slug}`} className="csc-link underline">
-                        public
-                      </Link>
-                    </>
-                  ) : null}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/admin/gardens/${g.id}/blooms/new`}
-                  className="rounded-lg border border-[var(--csc-accent)]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
+          {gardens.map((g) => {
+            const manageHref = `/admin/gardens/${g.id}`;
+            return (
+              <li
+                key={g.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(manageHref)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(manageHref);
+                  }
+                }}
+                className="csc-list-row"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-white">{g.title}</p>
+                  <p className="text-xs text-gray-500">
+                    /g/{g.slug} · {g.status} · v{g.worldVersion} · energy{" "}
+                    {(g.worldState?.energy ?? 0).toFixed(2)}
+                    {g.status === "live" ? (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <Link
+                          href={`/g/${g.slug}`}
+                          className="csc-link underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          public
+                        </Link>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+                <div
+                  className="flex flex-wrap gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
                 >
-                  + Bloom
-                </Link>
-                <Link
-                  href={`/admin/gardens/${g.id}`}
-                  className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
-                >
-                  Manage
-                </Link>
-              </div>
-            </li>
-          ))}
+                  <Link
+                    href={`/admin/gardens/${g.id}/blooms/new`}
+                    className="rounded-lg border border-[var(--csc-accent)]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
+                  >
+                    + Bloom
+                  </Link>
+                  <Link
+                    href={manageHref}
+                    className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
+                  >
+                    Manage
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

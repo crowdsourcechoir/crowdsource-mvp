@@ -84,7 +84,7 @@ export default function NewGardenPage() {
         <label className="block text-xs text-gray-400">
           Title
           <input
-            className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -101,7 +101,7 @@ export default function NewGardenPage() {
           <div className="mt-1 flex items-center gap-2">
             <span className="text-sm text-gray-500">/g/</span>
             <input
-              className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={slugTouched ? slug : previewSlug}
               onChange={(e) => {
                 setSlugTouched(true);
@@ -117,7 +117,7 @@ export default function NewGardenPage() {
           <label className="block text-xs text-gray-400">
             Kind
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={kind}
               onChange={(e) => setKind(e.target.value as GardenKind)}
             >
@@ -129,7 +129,7 @@ export default function NewGardenPage() {
           <label className="block text-xs text-gray-400">
             Status
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={status}
               onChange={(e) => setStatus(e.target.value as GardenStatus)}
             >
@@ -143,7 +143,7 @@ export default function NewGardenPage() {
           <button
             type="submit"
             disabled={creating}
-            className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+            className="rounded-lg bg-[var(--csc-accent)] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
           >
             {creating ? "Creating…" : "Create Song Garden"}
           </button>

@@ -1056,7 +1056,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <Link href="/admin/gardens" className="text-sm text-gray-400 hover:text-white">
             ← Song Gardens
           </Link>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81]">
+          <p className="mt-4 csc-eyebrow">
             Song Garden
           </p>
           <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">
@@ -1074,7 +1074,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         {publicHref ? (
           <Link
             href={publicHref}
-            className="rounded-lg border border-[#CFFF81]/40 px-4 py-2.5 text-sm font-medium text-[#CFFF81] transition-colors hover:bg-[#CFFF81]/10"
+            className="rounded-lg border border-[var(--csc-accent)]/40 px-4 py-2.5 text-sm font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
           >
             Open public garden
           </Link>
@@ -1083,7 +1083,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
 
       {error ? <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p> : null}
       {notice ? (
-        <p className="rounded-lg bg-[#CFFF81]/10 px-3 py-2 text-sm text-[#CFFF81]">{notice}</p>
+        <p className="rounded-lg bg-[var(--csc-accent)]/10 px-3 py-2 text-sm text-[var(--csc-accent)]">{notice}</p>
       ) : null}
 
       <section className="rounded-xl border border-white/10 p-4 sm:p-5">
@@ -1098,7 +1098,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             type="button"
             onClick={() => void handleSettingsSave()}
             disabled={saving || deleting}
-            className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+            className="rounded-lg bg-[var(--csc-accent)] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save settings"}
           </button>
@@ -1107,7 +1107,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Kind
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={kind}
               onChange={(e) => setKind(e.target.value as GardenKind)}
             >
@@ -1119,7 +1119,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Status
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={status}
               onChange={(e) => setStatus(e.target.value as Garden["status"])}
             >
@@ -1131,7 +1131,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-[#CFFF81]/25 p-4 sm:p-5">
+      <section className="rounded-xl border border-[var(--csc-accent)]/25 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-medium text-white">Blooms in this garden</h2>
@@ -1142,7 +1142,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           {chapters.length > 0 ? (
             <Link
               href={`/admin/gardens/${gardenId}/blooms/new`}
-              className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black"
+              className="rounded-lg bg-[var(--csc-accent)] px-4 py-2.5 text-sm font-semibold text-black"
             >
               + Create bloom
             </Link>
@@ -1150,14 +1150,14 @@ export default function GardenDetailClient({ gardenId }: Props) {
         </div>
 
         {chapters.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-[#CFFF81]/35 bg-[#CFFF81]/5 px-5 py-8 text-center">
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--csc-accent)]/35 bg-[var(--csc-accent)]/5 px-5 py-8 text-center">
             <p className="text-sm font-medium text-white">No blooms yet</p>
             <p className="mt-2 max-w-md text-sm text-gray-400">
               Create the first bloom to give fans a journey inside this world.
             </p>
             <Link
               href={`/admin/gardens/${gardenId}/blooms/new`}
-              className="mt-5 inline-flex rounded-lg bg-[#CFFF81] px-5 py-2.5 text-sm font-semibold text-black"
+              className="mt-5 inline-flex rounded-lg bg-[var(--csc-accent)] px-5 py-2.5 text-sm font-semibold text-black"
             >
               + Create first bloom
             </Link>
@@ -1188,7 +1188,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                       </Link>
                     ) : null}
                     {ev?.slug ? (
-                      <Link href={publicEventPath(ev.slug)} className="text-xs text-[#CFFF81] underline">
+                      <Link href={publicEventPath(ev.slug)} className="text-xs text-[var(--csc-accent)] underline">
                         Open public
                       </Link>
                     ) : null}
@@ -1219,7 +1219,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             <label className="block text-xs text-gray-400">
               Event
               <select
-                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                 value={eventId}
                 onChange={(e) => setEventId(e.target.value)}
                 required
@@ -1238,7 +1238,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <input
                   type="number"
                   min={1}
-                  className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                   value={index}
                   onChange={(e) => setIndex(e.target.value)}
                   required
@@ -1247,7 +1247,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               <label className="block text-xs text-gray-400">
                 Label
                 <input
-                  className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="Show 1"
@@ -1257,7 +1257,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             <button
               type="submit"
               disabled={saving || !eventId}
-              className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-gray-200 transition-colors hover:border-[#CFFF81] hover:text-white disabled:opacity-50"
+              className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
             >
               {saving ? "Saving…" : "Attach bloom"}
             </button>
@@ -1299,7 +1299,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Season label
             <input
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={mapSeasonLabel}
               onChange={(e) => setMapSeasonLabel(e.target.value)}
               placeholder="2026 season"
@@ -1309,7 +1309,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Vibe prompt
             <textarea
-              className="mt-1 min-h-[72px] w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 min-h-[72px] w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={mapVibe}
               onChange={(e) => setMapVibe(e.target.value)}
               placeholder="Interbay night matchday, deep navy pitch, chartreuse accents, Pacific Northwest mist…"
@@ -1319,7 +1319,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Venue landmarks (digital twin cues)
             <textarea
-              className="mt-1 min-h-[64px] w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 min-h-[64px] w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={mapVenueNotes}
               onChange={(e) => setMapVenueNotes(e.target.value)}
               placeholder="Horizontal pitch; west parking; north concessions strip; east beer garden; south stand; surrounding trees…"
@@ -1389,17 +1389,17 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     <img
                       src={url.trim()}
                       alt=""
-                      className="h-14 w-20 rounded border border-gray-700 object-cover"
+                      className="h-14 w-20 rounded border border-white/15 object-cover"
                     />
                   ) : (
-                    <div className="flex h-14 w-20 items-center justify-center rounded border border-dashed border-gray-700 text-[10px] text-gray-600">
+                    <div className="flex h-14 w-20 items-center justify-center rounded border border-dashed border-white/15 text-[10px] text-gray-600">
                       empty
                     </div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
                   <input
-                    className="w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={url}
                     onChange={(e) =>
                       setMapRefs((prev) => prev.map((row, j) => (j === i ? e.target.value : row)))
@@ -1445,7 +1445,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               type="button"
               disabled={generatingPlate || saving}
               onClick={() => void handleGenerateMapPlate()}
-              className="rounded-lg bg-[#CFFF81] px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+              className="rounded-lg bg-[var(--csc-accent)] px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
             >
               {generatingPlate ? "Generating…" : "Generate draft"}
             </button>
@@ -1453,7 +1453,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               type="button"
               disabled={pinningPlate || saving || (!mapDraftUrl && !mapImageUrl.trim())}
               onClick={() => void handlePinMapPlate()}
-              className="rounded-lg border border-[#CFFF81]/40 px-3 py-2 text-sm text-[#CFFF81] disabled:opacity-50"
+              className="rounded-lg border border-[var(--csc-accent)]/40 px-3 py-2 text-sm text-[var(--csc-accent)] disabled:opacity-50"
             >
               {pinningPlate ? "Pinning…" : "Pin for season"}
             </button>
@@ -1514,7 +1514,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             <label className="block text-xs text-gray-400">
               Active on /g
               <select
-                className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                 value={mapActiveVariant}
                 onChange={(e) =>
                   void handleSetActiveVariant(e.target.value as MapPlateVariantKey | "default")
@@ -1579,7 +1579,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
         <label className="block text-xs text-gray-400">
           Map image URL (live plate — set by pin, or paste manually)
           <input
-            className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
             value={mapImageUrl}
             onChange={(e) => setMapImageUrl(e.target.value)}
             placeholder="/fans/ballard-fc/interbay-stadium-map.jpg"
@@ -1596,7 +1596,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               y: z.y,
               hit: z.hit,
             }))}
-            accentColor={garden?.brandKit?.accentColor || "#CFFF81"}
+            accentColor={garden?.brandKit?.accentColor || "var(--csc-accent)"}
             selectedKey={selectedZoneKey}
             onSelect={setSelectedZoneKey}
             onMove={(key, x, y) => {
@@ -1618,7 +1618,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               <li
                 key={z.key}
                 className={`rounded-lg border p-3 ${
-                  selectedZoneKey === z.key ? "border-[#CFFF81]/50" : "border-white/10"
+                  selectedZoneKey === z.key ? "border-[var(--csc-accent)]/50" : "border-white/10"
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1661,7 +1661,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   <label className="block text-xs text-gray-500">
                     Or paste URL
                     <input
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                       value={z.logoUrl}
                       onChange={(e) =>
                         setZones((prev) =>
@@ -1698,7 +1698,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="mt-2 block text-xs text-gray-400">
                   Fan prompt
                   <input
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={z.prompt}
                     onChange={(e) =>
                       setZones((prev) =>
@@ -1713,7 +1713,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="mt-2 block text-xs text-gray-400">
                   CTA label (on the map marker + button after tap)
                   <input
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={z.ctaLabel}
                     onChange={(e) =>
                       setZones((prev) =>
@@ -1729,7 +1729,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   <label className="block text-xs text-gray-400">
                     When fans tap this zone
                     <select
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                       value={z.engageMode}
                       onChange={(e) =>
                         setZones((prev) =>
@@ -1752,7 +1752,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     <label className="block text-xs text-gray-400">
                       Journey (bloom)
                       <select
-                        className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                        className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                         value={z.journeyEventId}
                         onChange={(e) =>
                           setZones((prev) =>
@@ -1793,7 +1793,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="mt-2 block text-xs text-gray-400">
                   Short hint
                   <input
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={z.blurb}
                     onChange={(e) =>
                       setZones((prev) =>
@@ -1811,7 +1811,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                       min={0}
                       max={1}
                       step={0.01}
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                       value={Number(z.x.toFixed(3))}
                       onChange={(e) => {
                         const x = Math.min(1, Math.max(0, Number(e.target.value) || 0));
@@ -1829,7 +1829,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                       min={0}
                       max={1}
                       step={0.01}
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                       value={Number(z.y.toFixed(3))}
                       onChange={(e) => {
                         const y = Math.min(1, Math.max(0, Number(e.target.value) || 0));
@@ -1845,7 +1845,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   <label className="mt-2 block text-xs text-gray-400">
                     Sponsor (optional)
                     <select
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                       value={z.sponsorKey}
                       onChange={(e) =>
                         setZones((prev) =>
@@ -1869,12 +1869,12 @@ export default function GardenDetailClient({ gardenId }: Props) {
           </ul>
         )}
 
-        <div className="space-y-3 rounded-lg border border-dashed border-gray-700 p-3">
+        <div className="space-y-3 rounded-lg border border-dashed border-white/15 p-3">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Add a zone</p>
           <label className="block text-xs text-gray-400">
             Name
             <input
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={newZoneLabel}
               onChange={(e) => setNewZoneLabel(e.target.value)}
               placeholder="North End"
@@ -1883,7 +1883,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Hint (optional)
             <input
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={newZoneBlurb}
               onChange={(e) => setNewZoneBlurb(e.target.value)}
               placeholder="Home roar"
@@ -1892,7 +1892,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Map spot
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={newZonePreset}
               onChange={(e) => setNewZonePreset(e.target.value)}
             >
@@ -1952,7 +1952,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     <label className="block text-xs text-gray-500">
                       Or paste URL
                       <input
-                        className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                        className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                         value={s.logoUrl}
                         onChange={(e) =>
                           setSponsors((prev) =>
@@ -1989,7 +1989,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   <label className="block text-xs text-gray-400">
                     Credit line
                     <input
-                      className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                       value={s.credit}
                       onChange={(e) =>
                         setSponsors((prev) =>
@@ -2009,7 +2009,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           )}
           <div className="flex flex-wrap gap-2">
             <input
-              className="min-w-[12rem] flex-1 rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="min-w-[12rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={newSponsorName}
               onChange={(e) => setNewSponsorName(e.target.value)}
               placeholder="Acme Bank"
@@ -2028,7 +2028,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           type="button"
           disabled={saving}
           onClick={() => void handleSaveFansMap()}
-          className="rounded-lg bg-[#CFFF81] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+          className="rounded-lg bg-[var(--csc-accent)] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
         >
           Save map
         </button>
@@ -2073,7 +2073,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Title
             <input
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={shelfTitle}
               onChange={(e) => setShelfTitle(e.target.value)}
               placeholder="North End kickoff swell"
@@ -2082,7 +2082,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400">
             Moment
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={shelfMoment}
               onChange={(e) => setShelfMoment(e.target.value)}
             >
@@ -2098,7 +2098,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
           <label className="block text-xs text-gray-400 sm:col-span-2">
             Zone (optional)
             <select
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
               value={shelfZone}
               onChange={(e) => setShelfZone(e.target.value)}
             >
@@ -2124,7 +2124,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
             type="button"
             disabled={saving || !shelfTitle.trim()}
             onClick={() => void handleAddReadyItem(true)}
-            className="rounded-lg border border-[#CFFF81]/40 px-3 py-2 text-sm text-[#CFFF81] disabled:opacity-50"
+            className="rounded-lg border border-[var(--csc-accent)]/40 px-3 py-2 text-sm text-[var(--csc-accent)] disabled:opacity-50"
           >
             Add with world snapshot
           </button>
@@ -2142,7 +2142,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <li
                   key={item.id}
                   className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-3 ${
-                    played ? "border-[#CFFF81]/30 bg-[#CFFF81]/5" : "border-white/10"
+                    played ? "border-[var(--csc-accent)]/30 bg-[var(--csc-accent)]/5" : "border-white/10"
                   }`}
                 >
                   <span>
@@ -2154,7 +2154,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                     </span>
                   </span>
                   {played ? (
-                    <span className="rounded-full bg-[#CFFF81]/15 px-2.5 py-1 text-xs font-medium text-[#CFFF81]">
+                    <span className="rounded-full bg-[var(--csc-accent)]/15 px-2.5 py-1 text-xs font-medium text-[var(--csc-accent)]">
                       Played ✓
                     </span>
                   ) : (
@@ -2191,7 +2191,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="block text-xs text-gray-400">
                   Slug
                   <input
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={editionSlug}
                     onChange={(e) => setEditionSlug(e.target.value)}
                     placeholder="2026-03"
@@ -2201,7 +2201,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="block text-xs text-gray-400">
                   Label
                   <input
-                    className="mt-1 w-full rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={editionLabel}
                     onChange={(e) => setEditionLabel(e.target.value)}
                     placeholder="March 2026"
@@ -2212,7 +2212,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                className="rounded-lg bg-[var(--csc-accent)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
               >
                 Pin current world
               </button>
@@ -2240,7 +2240,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                         href={`/api/gardens/${gardenId}/merch/preview?format=square_print&edition=${ed.slug}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-[#CFFF81] underline"
+                        className="text-xs text-[var(--csc-accent)] underline"
                       >
                         Preview PNG
                       </a>
@@ -2256,7 +2256,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="block text-xs text-gray-400">
                   Format
                   <select
-                    className="mt-1 block rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 block rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={orderFormat}
                     onChange={(e) => setOrderFormat(e.target.value as MerchFormat)}
                   >
@@ -2268,7 +2268,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 <label className="block text-xs text-gray-400">
                   Edition (for edition order)
                   <select
-                    className="mt-1 block rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                    className="mt-1 block rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                     value={orderEdition}
                     onChange={(e) => setOrderEdition(e.target.value)}
                   >
@@ -2300,7 +2300,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                   href={`/api/gardens/${gardenId}/merch/preview?format=${orderFormat}&living=1`}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-[#CFFF81]"
+                  className="rounded-lg border border-white/15 px-3 py-2 text-sm text-[var(--csc-accent)]"
                 >
                   Living preview
                 </a>
@@ -2331,7 +2331,7 @@ export default function GardenDetailClient({ gardenId }: Props) {
                 Snapshot at (local datetime)
                 <input
                   type="datetime-local"
-                  className="mt-1 block rounded-lg border border-gray-700 bg-black/40 px-3 py-2 text-sm text-white"
+                  className="mt-1 block rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
                   value={histAt}
                   onChange={(e) => setHistAt(e.target.value)}
                 />

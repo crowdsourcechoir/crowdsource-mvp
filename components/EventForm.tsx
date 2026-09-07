@@ -1262,12 +1262,12 @@ export default function EventForm({
   }
 
   const inputClass =
-    "mt-0.5 block w-full rounded-lg border border-gray-700/50 bg-[#222] px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-gray-500 focus:outline-none";
+    "mt-0.5 block w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none";
   const labelClass = "block text-xs font-medium text-gray-400";
-  const sectionClass = "space-y-3 border-t border-gray-800 pt-5";
-  const sectionTitleClass = "text-xs font-semibold uppercase tracking-wider text-gray-500";
+  const sectionClass = "space-y-3 border-t border-[var(--csc-row-divider)] pt-5";
+  const sectionTitleClass = "csc-eyebrow";
   const chipClass =
-    "rounded-md border border-gray-700 bg-[#1a1a1a] px-2 py-0.5 text-[11px] font-medium text-gray-300 hover:bg-[#252525] disabled:opacity-40";
+    "rounded-md border border-white/15 bg-black px-2 py-0.5 text-[11px] font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-40";
 
   return (
     <form noValidate onSubmit={handleSubmit} className="w-full space-y-3">
@@ -1298,8 +1298,8 @@ export default function EventForm({
           <label htmlFor="slug" className={labelClass}>
             Public URL
           </label>
-          <div className="mt-0.5 flex overflow-hidden rounded-lg border border-gray-700/50 bg-[#222]">
-            <span className="flex items-center border-r border-gray-700/50 bg-[#1a1a1a] px-3 py-2 text-sm text-gray-500">
+          <div className="mt-0.5 flex overflow-hidden rounded-lg border border-white/15 bg-black">
+            <span className="flex items-center border-r border-white/15 bg-black px-3 py-2 text-sm text-gray-500">
               /e/
             </span>
             <input
