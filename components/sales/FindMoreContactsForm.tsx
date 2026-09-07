@@ -76,7 +76,7 @@ export default function FindMoreContactsForm({
       <button
         type="button"
         onClick={() => onOpenChange(true)}
-        className="rounded-md border border-dashed border-sky-800 px-3 py-1.5 text-xs text-sky-200 hover:border-sky-500 hover:text-white"
+        className="rounded-md border border-dashed border-gray-600 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-400 hover:text-gray-200"
       >
         Find more contacts
       </button>

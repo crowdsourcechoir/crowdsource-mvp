@@ -33,7 +33,11 @@ function formatWhen(iso: string | null): string {
 
 function ScoreBadge({ score }: { score: number }) {
   const color =
-    score >= 70 ? "text-emerald-300 border-emerald-700 bg-emerald-950/40" : score >= 45 ? "text-amber-300 border-amber-700 bg-amber-950/30" : "text-gray-300 border-gray-700 bg-gray-900/40";
+    score >= 70
+      ? "border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 text-[var(--csc-accent)]"
+      : score >= 45
+        ? "text-amber-300 border-amber-700 bg-amber-950/30"
+        : "text-gray-300 border-gray-700 bg-gray-900/40";
   return (
     <span className={`inline-flex items-baseline gap-1 rounded-lg border px-3 py-1.5 ${color}`}>
       <span className="text-2xl font-semibold tabular-nums">{score.toFixed(0)}</span>

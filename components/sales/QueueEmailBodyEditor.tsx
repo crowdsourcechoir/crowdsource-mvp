@@ -171,11 +171,11 @@ export default function QueueEmailBodyEditor({
   }, [editor, linkUrl]);
 
   if (!editor) {
-    return <div className="min-h-[16rem] rounded-md border border-gray-700 bg-gray-900" />;
+    return <div className="min-h-[16rem] rounded-md border border-gray-700 bg-black" />;
   }
 
   return (
-    <div className="rounded-md border border-gray-700 bg-gray-900">
+    <div className="rounded-md border border-gray-700 bg-black">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-800 px-1 py-1">
         <IconButton
           title={formatOpen ? "Hide formatting" : "Show formatting"}

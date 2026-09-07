@@ -55,7 +55,12 @@ import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
 function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 70 ? "text-emerald-400 border-emerald-700" : score >= 45 ? "text-amber-400 border-amber-700" : "text-gray-400 border-gray-700";
+  const color =
+    score >= 70
+      ? "border-[var(--csc-accent)]/50 text-[var(--csc-accent)]"
+      : score >= 45
+        ? "text-amber-400 border-amber-700"
+        : "text-gray-400 border-gray-700";
   return <span className={`rounded-md border px-2 py-0.5 text-sm font-semibold ${color}`}>{score.toFixed(0)}</span>;
 }
 
@@ -1221,7 +1226,7 @@ export default function ApprovalQueueClient() {
                   type="button"
                   disabled={busy || improving || !current.draft}
                   onClick={() => void improveDraft()}
-                  className="rounded-md border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-md border border-[var(--csc-accent)]/40 px-2 py-1 text-xs text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/10 disabled:opacity-50"
                 >
                   {improving ? "Improving…" : "Improve with AI"}
                 </button>
@@ -1233,7 +1238,7 @@ export default function ApprovalQueueClient() {
                   value={editedSubject}
                   onChange={(e) => setEditedSubject(e.target.value)}
                   onBlur={() => void persistDraft().catch(() => undefined)}
-                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+                  className="w-full rounded-md border border-gray-700 bg-black px-3 py-2 text-sm font-medium text-white"
                 />
                 <QueueEmailBodyEditor
                   value={editedBody}
@@ -1270,7 +1275,7 @@ export default function ApprovalQueueClient() {
               type="button"
               disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
               onClick={requestSend}
-              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              className="rounded-lg bg-[var(--csc-accent)] px-5 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
             >
               Send
             </button>
@@ -1325,7 +1330,7 @@ export default function ApprovalQueueClient() {
                 type="button"
                 disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
                 onClick={() => void executeDecision("approve")}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                className="rounded-lg bg-[var(--csc-accent)] px-4 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
               >
                 Yes, send now
               </button>
