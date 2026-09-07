@@ -650,8 +650,10 @@ export default function ApprovalQueueClient() {
               key={chip.key}
               type="button"
               onClick={() => setScope(chip.key)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                active ? "bg-[#CFFF81] text-gray-900" : "border border-gray-800 text-gray-300 hover:border-gray-600"
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                active
+                  ? "bg-[#CFFF81] text-[#1a1530]"
+                  : "border border-gray-600 text-gray-300 hover:bg-gray-800"
               }`}
             >
               {chip.label}
@@ -669,12 +671,14 @@ export default function ApprovalQueueClient() {
               key={chip.key}
               type="button"
               onClick={() => setCategory(chip.key)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                active ? "bg-white text-gray-900" : "border border-gray-800 text-gray-300 hover:border-gray-600"
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                active
+                  ? "bg-white text-[#1a1530]"
+                  : "border border-gray-600 text-gray-300 hover:bg-gray-800"
               }`}
             >
               {chip.label}
-              <span className={`ml-1.5 ${active ? "text-gray-500" : "text-gray-500"}`}>{count}</span>
+              <span className="ml-1.5 text-gray-500">{count}</span>
             </button>
           );
         })}
@@ -876,10 +880,10 @@ export default function ApprovalQueueClient() {
                   type="button"
                   disabled={busy || active}
                   onClick={() => void moveFunnel(s.key)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                     active
-                      ? "bg-[#CFFF81] text-gray-900"
-                      : "border border-gray-700 text-gray-300 hover:border-gray-500"
+                      ? "bg-[#CFFF81] text-[#1a1530]"
+                      : "border border-gray-600 text-gray-300 hover:bg-gray-800"
                   } disabled:opacity-60`}
                 >
                   {s.label}
