@@ -87,7 +87,7 @@ export default function SalesOverviewClient() {
                 {task.gmailThreadId ? (
                   <GmailThreadLink
                     threadId={task.gmailThreadId}
-                    className="shrink-0 rounded-md bg-[var(--csc-accent)] px-2.5 py-1 text-xs font-semibold text-black hover:opacity-90"
+                    className="shrink-0 rounded-lg border border-[var(--csc-accent)]/40 bg-transparent px-3 py-1.5 text-xs font-medium text-[var(--csc-accent)] transition-colors hover:bg-[var(--csc-accent)]/10"
                   >
                     Open Gmail
                   </GmailThreadLink>
