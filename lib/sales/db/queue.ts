@@ -6,7 +6,7 @@ import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { loadSalesTodayTasks } from "./follow-ups";
 import type { QueueScope } from "../queue/scope";
-import type { ApprovalQueueItem, ApprovalQueueItemKind, ApprovalQueueItemStatus, QueueSidebarItem } from "../types";
+import type { ApprovalQueueItem, ApprovalQueueItemKind, ApprovalQueueItemStatus, QueueSidebarItem, RelationshipStage } from "../types";
 
 const IN_CHUNK = 150;
 
@@ -235,13 +235,14 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       next_follow_up_at: string | null;
       last_inbound_at: string | null;
       last_outbound_at: string | null;
+      relationship_stage: string | null;
     }>(
       items.map((item) => item.opportunityId),
       async (chunk) =>
         db
           .from("opportunities")
           .select(
-            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at"
+            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at, relationship_stage"
           )
           .in("id", chunk)
     ),
@@ -325,6 +326,7 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       nextFollowUpAt,
       gmailThreadId: opportunity.gmail_thread_id ?? null,
       followUpDue: isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt),
+      relationshipStage: (opportunity.relationship_stage as RelationshipStage | null) ?? null,
     });
   }
   return sortQueueSidebarItems(sidebar);

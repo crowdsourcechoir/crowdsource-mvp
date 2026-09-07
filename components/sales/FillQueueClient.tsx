@@ -5,7 +5,12 @@ import Link from "next/link";
 
 type Candidate = { organizationId: string; organizationName?: string; score: number };
 
-export default function FillQueueClient({ variant = "full" }: { variant?: "full" | "compact" }) {
+/**
+ * Lead-generation panel for reprocessing blocked high-score orgs.
+ * - full: always-visible card (organizations tools page)
+ * - panel: body only, parent controls when it shows (queue toolbar)
+ */
+export default function FillQueueClient({ variant = "full" }: { variant?: "full" | "panel" }) {
   const [solidCount, setSolidCount] = useState<number | null>(null);
   const [nearMissCount, setNearMissCount] = useState<number | null>(null);
   const [minScore, setMinScore] = useState(70);
@@ -31,7 +36,7 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   async function fill() {
@@ -60,10 +65,10 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
   }
 
   const body = (
-    <div className={variant === "compact" ? "px-4 pb-4" : ""}>
+    <div className={variant === "panel" ? "px-4 py-4" : ""}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-400/90">Fill the queue</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--csc-accent)]">Fill the queue</h2>
           <p className="mt-1 text-xs text-gray-400">
             Re-runs pipeline on high-scoring leads stuck at <span className="text-gray-300">awaiting contact</span>{" "}
             (score ≥{minScore}). Enrichment retries + leadership deepen can clear the verified-email gate without
@@ -95,14 +100,14 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
               value={limit}
               onChange={(e) => setLimit(Math.max(1, Math.min(25, Number(e.target.value) || 10)))}
               disabled={running}
-              className="ml-2 w-16 rounded-md border border-gray-700 bg-gray-950 px-2 py-1.5 text-sm text-white disabled:opacity-50"
+              className="ml-2 w-16 rounded-md border border-white/15 bg-black px-2 py-1.5 text-sm text-white disabled:opacity-50"
             />
           </label>
           <button
             type="button"
-            onClick={fill}
+            onClick={() => void fill()}
             disabled={running || solidCount === 0}
-            className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            className="rounded-lg bg-[var(--csc-accent)] px-4 py-1.5 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
           >
             {running ? "Filling…" : "Fill queue now"}
           </button>
@@ -111,7 +116,7 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       {result && (
-        <p className="mt-3 text-sm text-emerald-300">
+        <p className="mt-3 text-sm text-[var(--csc-accent)]">
           {result}{" "}
           <Link href="/admin/sales/queue" className="underline">
             Open queue →
@@ -122,11 +127,11 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
       {candidates.length > 0 && (
         <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-xs text-gray-500">
           {candidates.slice(0, 12).map((c) => (
-            <li key={c.organizationId} className="flex justify-between gap-2 border-b border-gray-900 py-1">
+            <li key={c.organizationId} className="flex justify-between gap-2 border-b border-[var(--csc-row-divider)] py-1">
               <Link href={`/admin/sales/organizations/${c.organizationId}`} className="truncate text-gray-400 hover:underline">
                 {c.organizationName ?? c.organizationId.slice(0, 8)}
               </Link>
-              <span className={c.score >= minScore ? "text-emerald-400" : "text-amber-400"}>
+              <span className={c.score >= minScore ? "text-[var(--csc-accent)]" : "text-amber-400"}>
                 score {c.score.toFixed(0)}
               </span>
             </li>
@@ -136,22 +141,9 @@ export default function FillQueueClient({ variant = "full" }: { variant?: "full"
     </div>
   );
 
-  if (variant === "compact") {
-    return (
-      <details className="mb-4 rounded-xl border border-gray-800 bg-gray-950/40">
-        <summary className="cursor-pointer list-none px-4 py-3 text-sm text-gray-300 [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center justify-between gap-3">
-            <span>
-              Fill the queue
-              {solidCount != null ? <span className="ml-2 text-gray-500">{solidCount} blocked</span> : null}
-            </span>
-            <span className="text-xs text-gray-500">Show</span>
-          </span>
-        </summary>
-        {body}
-      </details>
-    );
+  if (variant === "panel") {
+    return body;
   }
 
-  return <div className="mb-6 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4">{body}</div>;
+  return <div className="mb-6 rounded-xl border border-[var(--csc-accent)]/25 bg-black p-4">{body}</div>;
 }

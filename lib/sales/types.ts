@@ -410,6 +410,7 @@ export type QueueSidebarItem = {
   nextFollowUpAt: string | null;
   gmailThreadId: string | null;
   followUpDue: boolean;
+  relationshipStage: RelationshipStage | null;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

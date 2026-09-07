@@ -1,14 +1,15 @@
 import FunnelClient from "@/components/sales/FunnelClient";
-import SalesSubNav from "@/components/sales/SalesSubNav";
 
 export default function SalesFunnelPage() {
   return (
-    <div>
-      <h1 className="mb-2 text-2xl font-bold text-white">Funnel</h1>
-      <p className="mb-4 text-sm text-gray-400">
-        Everything approved out of the queue, tracked Awareness → Interest → Won (or Lost) after the email is launched.
-      </p>
-      <SalesSubNav />
+    <div className="w-full text-white">
+      <div className="mb-6">
+        <p className="csc-eyebrow">Prospecting</p>
+        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Funnel</h1>
+        <p className="mt-2 text-sm text-gray-400">
+          Awareness → Interest → Won after email is launched. Stages also live on each org in the queue.
+        </p>
+      </div>
       <FunnelClient />
     </div>
   );

@@ -24,6 +24,13 @@ import {
   type QueueCategoryFilter,
 } from "@/lib/sales/queue/category";
 import {
+  QUEUE_FUNNEL_OPTIONS,
+  matchesQueueFunnel,
+  parseQueueFunnel,
+  queueFunnelLabel,
+  type QueueFunnelFilter,
+} from "@/lib/sales/queue/funnel";
+import {
   applySelectContactResponse,
   applySelectedContact,
   applySentDraft,
@@ -39,6 +46,8 @@ import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
 import FollowUpControls from "@/components/sales/FollowUpControls";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
+import FillQueueClient from "@/components/sales/FillQueueClient";
+import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
 import { isExternalSentDraft } from "@/lib/sales/outreach/external-sent";
@@ -71,6 +80,7 @@ export default function ApprovalQueueClient() {
   const searchParams = useSearchParams();
   const category = parseQueueCategory(searchParams.get("category"));
   const scope = parseQueueScope(searchParams.get("scope"));
+  const funnel = parseQueueFunnel(searchParams.get("funnel"));
   const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
@@ -92,6 +102,7 @@ export default function ApprovalQueueClient() {
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [addOrgOpen, setAddOrgOpen] = useState(false);
+  const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -141,10 +152,27 @@ export default function ApprovalQueueClient() {
   }, [load]);
 
   const visible = useMemo(
-    () => sidebar.filter((item) => matchesQueueCategory(item, category)),
-    [sidebar, category]
+    () =>
+      sidebar.filter(
+        (item) => matchesQueueCategory(item, category) && matchesQueueFunnel(item.relationshipStage, funnel)
+      ),
+    [sidebar, category, funnel]
   );
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
+  const funnelCounts = useMemo(() => {
+    const counts: Record<QueueFunnelFilter, number> = {
+      all: sidebar.length,
+      awareness: 0,
+      interest: 0,
+      purchase: 0,
+      lost: 0,
+    };
+    for (const item of sidebar) {
+      const stage = item.relationshipStage ?? "awareness";
+      counts[stage] += 1;
+    }
+    return counts;
+  }, [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
@@ -460,6 +488,9 @@ export default function ApprovalQueueClient() {
       const itemId = current.queueItem.id;
       const previous = current.opportunity.relationshipStage;
       replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: stage } });
+      setSidebar((rows) =>
+        rows.map((row) => (row.queueItem.id === itemId ? { ...row, relationshipStage: stage } : row))
+      );
       showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
       void (async () => {
         try {
@@ -476,6 +507,9 @@ export default function ApprovalQueueClient() {
           }
         } catch (err) {
           replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: previous } });
+          setSidebar((rows) =>
+            rows.map((row) => (row.queueItem.id === itemId ? { ...row, relationshipStage: previous } : row))
+          );
           setActionError(publicErrorMessage(err, "Could not move funnel"));
         }
       })();
@@ -595,7 +629,7 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope]);
+  }, [category, scope, funnel]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
@@ -610,6 +644,14 @@ export default function ApprovalQueueClient() {
     if (next === "to_send") params.delete("scope");
     else params.set("scope", next);
     params.delete("item");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setFunnel(next: QueueFunnelFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("funnel");
+    else params.set("funnel", next === "purchase" ? "won" : next);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -640,58 +682,73 @@ export default function ApprovalQueueClient() {
     <AddOrganizationForm open={addOrgOpen} onClose={() => setAddOrgOpen(false)} onQueued={() => void load()} />
   );
 
-  const filterBar = (
-    <div className="mb-4 flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        {QUEUE_SCOPE_CHIPS.map((chip) => {
-          const active = scope === chip.key;
-          return (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => setScope(chip.key)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                active
-                  ? "bg-[#CFFF81] text-[#1a1530]"
-                  : "border border-gray-600 text-gray-300 hover:bg-gray-800"
-              }`}
-            >
-              {chip.label}
-            </button>
-          );
-        })}
+  const pageHeader = (
+    <div className="mb-4 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p className="csc-eyebrow">Prospecting</p>
+        <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Queue</h1>
       </div>
       <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-        {QUEUE_CATEGORY_CHIPS.map((chip) => {
-          const active = category === chip.key;
-          const count = categoryCounts[chip.key];
-          return (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => setCategory(chip.key)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                active
-                  ? "bg-white text-[#1a1530]"
-                  : "border border-gray-600 text-gray-300 hover:bg-gray-800"
-              }`}
-            >
-              {chip.label}
-              <span className="ml-1.5 text-gray-500">{count}</span>
-            </button>
-          );
-        })}
-        </div>
-      <SalesSearchBox onPick={pickFromSearch} />
-      <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
+        <SalesSearchBox onPick={pickFromSearch} />
+        <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
+      </div>
     </div>
+  );
+
+  const filterBar = (
+    <div className="mb-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <QueueFilterSelect
+            label="Category"
+            value={category}
+            options={QUEUE_CATEGORY_CHIPS.map((chip) => ({
+              key: chip.key,
+              label: chip.label,
+              count: categoryCounts[chip.key],
+            }))}
+            onChange={setCategory}
+          />
+          <QueueFilterSelect
+            label="Funnel"
+            value={funnel}
+            options={QUEUE_FUNNEL_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: funnelCounts[opt.key],
+            }))}
+            onChange={setFunnel}
+          />
+          <QueueFilterSelect
+            label="Queue"
+            value={scope}
+            options={QUEUE_SCOPE_CHIPS.map((chip) => ({
+              key: chip.key,
+              label: chip.label,
+            }))}
+            onChange={setScope}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setFillQueueOpen((v) => !v)}
+          className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
+        >
+          {fillQueueOpen ? "Hide fill queue" : "Fill queue"}
+        </button>
+      </div>
+      {fillQueueOpen ? (
+        <div className="rounded-xl border border-[var(--csc-row-divider)] bg-black">
+          <FillQueueClient variant="panel" />
+        </div>
+      ) : null}
     </div>
   );
 
   if (loading) {
     return (
-      <div>
+      <div className="w-full text-white">
+        {pageHeader}
         {filterBar}
         {addOrgModal}
         <p className="text-gray-400">Loading queue…</p>
@@ -700,7 +757,8 @@ export default function ApprovalQueueClient() {
   }
   if (loadError) {
     return (
-      <div>
+      <div className="w-full text-white">
+        {pageHeader}
         {filterBar}
         {addOrgModal}
         <div className="rounded-xl border border-red-800 bg-red-950/40 p-6">
@@ -719,18 +777,20 @@ export default function ApprovalQueueClient() {
 
   if (sidebar.length === 0) {
     return (
-      <div>
+      <div className="w-full text-white">
+        {pageHeader}
         {filterBar}
         {addOrgModal}
         <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
-          Queue is empty. Add an organization with +.
+          Queue is empty. Add an organization with +, or use Fill queue to generate leads.
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="w-full text-white">
+      {pageHeader}
       {filterBar}
       {addOrgModal}
       {actionError && (
@@ -743,9 +803,9 @@ export default function ApprovalQueueClient() {
             ? `${pendingCount} follow-ups`
             : scope === "all"
               ? `${pendingCount} orgs`
-              : category === "all"
+              : category === "all" && funnel === "all"
                 ? `${pendingCount} to send`
-                : `${pendingCount} ${queueCategoryLabel(category).toLowerCase()} · ${sidebar.length} total`}
+                : `${pendingCount} filtered · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
