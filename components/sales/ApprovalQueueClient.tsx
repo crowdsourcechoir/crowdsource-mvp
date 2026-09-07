@@ -12,7 +12,6 @@ import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/con
 import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
-import { NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import type { SalesSearchHit } from "@/lib/sales/search/query";
 import {
@@ -32,7 +31,6 @@ import {
 import {
   applySelectContactResponse,
   applySelectedContact,
-  applySentDraft,
   draftFromMutationPayload,
   isOpenDraftStatus,
   isSentDraftStatus,
@@ -109,7 +107,6 @@ export default function ApprovalQueueClient() {
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
   const draftIdentityRef = useRef("");
@@ -249,7 +246,6 @@ export default function ApprovalQueueClient() {
   useEffect(() => {
     setSendConfirmOpen(false);
     setFindContactsOpen(false);
-    setMenuOpenId(null);
   }, [current?.queueItem.id, current?.draft?.id]);
 
   const selectItem = useCallback((index: number) => {
@@ -313,7 +309,6 @@ export default function ApprovalQueueClient() {
     (contactId: string) => {
       if (!current || current.contact?.id === contactId) return;
       setSendConfirmOpen(false);
-      setMenuOpenId(null);
       setActionError(null);
       const itemId = current.queueItem.id;
       const prevSubject = editedSubject;
@@ -440,55 +435,45 @@ export default function ApprovalQueueClient() {
     setSendConfirmOpen(true);
   }, [current, busy]);
 
-  const runMoreResearch = useCallback(async () => {
-    if (!current || busy) return;
-    setBusy(true);
-    setMenuOpenId(null);
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/sales/queue/${current.queueItem.id}/more-research`, { method: "POST" });
-      const data = await readApiJson(res);
-      if (!res.ok) throw new Error(apiErrorFromBody(data, "Research failed"));
-      const detail = (data as { detail?: QueueItemDetail }).detail;
-      if (detail) replaceDetail(current.queueItem.id, detail);
-      showCopyStatus("Research re-run finished — review updated contacts and draft.");
-    } catch (err) {
-      setActionError(publicErrorMessage(err, "Research failed"));
-    } finally {
-      setBusy(false);
-    }
-  }, [current, busy, showCopyStatus, replaceDetail]);
-
-  const hideContact = useCallback(
-    async (contactId: string) => {
+  const markContactVerified = useCallback(
+    (contactId: string) => {
       if (!current || busy) return;
-      setBusy(true);
-      setMenuOpenId(null);
-      try {
-        const res = await fetch(`/api/sales/contacts/${contactId}`, { method: "DELETE" });
-        const data = await readApiJson(res);
-        if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not hide contact"));
-        const remaining = (current.contacts ?? []).filter((c) => c.id !== contactId);
-        const next = remaining[0];
-        if (next && next.id !== current.contact?.id) {
-          await selectContact(next.id);
-        } else {
-          replaceDetail(current.queueItem.id, { ...current, contacts: remaining });
+      setActionError(null);
+      const itemId = current.queueItem.id;
+      const snapshot = current;
+      const patchContact = <T extends { id: string; emailVerificationStatus: string }>(c: T): T =>
+        c.id === contactId ? { ...c, emailVerificationStatus: "verified_deliverable" } : c;
+      replaceDetail(itemId, {
+        ...current,
+        contacts: (current.contacts ?? []).map(patchContact),
+        contact: current.contact ? patchContact(current.contact) : current.contact,
+      });
+      void (async () => {
+        try {
+          const res = await fetch(`/api/sales/contacts/${contactId}/verify`, { method: "POST" });
+          const data = await readApiJson(res);
+          if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not verify contact"));
+          const updated = (data as { contact?: typeof current.contact }).contact;
+          if (updated) {
+            replaceDetail(itemId, {
+              ...snapshot,
+              contacts: (snapshot.contacts ?? []).map((c) => (c.id === contactId ? { ...c, ...updated } : c)),
+              contact:
+                snapshot.contact?.id === contactId ? { ...snapshot.contact, ...updated } : snapshot.contact,
+            });
+          }
+        } catch (err) {
+          replaceDetail(itemId, snapshot);
+          setActionError(publicErrorMessage(err, "Could not verify contact"));
         }
-        showCopyStatus("Contact hidden from this list.");
-      } catch (err) {
-        setActionError(publicErrorMessage(err, "Could not hide contact"));
-      } finally {
-        setBusy(false);
-      }
+      })();
     },
-    [current, busy, selectContact, showCopyStatus, replaceDetail]
+    [current, busy, replaceDetail]
   );
 
   const moveFunnel = useCallback(
     (stage: RelationshipStage) => {
       if (!current) return;
-      setMenuOpenId(null);
       const itemId = current.queueItem.id;
       const previous = current.opportunity.relationshipStage;
       replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: stage } });
@@ -519,54 +504,6 @@ export default function ApprovalQueueClient() {
       })();
     },
     [current, showCopyStatus, replaceDetail, scope, load]
-  );
-
-  const markContactSent = useCallback(
-    (contactId: string) => {
-      if (!current) return;
-      setMenuOpenId(null);
-      setActionError(null);
-      const itemId = current.queueItem.id;
-      const snapshot = current;
-      replaceDetail(itemId, applySentDraft(current, contactId));
-      showCopyStatus(`Marked sent — stays in Awareness. Nudge in ${NUDGE_DUE_AFTER_DAYS} days if no reply.`);
-      void (async () => {
-        try {
-          const res = await fetch(`/api/sales/queue/${itemId}/mark-sent`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contactId,
-              ...(snapshot.contact?.id === contactId && snapshot.draft
-                ? { editedSubject, editedBody: stripEmailSignature(editedBody) }
-                : {}),
-            }),
-          });
-          const data = (await readApiJson(res)) as QueueMutationPayload;
-          if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not mark sent"));
-          if (!data.remaining) {
-            dropQueueRow(itemId);
-            setMobileDetailOpen(false);
-          } else if (data.nextContactId || data.detail || data.draft) {
-            setDetailsById((prev) => {
-              const item = prev[itemId] ?? snapshot;
-              const sent = applySentDraft(item, contactId);
-              const next = applySelectContactResponse(sent, data, data.nextContactId || contactId);
-              const nextDraft = next.draft;
-              if (nextDraft) {
-                setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
-                setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
-              }
-              return { ...prev, [itemId]: next };
-            });
-          }
-        } catch (err) {
-          replaceDetail(itemId, snapshot);
-          setActionError(publicErrorMessage(err, "Could not mark sent"));
-        }
-      })();
-    },
-    [current, editedSubject, editedBody, showCopyStatus, replaceDetail, dropQueueRow]
   );
 
   const improveDraft = useCallback(async () => {
@@ -998,33 +935,55 @@ export default function ApprovalQueueClient() {
                               {outreachChip ? (
                                 <span className={`ml-2 text-xs font-medium ${outreachChip.className}`}>{outreachChip.text}</span>
                               ) : sent ? (
-                                <span className="ml-2 text-xs font-medium text-emerald-400">sent</span>
+                                <span className="ml-2 text-xs font-medium text-[var(--csc-accent)]">sent</span>
                               ) : hasDraft ? (
                                 <span className="ml-2 text-xs text-gray-500">draft</span>
                               ) : null}
-                              {c.emailVerificationStatus === "verified_deliverable" ? (
-                                <span className="ml-2 text-xs font-medium text-emerald-400">verified</span>
-                              ) : c.emailVerificationStatus === "invalid" ? (
+                              {c.emailVerificationStatus === "invalid" ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
                               ) : isGenericMailboxEmail(c.email) ? (
                                 <span className="ml-2 text-xs font-medium text-[var(--csc-accent)]">inbox</span>
-                              ) : (
-                                <span className="ml-2 text-xs text-amber-400">unverified</span>
-                              )}
+                              ) : null}
                             </span>
                             <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
                           </button>
-                          <button
-                            type="button"
-                            aria-label="Contact actions"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMenuOpenId((id) => (id === c.id ? null : c.id));
-                            }}
-                            className="rounded px-1.5 py-0.5 text-gray-400 hover:bg-gray-800 hover:text-white"
-                          >
-                            ⋯
-                          </button>
+                          {c.email && c.emailVerificationStatus !== "invalid" ? (
+                            c.emailVerificationStatus === "verified_deliverable" ? (
+                              <span
+                                title="Verified"
+                                aria-label="Verified"
+                                className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center text-[var(--csc-accent)]"
+                              >
+                                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                title="Mark verified"
+                                aria-label={`Mark ${c.fullName ?? "contact"} verified`}
+                                disabled={busy}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markContactVerified(c.id);
+                                }}
+                                className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-gray-500 transition-colors hover:border-[var(--csc-accent)]/50 hover:text-[var(--csc-accent)] disabled:opacity-50"
+                              >
+                                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </button>
+                            )
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -1061,65 +1020,6 @@ export default function ApprovalQueueClient() {
                           )}
                         </button>
                       </div>
-                      {menuOpenId === c.id && (
-                        <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-xl">
-                          {!sent && (
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-1.5 text-left text-sm font-medium text-emerald-400 hover:bg-gray-800"
-                              onClick={() => void markContactSent(c.id)}
-                            >
-                              Sent
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
-                            onClick={() => {
-                              setMenuOpenId(null);
-                              void executeDecision("reject");
-                            }}
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
-                            onClick={() => {
-                              setMenuOpenId(null);
-                              void executeDecision("defer");
-                            }}
-                          >
-                            Defer
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
-                            onClick={() => void runMoreResearch()}
-                          >
-                            More research
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
-                            onClick={() => void hideContact(c.id)}
-                          >
-                            Delete
-                          </button>
-                          <div className="my-1 border-t border-gray-800" />
-                          <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500">Move to</p>
-                          {FUNNEL_STAGES.map((s) => (
-                            <button
-                              key={s.key}
-                              type="button"
-                              className="block w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-gray-800"
-                              onClick={() => void moveFunnel(s.key)}
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </li>
                   );
                 })}

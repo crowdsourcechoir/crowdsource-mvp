@@ -1,5 +1,5 @@
 import { createOutreachActivity, listActivitiesForOpportunity } from "@/lib/sales/db/activities";
-import { getContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
+import { getContact, listContactsForOrganization, updateContactVerification } from "@/lib/sales/db/contacts";
 import {
   getOpportunity,
   updateOpportunityRelationshipStage,
@@ -142,6 +142,10 @@ export async function markContactSent(input: {
         metadata: { kind: "initial", via: "manual_mark_sent", queueItemId: item.id },
       })
     );
+  }
+
+  if (contact.emailVerificationStatus !== "verified_deliverable" && contact.emailVerificationStatus !== "invalid") {
+    writes.push(updateContactVerification(contact.id, "verified_deliverable"));
   }
 
   if (!opportunity.relationshipStage) {

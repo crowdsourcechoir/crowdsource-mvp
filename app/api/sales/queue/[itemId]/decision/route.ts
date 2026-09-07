@@ -236,6 +236,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
             draftClaimedForSend = false;
             throw sendErr;
           }
+          if (contact.emailVerificationStatus !== "verified_deliverable") {
+            await updateContactVerification(contact.id, "verified_deliverable");
+          }
         } catch (err) {
           return NextResponse.json(
             {
