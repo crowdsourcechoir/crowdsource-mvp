@@ -108,12 +108,12 @@ export default function SalesSearchBox({
         }}
         placeholder="Search…"
         aria-label="Search organizations, contacts, titles"
-        className="h-9 w-full rounded-full border border-gray-800 bg-gray-950 px-3 text-sm text-white placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
+        className="h-9 w-full rounded-full border border-gray-600 bg-black px-3 text-sm text-white placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
       />
       {showMenu && (
         <div
           role="listbox"
-          className="absolute right-0 z-40 mt-1 max-h-80 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 shadow-xl"
+          className="absolute right-0 z-40 mt-1 max-h-80 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-gray-700 bg-black shadow-xl"
         >
           {busy && hits.length === 0 && !error ? (
             <p className="px-3 py-2 text-sm text-gray-400">Searching…</p>
