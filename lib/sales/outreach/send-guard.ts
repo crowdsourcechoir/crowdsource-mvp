@@ -111,9 +111,12 @@ export function shouldBlockInitialGmailSend(input: {
 }
 
 /**
- * After sending one contact, keep the org in queue only for *other* people who
- * still have an unsent open draft. Never auto-advance to the person just sent,
- * even if a duplicate open draft remains (that was the multi-send loop).
+ * After sending one contact, keep the org in queue for *other* people who still
+ * have an unsent open draft. Prefer Hunter-ready contacts when auto-advancing,
+ * but fall back to any open draft so unverified names (still shown as "draft"
+ * in the UI) do not eject the org from To send before Joel finishes them.
+ * Never auto-advance to the person just sent, even if a duplicate open draft
+ * remains (that was the multi-send loop).
  */
 export function pickNextRemainingInitialDraft(input: {
   drafts: SendGuardDraft[];
@@ -130,13 +133,15 @@ export function pickNextRemainingInitialDraft(input: {
     }
   }
 
-  const next = input.drafts.find((d) => {
+  const candidates = input.drafts.filter((d) => {
     if (!isInitialKind(d.kind) || !d.contactId) return false;
     if (d.id === input.justSentDraftId) return false;
-    if (!input.readyContactIds.has(d.contactId)) return false;
     if (handledContactIds.has(d.contactId)) return false;
     return isOpenDraftStatus(d.status);
   });
+
+  const next =
+    candidates.find((d) => input.readyContactIds.has(d.contactId!)) ?? candidates[0] ?? null;
 
   if (!next?.contactId) return null;
   return { id: next.id, contactId: next.contactId };

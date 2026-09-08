@@ -115,6 +115,29 @@ function main() {
   });
   assert.equal(noOthers, null, "queue should close when only duplicate drafts remain");
 
+  // Unverified contacts still show as "draft" in the queue UI — keep the org pending
+  // so Joel can verify / send them next instead of ejecting after the first send.
+  const unverifiedOther = draft({
+    id: "d-georgia",
+    contactId: "c-georgia",
+    createdAt: "2026-08-15T17:03:00.000Z",
+  });
+  const keepUnverified = pickNextRemainingInitialDraft({
+    drafts: [approved, unverifiedOther],
+    readyContactIds: new Set(["c-tyler"]),
+    justSentDraftId: approved.id,
+    justSentContactId: "c-tyler",
+  });
+  assert.equal(keepUnverified?.contactId, "c-georgia", "open drafts on unverified contacts keep the org in queue");
+
+  const preferReady = pickNextRemainingInitialDraft({
+    drafts: [approved, unverifiedOther, otherPerson],
+    readyContactIds: new Set(["c-tyler", "c-blair"]),
+    justSentDraftId: approved.id,
+    justSentContactId: "c-tyler",
+  });
+  assert.equal(preferReady?.contactId, "c-blair", "auto-advance prefers Hunter-ready contacts");
+
   assert.equal(gmailSendsAllowed({ envFlag: undefined, connectionSendsEnabled: false }), false);
   assert.equal(gmailSendsAllowed({ envFlag: "true", connectionSendsEnabled: false }), true);
   assert.equal(gmailSendsAllowed({ envFlag: undefined, connectionSendsEnabled: true }), true);

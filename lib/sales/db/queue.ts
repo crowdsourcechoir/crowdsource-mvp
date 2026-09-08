@@ -452,6 +452,25 @@ export async function decideQueueItem(
   return rowToQueueItem(data);
 }
 
+/** Put a decided queue row back to pending so multi-contact outreach can continue. */
+export async function reopenQueueItem(id: string): Promise<ApprovalQueueItem> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .update({
+      status: "pending",
+      decision_notes: null,
+      decided_by: null,
+      decided_at: null,
+      deferred_until: null,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToQueueItem(data);
+}
+
 /** Point a still-pending queue row at a different contact's draft (multi-contact picker). */
 export async function setQueueItemOutreachDraft(id: string, outreachDraftId: string): Promise<ApprovalQueueItem> {
   const db = requireSupabaseAdmin();

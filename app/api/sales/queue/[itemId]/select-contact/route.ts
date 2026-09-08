@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
-import { getOpportunity } from "@/lib/sales/db/opportunities";
+import { getQueueItem, reopenQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
+import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
 import { listDraftsForOpportunity } from "@/lib/sales/db/outreach";
@@ -21,10 +21,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const contactId = typeof body?.contactId === "string" ? body.contactId : "";
     if (!contactId) return NextResponse.json({ error: "contactId is required" }, { status: 400 });
 
-    const item = await getQueueItem(itemId);
+    let item = await getQueueItem(itemId);
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Premature decide after one contact used to eject the org; reopen when Joel
+    // continues to another person (same idea as find-more / add-manual).
     if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+      item = await reopenQueueItem(itemId);
+      if (item.kind === "initial") {
+        await updateOpportunityStatus(item.opportunityId, "ready_for_review");
+      }
     }
 
     const opportunity = await getOpportunity(item.opportunityId);

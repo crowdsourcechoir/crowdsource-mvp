@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getQueueItem } from "@/lib/sales/db/queue";
+import { getQueueItem, reopenQueueItem } from "@/lib/sales/db/queue";
+import { updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { getDraft, updateDraftEdits } from "@/lib/sales/db/outreach";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       return NextResponse.json({ error: "editedSubject and editedBody are required." }, { status: 400 });
     }
 
-    const item = await getQueueItem(itemId);
+    let item = await getQueueItem(itemId);
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+      item = await reopenQueueItem(itemId);
+      if (item.kind === "initial") {
+        await updateOpportunityStatus(item.opportunityId, "ready_for_review");
+      }
     }
     if (!item.outreachDraftId) {
       return NextResponse.json({ error: "No draft on this queue item." }, { status: 400 });
