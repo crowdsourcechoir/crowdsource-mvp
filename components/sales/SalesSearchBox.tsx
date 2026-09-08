@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import { SEARCH_MIN_CHARS, type SalesSearchHit } from "@/lib/sales/search/query";
+import { StatusPill } from "@/components/settings/ui";
 
 export default function SalesSearchBox({
   onPick,
@@ -108,45 +109,50 @@ export default function SalesSearchBox({
         }}
         placeholder="Search…"
         aria-label="Search organizations, contacts, titles"
-        className="h-9 w-full rounded-full border border-gray-600 bg-black px-3 text-sm text-white placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
+        className="h-9 w-full rounded-full border border-[var(--csc-row-divider)] bg-transparent px-3 text-sm text-white placeholder:text-gray-500 focus:border-[var(--csc-accent)] focus:outline-none"
       />
       {showMenu && (
         <div
           role="listbox"
-          className="absolute right-0 z-40 mt-1 max-h-80 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-gray-700 bg-black shadow-xl"
+          className="absolute right-0 z-40 mt-1.5 max-h-80 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-[var(--csc-row-divider)] bg-black"
         >
           {busy && hits.length === 0 && !error ? (
-            <p className="px-3 py-2 text-sm text-gray-400">Searching…</p>
+            <p className="px-4 py-3 text-sm text-gray-400">Searching…</p>
           ) : error ? (
-            <p className="px-3 py-2 text-sm text-red-400">{error}</p>
+            <p className="px-4 py-3 text-sm text-red-300">{error}</p>
           ) : hits.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-gray-400">No matches.</p>
+            <p className="px-4 py-3 text-sm text-gray-400">No matches.</p>
           ) : (
-            hits.map((hit, i) => (
-              <button
-                key={hit.organizationId}
-                type="button"
-                role="option"
-                aria-selected={i === active}
-                onMouseEnter={() => setActive(i)}
-                onClick={() => pick(hit)}
-                className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left ${
-                  i === active ? "bg-gray-800" : "hover:bg-gray-900"
-                }`}
-              >
-                <span className="flex w-full items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-white">{hit.organizationName}</span>
-                  {hit.queueItemId ? (
-                    <span className="shrink-0 rounded-full bg-emerald-900/70 px-2 py-0.5 text-[10px] uppercase tracking-wide text-emerald-300">
-                      Queue
+            <div className="divide-y divide-[var(--csc-row-divider)]">
+              {hits.map((hit, i) => {
+                const selected = i === active;
+                return (
+                  <button
+                    key={hit.organizationId}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => pick(hit)}
+                    className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left outline outline-[length:var(--csc-outline-width)] -outline-offset-1 transition-[outline-color] ${
+                      selected
+                        ? "outline-[var(--csc-accent)]"
+                        : "outline-transparent hover:outline-[var(--csc-accent)]"
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-white">{hit.organizationName}</span>
+                      <span className="mt-0.5 block truncate text-xs text-gray-400">{hit.matchLabel}</span>
                     </span>
-                  ) : (
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-500">Org</span>
-                  )}
-                </span>
-                <span className="truncate text-xs text-gray-400">{hit.matchLabel}</span>
-              </button>
-            ))
+                    {hit.queueItemId ? (
+                      <StatusPill tone="ok">Queue</StatusPill>
+                    ) : (
+                      <StatusPill tone="neutral">Org</StatusPill>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
