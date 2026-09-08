@@ -35,6 +35,10 @@ Pattern for a new master control:
 
 Chrome-only preferences (Design system, sidebar) stay in `localStorage`.
 
+## Google connections
+
+Settings card `gmail` is titled **Google connections** (`/admin/settings/gmail`). One OAuth grant covers Gmail send/read and `calendar.readonly`. Calendar meetings sync into Storage (`google-calendar/events-v1.json`) and surface at `/admin/sales/calendar`. After adding Calendar scope, reconnect Google once and allow Calendar.
+
 ## Card statuses
 
 | Status | Meaning |
