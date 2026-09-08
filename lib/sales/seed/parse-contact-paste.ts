@@ -19,7 +19,7 @@ export function parseContactPaste(raw: string): PastedContact[] {
   const text = raw.replace(/\u00a0/g, " ").trim();
   if (!text.includes("@")) return [];
 
-  const matches = [...text.matchAll(EMAIL_RE)];
+  const matches = Array.from(text.matchAll(EMAIL_RE));
   if (matches.length === 0) return [];
 
   const out: PastedContact[] = [];
