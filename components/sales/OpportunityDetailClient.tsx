@@ -6,6 +6,7 @@ import type { OpportunityPageDetail, ScoreComponentKey } from "@/lib/sales/types
 import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import FollowUpControls from "@/components/sales/FollowUpControls";
+import OpportunityMeetingsStrip from "@/components/sales/OpportunityMeetingsStrip";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { looksLikeHtml, sanitizeEmailHtml, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
@@ -141,6 +142,9 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             nextFollowUpAt={opportunity.nextFollowUpAt}
             onSaved={() => void load()}
           />
+        </div>
+        <div className="mt-4">
+          <OpportunityMeetingsStrip opportunityId={opportunity.id} />
         </div>
         {opportunity.eventOrInitiativeName && (
           <p className="mt-2 text-sm text-gray-400">

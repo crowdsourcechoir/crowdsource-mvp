@@ -175,6 +175,22 @@
     {
       "path": "/api/sales/cron/nudges",
       "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/sales/cron/calendar-sync",
+      "schedule": "15 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/calendar-sync",
+      "schedule": "15 13 * * *"
+    },
+    {
+      "path": "/api/sales/cron/calendar-sync",
+      "schedule": "15 17 * * *"
+    },
+    {
+      "path": "/api/sales/cron/calendar-sync",
+      "schedule": "15 21 * * *"
     }
   ]
 }

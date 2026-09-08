@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   InlineNote,
@@ -19,6 +20,33 @@ type GmailStatus = {
   error?: string | null;
 };
 
+type CalendarStatus = {
+  connected: boolean;
+  email: string | null;
+  configured: boolean;
+  calendarGranted: boolean;
+  requiredScope: string;
+  grantedScopes: string[];
+  window: { pastDays: number; nextDays: number };
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  eventCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+};
+
+function formatWhen(iso: string | null): string {
+  if (!iso) return "Never";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function GmailSettingsClient({
   scopes,
   nudgeDueAfterDays,
@@ -29,6 +57,7 @@ export default function GmailSettingsClient({
   maxNudgesPerOpportunity: number;
 }) {
   const [status, setStatus] = useState<GmailStatus | null>(null);
+  const [calendar, setCalendar] = useState<CalendarStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -37,26 +66,36 @@ export default function GmailSettingsClient({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/sales/gmail/status", { cache: "no-store" });
-      const data = (await res.json().catch(() => ({}))) as GmailStatus & { error?: string };
-      if (typeof data.configured === "boolean") {
+      const [gmailRes, calendarRes] = await Promise.all([
+        fetch("/api/sales/gmail/status", { cache: "no-store" }),
+        fetch("/api/sales/calendar/status", { cache: "no-store" }),
+      ]);
+      const gmailData = (await gmailRes.json().catch(() => ({}))) as GmailStatus & { error?: string };
+      if (typeof gmailData.configured === "boolean") {
         setStatus({
-          connected: Boolean(data.connected),
-          email: data.email ?? null,
-          configured: Boolean(data.configured),
-          sendsEnabled: Boolean(data.sendsEnabled),
+          connected: Boolean(gmailData.connected),
+          email: gmailData.email ?? null,
+          configured: Boolean(gmailData.configured),
+          sendsEnabled: Boolean(gmailData.sendsEnabled),
         });
       }
-      if (!res.ok || data.error) {
+      const calendarData = (await calendarRes.json().catch(() => ({}))) as CalendarStatus & { error?: string };
+      if (!calendarRes.ok && calendarData.error) {
+        // Non-fatal — Gmail panel can still work.
+        setCalendar(null);
+      } else if (typeof calendarData.calendarGranted === "boolean") {
+        setCalendar(calendarData);
+      }
+      if (!gmailRes.ok || gmailData.error) {
         throw new Error(
-          typeof data.error === "string" && data.error.trim()
-            ? data.error
-            : `Gmail status failed (${res.status}). OAuth may still work — try Connect Gmail.`
+          typeof gmailData.error === "string" && gmailData.error.trim()
+            ? gmailData.error
+            : `Google status failed (${gmailRes.status}). OAuth may still work — try Connect.`
         );
       }
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load Gmail status");
+      setError(err instanceof Error ? err.message : "Failed to load Google status");
     } finally {
       setLoading(false);
     }
@@ -67,10 +106,12 @@ export default function GmailSettingsClient({
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("gmail") === "connected") {
-      setMessage("Gmail connected. Sending stays paused until you resume it below.");
+      setMessage(
+        "Google connected. Sending stays paused until you resume it. If Calendar was just granted, click Sync calendar now."
+      );
     }
     if (params.get("gmail") === "error") {
-      setError(params.get("message") || "Gmail connect failed.");
+      setError(params.get("message") || "Google connect failed.");
     }
   }, [load]);
 
@@ -81,7 +122,10 @@ export default function GmailSettingsClient({
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) throw new Error((data.error as string) ?? "Request failed");
+    if (!res.ok) {
+      const result = data.result as { error?: string } | undefined;
+      throw new Error((result?.error as string) || (data.error as string) || "Request failed");
+    }
     return data;
   }
 
@@ -99,7 +143,7 @@ export default function GmailSettingsClient({
       setMessage(
         enabled
           ? "Sending resumed. Each email still needs Send → Yes, send now."
-          : "Sending paused. Gmail stays connected; nothing goes out until you resume."
+          : "Sending paused. Google stays connected; nothing goes out until you resume."
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update sending");
@@ -126,6 +170,24 @@ export default function GmailSettingsClient({
     }
   }
 
+  async function syncCalendarNow() {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await post("/api/sales/calendar/sync");
+      const r = (data.result ?? {}) as Record<string, number | string>;
+      setMessage(
+        `Calendar sync — ${r.synced ?? 0} meetings (${r.matched ?? 0} matched to contacts, ${r.unmatched ?? 0} unmatched).`
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Calendar sync failed");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runNudges() {
     setBusy(true);
     setError(null);
@@ -141,12 +203,12 @@ export default function GmailSettingsClient({
   }
 
   async function disconnect() {
-    if (!window.confirm("Disconnect Gmail? Nothing will send from the app until you reconnect.")) return;
+    if (!window.confirm("Disconnect Google? Gmail sending and Calendar sync stop until you reconnect.")) return;
     setBusy(true);
     setError(null);
     try {
       await post("/api/sales/gmail/disconnect");
-      setMessage("Gmail disconnected.");
+      setMessage("Google disconnected.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Disconnect failed");
@@ -166,12 +228,25 @@ export default function GmailSettingsClient({
           : "Paused"
         : "Not connected";
 
+  const calendarTone = !status?.connected
+    ? "neutral"
+    : calendar?.calendarGranted
+      ? "ok"
+      : "warn";
+  const calendarLabel = !status?.connected
+    ? "Needs Google"
+    : calendar?.calendarGranted
+      ? "Calendar on"
+      : "Reconnect needed";
+
+  const displayedScopes = calendar?.grantedScopes?.length ? calendar.grantedScopes : scopes;
+
   return (
     <div className="space-y-6">
       <SettingsPanel
         eyebrow="Connection"
         title="Google account"
-        description="Approved outreach sends from your own inbox. Replies sync back into the pipeline."
+        description="One Google connection powers Gmail outreach and Calendar meeting sync for Sales."
         actions={
           <>
             <StatusPill tone={tone}>{label}</StatusPill>
@@ -181,7 +256,7 @@ export default function GmailSettingsClient({
               </SettingsButton>
             ) : (
               <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
-                Connect Gmail
+                Connect Google
               </SettingsButton>
             )}
           </>
@@ -192,12 +267,69 @@ export default function GmailSettingsClient({
           <Stat
             label="OAuth config"
             value={status?.configured ? "Configured" : "Missing"}
-            hint={status?.configured ? undefined : "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_TOKEN_ENCRYPTION_KEY"}
+            hint={
+              status?.configured
+                ? undefined
+                : "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_TOKEN_ENCRYPTION_KEY"
+            }
           />
           <Stat label="Sending" value={status?.sendsEnabled ? "Resumed" : "Paused"} />
         </StatGrid>
         {message ? <InlineNote tone="ok">{message}</InlineNote> : null}
         {error ? <InlineNote tone="off">{error}</InlineNote> : null}
+      </SettingsPanel>
+
+      <SettingsPanel
+        eyebrow="Calendar"
+        title="Meeting sync"
+        description="Pulls primary-calendar meetings into Sales so you can see conversations with contacts on a calendar."
+        actions={
+          <>
+            <StatusPill tone={calendarTone}>{calendarLabel}</StatusPill>
+            {status?.connected && !calendar?.calendarGranted ? (
+              <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
+                Reconnect for Calendar
+              </SettingsButton>
+            ) : (
+              <SettingsButton
+                onClick={() => void syncCalendarNow()}
+                disabled={busy || !status?.connected || !calendar?.calendarGranted}
+              >
+                Sync calendar now
+              </SettingsButton>
+            )}
+            <Link href="/admin/sales/calendar" className="csc-link text-xs font-semibold uppercase tracking-[0.14em]">
+              Open calendar →
+            </Link>
+          </>
+        }
+      >
+        <StatGrid>
+          <Stat
+            label="Access"
+            value={calendar?.calendarGranted ? "calendar.readonly" : "Not granted"}
+            hint={calendar?.calendarGranted ? undefined : "Reconnect and allow Google Calendar"}
+          />
+          <Stat
+            label="Window"
+            value={
+              calendar
+                ? `Past ${calendar.window.pastDays}d · next ${calendar.window.nextDays}d`
+                : "Past 7d · next 30d"
+            }
+          />
+          <Stat label="Last sync" value={formatWhen(calendar?.lastSyncedAt ?? null)} />
+          <Stat
+            label="Meetings"
+            value={calendar ? String(calendar.eventCount) : "—"}
+            hint={
+              calendar
+                ? `${calendar.matchedCount} matched · ${calendar.unmatchedCount} unmatched`
+                : undefined
+            }
+          />
+        </StatGrid>
+        {calendar?.lastSyncError ? <InlineNote tone="warn">{calendar.lastSyncError}</InlineNote> : null}
       </SettingsPanel>
 
       <SettingsPanel
@@ -207,7 +339,7 @@ export default function GmailSettingsClient({
       >
         <ToggleRow
           label="Sending enabled"
-          hint="Off means Gmail stays connected but nothing can leave the app."
+          hint="Off means Google stays connected but nothing can leave the app."
           checked={Boolean(status?.sendsEnabled)}
           disabled={busy || !status?.connected}
           onChange={(next) => void setSendsEnabled(next)}
@@ -245,7 +377,7 @@ export default function GmailSettingsClient({
 
       <SettingsPanel eyebrow="Access" title="Granted scopes">
         <div className="csc-list">
-          {scopes.map((scope) => (
+          {displayedScopes.map((scope) => (
             <div key={scope} className="py-3">
               <code className="text-xs text-gray-300">{scope}</code>
             </div>

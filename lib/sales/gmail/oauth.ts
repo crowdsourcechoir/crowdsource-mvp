@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { google } from "googleapis";
 import { siteUrl } from "@/lib/site-url";
-import { GMAIL_SCOPES } from "./constants";
+import { GOOGLE_OAUTH_SCOPES } from "./constants";
 
 function clientId(): string {
   const id = process.env.GOOGLE_CLIENT_ID?.trim();
@@ -43,7 +43,9 @@ export function buildConnectUrl(state: string): string {
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: [...GMAIL_SCOPES],
+    // Union prior grants when reconnecting so Calendar can be added without dropping Gmail.
+    include_granted_scopes: true,
+    scope: [...GOOGLE_OAUTH_SCOPES],
     state,
   });
 }

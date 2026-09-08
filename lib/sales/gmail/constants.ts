@@ -10,6 +10,12 @@ export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ] as const;
 
+/** Full Google OAuth grant for connect — Gmail + Calendar read. */
+export const GOOGLE_OAUTH_SCOPES = [
+  ...GMAIL_SCOPES,
+  "https://www.googleapis.com/auth/calendar.readonly",
+] as const;
+
 export const GMAIL_OWNER_KEY = "default";
 
 /**
