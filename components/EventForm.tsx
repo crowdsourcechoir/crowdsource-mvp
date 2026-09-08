@@ -246,7 +246,7 @@ export default function EventForm({
   const [themes, setThemes] = useState<AgentTheme[]>([]);
   const [themeError, setThemeError] = useState<string | null>(null);
   const [savedTemplates, setSavedTemplates] = useState<SavedAgentTemplate[]>([]);
-  const [templateName, setTemplateName] = useState("");
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
   // AI storyboard generation (Runway) — see app/api/events/[id]/generate-storyboard/route.ts.
   const [runwayStatus, setRunwayStatus] = useState<{
@@ -670,8 +670,8 @@ export default function EventForm({
     }));
   }
 
-  function saveCurrentAsTemplate() {
-    const trimmed = templateName.trim();
+  function saveCurrentAsTemplate(nameOverride?: string) {
+    const trimmed = (nameOverride ?? "").trim();
     if (!trimmed) {
       setThemeError("Add a template name before saving.");
       return;
@@ -712,8 +712,14 @@ export default function EventForm({
       askAboutItems,
     };
     persistSavedTemplates([tpl, ...savedTemplates]);
-    setTemplateName("");
     setThemeError(null);
+    setTemplateMenuOpen(false);
+  }
+
+  function promptAndSaveTemplate() {
+    const name = window.prompt("Name this template");
+    if (name == null) return;
+    saveCurrentAsTemplate(name);
   }
 
   function setWorldConfigField<K extends keyof WorldConfig>(key: K, value: WorldConfig[K]) {
@@ -1267,10 +1273,21 @@ export default function EventForm({
   const inputClass =
     "mt-0.5 block w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none";
   const labelClass = "block text-xs font-medium text-gray-400";
-  const sectionClass = "space-y-3 border-t border-[var(--csc-row-divider)] pt-5";
+  const sectionClass = "space-y-3 border-t-2 border-[#CFFF81]/70 pt-5";
   const sectionTitleClass = "csc-eyebrow";
+  const subsectionTitleClass = "text-[11px] font-semibold uppercase tracking-[0.2em] text-[#CFFF81]/80";
   const chipClass =
     "rounded-md border border-white/15 bg-black px-2 py-0.5 text-[11px] font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-40";
+
+  const eventTypeLower = (values.agentBrief?.eventType ?? "custom").toLowerCase();
+  const activeTemplateLabel =
+    eventTypeLower === "birthday"
+      ? "Birthday"
+      : eventTypeLower === "fundraiser"
+        ? "Fundraiser"
+        : eventTypeLower === "other" || eventTypeLower === "conference"
+          ? "Other"
+          : "Custom";
 
   return (
     <form noValidate onSubmit={handleSubmit} className="w-full space-y-3">
@@ -1284,7 +1301,9 @@ export default function EventForm({
           {submitSuccessMessage}
         </div>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <section className={sectionClass}>
+        <h3 className={sectionTitleClass}>Event details</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label htmlFor="title" className={labelClass}>
             Title
@@ -1416,186 +1435,22 @@ export default function EventForm({
             />
           </div>
         </div>
-      </div>
-      <section className={sectionClass}>
-        <h3 className={sectionTitleClass}>Event details</h3>
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="welcomeEyebrow" className={labelClass}>
-              Welcome eyebrow
-            </label>
-            <input
-              id="welcomeEyebrow"
-              type="text"
-              value={values.songGardenConfig?.welcomeEyebrow ?? ""}
-              onChange={(e) =>
-                setValues((v) => ({
-                  ...v,
-                  songGardenConfig: {
-                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
-                    welcomeEyebrow: e.target.value,
-                  },
-                }))
-              }
-              className={inputClass}
-              placeholder={WELCOME_MOMENT_LABEL}
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Small label above the landing headline (e.g. “Welcome to the Zag Song Garden”).
-            </p>
-          </div>
-          <div>
-            <label htmlFor="landingHeadline" className={labelClass}>
-              Landing headline
-            </label>
-            <input
-              id="landingHeadline"
-              type="text"
-              value={values.landingHeadline}
-              onChange={(e) => setValues((v) => ({ ...v, landingHeadline: e.target.value }))}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="landingCopy" className={labelClass}>
-              Supporting copy
-            </label>
-            <textarea
-              id="landingCopy"
-              rows={2}
-              value={values.landingCopy}
-              onChange={(e) => setValues((v) => ({ ...v, landingCopy: e.target.value }))}
-              className={inputClass}
-              placeholder="Optional short subheading under the headline."
-            />
-          </div>
-          <div>
-            <label htmlFor="ctaText" className={labelClass}>
-              CTA button text
-            </label>
-            <input
-              id="ctaText"
-              type="text"
-              value={values.ctaText}
-              onChange={(e) => setValues((v) => ({ ...v, ctaText: e.target.value }))}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="completionEyebrow" className={labelClass}>
-              Completion eyebrow
-            </label>
-            <input
-              id="completionEyebrow"
-              type="text"
-              value={values.songGardenConfig?.completionEyebrow ?? ""}
-              onChange={(e) =>
-                setValues((v) => ({
-                  ...v,
-                  songGardenConfig: {
-                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
-                    completionEyebrow: e.target.value,
-                  },
-                }))
-              }
-              className={inputClass}
-              placeholder={COMPLETION_MOMENT_LABEL}
-            />
-          </div>
-          <div>
-            <label htmlFor="anthemCompletionMessage" className={labelClass}>
-              Completion message
-            </label>
-            <textarea
-              id="anthemCompletionMessage"
-              rows={2}
-              value={values.anthemCompletionMessage}
-              onChange={(e) => setValues((v) => ({ ...v, anthemCompletionMessage: e.target.value }))}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="completionButtonText" className={labelClass}>
-              Completion button text
-            </label>
-            <input
-              id="completionButtonText"
-              type="text"
-              value={values.songGardenConfig?.completionButtonText ?? ""}
-              onChange={(e) =>
-                setValues((v) => ({
-                  ...v,
-                  songGardenConfig: {
-                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
-                    completionButtonText: e.target.value,
-                  },
-                }))
-              }
-              disabled={values.songGardenConfig?.showCompletionButton === false}
-              className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-40`}
-              placeholder={DEFAULT_COMPLETION_BUTTON_TEXT}
-            />
-            <label className="mt-2 flex cursor-pointer items-start gap-2.5">
-              <input
-                type="checkbox"
-                checked={values.songGardenConfig?.showCompletionButton !== false}
-                onChange={(e) =>
-                  setValues((v) => ({
-                    ...v,
-                    songGardenConfig: {
-                      ...(v.songGardenConfig ?? defaultSongGardenConfig()),
-                      showCompletionButton: e.target.checked,
-                    },
-                  }))
-                }
-                className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
-              />
-              <span className="text-sm text-gray-300">Show button on closing screen</span>
-            </label>
-          </div>
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={values.agentBrief?.requireContributionConsent !== false}
-              onChange={(e) => setBrief("requireContributionConsent", e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
-            />
-            <span className="text-sm text-gray-300">Require contribution consent on landing</span>
+        <div>
+          <label htmlFor="heroImageMode" className={labelClass}>
+            Default photo mode
           </label>
-          {values.agentBrief?.requireContributionConsent !== false && (
-            <div>
-              <label htmlFor="contributionConsentText" className={labelClass}>
-                Consent checkbox text
-              </label>
-              <textarea
-                id="contributionConsentText"
-                rows={2}
-                value={
-                  values.agentBrief?.contributionConsentText ?? DEFAULT_CONTRIBUTION_CONSENT_TEXT
-                }
-                onChange={(e) => setBrief("contributionConsentText", e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="heroImageMode" className={labelClass}>
-                Default photo mode
-              </label>
-              <select
-                id="heroImageMode"
-                value={values.heroImageMode}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, heroImageMode: e.target.value === "color" ? "color" : "bw" }))
-                }
-                className={inputClass}
-              >
-                <option value="bw">Black and white</option>
-                <option value="color">Full color</option>
-              </select>
-            </div>
-          </div>
+          <select
+            id="heroImageMode"
+            value={values.heroImageMode}
+            onChange={(e) =>
+              setValues((v) => ({ ...v, heroImageMode: e.target.value === "color" ? "color" : "bw" }))
+            }
+            className={inputClass}
+          >
+            <option value="bw">Black and white</option>
+            <option value="color">Full color</option>
+          </select>
+        </div>
         </div>
       </section>
 
@@ -1624,14 +1479,7 @@ export default function EventForm({
           </label>
 
           <div className="sm:col-span-2 space-y-2 rounded-lg border border-gray-800 bg-[#1a1a1a]/60 p-3">
-            <div>
-              <span className={labelClass}>Client logo</span>
-              <p className="mt-0.5 text-[11px] text-gray-500">
-                Shown on the public bloom below the world title and above the live presence bubble
-                (e.g. “another voice is warming up”). Upload a PNG or SVG with transparency when
-                possible.
-              </p>
-            </div>
+            <span className={labelClass}>Client logo</span>
             <div className="flex flex-wrap items-start gap-3">
               {values.worldConfig?.logoUrl?.trim() ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -1706,10 +1554,6 @@ export default function EventForm({
                     void applyBloomLogo({ logoMaxWidthPx: px });
                   }}
                 />
-                <p className="mt-1 text-[11px] text-gray-500">
-                  Drag to resize, then open the public bloom to check placement.{" "}
-                  {eventId ? "Size saves automatically when you release the slider." : "Save the bloom to publish."}
-                </p>
               </label>
             ) : null}
           </div>
@@ -2207,121 +2051,222 @@ export default function EventForm({
       </section>
 
       <section className={sectionClass}>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className={sectionTitleClass}>Journey</h3>
-          <p className="text-[11px] text-gray-500">
-            Ordered prompts — set eyebrow, Accept channels, and optionally tie a World storyboard
-            frame so the background changes on that step
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <label className={labelClass}>Template seed</label>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {(
-                [
-                  { id: "custom", label: "Custom", themeKey: null },
-                  { id: "birthday", label: "Birthday", themeKey: "birthday" },
-                  { id: "fundraiser", label: "Fundraiser", themeKey: "fundraiser" },
-                  { id: "other", label: "Other", themeKey: "conference" },
-                ] as const
-              ).map((opt) => {
-                const eventType = (values.agentBrief?.eventType ?? "custom").toLowerCase();
-                const active =
-                  opt.id === "custom"
-                    ? eventType === "custom"
-                    : eventType === opt.id ||
-                      themes.find((t) => t.id === values.agentThemeId)?.key === opt.themeKey;
-                const themeForOpt = opt.themeKey ? themes.find((t) => t.key === opt.themeKey) : null;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={async () => {
-                      if (opt.id === "custom") {
-                        applyCustomBrief();
-                        return;
-                      }
-                      let theme: AgentTheme | null = themeForOpt ?? null;
-                      if (!theme) {
-                        try {
-                          const fresh = await getAgentThemes();
-                          setThemes(fresh);
-                          theme = fresh.find((t) => t.key === (opt.themeKey ?? "")) ?? null;
-                        } catch {
-                          theme = null;
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setTemplateMenuOpen((o) => !o)}
+              className={chipClass + " min-h-[30px] px-3"}
+              aria-expanded={templateMenuOpen}
+              aria-haspopup="menu"
+            >
+              Template · {activeTemplateLabel} ▾
+            </button>
+            {templateMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 z-20 mt-1 min-w-[14rem] rounded-lg border border-white/15 bg-[#121214] p-1 shadow-xl"
+              >
+                {(
+                  [
+                    { id: "custom", label: "Custom", themeKey: null },
+                    { id: "birthday", label: "Birthday", themeKey: "birthday" },
+                    { id: "fundraiser", label: "Fundraiser", themeKey: "fundraiser" },
+                    { id: "other", label: "Other", themeKey: "conference" },
+                  ] as const
+                ).map((opt) => {
+                  const eventType = (values.agentBrief?.eventType ?? "custom").toLowerCase();
+                  const active =
+                    opt.id === "custom"
+                      ? eventType === "custom"
+                      : eventType === opt.id ||
+                        themes.find((t) => t.id === values.agentThemeId)?.key === opt.themeKey;
+                  const themeForOpt = opt.themeKey ? themes.find((t) => t.key === opt.themeKey) : null;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={async () => {
+                        setTemplateMenuOpen(false);
+                        if (opt.id === "custom") {
+                          applyCustomBrief();
+                          return;
                         }
+                        let theme: AgentTheme | null = themeForOpt ?? null;
+                        if (!theme) {
+                          try {
+                            const fresh = await getAgentThemes();
+                            setThemes(fresh);
+                            theme = fresh.find((t) => t.key === (opt.themeKey ?? "")) ?? null;
+                          } catch {
+                            theme = null;
+                          }
+                        }
+                        setThemeError(null);
+                        const local = TEMPLATE_DEFAULTS[opt.id];
+                        const journeySteps = journeyFromAskAboutItems(local.askAboutItems, {
+                          collectName: true,
+                        });
+                        setValues((v) => ({
+                          ...v,
+                          agentThemeId: theme?.id ?? v.agentThemeId ?? null,
+                          journeySteps,
+                          agentBrief: {
+                            ...(v.agentBrief ?? {}),
+                            eventType: local.eventType,
+                            askAboutItems: local.askAboutItems,
+                            askAbout: local.askAboutItems.map((item) => item.prompt),
+                            emotionalArc: local.emotionalArc,
+                          },
+                        }));
+                      }}
+                      className={`flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs ${
+                        active
+                          ? "bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]"
+                          : "text-gray-300 hover:bg-white/5"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+                {savedTemplates.length > 0 && (
+                  <div className="my-1 border-t border-white/10" />
+                )}
+                {savedTemplates.map((tpl) => (
+                  <div key={tpl.id} className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        applySavedTemplate(tpl);
+                        setTemplateMenuOpen(false);
+                      }}
+                      className="min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-left text-xs text-gray-300 hover:bg-white/5"
+                    >
+                      {tpl.name}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${tpl.name}`}
+                      onClick={() =>
+                        persistSavedTemplates(savedTemplates.filter((x) => x.id !== tpl.id))
                       }
-                      setThemeError(null);
-                      const local = TEMPLATE_DEFAULTS[opt.id];
-                      const journeySteps = journeyFromAskAboutItems(local.askAboutItems, {
-                        collectName: true,
-                      });
-                      setValues((v) => ({
-                        ...v,
-                        agentThemeId: theme?.id ?? v.agentThemeId ?? null,
-                        journeySteps,
-                        agentBrief: {
-                          ...(v.agentBrief ?? {}),
-                          eventType: local.eventType,
-                          askAboutItems: local.askAboutItems,
-                          askAbout: local.askAboutItems.map((item) => item.prompt),
-                          emotionalArc: local.emotionalArc,
-                        },
-                      }));
-                    }}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                      active
-                        ? "bg-gray-700 text-white"
-                        : "border border-gray-700 text-gray-400 hover:text-gray-200"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-            {themeError && <p className="mt-1 text-xs text-amber-300">{themeError}</p>}
+                      className="rounded-md px-1.5 py-1 text-[11px] text-red-300 hover:bg-red-950/40"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <div className="my-1 border-t border-white/10" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTemplateMenuOpen(false);
+                    promptAndSaveTemplate();
+                  }}
+                  className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/10"
+                >
+                  Save as new template…
+                </button>
+              </div>
+            )}
           </div>
         </div>
+        {themeError && <p className="text-xs text-amber-300">{themeError}</p>}
 
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1">
-            <label htmlFor="saveTemplateName" className={labelClass}>
-              Save as template
+        <div className="space-y-3 border-t border-[#CFFF81]/40 pt-4">
+          <p className={subsectionTitleClass}>Landing</p>
+          <div>
+            <label htmlFor="welcomeEyebrow" className={labelClass}>
+              Welcome eyebrow
             </label>
             <input
-              id="saveTemplateName"
+              id="welcomeEyebrow"
               type="text"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="e.g. Team appreciation"
+              value={values.songGardenConfig?.welcomeEyebrow ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                    welcomeEyebrow: e.target.value,
+                  },
+                }))
+              }
+              className={inputClass}
+              placeholder={WELCOME_MOMENT_LABEL}
+            />
+          </div>
+          <div>
+            <label htmlFor="landingHeadline" className={labelClass}>
+              Landing headline
+            </label>
+            <input
+              id="landingHeadline"
+              type="text"
+              value={values.landingHeadline}
+              onChange={(e) => setValues((v) => ({ ...v, landingHeadline: e.target.value }))}
               className={inputClass}
             />
           </div>
-          <button type="button" onClick={saveCurrentAsTemplate} className={chipClass + " min-h-[34px] px-3"}>
-            Save
-          </button>
-        </div>
-        {savedTemplates.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {savedTemplates.map((tpl) => (
-              <div key={tpl.id} className="flex items-center gap-0.5">
-                <button type="button" onClick={() => applySavedTemplate(tpl)} className={chipClass}>
-                  {tpl.name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => persistSavedTemplates(savedTemplates.filter((x) => x.id !== tpl.id))}
-                  className="rounded-md border border-red-900/40 px-1.5 py-0.5 text-[11px] text-red-300 hover:bg-red-950/40"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+          <div>
+            <label htmlFor="landingCopy" className={labelClass}>
+              Supporting copy
+            </label>
+            <textarea
+              id="landingCopy"
+              rows={2}
+              value={values.landingCopy}
+              onChange={(e) => setValues((v) => ({ ...v, landingCopy: e.target.value }))}
+              className={inputClass}
+              placeholder="Optional short subheading under the headline."
+            />
           </div>
-        )}
+          <div>
+            <label htmlFor="ctaText" className={labelClass}>
+              CTA button text
+            </label>
+            <input
+              id="ctaText"
+              type="text"
+              value={values.ctaText}
+              onChange={(e) => setValues((v) => ({ ...v, ctaText: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={values.agentBrief?.requireContributionConsent !== false}
+              onChange={(e) => setBrief("requireContributionConsent", e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
+            />
+            <span className="text-sm text-gray-300">Require contribution consent on landing</span>
+          </label>
+          {values.agentBrief?.requireContributionConsent !== false && (
+            <div>
+              <label htmlFor="contributionConsentText" className={labelClass}>
+                Consent checkbox text
+              </label>
+              <textarea
+                id="contributionConsentText"
+                rows={2}
+                value={
+                  values.agentBrief?.contributionConsentText ?? DEFAULT_CONTRIBUTION_CONSENT_TEXT
+                }
+                onChange={(e) => setBrief("contributionConsentText", e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t border-[#CFFF81]/40 pt-4">
+          <p className={subsectionTitleClass}>Prompts</p>
 
         <div className="flex flex-col gap-8">
           {values.journeySteps.map((step, idx) => {
@@ -2343,8 +2288,8 @@ export default function EventForm({
                 className="space-y-1.5 border-b border-[#CFFF81]/70 pb-8 last:border-b-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
-                  <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                  <span className="w-5 text-[11px] font-medium text-[#CFFF81]">{idx + 1}</span>
+                  <span className="rounded border border-[#CFFF81]/70 bg-[#CFFF81]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#CFFF81]">
                     {kindLabel}
                   </span>
                   <span className="flex-1" />
@@ -2640,6 +2585,83 @@ export default function EventForm({
           >
             + Name
           </button>
+        </div>
+        </div>
+
+        <div className="space-y-3 border-t border-[#CFFF81]/40 pt-4">
+          <p className={subsectionTitleClass}>Closing</p>
+          <div>
+            <label htmlFor="completionEyebrow" className={labelClass}>
+              Completion eyebrow
+            </label>
+            <input
+              id="completionEyebrow"
+              type="text"
+              value={values.songGardenConfig?.completionEyebrow ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                    completionEyebrow: e.target.value,
+                  },
+                }))
+              }
+              className={inputClass}
+              placeholder={COMPLETION_MOMENT_LABEL}
+            />
+          </div>
+          <div>
+            <label htmlFor="anthemCompletionMessage" className={labelClass}>
+              Completion message
+            </label>
+            <textarea
+              id="anthemCompletionMessage"
+              rows={2}
+              value={values.anthemCompletionMessage}
+              onChange={(e) => setValues((v) => ({ ...v, anthemCompletionMessage: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="completionButtonText" className={labelClass}>
+              Completion button text
+            </label>
+            <input
+              id="completionButtonText"
+              type="text"
+              value={values.songGardenConfig?.completionButtonText ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  songGardenConfig: {
+                    ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                    completionButtonText: e.target.value,
+                  },
+                }))
+              }
+              disabled={values.songGardenConfig?.showCompletionButton === false}
+              className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-40`}
+              placeholder={DEFAULT_COMPLETION_BUTTON_TEXT}
+            />
+            <label className="mt-2 flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={values.songGardenConfig?.showCompletionButton !== false}
+                onChange={(e) =>
+                  setValues((v) => ({
+                    ...v,
+                    songGardenConfig: {
+                      ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                      showCompletionButton: e.target.checked,
+                    },
+                  }))
+                }
+                className="mt-0.5 h-4 w-4 rounded border-white/15 bg-black accent-[var(--csc-accent)]"
+              />
+              <span className="text-sm text-gray-300">Show button on closing screen</span>
+            </label>
+          </div>
         </div>
       </section>
 
