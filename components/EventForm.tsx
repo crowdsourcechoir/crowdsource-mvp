@@ -2338,7 +2338,7 @@ export default function EventForm({
             const kindLabel = step.kind === "prompt" ? "Prompt" : "Name";
             const channels = step.kind === "prompt" ? normalizePromptChannels(step) : null;
             return (
-              <div key={step.id} className="space-y-1.5 py-2.5">
+              <div key={step.id} className="space-y-1.5 py-6 first:pt-2 last:pb-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
                   <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
