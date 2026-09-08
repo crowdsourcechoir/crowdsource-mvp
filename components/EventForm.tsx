@@ -2340,7 +2340,7 @@ export default function EventForm({
             return (
               <div
                 key={step.id}
-                className="space-y-1.5 border-b border-[var(--csc-accent)]/40 pb-8 last:border-b-0 last:pb-0"
+                className="space-y-1.5 border-b border-[#CFFF81]/45 pb-8 last:border-b-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
