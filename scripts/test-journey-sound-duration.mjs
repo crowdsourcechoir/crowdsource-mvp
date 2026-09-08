@@ -96,6 +96,46 @@ async function main() {
   assert.equal(channels.allowAudio, true);
   assert.equal(channels.allowSound, true);
 
+  // Explicit allowAudio:false must win over stale allowSound (Accept toggle bug).
+  const videoOnly = normalizePromptChannels({
+    allowText: false,
+    allowAudio: false,
+    allowVideo: true,
+    allowSound: true,
+  });
+  assert.equal(videoOnly.allowAudio, false);
+  assert.equal(videoOnly.allowSound, false);
+  assert.equal(videoOnly.allowVideo, true);
+  assert.equal(videoOnly.allowPhoto, false);
+
+  const photoOnly = normalizePromptChannels({
+    allowText: false,
+    allowPhoto: true,
+  });
+  assert.equal(photoOnly.allowPhoto, true);
+  assert.equal(photoOnly.allowText, false);
+  assert.equal(photoOnly.allowAudio, false);
+  assert.equal(isAgentContributionStep({
+    id: "p",
+    kind: "prompt",
+    prompt: "Snap your world",
+    ...photoOnly,
+  }), true);
+
+  const withHint = normalizeJourneySteps([
+    {
+      id: "hinted",
+      kind: "prompt",
+      prompt: "What threshold?",
+      responseHint: "Add a short phrase or take a snapshot.",
+      allowText: true,
+      allowPhoto: true,
+    },
+  ]);
+  assert.equal(withHint[0].kind, "prompt");
+  assert.equal(withHint[0].responseHint, "Add a short phrase or take a snapshot.");
+  assert.equal(withHint[0].allowPhoto, true);
+
   const normalized = normalizeJourneySteps([
     {
       id: "a",
@@ -119,7 +159,7 @@ async function main() {
   assert.equal(normalized[1].recordSeconds, 25);
   assert.equal(DEFAULT_FREE_SOUND_SECONDS, 10);
 
-  console.log("ok — unified audio + optional composition category");
+  console.log("ok — unified audio + optional composition category + photo/video-alone");
 }
 
 main().catch((err) => {

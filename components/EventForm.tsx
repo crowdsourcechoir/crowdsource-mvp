@@ -583,7 +583,7 @@ export default function EventForm({
       if (!item.prompt?.trim()) continue;
       const allowAudio = Boolean(item.allowAudio);
       const allowVideo = Boolean(item.allowVideo);
-      const allowText = (!allowAudio && !allowVideo) || (allowAudio && allowVideo);
+      const allowText = !allowAudio && !allowVideo;
       steps.push({
         ...createJourneyPromptStep(item.prompt.trim()),
         ...normalizePromptChannels({ allowText, allowAudio, allowVideo }),
@@ -595,16 +595,19 @@ export default function EventForm({
 
   function togglePromptChannel(
     index: number,
-    channel: "allowText" | "allowAudio" | "allowVideo"
+    channel: "allowText" | "allowAudio" | "allowVideo" | "allowPhoto"
   ) {
     setValues((v) => {
       const cur = v.journeySteps[index];
       if (!cur || cur.kind !== "prompt") return v;
       const channels = normalizePromptChannels(cur);
       const turningAudioOn = channel === "allowAudio" && !channels.allowAudio;
+      // Do not spread allowSound — stale true would keep Audio stuck on after toggle-off.
       const nextChannels = normalizePromptChannels({
-        ...channels,
-        [channel]: !channels[channel],
+        allowText: channel === "allowText" ? !channels.allowText : channels.allowText,
+        allowAudio: channel === "allowAudio" ? !channels.allowAudio : channels.allowAudio,
+        allowVideo: channel === "allowVideo" ? !channels.allowVideo : channels.allowVideo,
+        allowPhoto: channel === "allowPhoto" ? !channels.allowPhoto : channels.allowPhoto,
       });
       const next = [...v.journeySteps];
       next[index] = {
@@ -2373,45 +2376,6 @@ export default function EventForm({
                   />
                 </label>
 
-                <label className="block max-w-xs">
-                  <span className={labelClass}>Background frame</span>
-                  <select
-                    className={inputClass}
-                    value={
-                      typeof step.storyboardFrameIndex === "number"
-                        ? String(step.storyboardFrameIndex)
-                        : ""
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (!raw) {
-                        updateJourneyStep(idx, { storyboardFrameIndex: undefined });
-                        return;
-                      }
-                      updateJourneyStep(idx, {
-                        storyboardFrameIndex: Number(raw),
-                      });
-                    }}
-                    disabled={(values.worldConfig?.worldStoryboard?.length ?? 0) === 0}
-                  >
-                    <option value="">
-                      {(values.worldConfig?.worldStoryboard?.length ?? 0) === 0
-                        ? "Auto (add storyboard frames in World)"
-                        : "Auto / hold previous"}
-                    </option>
-                    {(values.worldConfig?.worldStoryboard ?? []).map((frame, fi) => (
-                      <option key={`frame-${fi}`} value={fi}>
-                        Frame {fi + 1}
-                        {frame.videoUrl ? " (video)" : frame.sceneUrl ? " (still)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="mt-0.5 block text-[11px] text-gray-500">
-                    When this step starts, switch the world background to that plate. Leave Auto to
-                    keep the previous tied frame (or progress-based if none yet).
-                  </span>
-                </label>
-
                 {step.kind === "name" && (
                   <>
                     <label className="block">
@@ -2449,6 +2413,16 @@ export default function EventForm({
                         placeholder="What participants see"
                       />
                     </label>
+                    <label className="block">
+                      <span className={labelClass}>Helper text</span>
+                      <input
+                        type="text"
+                        value={step.responseHint ?? ""}
+                        onChange={(e) => updateJourneyStep(idx, { responseHint: e.target.value })}
+                        className={inputClass}
+                        placeholder="e.g. Add a short phrase or take a snapshot."
+                      />
+                    </label>
                     <div className="flex flex-wrap items-center gap-1">
                       <span className="mr-1 text-[11px] text-gray-500">Accept:</span>
                       {(
@@ -2456,6 +2430,7 @@ export default function EventForm({
                           { key: "allowText" as const, label: "Text" },
                           { key: "allowAudio" as const, label: "Audio" },
                           { key: "allowVideo" as const, label: "Video" },
+                          { key: "allowPhoto" as const, label: "Photo" },
                         ] as const
                       ).map(({ key, label }) => {
                         const on = channels[key];
@@ -2466,7 +2441,7 @@ export default function EventForm({
                             onClick={() => togglePromptChannel(idx, key)}
                             className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
                               on
-                                ? "border border-sky-600/60 bg-sky-900/30 text-sky-200"
+                                ? "border border-[var(--csc-accent)]/70 bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]"
                                 : chipClass
                             }`}
                           >
@@ -2484,7 +2459,7 @@ export default function EventForm({
                           }
                           className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
                             step.requireEmailCaptcha
-                              ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
+                              ? "border border-[var(--csc-accent)]/70 bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]"
                               : chipClass
                           }`}
                         >
@@ -2591,7 +2566,7 @@ export default function EventForm({
                                     }}
                                     className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
                                       on
-                                        ? "border border-emerald-600/60 bg-emerald-900/25 text-emerald-200"
+                                        ? "border border-[var(--csc-accent)]/70 bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]"
                                         : chipClass
                                     }`}
                                   >
@@ -2600,21 +2575,47 @@ export default function EventForm({
                                 );
                               }
                             )}
-                            <p className="w-full text-[11px] text-gray-500">
-                              Optional — for canvas/composition. e.g. Mid choir + Also allow Clap.
-                            </p>
                           </div>
-                        ) : (
-                          <p className="text-[11px] text-gray-500 sm:col-span-2">
-                            All audio is just a recording. Set length above (tap ≈ 5s, phrase ≈ 10s,
-                            ambient ≈ 30s). Add a composition category only if you want it on the
-                            canvas.
-                          </p>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </>
                 )}
+
+                <label className="block max-w-xs">
+                  <span className={labelClass}>Background frame</span>
+                  <select
+                    className={inputClass}
+                    value={
+                      typeof step.storyboardFrameIndex === "number"
+                        ? String(step.storyboardFrameIndex)
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (!raw) {
+                        updateJourneyStep(idx, { storyboardFrameIndex: undefined });
+                        return;
+                      }
+                      updateJourneyStep(idx, {
+                        storyboardFrameIndex: Number(raw),
+                      });
+                    }}
+                    disabled={(values.worldConfig?.worldStoryboard?.length ?? 0) === 0}
+                  >
+                    <option value="">
+                      {(values.worldConfig?.worldStoryboard?.length ?? 0) === 0
+                        ? "Auto (add storyboard frames in World)"
+                        : "Auto / hold previous"}
+                    </option>
+                    {(values.worldConfig?.worldStoryboard ?? []).map((frame, fi) => (
+                      <option key={`frame-${fi}`} value={fi}>
+                        Frame {fi + 1}
+                        {frame.videoUrl ? " (video)" : frame.sceneUrl ? " (still)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             );
           })}

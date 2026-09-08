@@ -677,18 +677,30 @@ export default function SonggardenCanvas({
       {showVideo ? (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
-            Video responses ({filteredVideo.length})
+            Video & photo ({filteredVideo.length})
           </h2>
           {filteredVideo.length === 0 ? (
-            <p className="text-sm text-gray-500">No video responses in this scope.</p>
+            <p className="text-sm text-gray-500">No video or photo responses in this scope.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredVideo.map((item) => (
+              {filteredVideo.map((item) => {
+                const isPhoto = /\.(jpe?g|png|webp|gif)(\?|$)/i.test(item.videoUrl) ||
+                  /\/photo-/i.test(item.videoUrl);
+                return (
                 <figure
                   key={item.id}
                   className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
                 >
-                  <video src={item.videoUrl} controls className="aspect-video w-full bg-black" />
+                  {isPhoto ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- contributor upload URL
+                    <img
+                      src={item.videoUrl}
+                      alt=""
+                      className="aspect-video w-full bg-black object-cover"
+                    />
+                  ) : (
+                    <video src={item.videoUrl} controls className="aspect-video w-full bg-black" />
+                  )}
                   <figcaption className="space-y-1 px-3 py-2">
                     <p className="text-xs text-gray-500">{item.participantName}</p>
                     {item.questionText ? (
@@ -699,7 +711,8 @@ export default function SonggardenCanvas({
                     ) : null}
                   </figcaption>
                 </figure>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

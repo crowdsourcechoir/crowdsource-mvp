@@ -50,13 +50,15 @@ export const DEFAULT_VIDEO_SECONDS = 20;
 
 /**
  * One customizable contribution prompt. Response channels are independent toggles —
- * text, voice (audio), video, and/or sound clip (at least one required).
+ * text, audio, video, and/or photo (at least one required).
  */
 export type JourneyPromptStep = {
   id: string;
   kind: "prompt";
   prompt: string;
   categoryLabel?: string;
+  /** Helper line under the prompt (e. for “Add a short phrase” / “Take a snapshot”). */
+  responseHint?: string;
   allowText?: boolean;
   /**
    * Audio recording (mic). Optional `slotId` tags it for canvas/composition
@@ -65,6 +67,8 @@ export type JourneyPromptStep = {
    */
   allowAudio?: boolean;
   allowVideo?: boolean;
+  /** Still photo / snapshot from the camera. */
+  allowPhoto?: boolean;
   /** @deprecated Alias of allowAudio — normalized to match allowAudio. */
   allowSound?: boolean;
   /** Optional composition pad. Omit / empty = free sound with custom length. */
@@ -220,27 +224,39 @@ export function normalizePromptChannels(step: {
   allowText?: boolean;
   allowAudio?: boolean;
   allowVideo?: boolean;
+  allowPhoto?: boolean;
   allowSound?: boolean;
 }): {
   allowText: boolean;
   allowAudio: boolean;
   allowVideo: boolean;
+  allowPhoto: boolean;
   allowSound: boolean;
 } {
-  // Sound is legacy alias for Audio — one recording channel, optional composition pad.
-  const wantsAudio = Boolean(step.allowAudio) || Boolean(step.allowSound);
-  const allowAudio = wantsAudio;
-  const allowSound = wantsAudio;
+  // Sound is legacy alias for Audio. When allowAudio is explicitly set, it wins
+  // (so toggling Audio off is not undone by a stale allowSound: true).
+  const allowAudio =
+    step.allowAudio !== undefined
+      ? Boolean(step.allowAudio)
+      : Boolean(step.allowSound);
+  const allowSound = allowAudio;
   const allowVideo = Boolean(step.allowVideo);
+  const allowPhoto = Boolean(step.allowPhoto);
   let allowText: boolean;
   if (step.allowText === false) allowText = false;
   else if (step.allowText === true) allowText = true;
-  else allowText = !allowAudio && !allowVideo;
+  else allowText = !allowAudio && !allowVideo && !allowPhoto;
 
-  if (!allowText && !allowAudio && !allowVideo) {
-    return { allowText: true, allowAudio: false, allowVideo: false, allowSound: false };
+  if (!allowText && !allowAudio && !allowVideo && !allowPhoto) {
+    return {
+      allowText: true,
+      allowAudio: false,
+      allowVideo: false,
+      allowPhoto: false,
+      allowSound: false,
+    };
   }
-  return { allowText, allowAudio, allowVideo, allowSound };
+  return { allowText, allowAudio, allowVideo, allowPhoto, allowSound };
 }
 
 /** True when this prompt records audio (garden clip; optional composition category). */
@@ -266,13 +282,22 @@ export function resolveCategoryLabel(step: JourneyStep): string {
   if (custom) return custom;
   if (step.kind === "prompt") {
     const channels = normalizePromptChannels(step);
-    if (channels.allowAudio && !channels.allowText && !channels.allowVideo) {
+    const mediaOnly =
+      !channels.allowText &&
+      (channels.allowAudio || channels.allowVideo || channels.allowPhoto);
+    if (channels.allowAudio && !channels.allowText && !channels.allowVideo && !channels.allowPhoto) {
       return step.slotId
         ? defaultCategoryLabelForStep("sound", step.slotId)
         : "Your Sounds";
     }
-    if (channels.allowVideo && !channels.allowText && !channels.allowAudio) {
+    if (channels.allowPhoto && !channels.allowText && !channels.allowAudio && !channels.allowVideo) {
+      return "Your World";
+    }
+    if (channels.allowVideo && !channels.allowText && !channels.allowAudio && !channels.allowPhoto) {
       return "Your Face";
+    }
+    if (mediaOnly && (channels.allowVideo || channels.allowPhoto)) {
+      return channels.allowPhoto && !channels.allowVideo ? "Your World" : "Your Face";
     }
     return "Your Words";
   }
@@ -287,7 +312,7 @@ export function isAgentContributionStep(
   if (step.kind !== "prompt") return false;
   const channels = normalizePromptChannels(step);
   // Audio recordings plant in the garden (SoundMomentPad) — not the agent interview.
-  return channels.allowText || channels.allowVideo;
+  return channels.allowText || channels.allowVideo || channels.allowPhoto;
 }
 
 export function defaultJourneySteps(): JourneyStep[] {
@@ -306,6 +331,7 @@ export function defaultJourneySteps(): JourneyStep[] {
       allowText: true,
       allowAudio: false,
       allowVideo: false,
+      allowPhoto: false,
       allowSound: false,
     },
     createJourneySoundPromptStep(undefined, {
@@ -325,6 +351,7 @@ function buildPromptStep(
     allowText?: boolean;
     allowAudio?: boolean;
     allowVideo?: boolean;
+    allowPhoto?: boolean;
     allowSound?: boolean;
     requireEmailCaptcha?: boolean;
     slotId?: GardenSlotId | null;
@@ -333,6 +360,7 @@ function buildPromptStep(
     alternateSlotIds?: GardenSlotId[];
     recordSeconds?: number;
     storyboardFrameIndex?: number;
+    responseHint?: string;
   }
 ): JourneyPromptStep {
   const channels = normalizePromptChannels(opts);
@@ -340,6 +368,8 @@ function buildPromptStep(
   const storyboardFrameIndex = clampStoryboardFrameIndex(opts.storyboardFrameIndex);
   const hasPad = channels.allowAudio && isGardenSlotId(opts.slotId);
   const slotId = hasPad ? (opts.slotId as GardenSlotId) : undefined;
+  const responseHint =
+    typeof opts.responseHint === "string" ? opts.responseHint : undefined;
   return {
     id,
     kind: "prompt",
@@ -347,6 +377,7 @@ function buildPromptStep(
     categoryLabel: typeof categoryLabel === "string" ? categoryLabel : "",
     ...channels,
     requireEmailCaptcha: Boolean(opts.requireEmailCaptcha) && channels.allowText,
+    ...(responseHint !== undefined ? { responseHint } : {}),
     ...(storyboardFrameIndex != null ? { storyboardFrameIndex } : {}),
     ...(recordSeconds != null
       ? { recordSeconds }
@@ -417,33 +448,39 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
       let allowText = Boolean((item as { allowText?: unknown }).allowText);
       let allowAudio = Boolean((item as { allowAudio?: unknown }).allowAudio);
       let allowVideo = Boolean((item as { allowVideo?: unknown }).allowVideo);
+      let allowPhoto = Boolean((item as { allowPhoto?: unknown }).allowPhoto);
       let allowSound = Boolean((item as { allowSound?: unknown }).allowSound);
 
       if (kind === "text") {
         allowText = true;
         allowAudio = Boolean((item as { allowAudio?: unknown }).allowAudio);
         allowVideo = Boolean((item as { allowVideo?: unknown }).allowVideo);
+        allowPhoto = Boolean((item as { allowPhoto?: unknown }).allowPhoto);
         allowSound = false;
       } else if (kind === "audio") {
         allowText = false;
         allowAudio = true;
         allowVideo = false;
+        allowPhoto = false;
         allowSound = false;
       } else if (kind === "video") {
         allowText = false;
         allowAudio = false;
         allowVideo = true;
+        allowPhoto = false;
         allowSound = false;
       } else if (kind === "prompt") {
         const hasAnyFlag =
           (item as { allowText?: unknown }).allowText !== undefined ||
           (item as { allowAudio?: unknown }).allowAudio !== undefined ||
           (item as { allowVideo?: unknown }).allowVideo !== undefined ||
+          (item as { allowPhoto?: unknown }).allowPhoto !== undefined ||
           (item as { allowSound?: unknown }).allowSound !== undefined;
         if (!hasAnyFlag) {
           allowText = true;
           allowAudio = false;
           allowVideo = false;
+          allowPhoto = false;
           allowSound = false;
         } else {
           // Preserve explicit false for allowText when other flags are present.
@@ -459,6 +496,10 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
         ? ((item as { slotId: GardenSlotId }).slotId)
         : undefined;
       const recordSeconds = readRecordSeconds(item as object);
+      const responseHint =
+        typeof (item as { responseHint?: unknown }).responseHint === "string"
+          ? (item as { responseHint: string }).responseHint
+          : undefined;
       // Composition category is optional on any audio recording.
       if (allowAudio || allowSound) {
         if (slotId && seenSlots.has(slotId)) {
@@ -475,6 +516,7 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
           allowText,
           allowAudio: allowAudio || allowSound,
           allowVideo,
+          allowPhoto,
           allowSound: allowAudio || allowSound,
           requireEmailCaptcha: Boolean((item as { requireEmailCaptcha?: unknown }).requireEmailCaptcha),
           slotId: slotId ?? null,
@@ -485,6 +527,7 @@ export function normalizeJourneySteps(raw: unknown): JourneyStep[] {
             recordSeconds ??
             ((allowAudio || allowSound) && !slotId ? DEFAULT_FREE_SOUND_SECONDS : undefined),
           storyboardFrameIndex: readStoryboardFrameIndex(item as object),
+          responseHint,
         })
       );
       continue;
@@ -550,7 +593,7 @@ export function synthesizeJourneySteps(event: Event | null | undefined): Journey
     for (const item of items) {
       const allowAudio = Boolean(item.allowAudio);
       const allowVideo = Boolean(item.allowVideo);
-      const allowText = (!allowAudio && !allowVideo) || (allowAudio && allowVideo);
+      const allowText = !allowAudio && !allowVideo;
       steps.push(
         buildPromptStep(newStepId(), item.prompt.trim(), undefined, {
           allowText,
@@ -602,7 +645,7 @@ export function syncLegacyFromJourneySteps(
       const channels = normalizePromptChannels(s);
       return (
         s.prompt.trim().length > 0 &&
-        (channels.allowText || channels.allowVideo)
+        (channels.allowText || channels.allowVideo || channels.allowPhoto)
       );
     })
     .map((s) => {
@@ -610,8 +653,8 @@ export function syncLegacyFromJourneySteps(
       return {
         prompt: s.prompt.trim(),
         allowAudio: false,
-        allowVideo: channels.allowVideo,
-        allowMedia: channels.allowVideo,
+        allowVideo: channels.allowVideo || channels.allowPhoto,
+        allowMedia: channels.allowVideo || channels.allowPhoto,
         requireEmailCaptcha: Boolean(s.requireEmailCaptcha) && channels.allowText,
       };
     });
@@ -727,9 +770,11 @@ export function createJourneyPromptStep(prompt = ""): JourneyPromptStep {
     kind: "prompt",
     prompt,
     categoryLabel: "",
+    responseHint: "",
     allowText: true,
     allowAudio: false,
     allowVideo: false,
+    allowPhoto: false,
     allowSound: false,
   };
 }
@@ -808,6 +853,7 @@ export function createJourneyVideoStep(prompt = "Share a short video."): Journey
     allowText: false,
     allowAudio: false,
     allowVideo: true,
+    allowPhoto: false,
     allowSound: false,
   };
 }

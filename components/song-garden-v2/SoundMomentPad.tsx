@@ -26,6 +26,7 @@ type SoundMomentPadProps = {
   buttonLabel?: string;
   contributorName: string | null;
   accentColor: string;
+  hint?: string | null;
   /** Override pad default duration (ms). */
   recordMs?: number;
   /**
@@ -53,6 +54,7 @@ export default function SoundMomentPad({
   buttonLabel,
   contributorName,
   accentColor,
+  hint,
   recordMs: recordMsOverride,
   progressSlotId,
   alternateSlots,
@@ -213,6 +215,11 @@ export default function SoundMomentPad({
       <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
         <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
       </p>
+      {hint ? (
+        <p className="-mt-3 font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
+          {hint}
+        </p>
+      ) : null}
 
       {phase === "choose" && (
         <motion.div

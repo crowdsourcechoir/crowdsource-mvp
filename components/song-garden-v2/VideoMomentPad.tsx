@@ -16,6 +16,7 @@ type VideoMomentPadProps = {
   accentColor: string;
   recordMs?: number;
   disabled?: boolean;
+  hint?: string | null;
   /** Called with the captured clip when the participant confirms; parent should upload then advance. */
   onSubmitted: (blob: Blob) => void | Promise<void>;
 };
@@ -48,6 +49,7 @@ export default function VideoMomentPad({
   accentColor,
   recordMs = DEFAULT_RECORD_MS,
   disabled = false,
+  hint,
   onSubmitted,
 }: VideoMomentPadProps) {
   const [phase, setPhase] = useState<PadPhase>("idle");
@@ -139,8 +141,10 @@ export default function VideoMomentPad({
     setError(null);
     cancelledRef.current = false;
     try {
-      const stream = await navigator.mediaDevices
-        .getUserMedia({
+      // Prefer video+audio; fall back to video-only so video prompts work without a mic.
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
             width: { ideal: 640, max: 960 },
@@ -152,22 +156,22 @@ export default function VideoMomentPad({
             noiseSuppression: true,
             autoGainControl: true,
           },
-        })
-        .catch(() =>
-          navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          })
-        );
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 640, max: 960 },
+            height: { ideal: 360, max: 540 },
+            frameRate: { ideal: 20, max: 24 },
+          },
+          audio: false,
+        });
+      }
 
       if (cancelledRef.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
-      }
-
-      if (stream.getAudioTracks().length === 0) {
-        stream.getTracks().forEach((t) => t.stop());
-        throw new Error("Microphone access is needed to record video with sound.");
       }
 
       streamRef.current = stream;
@@ -303,6 +307,11 @@ export default function VideoMomentPad({
       <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
         <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
       </p>
+      {hint ? (
+        <p className="-mt-3 font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
+          {hint}
+        </p>
+      ) : null}
 
       <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
         <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>

@@ -4,6 +4,9 @@ export const AGENT_MEDIA_BUCKET = process.env.SUPABASE_MEDIA_BUCKET || "agent-me
 
 export const MAX_AGENT_AUDIO_BYTES = 12 * 1024 * 1024;
 export const MAX_AGENT_VIDEO_BYTES = 25 * 1024 * 1024;
+export const MAX_AGENT_PHOTO_BYTES = 8 * 1024 * 1024;
+
+export type AgentMediaKind = "audio" | "video" | "photo";
 
 let bucketChecked = false;
 
@@ -21,8 +24,13 @@ export function sanitizeConversationKey(conversationId: string): string {
   return conversationId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
 }
 
-export function extForAgentMedia(contentType: string, kind: "audio" | "video"): string {
+export function extForAgentMedia(contentType: string, kind: AgentMediaKind): string {
   const ct = contentType.toLowerCase();
+  if (kind === "photo") {
+    if (ct.includes("png")) return "png";
+    if (ct.includes("webp")) return "webp";
+    return "jpg";
+  }
   if (kind === "audio") {
     if (ct.includes("mpeg")) return "mp3";
     if (ct.includes("ogg")) return "ogg";
@@ -34,7 +42,7 @@ export function extForAgentMedia(contentType: string, kind: "audio" | "video"): 
   return "webm";
 }
 
-export function newTurnMediaPath(conversationId: string, kind: "audio" | "video", ext: string): string {
+export function newTurnMediaPath(conversationId: string, kind: AgentMediaKind, ext: string): string {
   const key = sanitizeConversationKey(conversationId);
   const stamp = Date.now();
   const rand = Math.random().toString(36).slice(2, 8);

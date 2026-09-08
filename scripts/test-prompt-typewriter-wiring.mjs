@@ -15,6 +15,7 @@ const files = [
   "components/song-garden-v2/VoiceMomentPad.tsx",
   "components/song-garden-v2/SoundMomentPad.tsx",
   "components/song-garden-v2/VideoMomentPad.tsx",
+  "components/song-garden-v2/PhotoMomentPad.tsx",
 ];
 
 for (const rel of files) {

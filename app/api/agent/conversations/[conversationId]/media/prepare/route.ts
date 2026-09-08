@@ -3,10 +3,12 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import {
   AGENT_MEDIA_BUCKET,
   MAX_AGENT_AUDIO_BYTES,
+  MAX_AGENT_PHOTO_BYTES,
   MAX_AGENT_VIDEO_BYTES,
   createAgentMediaSignedUpload,
   extForAgentMedia,
   newTurnMediaPath,
+  type AgentMediaKind,
 } from "@/lib/agent-media/storage-upload";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +19,7 @@ const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 type Ctx = { params: Promise<{ conversationId: string }> };
 
 /**
- * Mint a signed upload URL for journey turn audio/video.
+ * Mint a signed upload URL for journey turn audio/video/photo.
  * Client PUTs the blob, then sends storagePath + publicUrl on …/send.
  */
 export async function POST(request: Request, context: Ctx) {
@@ -45,13 +47,28 @@ export async function POST(request: Request, context: Ctx) {
       ext?: string;
     };
 
-    const kind = body.kind === "video" ? "video" : body.kind === "audio" ? "audio" : null;
+    const kind: AgentMediaKind | null =
+      body.kind === "video"
+        ? "video"
+        : body.kind === "audio"
+          ? "audio"
+          : body.kind === "photo"
+            ? "photo"
+            : null;
     if (!kind) {
-      return NextResponse.json({ error: "kind must be audio or video." }, { status: 400, ...NO_STORE });
+      return NextResponse.json(
+        { error: "kind must be audio, video, or photo." },
+        { status: 400, ...NO_STORE }
+      );
     }
 
     const size = Number(body.size) || 0;
-    const maxBytes = kind === "video" ? MAX_AGENT_VIDEO_BYTES : MAX_AGENT_AUDIO_BYTES;
+    const maxBytes =
+      kind === "video"
+        ? MAX_AGENT_VIDEO_BYTES
+        : kind === "photo"
+          ? MAX_AGENT_PHOTO_BYTES
+          : MAX_AGENT_AUDIO_BYTES;
     if (size <= 0 || size > maxBytes) {
       return NextResponse.json(
         {
@@ -79,7 +96,9 @@ export async function POST(request: Request, context: Ctx) {
         ? body.contentType.trim()
         : kind === "video"
           ? "video/webm"
-          : "audio/wav";
+          : kind === "photo"
+            ? "image/jpeg"
+            : "audio/wav";
 
     const ext =
       typeof body.ext === "string" && /^[a-z0-9]{1,8}$/i.test(body.ext.trim())

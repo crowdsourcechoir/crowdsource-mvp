@@ -82,18 +82,20 @@ import { useCelebration } from "./engine/useCelebration";
 const TurnstileWidget = dynamic(() => import("@/components/TurnstileWidget"), { ssr: false });
 const SoundMomentPad = dynamic(() => import("./SoundMomentPad"), { ssr: false });
 const VideoMomentPad = dynamic(() => import("./VideoMomentPad"), { ssr: false });
+const PhotoMomentPad = dynamic(() => import("./PhotoMomentPad"), { ssr: false });
 const CelebrationBurst = dynamic(() => import("./CelebrationBurst"), { ssr: false });
 
 type WorldJourneyProps = {
   event: Event;
 };
 
-type AnswerChannel = "text" | "audio" | "video";
+type AnswerChannel = "text" | "audio" | "video" | "photo";
 
 const CHANNEL_LABELS: Record<AnswerChannel, string> = {
   text: "Type",
   audio: "Record",
   video: "Video",
+  photo: "Photo",
 };
 
 function loadJourneyPosition(eventId: string, interviewVersion: string): JourneyPosition | null {
@@ -142,6 +144,7 @@ function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["sug
     if (channels.allowText) types.push("text");
     // Audio plants in the garden — not an agent-interview voice turn.
     if (channels.allowVideo) types.push("video");
+    if (channels.allowPhoto) types.push("video");
     if (channels.allowText && step.requireEmailCaptcha) {
       types.push("email");
       types.push("captcha");
@@ -323,6 +326,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     if (promptChannels.allowText) channels.push("text");
     if (promptChannels.allowAudio) channels.push("audio");
     if (promptChannels.allowVideo) channels.push("video");
+    if (promptChannels.allowPhoto) channels.push("photo");
     return channels;
   }, [isNameStep, promptChannels]);
 
@@ -333,7 +337,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const useTextPad = activeChannel === "text";
   const useAudioPad = activeChannel === "audio" && Boolean(activeSound);
   const useVideoPad = activeChannel === "video";
-  const showMomentPad = useTextPad || useVideoPad;
+  const usePhotoPad = activeChannel === "photo";
+  const showMomentPad = useTextPad || useVideoPad || usePhotoPad;
 
   const promptText = useMemo(() => {
     if (!activeStep) return "";
@@ -347,16 +352,24 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   }, [activeStep]);
 
   const responseHint = useMemo(() => {
-    if (!useTextPad) return null;
-    if (isNameStep && activeStep?.kind === "name") {
+    if (activeStep?.kind === "name") {
+      if (!useTextPad) return null;
       const custom = activeStep.responseHint?.trim();
       return custom || DEFAULT_NAME_RESPONSE_HINT;
     }
-    return questionResponseHint(promptText, {
-      isName: isNameStep,
-      isEmail: requiresEmailResponse,
-    });
-  }, [promptText, isNameStep, requiresEmailResponse, useTextPad, activeStep]);
+    if (activeStep?.kind === "prompt") {
+      const custom = activeStep.responseHint?.trim();
+      if (custom) return custom;
+      if (useTextPad) {
+        return questionResponseHint(promptText, {
+          isName: false,
+          isEmail: requiresEmailResponse,
+        });
+      }
+      return null;
+    }
+    return null;
+  }, [promptText, requiresEmailResponse, useTextPad, activeStep]);
 
   const goToStep = useCallback(
     (index: number) => {
@@ -617,6 +630,41 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, stepIndex]
   );
 
+  const handlePhotoSubmitted = useCallback(
+    async (blob: Blob) => {
+      unlockReferenceTones();
+      setChatError(null);
+      setSending(true);
+      try {
+        const convId = await ensureConversation();
+        if (!convId) {
+          setSending(false);
+          throw new Error("Could not start the conversation. Try again.");
+        }
+        const { storagePath, publicUrl } = await uploadTurnMedia(convId, "photo", blob);
+        // Photos reuse video_url column (image URLs) — no schema migration.
+        const sent = await sendMessage(convId, "(photo)", {
+          videoStoragePath: storagePath,
+          videoPublicUrl: publicUrl,
+          deviceId: getOrCreateSonggardenDeviceId(),
+          journeyManaged,
+        });
+        setSending(false);
+        growNode("video");
+        pulseHaptic();
+        setBurstMessage(sent.gardenCelebrationLine?.trim() || "Got it");
+        if (gardenSnap.linked) void gardenSnap.refresh();
+        celebration.celebrate(() => {
+          goToStep(stepIndex + 1);
+        });
+      } catch (err) {
+        setSending(false);
+        throw err instanceof Error ? err : new Error("Submit failed");
+      }
+    },
+    [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, stepIndex]
+  );
+
   function handleParticipateAgain() {
     clearJourneySession(event, interviewVersion, activeSessionToken);
     clearDoneSlots(event.id);
@@ -824,12 +872,13 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     </div>
                   )}
                 </TextMomentPad>
-              ) : (
+              ) : useVideoPad ? (
                 <VideoMomentPad
                   key={`video-${stepIndex}-${activeStep?.id ?? ""}`}
                   promptText={displayPrompt(promptText)}
                   buttonLabel="Record"
                   accentColor={world.accentColor}
+                  hint={responseHint}
                   recordMs={
                     activeStep?.kind === "prompt"
                       ? resolvePromptRecordMs(activeStep, "video")
@@ -837,6 +886,16 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   }
                   disabled={sending}
                   onSubmitted={handleVideoSubmitted}
+                />
+              ) : (
+                <PhotoMomentPad
+                  key={`photo-${stepIndex}-${activeStep?.id ?? ""}`}
+                  promptText={displayPrompt(promptText)}
+                  buttonLabel="Snap"
+                  accentColor={world.accentColor}
+                  hint={responseHint}
+                  disabled={sending}
+                  onSubmitted={handlePhotoSubmitted}
                 />
               )}
               {availableChannels.length > 1 && selectedChannel && (
@@ -861,6 +920,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 buttonLabel={activeSound.buttonLabel}
                 contributorName={contributorName.trim() || null}
                 accentColor={world.accentColor}
+                hint={responseHint}
                 recordMs={activeSound.recordMs}
                 progressSlotId={activeSound.isFree ? null : activeSound.slotId}
                 alternateSlots={activeSound.alternateSlots}
