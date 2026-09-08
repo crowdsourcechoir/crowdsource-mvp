@@ -127,7 +127,7 @@ export async function addPastedContactsForQueueItem(input: {
   const hunterByEmail = new Map<string, HunterDomainSearchPerson>();
   let hunterReturned = 0;
   let hunterError: string | null = null;
-  for (const [domain] of byDomain) {
+  for (const [domain] of Array.from(byDomain.entries())) {
     const search = await searchHunterDomain({
       domain,
       limit: 100,
