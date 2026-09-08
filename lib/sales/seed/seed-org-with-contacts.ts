@@ -10,6 +10,8 @@ import {
   updateOrganization,
 } from "@/lib/sales/db/organizations";
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
+import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
+import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { runPipelineForOrganization } from "@/lib/sales/pipeline/run-pipeline";
 import { enqueueOrgManually, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
 import { isSalesInitiativeKey, withSalesInitiative } from "@/lib/sales/initiatives";
@@ -22,6 +24,11 @@ export type SeedContactInput = {
   roleCategory?: string | null;
   /** Short “what they do” blurb for queue copy tweaking. */
   roleDescription?: string | null;
+  /**
+   * When set (e.g. after a prior Hunter Verifier pass), skip a second verification.
+   * Named people still need `verified_deliverable` to enqueue; generic inboxes do not.
+   */
+  emailVerificationStatus?: Contact["emailVerificationStatus"];
 };
 
 export type SeedOrgWithContactsInput = {
@@ -108,8 +115,27 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     if (!fullName || !email || !c.roleTitle?.trim()) {
       throw new Error(`Each contact needs fullName, email, and roleTitle (bad: ${JSON.stringify(c)})`);
     }
+
+    // Generic inboxes (info@ / events@ / development@) are sendable without SMTP verify.
+    // Named people must clear Hunter Email Verifier or they never enqueue.
+    let status: Contact["emailVerificationStatus"];
+    let verifierMeta: Record<string, unknown> = {};
+    if (isGenericMailboxEmail(email)) {
+      status = c.emailVerificationStatus ?? "valid_format";
+    } else if (c.emailVerificationStatus && c.emailVerificationStatus !== "valid_format") {
+      status = c.emailVerificationStatus;
+    } else {
+      const verified = await verifyEmailAddress(email);
+      status = verified.status;
+      verifierMeta = {
+        hunterVerifier: verified.hunterStatus,
+        hunterVerifierError: verified.error,
+      };
+    }
+
     const meta = {
       seededManually: true,
+      ...verifierMeta,
       ...(c.roleDescription?.trim() ? { roleDescription: c.roleDescription.trim() } : {}),
     };
     const existing = await findExistingContact(organization.id, email, fullName);
@@ -119,7 +145,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         roleTitle: c.roleTitle.trim(),
         roleCategory: c.roleCategory ?? existing.roleCategory,
         email,
-        emailVerificationStatus: "valid_format",
+        emailVerificationStatus: status,
         importMetadata: { ...(existing.importMetadata ?? {}), ...meta },
       });
       contactsUpdated += 1;
@@ -131,7 +157,7 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         roleCategory: c.roleCategory ?? null,
         email,
         source: "manual",
-        emailVerificationStatus: "valid_format",
+        emailVerificationStatus: status,
         importMetadata: meta,
       });
       contactsCreated += 1;
