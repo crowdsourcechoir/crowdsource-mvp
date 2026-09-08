@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getQueueItem } from "@/lib/sales/db/queue";
+import { getQueueItem, reopenQueueItem } from "@/lib/sales/db/queue";
 import { getDraft, updateDraftEdits } from "@/lib/sales/db/outreach";
-import { getOpportunity } from "@/lib/sales/db/opportunities";
+import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
 import { improveOutreachDraft } from "@/lib/sales/outreach/improve-draft";
@@ -19,10 +19,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
   try {
     const { itemId } = await params;
     const body = await request.json().catch(() => ({}));
-    const item = await getQueueItem(itemId);
+    let item = await getQueueItem(itemId);
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (item.status !== "pending") {
-      return NextResponse.json({ error: "Queue item already decided." }, { status: 409 });
+      item = await reopenQueueItem(itemId);
+      if (item.kind === "initial") {
+        await updateOpportunityStatus(item.opportunityId, "ready_for_review");
+      }
     }
     if (!item.outreachDraftId) {
       return NextResponse.json({ error: "No draft on this queue item." }, { status: 400 });

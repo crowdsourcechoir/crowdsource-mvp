@@ -405,12 +405,23 @@ export default function ApprovalQueueClient() {
         if (!res.ok) throw new Error(apiErrorFromBody(data, "Decision failed"));
         const body = data as { remaining?: boolean; detail?: QueueItemDetail; gmail?: { sent?: boolean; email?: string } };
         if (body.gmail?.sent) showCopyStatus(`Sent via Gmail${body.gmail.email ? ` (${body.gmail.email})` : ""}`);
-        if (body.remaining && body.detail) {
-          replaceDetail(current.queueItem.id, body.detail);
-          const nextDraft = draftFromMutationPayload(body);
-          if (nextDraft) {
-            setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
-            setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
+        if (body.remaining) {
+          // Keep the org in To send while other contacts still have drafts — even if
+          // the slim response omitted `detail` (clear cache so the item fetch reloads).
+          if (body.detail) {
+            replaceDetail(current.queueItem.id, body.detail);
+            const nextDraft = draftFromMutationPayload(body);
+            if (nextDraft) {
+              setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
+              setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
+            }
+          } else {
+            const keepId = current.queueItem.id;
+            setDetailsById((prev) => {
+              const { [keepId]: _removed, ...rest } = prev;
+              return rest;
+            });
+            setDetailNonce((n) => n + 1);
           }
         } else {
           dropQueueRow(current.queueItem.id);
