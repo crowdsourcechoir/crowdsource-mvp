@@ -1064,8 +1064,18 @@ export default function ApprovalQueueClient() {
                   domainHint={current.organization.domain ?? current.organization.websiteUrl}
                   open={findContactsOpen}
                   onOpenChange={setFindContactsOpen}
-                  onFound={(detail, message) => {
-                    if (detail) {
+                  onFound={(detail, message, meta) => {
+                    const targetId = meta?.targetQueueItemId;
+                    if (detail && targetId && targetId !== current.queueItem.id) {
+                      replaceDetail(targetId, detail);
+                      if (scope !== "all") setScope("all");
+                      setJumpToQueueItemId(targetId);
+                      const d = detail.draft;
+                      if (d) {
+                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+                      }
+                    } else if (detail) {
                       replaceDetail(current.queueItem.id, detail);
                       const d = detail.draft;
                       if (d) {
