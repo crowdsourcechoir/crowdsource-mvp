@@ -3,7 +3,8 @@ import type { HunterVerifierResult } from "./hunter-verifier";
 
 /**
  * Map a Hunter Email Verifier payload onto our contact status.
- * Only a live SMTP-ok, non-catch-all "valid" is sendable.
+ * `verified_deliverable` is SMTP-ok non-catch-all. Catch-all / accept_all maps to
+ * `risky` (shown in UI) but does not block send — Joel decides.
  */
 export function mapHunterVerifierToContactStatus(
   result: HunterVerifierResult
@@ -27,6 +28,7 @@ export function mapHunterVerifierToContactStatus(
   return "unverified";
 }
 
+/** Hard bounce only — soft Hunter results (risky / accept_all) do not block send. */
 export function hunterVerifierBlocksSend(status: Contact["emailVerificationStatus"]): boolean {
-  return status === "invalid" || status === "risky" || status === "unverified";
+  return status === "invalid";
 }

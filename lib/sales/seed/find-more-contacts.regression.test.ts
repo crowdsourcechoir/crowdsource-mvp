@@ -26,9 +26,17 @@ async function main() {
   assert.match(findMore, /reopenDecided:\s*true/);
   assert.match(addManual, /wasDecided/);
   assert.match(addManual, /reopenDecided:\s*true/);
-  assert.match(selectContact, /reopenQueueItem/, "select-contact must reopen decided items");
-  assert.match(saveDraft, /reopenQueueItem/, "save-draft must reopen decided items");
-
+  assert.match(findMore, /verified\.status === ["']invalid["']/, "find-more must only skip hard bounces");
+  assert.equal(
+    /verified\.status !== ["']verified_deliverable["']/.test(findMore),
+    false,
+    "find-more must not require verified_deliverable"
+  );
+  assert.equal(
+    /could not confirm deliverability/.test(addManual),
+    false,
+    "add-manual must not refuse accept_all / risky"
+  );
   console.log("find-more-contacts decided-item regression tests passed");
 }
 

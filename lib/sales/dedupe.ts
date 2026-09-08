@@ -86,10 +86,9 @@ export function looksLikePersonName(name: string | null | undefined): boolean {
 }
 
 /**
- * Hunter Email Verifier SMTP-ok bar for *named people*. `valid_format` is only a syntax +
- * org-domain check and was letting undeliverable personal mailboxes into the queue (bounces).
- * Generic inboxes (info@ / events@) do not use this bar — catch-all domains usually come back
- * `risky` / `accept_all` even when the mailbox is real.
+ * Hunter Email Verifier SMTP-ok bar for *named people* (UI checkmarks / scoring).
+ * `valid_format` is only syntax; `risky` usually means catch-all / accept_all.
+ * Outbound gating uses `isSendableContact` — Joel decides on soft Hunter results.
  */
 export function hasVerifiedEmail(contact: Contact | null | undefined): boolean {
   if (!contact) return false;
@@ -108,13 +107,12 @@ export function isSelectableContact(contact: Contact | null | undefined): boolea
 }
 
 /**
- * Ready to enqueue / draft / send: a named person with Hunter `verified_deliverable`, or a
- * general inbox that is not known-invalid. Outbound blocklist is applied by callers.
+ * Ready to enqueue / draft / send: selectable contact that is not a known bounce.
+ * Hunter `accept_all` / risky / unverified named people are allowed — Joel rejects
+ * in the queue. Hard block remains `invalid` (+ outbound blocklist at call sites).
  */
 export function isSendableContact(contact: Contact | null | undefined): boolean {
-  if (!isSelectableContact(contact)) return false;
-  if (isGenericMailboxEmail(contact!.email)) return true;
-  return hasVerifiedEmail(contact);
+  return isSelectableContact(contact);
 }
 
 /** Greeting token: first name for a person, "there" for a shared inbox. */

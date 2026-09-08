@@ -54,13 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       if (!looksLikePersonName(contact.fullName) && !isGenericMailboxEmail(contact.email)) {
         return NextResponse.json({ error: "Contact needs a name and email" }, { status: 400 });
       }
-      return NextResponse.json(
-        {
-          error:
-            "This named contact is not Hunter-verified yet. Pick a general inbox like info@ / events@, or wait until verification lands.",
-        },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Contact cannot be selected for outreach" }, { status: 409 });
     }
     if (isOutboundEmailBlocked(contact.email)) {
       return NextResponse.json(
