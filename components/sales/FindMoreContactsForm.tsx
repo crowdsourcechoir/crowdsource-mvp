@@ -93,13 +93,13 @@ export default function FindMoreContactsForm({
         >
           <form
             onSubmit={submit}
-            className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-950 p-5 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-white/15 bg-black p-5 shadow-2xl shadow-black/70"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id={titleId} className="text-lg font-semibold text-white">
               Find more contacts
             </h2>
-            <p className="mt-2 text-sm text-gray-300">
+            <p className="mt-2 text-sm text-gray-400">
               Hunter will search {orgName}
               {domainHint ? ` (${domainHint})` : ""} for people matching what you type, then add them to this
               contacts grid.
@@ -114,7 +114,7 @@ export default function FindMoreContactsForm({
               onChange={(e) => setQuery(e.target.value)}
               required
               placeholder="e.g. events team"
-              className="mt-1.5 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
+              className="mt-1.5 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
             />
             <div className="mt-2 flex flex-wrap gap-1.5">
               {SUGGESTIONS.map((s) => (
@@ -122,7 +122,11 @@ export default function FindMoreContactsForm({
                   key={s}
                   type="button"
                   onClick={() => setQuery(s)}
-                  className="rounded-full border border-gray-800 px-2 py-0.5 text-[11px] text-gray-400 hover:border-gray-500 hover:text-white"
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    query === s
+                      ? "border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]"
+                      : "border-white/15 text-gray-300 hover:border-[var(--csc-accent)]/40 hover:text-white"
+                  }`}
                 >
                   {s}
                 </button>
@@ -132,20 +136,20 @@ export default function FindMoreContactsForm({
               About 1 Hunter credit per 10 people returned. Misses on a filtered search are not billed.
             </p>
             {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-            {!error && info && <p className="mt-2 text-xs text-amber-200">{info}</p>}
+            {!error && info && <p className="mt-2 text-xs text-[var(--csc-accent)]">{info}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => onOpenChange(false)}
-                className="rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={busy || !query.trim()}
-                className="rounded-md bg-[var(--csc-accent)] px-3 py-1.5 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
+                className="rounded-lg bg-[var(--csc-accent)] px-3 py-1.5 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? "Searching Hunter…" : "Search Hunter"}
               </button>
