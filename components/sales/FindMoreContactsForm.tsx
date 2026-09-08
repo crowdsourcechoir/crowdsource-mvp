@@ -6,6 +6,12 @@ import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/h
 
 const SUGGESTIONS = ["events team", "director of development", "marketing", "programming", "executive"];
 
+export type FindMoreFoundMeta = {
+  targetQueueItemId?: string | null;
+  targetOrganizationName?: string | null;
+  switchedOrganization?: boolean;
+};
+
 export default function FindMoreContactsForm({
   itemId,
   orgName,
@@ -19,10 +25,10 @@ export default function FindMoreContactsForm({
   domainHint?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onFound: (detail: QueueItemDetail | null, message: string) => void;
+  onFound: (detail: QueueItemDetail | null, message: string, meta?: FindMoreFoundMeta) => void;
 }) {
   const titleId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +60,16 @@ export default function FindMoreContactsForm({
         detail?: QueueItemDetail | null;
         message?: string;
         added?: unknown[];
+        targetQueueItemId?: string | null;
+        targetOrganizationName?: string | null;
+        switchedOrganization?: boolean;
       };
       const message = body.message ?? "Hunter search finished.";
-      onFound(body.detail ?? null, message);
+      onFound(body.detail ?? null, message, {
+        targetQueueItemId: body.targetQueueItemId,
+        targetOrganizationName: body.targetOrganizationName,
+        switchedOrganization: body.switchedOrganization,
+      });
       if ((body.added?.length ?? 0) > 0) {
         onOpenChange(false);
         setQuery("");
@@ -100,21 +113,22 @@ export default function FindMoreContactsForm({
               Find more contacts
             </h2>
             <p className="mt-2 text-sm text-gray-400">
-              Hunter will search {orgName}
-              {domainHint ? ` (${domainHint})` : ""} for people matching what you type, then add them to this
-              contacts grid.
+              Search {orgName}
+              {domainHint ? ` (${domainHint})` : ""} by role, or paste names and emails from a reply — Hunter
+              fills titles when it can.
             </p>
             <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-gray-500" htmlFor={`${titleId}-q`}>
               Who should we look for?
             </label>
-            <input
+            <textarea
               id={`${titleId}-q`}
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               required
-              placeholder="e.g. events team"
-              className="mt-1.5 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
+              rows={3}
+              placeholder={"e.g. events team\nor Khalilah Elliott: kelliott@org.org"}
+              className="mt-1.5 w-full resize-y rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
             />
             <div className="mt-2 flex flex-wrap gap-1.5">
               {SUGGESTIONS.map((s) => (
@@ -133,7 +147,8 @@ export default function FindMoreContactsForm({
               ))}
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              About 1 Hunter credit per 10 people returned. Misses on a filtered search are not billed.
+              Role search: ~1 Hunter credit per 10 people. Paste Name: email to add those people and look up
+              titles.
             </p>
             {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
             {!error && info && <p className="mt-2 text-xs text-[var(--csc-accent)]">{info}</p>}

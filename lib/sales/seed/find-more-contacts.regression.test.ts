@@ -26,7 +26,8 @@ async function main() {
   assert.match(findMore, /reopenDecided:\s*true/);
   assert.match(addManual, /wasDecided/);
   assert.match(addManual, /reopenDecided:\s*true/);
-  assert.match(findMore, /verified\.status === ["']invalid["']/, "find-more must only skip hard bounces");
+  assert.match(findMore, /parseContactPaste/, "find-more must detect pasted Name: email lists");
+  assert.match(findMore, /addPastedContactsForQueueItem/, "find-more must add pasted contacts with titles");
   assert.equal(
     /verified\.status !== ["']verified_deliverable["']/.test(findMore),
     false,

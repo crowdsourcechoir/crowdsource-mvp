@@ -9,7 +9,9 @@ import { describeFindQuery, hunterPersonMatchesQuery, parseFindQuery } from "@/l
 import { searchHunterDomain, type HunterDomainSearchPerson } from "@/lib/sales/enrichment/hunter-domain-search";
 import { getEnrichmentConfigStatus } from "@/lib/sales/enrichment/config-status";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
+import { addPastedContactsForQueueItem } from "@/lib/sales/seed/add-pasted-contacts";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
+import { parseContactPaste } from "@/lib/sales/seed/parse-contact-paste";
 import type { QueueItemDetail } from "@/lib/sales/types";
 
 const MAX_RESULTS = 10;
@@ -28,6 +30,10 @@ export type FindMoreContactsResult = {
   matched: number;
   query: string;
   domain: string | null;
+  /** When paste emails belong to another CRM org, UI should jump here. */
+  targetQueueItemId?: string | null;
+  targetOrganizationName?: string | null;
+  switchedOrganization?: boolean;
   credits: {
     beforeUsed: number | null;
     afterUsed: number | null;
@@ -79,6 +85,35 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   if (!opportunity) throw new Error("Opportunity not found.");
   const organization = await getOrganization(opportunity.organizationId);
   if (!organization) throw new Error("Organization not found.");
+
+  // Pasted "Name: email" lists — add those people and pull titles from Hunter on the
+  // email domain (not a role keyword search against this org's domain).
+  const pasted = parseContactPaste(query);
+  if (pasted.length > 0) {
+    const pastedResult = await addPastedContactsForQueueItem({
+      organization,
+      opportunity,
+      item,
+      pasted,
+      query,
+    });
+    return {
+      detail: pastedResult.detail,
+      added: pastedResult.added,
+      skippedExisting: pastedResult.skippedExisting,
+      skippedInvalid: pastedResult.skippedInvalid,
+      hunterReturned: pastedResult.hunterReturned,
+      matched: pastedResult.matched,
+      query: pastedResult.query,
+      domain: pastedResult.domain,
+      targetQueueItemId: pastedResult.targetQueueItemId,
+      targetOrganizationName: pastedResult.targetOrganizationName,
+      switchedOrganization: pastedResult.switchedOrganization,
+      credits: pastedResult.credits,
+      hunter: pastedResult.hunter,
+      message: pastedResult.message,
+    };
+  }
 
   const domain = extractDomain(organization.websiteUrl ?? organization.domain);
   const emptyCredits = { beforeUsed: null, afterUsed: null, delta: null, available: null };
