@@ -1,8 +1,8 @@
 import { createContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { getOrganization } from "@/lib/sales/db/organizations";
-import { getOpportunity } from "@/lib/sales/db/opportunities";
-import { getQueueItem } from "@/lib/sales/db/queue";
+import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
+import { createOrUpdateQueueItem, getQueueItem } from "@/lib/sales/db/queue";
 import { extractDomain, isPlausibleEmail, looksLikePersonName, normalizeEmail } from "@/lib/sales/dedupe";
 import { getHunterAccountCredits } from "@/lib/sales/enrichment/hunter-account";
 import { describeFindQuery, hunterPersonMatchesQuery, parseFindQuery } from "@/lib/sales/enrichment/find-query";
@@ -72,7 +72,9 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
 
   const item = await getQueueItem(input.itemId);
   if (!item) throw new Error("Queue item not found.");
-  if (item.status !== "pending") throw new Error("Queue item already decided.");
+  // Enrichment is not a queue decision — allow Hunter search even after approve/reject/defer
+  // so "Find more contacts" works from All orgs / stale clients / follow-ups.
+  const wasDecided = item.status !== "pending";
   const opportunity = await getOpportunity(item.opportunityId);
   if (!opportunity) throw new Error("Opportunity not found.");
   const organization = await getOrganization(opportunity.organizationId);
@@ -255,18 +257,42 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     });
   }
 
+  let reopened = false;
   if (added.length > 0) {
-    await ensureContactDrafts({
+    const created = await ensureContactDrafts({
       organization,
       opportunityId: opportunity.id,
       pipelineRunId: null,
     });
+    // Pending items keep the current selected contact. Decided items reopen into To send
+    // pointed at a newly added open draft so the operator can email them.
+    if (wasDecided) {
+      const addedIds = new Set(added.map((c) => c.id));
+      const openForAdded = created.drafts.find(
+        (d) =>
+          d.contactId != null &&
+          addedIds.has(d.contactId) &&
+          (d.status === "draft" || d.status === "qa_flagged")
+      );
+      const draft = openForAdded ?? created.primaryDraft;
+      await createOrUpdateQueueItem({
+        opportunityId: opportunity.id,
+        outreachDraftId: draft.id,
+        prospectScoreId: item.prospectScoreId,
+        reopenDecided: true,
+      });
+      if (item.kind === "initial") {
+        await updateOpportunityStatus(opportunity.id, "ready_for_review");
+      }
+      reopened = true;
+    }
   }
 
   const refreshed = await getQueueItem(item.id);
   const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : await assembleQueueItemDetailFromQueueItem(item);
   const who = describeFindQuery(parsed);
   const creditBit = creditPhrase(credits.delta);
+  const reopenBit = reopened ? " Reopened in To send." : "";
 
   let message: string;
   if (added.length === 0 && matchedPeople.length === 0) {
@@ -283,7 +309,7 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   } else {
     const names = added.map((c) => c.fullName).filter(Boolean).join(", ");
     const bounceNote = skippedInvalid > 0 ? ` Skipped ${skippedInvalid} that would bounce.` : "";
-    message = `Added ${added.length} verified contact${added.length === 1 ? "" : "s"} from Hunter: ${names}.${bounceNote}${creditBit}`;
+    message = `Added ${added.length} verified contact${added.length === 1 ? "" : "s"} from Hunter: ${names}.${bounceNote}${creditBit}${reopenBit}`;
   }
 
   return {

@@ -22,12 +22,13 @@ export function publicErrorMessage(err: unknown, fallback = "Something went wron
   }
   let text = "";
   if (typeof err === "string") text = err;
-  else if (err instanceof Error) text = `${err.name}: ${err.message}`;
+  else if (err instanceof Error) text = err.message;
   else if (err && typeof err === "object" && "error" in err) {
     const nested = (err as { error: unknown }).error;
     if (typeof nested === "string") text = nested;
+    else if (nested instanceof Error) text = nested.message;
   }
-  text = text.trim();
+  text = text.trim().replace(/^(Error:\s*)+/i, "").trim();
   if (!text) return fallback;
   if (HTML_OR_CDN.test(text) || UNREACHABLE.test(text) || text.length > 280) {
     return DATABASE_UNREACHABLE_MESSAGE;

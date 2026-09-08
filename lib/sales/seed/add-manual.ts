@@ -6,8 +6,8 @@ import {
 } from "@/lib/sales/db/organizations";
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
-import { getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
-import { getOpportunity } from "@/lib/sales/db/opportunities";
+import { createOrUpdateQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
+import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { extractDomain, isGenericMailboxEmail, isPlausibleEmail, isSendableContact, looksLikeGenericRoleName, looksLikePersonName, genericMailboxLabel, normalizeEmail } from "@/lib/sales/dedupe";
 import { enrichContactEmail } from "@/lib/sales/enrichment";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
@@ -262,7 +262,8 @@ export async function addContactToQueueItem(input: {
 }): Promise<AddQueueContactResult> {
   const item = await getQueueItem(input.itemId);
   if (!item) throw new Error("Queue item not found.");
-  if (item.status !== "pending") throw new Error("Queue item already decided.");
+  // Adding a contact is enrichment, not a decision — allow on decided rows and reopen when queued.
+  const wasDecided = item.status !== "pending";
   const opportunity = await getOpportunity(item.opportunityId);
   if (!opportunity) throw new Error("Opportunity not found.");
   const organization = await getOrganization(opportunity.organizationId);
@@ -346,7 +347,19 @@ export async function addContactToQueueItem(input: {
     pipelineRunId: null,
   });
   const draft = created.drafts.find((d) => d.contactId === contact.id) ?? created.primaryDraft;
-  await setQueueItemOutreachDraft(item.id, draft.id);
+  if (wasDecided) {
+    await createOrUpdateQueueItem({
+      opportunityId: opportunity.id,
+      outreachDraftId: draft.id,
+      prospectScoreId: item.prospectScoreId,
+      reopenDecided: true,
+    });
+    if (item.kind === "initial") {
+      await updateOpportunityStatus(opportunity.id, "ready_for_review");
+    }
+  } else {
+    await setQueueItemOutreachDraft(item.id, draft.id);
+  }
   const refreshed = await getQueueItem(item.id);
   const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : null;
 
@@ -356,7 +369,7 @@ export async function addContactToQueueItem(input: {
     selected: true,
     detail,
     message: hunter.found
-      ? `Added ${contact.fullName} — Hunter found ${contact.email}.`
-      : `Added ${contact.fullName}.`,
+      ? `Added ${contact.fullName} — Hunter found ${contact.email}.${wasDecided ? " Reopened in To send." : ""}`
+      : `Added ${contact.fullName}.${wasDecided ? " Reopened in To send." : ""}`,
   };
 }

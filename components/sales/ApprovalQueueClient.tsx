@@ -1027,40 +1027,42 @@ export default function ApprovalQueueClient() {
             ) : (
               <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
             )}
-            <div className="mt-3 flex flex-wrap items-start gap-2">
-              <AddContactForm
-                itemId={current.queueItem.id}
-                onAdded={(detail, message) => {
-                  if (detail) {
-                    replaceDetail(current.queueItem.id, detail);
-                    const d = detail.draft;
-                    if (d) {
-                      setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
-                      setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+            {current.queueItem.id ? (
+              <div className="mt-3 flex flex-wrap items-start gap-2">
+                <AddContactForm
+                  itemId={current.queueItem.id}
+                  onAdded={(detail, message) => {
+                    if (detail) {
+                      replaceDetail(current.queueItem.id, detail);
+                      const d = detail.draft;
+                      if (d) {
+                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+                      }
                     }
-                  }
-                  showCopyStatus(message);
-                }}
-              />
-              <FindMoreContactsForm
-                itemId={current.queueItem.id}
-                orgName={current.organization.name}
-                domainHint={current.organization.domain ?? current.organization.websiteUrl}
-                open={findContactsOpen}
-                onOpenChange={setFindContactsOpen}
-                onFound={(detail, message) => {
-                  if (detail) {
-                    replaceDetail(current.queueItem.id, detail);
-                    const d = detail.draft;
-                    if (d) {
-                      setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
-                      setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+                    showCopyStatus(message);
+                  }}
+                />
+                <FindMoreContactsForm
+                  itemId={current.queueItem.id}
+                  orgName={current.organization.name}
+                  domainHint={current.organization.domain ?? current.organization.websiteUrl}
+                  open={findContactsOpen}
+                  onOpenChange={setFindContactsOpen}
+                  onFound={(detail, message) => {
+                    if (detail) {
+                      replaceDetail(current.queueItem.id, detail);
+                      const d = detail.draft;
+                      if (d) {
+                        setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                        setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+                      }
                     }
-                  }
-                  showCopyStatus(message);
-                }}
-              />
-            </div>
+                    showCopyStatus(message);
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
 
           {conversationThreadId ? (
