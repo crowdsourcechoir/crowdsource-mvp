@@ -48,7 +48,7 @@ function IconButton({
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-200 hover:bg-gray-800 disabled:opacity-40 ${
-        active ? "bg-sky-950 text-sky-200" : ""
+        active ? "bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]" : ""
       }`}
     >
       {children}
@@ -100,7 +100,7 @@ export default function QueueEmailBodyEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-[16rem] px-3 py-2 text-sm text-gray-200 outline-none [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_a]:text-sky-300 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:text-gray-300 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-semibold",
+          "min-h-[16rem] px-3 py-2 text-sm text-gray-200 outline-none [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_a]:text-[var(--csc-accent)] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:text-gray-300 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-semibold",
       },
     },
     onUpdate: ({ editor: current }) => {
@@ -237,7 +237,7 @@ export default function QueueEmailBodyEditor({
           <button
             type="button"
             onClick={applyLink}
-            className="rounded-md bg-sky-700 px-2 py-1 text-xs text-white hover:bg-sky-600"
+            className="rounded-md bg-[var(--csc-accent)] px-2 py-1 text-xs font-semibold text-black hover:opacity-90"
           >
             Apply
           </button>

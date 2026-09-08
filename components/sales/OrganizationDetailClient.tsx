@@ -19,7 +19,7 @@ type DetailResponse = {
 const STAGE_STATUS_COLOR: Record<string, string> = {
   succeeded: "text-emerald-400",
   failed: "text-red-400",
-  running: "text-sky-400",
+  running: "text-[var(--csc-accent)]",
   skipped: "text-gray-500",
   pending: "text-gray-500",
   retrying: "text-amber-400",
@@ -202,7 +202,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
                   {c.email ?? "no email"} · {c.emailVerificationStatus} · {c.source}
                 </span>
                 {c.outreachPersona !== "other" && (
-                  <span className="ml-1 text-sky-500">· {PERSONA_STRATEGIES[c.outreachPersona].label}</span>
+                  <span className="ml-1 text-[var(--csc-accent)]">· {PERSONA_STRATEGIES[c.outreachPersona].label}</span>
                 )}
               </li>
             ))}
@@ -230,7 +230,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           <button
             type="submit"
             disabled={addingContact || (!contactName.trim() && !contactEmail.trim())}
-            className="rounded-md bg-sky-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 sm:col-span-3 w-fit"
+            className="rounded-md bg-[var(--csc-accent)] px-3 py-1.5 text-xs font-semibold text-black hover:opacity-90 disabled:opacity-50 sm:col-span-3 w-fit"
           >
             {addingContact ? "Adding…" : "Add contact"}
           </button>

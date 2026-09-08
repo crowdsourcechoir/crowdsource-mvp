@@ -110,7 +110,7 @@ export default function BatchRunClient() {
                     : r.state === "failed"
                       ? "text-red-400"
                       : r.state === "running"
-                        ? "text-sky-400"
+                        ? "text-[var(--csc-accent)]"
                         : r.state === "skipped_existing_client"
                           ? "text-gray-500"
                           : "text-gray-600"

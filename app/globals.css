@@ -98,8 +98,24 @@ input[type="checkbox"] {
   touch-action: manipulation;
 }
 
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
   accent-color: var(--csc-accent, #cfff81);
+}
+
+/* Native calendar / time popovers follow the dark shell + lime accent */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: dark;
 }
 
 /* Indeterminate bar for event-style loading shell */

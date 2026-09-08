@@ -1333,7 +1333,7 @@ export default function EventForm({
             type="date"
             value={values.date}
             onChange={(e) => setValues((v) => ({ ...v, date: e.target.value }))}
-            className={`${inputClass} [color-scheme:dark]`}
+            className={`${inputClass} accent-[var(--csc-accent)] [color-scheme:dark]`}
           />
         </div>
         <div>
@@ -1345,7 +1345,7 @@ export default function EventForm({
             type="time"
             value={values.time}
             onChange={(e) => setValues((v) => ({ ...v, time: e.target.value }))}
-            className={`${inputClass} [color-scheme:dark]`}
+            className={`${inputClass} accent-[var(--csc-accent)] [color-scheme:dark]`}
           />
         </div>
         <div>

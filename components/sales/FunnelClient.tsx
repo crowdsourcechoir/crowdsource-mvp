@@ -12,11 +12,11 @@ const STAGES = FUNNEL_STAGES.map((s) => ({
   ...s,
   accent:
     s.key === "awareness"
-      ? "border-sky-800"
+      ? "border-[var(--csc-accent)]/40"
       : s.key === "interest"
         ? "border-amber-800"
         : s.key === "purchase"
-          ? "border-emerald-800"
+          ? "border-[var(--csc-accent)]/60"
           : "border-gray-700",
 }));
 
@@ -48,7 +48,7 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
       <p className="mt-1 text-xs text-gray-600">{days === null ? "—" : days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`}</p>
       {item.needsNudge && <p className="mt-1 text-xs font-medium text-amber-400">Needs nudge</p>}
       {item.opportunity.lastOutboundAt && !item.opportunity.lastInboundAt && item.opportunity.relationshipStage === "awareness" && (
-        <p className="mt-1 text-xs text-sky-400">
+        <p className="mt-1 text-xs text-[var(--csc-accent)]">
           Awaiting reply
           {item.opportunity.nextFollowUpAt
             ? ` · follow up ${formatFollowUpDay(item.opportunity.nextFollowUpAt)}`
@@ -64,7 +64,7 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
       {item.opportunity.gmailThreadId && (
         <GmailThreadLink
           threadId={item.opportunity.gmailThreadId}
-          className="mt-1 block text-xs text-sky-400 underline"
+          className="mt-1 block text-xs text-[var(--csc-accent)] underline"
         />
       )}
 
@@ -72,7 +72,7 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
         {advance && (
           <button
             onClick={() => onMove(item.opportunity.id, advance.to)}
-            className="rounded-md bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+            className="rounded-md bg-[var(--csc-accent)] px-2 py-1 text-xs font-semibold text-black hover:opacity-90"
           >
             {advance.label}
           </button>

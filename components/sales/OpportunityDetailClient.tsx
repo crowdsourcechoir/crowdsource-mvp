@@ -120,7 +120,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             <span className="rounded-md border border-amber-800 bg-amber-950/30 px-2 py-0.5 text-amber-300">Email not sent yet</span>
           )}
           {detail.emailRepliedAt && (
-            <span className="rounded-md border border-sky-800 bg-sky-950/40 px-2 py-0.5 text-sky-300">
+            <span className="rounded-md border border-[var(--csc-accent)]/40 bg-[var(--csc-accent)]/10 px-2 py-0.5 text-[var(--csc-accent)]">
               Reply {formatWhen(detail.emailRepliedAt)}
             </span>
           )}
@@ -168,7 +168,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             <button
               type="button"
               onClick={() => setShowScoreDetails((v) => !v)}
-              className="text-sm text-sky-400 hover:underline"
+              className="csc-link text-sm hover:underline"
             >
               {showScoreDetails ? "Hide details" : "View score details"}
             </button>
@@ -218,7 +218,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             <p className="text-lg font-medium text-white">{contact.fullName ?? "Unnamed contact"}</p>
             {contact.roleTitle && <p className="text-sm text-gray-400">{contact.roleTitle}</p>}
             {contact.email ? (
-              <a href={`mailto:${contact.email}`} className="block text-sm text-sky-400 hover:underline">
+              <a href={`mailto:${contact.email}`} className="csc-link block text-sm hover:underline">
                 {contact.email}
               </a>
             ) : (
@@ -226,7 +226,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             )}
             {contact.phone && <p className="text-sm text-gray-400">{contact.phone}</p>}
             {contact.linkedinUrl && (
-              <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" className="block text-sm text-sky-400 hover:underline">
+              <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" className="csc-link block text-sm hover:underline">
                 LinkedIn
               </a>
             )}
@@ -251,7 +251,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
                   {c.email ? (
                     <>
                       {" · "}
-                      <a href={`mailto:${c.email}`} className="text-sky-400 hover:underline">
+                      <a href={`mailto:${c.email}`} className="csc-link hover:underline">
                         {c.email}
                       </a>
                     </>
@@ -276,7 +276,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
                   rel="noreferrer"
                   className="group flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2"
                 >
-                  <span className="shrink-0 text-sm text-sky-400 group-hover:underline">
+                  <span className="csc-link shrink-0 text-sm group-hover:underline">
                     {link.kind === "organization" ? "Org site" : link.kind === "conference" ? "Conference" : "Source"}
                   </span>
                   <span className="truncate text-sm text-gray-300 group-hover:underline">{link.label}</span>
@@ -289,7 +289,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           <p className="mt-2 text-sm text-gray-500">No website links found yet.</p>
         )}
         {opportunity.gmailThreadId && (
-          <GmailThreadLink threadId={opportunity.gmailThreadId} className="mt-3 inline-block text-sm text-sky-400 hover:underline" />
+          <GmailThreadLink threadId={opportunity.gmailThreadId} className="csc-link mt-3 inline-block text-sm hover:underline" />
         )}
       </section>
 
@@ -323,14 +323,14 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
                 {draft.status ? ` · ${draft.status.replace(/_/g, " ")}` : ""}
               </p>
             </div>
-            <button type="button" onClick={() => setShowEmailBody((v) => !v)} className="text-sm text-sky-400 hover:underline">
+            <button type="button" onClick={() => setShowEmailBody((v) => !v)} className="csc-link text-sm hover:underline">
               {showEmailBody ? "Hide email" : "View full email"}
             </button>
           </div>
           {showEmailBody && emailBody && (
             looksLikeHtml(emailBody) ? (
               <div
-                className="mt-3 rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300 [&_a]:text-sky-300 [&_a]:underline [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3 [&_p:last-child]:mb-0"
+                className="mt-3 rounded-lg border border-gray-800 bg-black/20 p-3 text-sm text-gray-300 [&_a]:text-[var(--csc-accent)] [&_a]:underline [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3 [&_p:last-child]:mb-0"
                 dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(emailBody) }}
               />
             ) : (
@@ -349,7 +349,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             Research notes ({detail.findings.length})
           </h2>
           {detail.findings.length > 0 && (
-            <button type="button" onClick={() => setShowFindings((v) => !v)} className="text-sm text-sky-400 hover:underline">
+            <button type="button" onClick={() => setShowFindings((v) => !v)} className="csc-link text-sm hover:underline">
               {showFindings ? "Hide notes" : "Show research notes"}
             </button>
           )}
@@ -369,7 +369,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
                     <li key={f.id} className="text-sm text-gray-400">
                       {f.claimText}{" "}
                       {f.sourceUrl && (
-                        <a href={f.sourceUrl} target="_blank" rel="noreferrer" className="text-gray-600 underline hover:text-sky-400">
+                        <a href={f.sourceUrl} target="_blank" rel="noreferrer" className="text-gray-600 underline hover:text-[var(--csc-accent)]">
                           source
                         </a>
                       )}

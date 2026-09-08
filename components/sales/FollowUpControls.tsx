@@ -93,7 +93,7 @@ export default function FollowUpControls({
             setCustom(e.target.value);
             if (e.target.value) void save({ date: e.target.value });
           }}
-          className="rounded-lg border border-white/15 bg-black px-2 py-1 text-xs text-white [color-scheme:dark] focus:border-[var(--csc-accent)] focus:outline-none disabled:opacity-50"
+          className="rounded-lg border border-white/15 bg-black px-2 py-1 text-xs text-white accent-[var(--csc-accent)] [color-scheme:dark] focus:border-[var(--csc-accent)] focus:outline-none disabled:opacity-50"
         />
       </label>
       {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}

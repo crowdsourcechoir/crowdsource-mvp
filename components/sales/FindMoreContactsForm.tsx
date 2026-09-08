@@ -145,7 +145,7 @@ export default function FindMoreContactsForm({
               <button
                 type="submit"
                 disabled={busy || !query.trim()}
-                className="rounded-md bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+                className="rounded-md bg-[var(--csc-accent)] px-3 py-1.5 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? "Searching Hunter…" : "Search Hunter"}
               </button>
