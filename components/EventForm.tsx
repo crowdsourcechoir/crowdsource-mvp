@@ -2323,7 +2323,7 @@ export default function EventForm({
           </div>
         )}
 
-        <div className="divide-y divide-gray-800/80">
+        <div className="flex flex-col gap-8">
           {values.journeySteps.map((step, idx) => {
             const usedSlots = new Set(
               values.journeySteps
@@ -2338,7 +2338,10 @@ export default function EventForm({
             const kindLabel = step.kind === "prompt" ? "Prompt" : "Name";
             const channels = step.kind === "prompt" ? normalizePromptChannels(step) : null;
             return (
-              <div key={step.id} className="space-y-1.5 py-6 first:pt-2 last:pb-2">
+              <div
+                key={step.id}
+                className="space-y-1.5 border-b border-gray-800/80 pb-8 last:border-b-0 last:pb-0"
+              >
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-5 text-[11px] font-medium text-gray-500">{idx + 1}</span>
                   <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
