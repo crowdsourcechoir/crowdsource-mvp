@@ -219,7 +219,8 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     }
 
     const verified = await verifyEmailAddress(email);
-    if (verified.status !== "verified_deliverable") {
+    // Only hard bounces are skipped — accept_all / risky still get added; Joel decides.
+    if (verified.status === "invalid") {
       skippedInvalid += 1;
       continue;
     }
@@ -233,7 +234,8 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
       phone: person.phone,
       linkedinUrl: person.linkedin,
       source: "ai_discovered",
-      emailVerificationStatus: "verified_deliverable",
+      emailVerificationStatus:
+        verified.status === "unverified" ? "valid_format" : verified.status,
       importMetadata: {
         hunterQuery: query,
         hunterDomainSearch: true,
@@ -301,15 +303,15 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
         ? `Hunter found nobody at ${domain} for “${who}”.${creditBit}`
         : `Hunter returned ${people.length} people at ${domain}, but none matched “${who}”.${creditBit}`;
   } else if (added.length === 0) {
-    const bounceNote = skippedInvalid > 0 ? ` Hunter rejected ${skippedInvalid} undeliverable address${skippedInvalid === 1 ? "" : "es"}.` : "";
+    const bounceNote = skippedInvalid > 0 ? ` Skipped ${skippedInvalid} that would bounce.` : "";
     message =
       skippedExisting > 0
         ? `Hunter already has ${skippedExisting} matching contact${skippedExisting === 1 ? "" : "s"} on this org — nothing new to add.${bounceNote}${creditBit}`
-        : `Hunter found matches for “${who}” but none passed deliverability checks.${bounceNote}${creditBit}`;
+        : `Hunter found matches for “${who}” but none could be added.${bounceNote}${creditBit}`;
   } else {
     const names = added.map((c) => c.fullName).filter(Boolean).join(", ");
     const bounceNote = skippedInvalid > 0 ? ` Skipped ${skippedInvalid} that would bounce.` : "";
-    message = `Added ${added.length} verified contact${added.length === 1 ? "" : "s"} from Hunter: ${names}.${bounceNote}${creditBit}${reopenBit}`;
+    message = `Added ${added.length} contact${added.length === 1 ? "" : "s"} from Hunter: ${names}.${bounceNote}${creditBit}${reopenBit}`;
   }
 
   return {

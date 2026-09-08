@@ -70,10 +70,23 @@ async function main() {
   assert.equal(isSelectableContact(events), true);
   assert.equal(isSelectableContact(thomasUnverified), true);
   assert.equal(isSendableContact(events), true);
-  assert.equal(isSendableContact(thomasUnverified), false);
+  assert.equal(isSendableContact(thomasUnverified), true, "Joel decides — unverified named people are sendable");
   assert.equal(isSendableContact(thomasVerified), true);
+  assert.equal(
+    isSendableContact(
+      contact({
+        fullName: "Ravi Patel",
+        email: "rpatel@ravinia.org",
+        emailVerificationStatus: "risky",
+      })
+    ),
+    true,
+    "accept_all / risky must not block send"
+  );
   assert.equal(isSendableContact(bouncedInbox), false);
   assert.equal(hasVerifiedEmail(events), false);
+  assert.equal(hasVerifiedEmail(thomasUnverified), false);
+  assert.equal(hasVerifiedEmail(thomasVerified), true);
 
   assert.equal(contactGreetingName(events), "there");
   assert.equal(contactGreetingName(thomasVerified), "Thomas");

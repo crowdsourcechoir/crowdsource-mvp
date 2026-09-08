@@ -952,6 +952,10 @@ export default function ApprovalQueueClient() {
                               ) : null}
                               {c.emailVerificationStatus === "invalid" ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
+                              ) : c.emailVerificationStatus === "risky" ? (
+                                <span className="ml-2 text-xs font-medium text-amber-400" title="Hunter catch-all / accept_all — you decide">
+                                  catch-all
+                                </span>
                               ) : isGenericMailboxEmail(c.email) ? (
                                 <span className="ml-2 text-xs font-medium text-[var(--csc-accent)]">inbox</span>
                               ) : null}

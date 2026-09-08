@@ -331,16 +331,8 @@ export async function addContactToQueueItem(input: {
     emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
   });
 
-  if (!parsed.isGenericMailbox && verified.status !== "verified_deliverable") {
-    return {
-      contact,
-      hunter,
-      selected: false,
-      detail: await assembleQueueItemDetailFromQueueItem(item),
-      message: `Saved ${contact.fullName} (${email}) but Hunter could not confirm deliverability (${verified.hunterStatus ?? verified.status}) — not queued to send.`,
-    };
-  }
-
+  // Queue for send even when Hunter returns accept_all / risky — Joel decides in the queue.
+  // Hard bounces already returned above.
   const created = await ensureContactDrafts({
     organization,
     opportunityId: opportunity.id,
@@ -363,13 +355,20 @@ export async function addContactToQueueItem(input: {
   const refreshed = await getQueueItem(item.id);
   const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : null;
 
+  const hunterNote =
+    !parsed.isGenericMailbox && verified.status === "risky"
+      ? ` Hunter flagged ${email} as ${verified.hunterStatus ?? "risky"} (catch-all) — send if you trust it.`
+      : !parsed.isGenericMailbox && verified.status !== "verified_deliverable"
+        ? ` Hunter status: ${verified.hunterStatus ?? verified.status}.`
+        : "";
+
   return {
     contact,
     hunter,
     selected: true,
     detail,
     message: hunter.found
-      ? `Added ${contact.fullName} — Hunter found ${contact.email}.${wasDecided ? " Reopened in To send." : ""}`
-      : `Added ${contact.fullName}.${wasDecided ? " Reopened in To send." : ""}`,
+      ? `Added ${contact.fullName} — Hunter found ${contact.email}.${hunterNote}${wasDecided ? " Reopened in To send." : ""}`
+      : `Added ${contact.fullName}.${hunterNote}${wasDecided ? " Reopened in To send." : ""}`,
   };
 }

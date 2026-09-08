@@ -99,8 +99,8 @@ export async function runDraftStage(
     return { output: { draftId: null, skippedReason: "No contact identified yet — drafting skipped, not blocked." } };
   }
 
-  // Named people still need Hunter verified_deliverable. General inboxes (info@ / events@)
-  // are sendable without that bar because catch-all domains usually come back risky/accept_all.
+  // Named people and general inboxes that are not known-invalid get drafts.
+  // Hunter accept_all / risky no longer blocks — Joel rejects in the queue.
   if (!isSendableContact(contact)) {
     return {
       output: {

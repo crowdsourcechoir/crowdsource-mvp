@@ -26,7 +26,7 @@ export type SeedContactInput = {
   roleDescription?: string | null;
   /**
    * When set (e.g. after a prior Hunter Verifier pass), skip a second verification.
-   * Named people still need `verified_deliverable` to enqueue; generic inboxes do not.
+   * Only `invalid` blocks enqueue; accept_all / risky are allowed for Joel to decide.
    */
   emailVerificationStatus?: Contact["emailVerificationStatus"];
 };

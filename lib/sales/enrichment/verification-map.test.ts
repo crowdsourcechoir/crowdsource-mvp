@@ -61,6 +61,12 @@ async function main() {
   assert.equal(hasVerifiedEmail(contact("risky")), false);
   assert.equal(hasVerifiedEmail(contact("invalid")), false);
 
+  const { hunterVerifierBlocksSend } = await import("./verification-map");
+  assert.equal(hunterVerifierBlocksSend("invalid"), true);
+  assert.equal(hunterVerifierBlocksSend("risky"), false, "accept_all / risky must not block send");
+  assert.equal(hunterVerifierBlocksSend("unverified"), false);
+  assert.equal(hunterVerifierBlocksSend("verified_deliverable"), false);
+
   assert.equal(contactNeedsHunterVerify(contact("valid_format")), true);
   assert.equal(contactNeedsHunterVerify(contact("unverified")), true);
   assert.equal(contactNeedsHunterVerify(contact("verified_deliverable")), false);
