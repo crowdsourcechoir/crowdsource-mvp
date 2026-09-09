@@ -195,7 +195,7 @@ export async function DELETE(
     if (deleteError) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 });
     }
-    if (!count) {
+    if (count === 0) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     return NextResponse.json({ ok: true });
