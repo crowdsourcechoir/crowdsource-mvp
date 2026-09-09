@@ -7,6 +7,7 @@ import { useSonggardenPoll } from "./useSonggardenPoll";
 import { SONGGARDEN_CATEGORIES } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
+import { deleteSonggardenClip } from "@/data/songgardenClient";
 
 type ComposerScope = "bloom" | "garden" | "master";
 type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
@@ -77,6 +78,8 @@ export default function SonggardenCanvas({
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailClip, setDetailClip] = useState<SonggardenClip | null>(null);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [garden, setGarden] = useState<GardenLink | null>(null);
   const [chapters, setChapters] = useState<ChapterLink[]>([]);
@@ -417,6 +420,32 @@ export default function SonggardenCanvas({
     );
   }
 
+  async function handleDeleteSelected() {
+    if (selectedClips.length === 0) return;
+    const label =
+      selectedClips.length === 1
+        ? `“${selectedClips[0].label || selectedClips[0].filename}”`
+        : `${selectedClips.length} sounds`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+    setDeletingSelected(true);
+    setDeleteError(null);
+    try {
+      for (const clip of selectedClips) {
+        await deleteSonggardenClip(clip.eventId || eventId, clip.id);
+      }
+      setSelectedIds(new Set());
+      if (detailClip && selectedClips.some((c) => c.id === detailClip.id)) {
+        setDetailClip(null);
+      }
+      await refreshAll();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete sounds.");
+      await refreshAll();
+    } finally {
+      setDeletingSelected(false);
+    }
+  }
+
   async function refreshAll() {
     if (scope === "bloom") {
       await refreshBloom();
@@ -719,10 +748,21 @@ export default function SonggardenCanvas({
       ) : null}
 
       {selectedIds.size > 0 && showSounds ? (
-        <p className="text-xs text-gray-500">
-          {selectedIds.size} selected · Shift-click to multi-select · drag any clip or use the batch
-          drag handle
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-gray-500">
+            {selectedIds.size} selected · Shift-click to multi-select · drag any clip or use the batch
+            drag handle
+          </p>
+          <button
+            type="button"
+            disabled={deletingSelected}
+            onClick={() => void handleDeleteSelected()}
+            className="rounded-lg border border-red-500/50 px-3 py-1.5 text-xs font-medium text-red-200 transition-colors hover:border-red-400 hover:text-red-100 disabled:opacity-50"
+          >
+            {deletingSelected ? "Deleting…" : `Delete selected (${selectedIds.size})`}
+          </button>
+          {deleteError ? <p className="text-xs text-red-300">{deleteError}</p> : null}
+        </div>
       ) : null}
 
       {detailClip ? (
@@ -732,6 +772,16 @@ export default function SonggardenCanvas({
           onClose={() => setDetailClip(null)}
           onUpdated={(updated) => {
             setDetailClip(updated);
+            void refreshAll();
+          }}
+          onDeleted={(clipId) => {
+            setDetailClip(null);
+            setSelectedIds((prev) => {
+              if (!prev.has(clipId)) return prev;
+              const next = new Set(prev);
+              next.delete(clipId);
+              return next;
+            });
             void refreshAll();
           }}
         />

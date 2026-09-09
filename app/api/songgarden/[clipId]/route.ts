@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import {
+  localSonggardenDeleteClip,
   localSonggardenGetClip,
   localSonggardenRestoreOriginal,
 } from "@/lib/local-songgarden-store";
 import { encodeSupabaseBytea, decodeSupabaseBytea } from "@/lib/supabase-bytea";
+import { PARTICIPANT_CLIPS_BUCKET } from "@/lib/songgarden/storage-upload";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
@@ -116,6 +118,89 @@ export async function PATCH(
     return NextResponse.json({ clip: rowToClip(updated) });
   } catch (err) {
     console.error("Songgarden clip PATCH error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE: permanently remove a clip (DB row + storage objects when present).
+ * Query: ?eventId=
+ */
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ clipId: string }> }
+) {
+  const { clipId } = await context.params;
+  const eventId = new URL(request.url).searchParams.get("eventId")?.trim() ?? "";
+  if (!eventId) {
+    return NextResponse.json({ error: "eventId is required." }, { status: 400 });
+  }
+
+  if (USE_LOCAL_EVENTS) {
+    const ok = await localSonggardenDeleteClip(eventId, clipId);
+    if (!ok) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
+  }
+
+  try {
+    let storagePaths: string[] = [];
+    const withPaths = await supabaseAdmin
+      .from("songgarden_clips")
+      .select("id, audio_storage_path, audio_original_storage_path")
+      .eq("id", clipId)
+      .eq("event_id", eventId)
+      .maybeSingle();
+
+    if (withPaths.error && /audio_storage_path|audio_original_storage_path/i.test(withPaths.error.message)) {
+      const legacy = await supabaseAdmin
+        .from("songgarden_clips")
+        .select("id")
+        .eq("id", clipId)
+        .eq("event_id", eventId)
+        .maybeSingle();
+      if (legacy.error || !legacy.data) {
+        return NextResponse.json({ error: "Not found." }, { status: 404 });
+      }
+    } else if (withPaths.error || !withPaths.data) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    } else {
+      const playable = withPaths.data.audio_storage_path;
+      const original = withPaths.data.audio_original_storage_path;
+      if (typeof playable === "string" && playable.trim()) storagePaths.push(playable.trim());
+      if (typeof original === "string" && original.trim()) storagePaths.push(original.trim());
+    }
+
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabaseAdmin.storage
+        .from(PARTICIPANT_CLIPS_BUCKET)
+        .remove(storagePaths);
+      if (storageError) {
+        console.warn("Songgarden clip storage cleanup:", storageError.message);
+      }
+    }
+
+    const { error: deleteError, count } = await supabaseAdmin
+      .from("songgarden_clips")
+      .delete({ count: "exact" })
+      .eq("id", clipId)
+      .eq("event_id", eventId);
+
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+    if (!count) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Songgarden clip DELETE error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Server error" },
       { status: 500 }

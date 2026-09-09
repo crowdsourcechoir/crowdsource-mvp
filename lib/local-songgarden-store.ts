@@ -210,6 +210,30 @@ export async function localSonggardenRestoreOriginal(
   return updated;
 }
 
+/** Permanently remove one clip and its audio files. */
+export async function localSonggardenDeleteClip(
+  eventId: string,
+  clipId: string
+): Promise<boolean> {
+  const clips = await readManifest(eventId);
+  const clip = clips.find((c) => c.id === clipId);
+  if (!clip) return false;
+  const ext = clip.filename.split(".").pop() || "wav";
+  await Promise.all([
+    fs.unlink(audioPath(eventId, clipId, ext)).catch((err: unknown) => {
+      if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
+    }),
+    fs.unlink(originalAudioPath(eventId, clipId, ext)).catch((err: unknown) => {
+      if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
+    }),
+  ]);
+  await writeManifest(
+    eventId,
+    clips.filter((c) => c.id !== clipId)
+  );
+  return true;
+}
+
 export async function localSonggardenWipeEvent(eventId: string): Promise<number> {
   const clips = await readManifest(eventId);
   const count = clips.length;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  deleteSonggardenClip,
   fetchClipFile,
   restoreSonggardenOriginal,
   songgardenAudioUrl,
@@ -15,19 +16,22 @@ type ClipDetailPanelProps = {
   clip: SonggardenClip;
   onClose: () => void;
   onUpdated: (clip: SonggardenClip) => void;
+  onDeleted: (clipId: string) => void;
 };
 
 /**
- * Inspect a clip: play trimmed (pad-ready) vs original, restore original as playable.
+ * Inspect a clip: play trimmed (pad-ready) vs original, restore original as playable, delete.
  */
 export default function ClipDetailPanel({
   eventId,
   clip,
   onClose,
   onUpdated,
+  onDeleted,
 }: ClipDetailPanelProps) {
   const [mode, setMode] = useState<"playable" | "original">("playable");
   const [restoring, setRestoring] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragHint, setDragHint] = useState<string | null>(null);
 
@@ -39,6 +43,14 @@ export default function ClipDetailPanel({
     setMode("playable");
     setError(null);
   }, [clip.id]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function handleRestore() {
     if (!clip.hasOriginal) return;
@@ -59,6 +71,20 @@ export default function ClipDetailPanel({
       setError(err instanceof Error ? err.message : "Could not restore original.");
     } finally {
       setRestoring(false);
+    }
+  }
+
+  async function handleDelete() {
+    const name = clip.label || clip.filename || "this sound";
+    if (!window.confirm(`Delete “${name}”? This cannot be undone.`)) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteSonggardenClip(eventId, clip.id);
+      onDeleted(clip.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete sound.");
+      setDeleting(false);
     }
   }
 
@@ -89,13 +115,24 @@ export default function ClipDetailPanel({
         ? "Trim skipped (no clear silence)"
         : "Legacy clip (not auto-trimmed)";
 
+  const modeIdle =
+    "rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+  const modeActive =
+    "rounded-lg border border-[var(--csc-accent)] bg-[var(--csc-accent)] px-3 py-1.5 text-xs font-medium text-black";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+      <button
+        type="button"
+        aria-label="Close overlay"
+        className="absolute inset-0 bg-black/70"
+        onClick={onClose}
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Clip detail"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-700 bg-[#121214] p-5 shadow-2xl"
+        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-white/15 bg-black p-5 shadow-2xl shadow-black/50"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -111,7 +148,7 @@ export default function ClipDetailPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-gray-600 px-2 py-1 text-sm text-gray-300 hover:bg-gray-800"
+            className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
           >
             Close
           </button>
@@ -121,11 +158,7 @@ export default function ClipDetailPanel({
           <button
             type="button"
             onClick={() => setMode("playable")}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-              mode === "playable"
-                ? "bg-[#CFFF81] text-[#1a1530]"
-                : "border border-gray-600 text-gray-300 hover:bg-gray-800"
-            }`}
+            className={mode === "playable" ? modeActive : modeIdle}
           >
             Playable (trimmed)
           </button>
@@ -133,11 +166,7 @@ export default function ClipDetailPanel({
             type="button"
             disabled={!clip.hasOriginal}
             onClick={() => setMode("original")}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
-              mode === "original"
-                ? "bg-[#CFFF81] text-[#1a1530]"
-                : "border border-gray-600 text-gray-300 hover:bg-gray-800"
-            }`}
+            className={mode === "original" ? modeActive : modeIdle}
           >
             Original{clip.hasOriginal ? "" : " (none)"}
           </button>
@@ -149,7 +178,7 @@ export default function ClipDetailPanel({
           draggable
           onDragStart={(e) => void handleDragStart(e)}
           onDragEnd={() => setDragHint(null)}
-          className="mt-4 cursor-grab rounded-xl border border-dashed border-[#CFFF81]/40 bg-[#CFFF81]/5 px-4 py-3 text-sm text-[#CFFF81] active:cursor-grabbing"
+          className="mt-4 cursor-grab rounded-lg border border-dashed border-[var(--csc-accent)]/40 bg-[var(--csc-accent)]/5 px-4 py-3 text-sm text-[var(--csc-accent)] active:cursor-grabbing"
         >
           Drag {mode === "original" && clip.hasOriginal ? "original" : "trimmed"} into Ableton /
           Finder
@@ -159,15 +188,24 @@ export default function ClipDetailPanel({
         {clip.hasOriginal && (
           <button
             type="button"
-            disabled={restoring}
+            disabled={restoring || deleting}
             onClick={() => void handleRestore()}
-            className="mt-4 w-full rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-200 hover:bg-amber-950/50 disabled:opacity-50"
+            className="mt-4 w-full rounded-lg border border-white/15 px-3 py-2 text-sm text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
           >
             {restoring ? "Restoring…" : "Use original as playable (undo trim)"}
           </button>
         )}
 
-        {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+        <button
+          type="button"
+          disabled={deleting || restoring}
+          onClick={() => void handleDelete()}
+          className="mt-3 w-full rounded-lg border border-red-500/50 px-3 py-2 text-sm text-red-200 transition-colors hover:border-red-400 hover:text-red-100 disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete sound"}
+        </button>
+
+        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
       </div>
     </div>
   );

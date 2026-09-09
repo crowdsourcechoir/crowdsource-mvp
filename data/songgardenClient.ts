@@ -175,6 +175,17 @@ export async function restoreSonggardenOriginal(
   return data.clip;
 }
 
+export async function deleteSonggardenClip(eventId: string, clipId: string): Promise<void> {
+  const params = new URLSearchParams({ eventId });
+  const res = await fetch(`/api/songgarden/${clipId}?${params.toString()}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Failed to delete sound");
+  }
+}
+
 export async function fetchClipFile(
   eventId: string,
   clip: SonggardenClip,
