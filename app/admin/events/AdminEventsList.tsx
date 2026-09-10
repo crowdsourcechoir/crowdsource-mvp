@@ -13,9 +13,37 @@ import { isEventUpcoming } from "@/lib/formatDate";
 import { draftToRestorePayload, readEventFormDraft } from "@/lib/event-form-draft";
 
 const LAST_CREATED_EVENT_KEY = "csc_last_created_event";
+/** Prefixes Joel dismissed without restoring — hide until new orphans appear. */
+const DISMISSED_ORPHANS_KEY = "csc_dismissed_storyboard_orphans";
 
 function isUpcoming(event: Event): boolean {
   return isEventUpcoming(event.date);
+}
+
+function readDismissedOrphanPrefixes(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DISMISSED_ORPHANS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedOrphanPrefixes(prefixes: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      DISMISSED_ORPHANS_KEY,
+      JSON.stringify(Array.from(new Set(prefixes)))
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 export default function AdminEventsList() {
@@ -26,6 +54,7 @@ export default function AdminEventsList() {
   const [eventsLoadError, setEventsLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [orphans, setOrphans] = useState<Array<{ prefix: string; frameCount: number }>>([]);
+  const [dismissedOrphanPrefixes, setDismissedOrphanPrefixes] = useState<string[]>([]);
   const [recoveringPrefix, setRecoveringPrefix] = useState<string | null>(null);
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
   const [baseUrl, setBaseUrl] = useState("https://app.crowdsourcechoir.com");
@@ -33,8 +62,26 @@ export default function AdminEventsList() {
   const showCreatedBanner = searchParams.get("created") === "1";
 
   useEffect(() => {
-    if (typeof window !== "undefined") setBaseUrl(window.location.origin);
+    if (typeof window !== "undefined") {
+      setBaseUrl(window.location.origin);
+      setDismissedOrphanPrefixes(readDismissedOrphanPrefixes());
+    }
   }, []);
+
+  const visibleOrphans = useMemo(() => {
+    const dismissed = new Set(dismissedOrphanPrefixes);
+    return orphans.filter((o) => !dismissed.has(o.prefix));
+  }, [orphans, dismissedOrphanPrefixes]);
+
+  function dismissUnattachedWorldsBanner() {
+    const next = [
+      ...dismissedOrphanPrefixes,
+      ...visibleOrphans.map((o) => o.prefix),
+    ];
+    const unique = Array.from(new Set(next));
+    setDismissedOrphanPrefixes(unique);
+    writeDismissedOrphanPrefixes(unique);
+  }
 
   /** Single parallel load — faster than sequential events + themes; avoids double-fetch on mount. */
   const loadData = useCallback(async () => {
@@ -168,16 +215,28 @@ export default function AdminEventsList() {
         </div>
       )}
 
-      {orphans.length > 0 && (
+      {visibleOrphans.length > 0 && (
         <div className="mb-6 rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-          <p className="font-medium">Unattached generated worlds</p>
-          <p className="mt-1 text-xs text-amber-200/80">
-            Runway stills/loops are in storage but not on a bloom yet — restore so those credits
-            aren’t lost. If you still have a form draft in this browser, journey prompts are
-            restored with the world.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium">Unattached generated worlds</p>
+              <p className="mt-1 text-xs text-amber-200/80">
+                Runway stills/loops are in storage but not on a bloom yet — restore so those credits
+                aren’t lost. If you still have a form draft in this browser, journey prompts are
+                restored with the world.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissUnattachedWorldsBanner}
+              className="shrink-0 rounded-lg border border-amber-600/50 px-2.5 py-1 text-xs font-medium text-amber-100/90 hover:bg-amber-900/50 hover:text-white"
+              aria-label="Dismiss unattached worlds message"
+            >
+              Dismiss
+            </button>
+          </div>
           <ul className="mt-3 space-y-2">
-            {orphans.map((o) => (
+            {visibleOrphans.map((o) => (
               <li key={o.prefix} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-mono text-xs">
                   {o.prefix} · {o.frameCount} frame{o.frameCount === 1 ? "" : "s"}
