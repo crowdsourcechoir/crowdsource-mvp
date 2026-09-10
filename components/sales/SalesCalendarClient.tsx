@@ -42,25 +42,16 @@ function isToday(key: string): boolean {
   return key === new Date().toISOString().slice(0, 10);
 }
 
-function MatchPill({ event }: { event: SyncedCalendarEvent }) {
-  if (event.matchStatus === "matched") return <StatusPill tone="ok">Matched</StatusPill>;
-  if (event.matchStatus === "self_only") return <StatusPill tone="neutral">Just you</StatusPill>;
-  return <StatusPill tone="warn">Unmatched</StatusPill>;
-}
-
-function matchHint(event: SyncedCalendarEvent): string {
-  if (event.matchStatus === "matched") {
-    const who = event.contactName || event.contactEmail || "a Sales contact";
-    const org = event.organizationName ? ` at ${event.organizationName}` : "";
-    return `Matched to ${who}${org} by attendee email.`;
+function contactLine(event: SyncedCalendarEvent): string | null {
+  if (event.contactName) {
+    return event.organizationName
+      ? `${event.contactName} · ${event.organizationName}`
+      : event.contactName;
   }
-  if (event.matchStatus === "self_only") {
-    return "No other invitees on this meeting — or only your Google account.";
-  }
-  const email = event.contactEmail || event.attendeeEmails[0];
-  return email
-    ? `${email} is invited, but that address is not in Sales contacts yet.`
-    : "Invitees are present, but none match a Sales contact email.";
+  // Show a non-self invitee email when we don't have a CRM contact — no status jargon.
+  const self = event.organizerEmail?.toLowerCase();
+  const other = event.attendeeEmails.find((email) => email.toLowerCase() !== self);
+  return other ?? event.contactEmail ?? null;
 }
 
 export default function SalesCalendarClient() {
@@ -109,7 +100,10 @@ export default function SalesCalendarClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.result?.error || data.error || "Sync failed");
       const r = data.result ?? {};
-      setMessage(`Synced ${r.synced ?? 0} meetings · ${r.matched ?? 0} matched`);
+      const withContacts = r.matched ?? 0;
+      setMessage(
+        `Synced ${r.synced ?? 0} meetings${withContacts ? ` · ${withContacts} with Sales contacts` : ""}`
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
@@ -154,12 +148,8 @@ export default function SalesCalendarClient() {
             <p className="csc-eyebrow">Prospecting Intelligence</p>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Calendar</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-400">
-              Meetings from your Google Calendar, matched to Sales contacts by invitee email (past 90
-              days · next 30).{" "}
-              <span className="text-gray-300">Matched</span> is the default — past and upcoming
-              meetings with people already in CRM.{" "}
-              <span className="text-gray-300">Unmatched</span> means an invitee email is on the
-              meeting but not yet in Sales contacts.
+              Meetings from your Google Calendar (past 90 days · next 30). When an invitee is already
+              in Sales, their name and org show on the row.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -259,17 +249,9 @@ export default function SalesCalendarClient() {
                         {event.location ? (
                           <p className="mt-1 truncate text-xs text-gray-500">{event.location}</p>
                         ) : null}
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <MatchPill event={event} />
-                          {event.contactName ? (
-                            <span className="text-xs text-gray-300">
-                              {event.contactName}
-                              {event.organizationName ? ` · ${event.organizationName}` : ""}
-                            </span>
-                          ) : event.contactEmail ? (
-                            <span className="text-xs text-gray-500">{event.contactEmail}</span>
-                          ) : null}
-                        </div>
+                        {contactLine(event) ? (
+                          <p className="mt-2 text-xs text-gray-300">{contactLine(event)}</p>
+                        ) : null}
                       </div>
                       <span
                         aria-hidden
@@ -287,8 +269,6 @@ export default function SalesCalendarClient() {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <p className="text-xs text-gray-500">{matchHint(event)}</p>
-
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
                             <p className="csc-eyebrow text-gray-500">When</p>
@@ -330,7 +310,7 @@ export default function SalesCalendarClient() {
                           ) : (
                             <ul className="mt-2 space-y-1">
                               {invitees.map((email) => {
-                                const isMatch =
+                                const inSales =
                                   event.matchStatus === "matched" &&
                                   event.contactEmail &&
                                   email.toLowerCase() === event.contactEmail.toLowerCase();
@@ -340,7 +320,11 @@ export default function SalesCalendarClient() {
                                     className="flex flex-wrap items-center gap-2 text-gray-200"
                                   >
                                     <span>{email}</span>
-                                    {isMatch ? <StatusPill tone="ok">In Sales</StatusPill> : null}
+                                    {inSales ? (
+                                      <span className="text-xs text-[var(--csc-accent)]">
+                                        {event.contactName ?? "In Sales"}
+                                      </span>
+                                    ) : null}
                                   </li>
                                 );
                               })}

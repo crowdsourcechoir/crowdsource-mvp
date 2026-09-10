@@ -195,7 +195,9 @@ export default function GmailSettingsClient({
       const data = await post("/api/sales/calendar/sync");
       const r = (data.result ?? {}) as Record<string, number | string>;
       setMessage(
-        `Calendar sync — ${r.synced ?? 0} meetings (${r.matched ?? 0} matched to contacts, ${r.unmatched ?? 0} unmatched).`
+        `Calendar sync — ${r.synced ?? 0} meetings${
+          r.matched ? ` · ${r.matched} with Sales contacts` : ""
+        }.`
       );
       await load();
     } catch (err) {
@@ -372,7 +374,7 @@ export default function GmailSettingsClient({
             value={calendar ? String(calendar.eventCount) : "—"}
             hint={
               calendar
-                ? `${calendar.matchedCount} matched · ${calendar.unmatchedCount} unmatched`
+                ? `${calendar.matchedCount} with contacts · ${calendar.eventCount} total`
                 : undefined
             }
           />
