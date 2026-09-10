@@ -96,6 +96,20 @@ function IconSales({ className }: { className?: string }) {
   );
 }
 
+function IconMarketing({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path d="M12 12v8M4 8.5l8 3.5 8-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function IconSettings({ className }: { className?: string }) {
   // OCTO — matches the octopus mark reference (mask so active tint inherits currentColor)
   return (
@@ -158,6 +172,13 @@ const navItems: AdminNavItem[] = [
     href: "/admin/sales",
     isActive: (pathname) => pathname.startsWith("/admin/sales"),
     icon: <IconSales className="h-5 w-5" />,
+  },
+  {
+    label: "Marketing",
+    eyebrow: "Audience & Campaigns",
+    href: "/admin/marketing",
+    isActive: (pathname) => pathname.startsWith("/admin/marketing"),
+    icon: <IconMarketing className="h-5 w-5" />,
   },
 ];
 

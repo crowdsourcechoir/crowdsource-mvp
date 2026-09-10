@@ -129,6 +129,23 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Recent runs; Send now / Force send",
         ],
       },
+      {
+        id: "marketing",
+        domain: "Marketing",
+        title: "Marketing",
+        description:
+          "Resend marketing sender, send kill switch, from identity, and Squarespace/Facebook ingest secret.",
+        href: "/admin/settings/marketing",
+        statusLabel: "Manage",
+        status: "live",
+        controls: [
+          "Enable / pause marketing sends",
+          "From name + verified from email + reply-to",
+          "Company + physical address for footer",
+          "Acquisition ingest secret (Squarespace / Facebook)",
+          "Resend webhook endpoint readout",
+        ],
+      },
     ],
   },
   {
