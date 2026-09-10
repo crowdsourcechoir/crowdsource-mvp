@@ -145,7 +145,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           />
         </div>
         <div className="mt-4">
-          <OpportunityMeetingsStrip opportunityId={opportunity.id} />
+          <OpportunityMeetingsStrip opportunityId={opportunity.id} contactId={contact?.id ?? null} />
           <OpportunityPitchesStrip opportunityId={opportunity.id} />
         </div>
         {opportunity.eventOrInitiativeName && (

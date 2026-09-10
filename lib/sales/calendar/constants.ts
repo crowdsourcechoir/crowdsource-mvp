@@ -3,8 +3,8 @@
 export const GOOGLE_CALENDAR_READONLY_SCOPE =
   "https://www.googleapis.com/auth/calendar.readonly";
 
-/** Look back this many days when syncing (inclusive of ongoing meetings). */
-export const CALENDAR_SYNC_PAST_DAYS = 7;
+/** Look back this many days when syncing (had / recent meetings with contacts). */
+export const CALENDAR_SYNC_PAST_DAYS = 90;
 
 /** Look ahead this many days for upcoming meetings. */
 export const CALENDAR_SYNC_NEXT_DAYS = 30;

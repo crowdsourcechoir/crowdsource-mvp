@@ -363,7 +363,7 @@ export default function GmailSettingsClient({
             value={
               calendar
                 ? `Past ${calendar.window.pastDays}d · next ${calendar.window.nextDays}d`
-                : "Past 7d · next 30d"
+                : "Past 90d · next 30d"
             }
           />
           <Stat label="Last sync" value={formatWhen(calendar?.lastSyncedAt ?? null)} />

@@ -66,12 +66,20 @@ function matchHint(event: SyncedCalendarEvent): string {
 export default function SalesCalendarClient() {
   const [events, setEvents] = useState<SyncedCalendarEvent[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"upcoming" | "matched" | "all">("upcoming");
+  const [filter, setFilter] = useState<"matched" | "upcoming" | "all">("matched");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const fromQuery = params.get("filter");
+    if (fromQuery === "matched" || fromQuery === "upcoming" || fromQuery === "all") {
+      setFilter(fromQuery);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -146,10 +154,12 @@ export default function SalesCalendarClient() {
             <p className="csc-eyebrow">Prospecting Intelligence</p>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Calendar</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-400">
-              Meetings from your Google Calendar.{" "}
+              Meetings from your Google Calendar, matched to Sales contacts by invitee email (past 90
+              days · next 30).{" "}
+              <span className="text-gray-300">Matched</span> is the default — past and upcoming
+              meetings with people already in CRM.{" "}
               <span className="text-gray-300">Unmatched</span> means an invitee email is on the
-              meeting but not yet in Sales contacts — click a row for the meeting link and who was
-              invited.
+              meeting but not yet in Sales contacts.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -168,8 +178,8 @@ export default function SalesCalendarClient() {
         <div className="flex flex-wrap items-center gap-2">
           {(
             [
+              ["matched", "With contacts"],
               ["upcoming", "Upcoming"],
-              ["matched", "Matched"],
               ["all", "All synced"],
             ] as const
           ).map(([id, label]) => (
