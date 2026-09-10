@@ -43,10 +43,11 @@ type PersonCard = {
   clips: SonggardenClip[];
 };
 
+/** Compact Queue-style actions — sit in section headers, not as mid-page hero CTAs. */
 const btnPrimary =
-  "rounded-lg bg-[#CFFF81] px-3 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#b8f06a] disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-md bg-[#CFFF81] px-2.5 py-1 text-xs font-semibold text-black transition-colors hover:bg-[#b8f06a] disabled:cursor-not-allowed disabled:opacity-50";
 const btnSecondary =
-  "rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white disabled:cursor-not-allowed disabled:opacity-50";
 const copyLink = "mt-2 text-xs font-medium text-[#CFFF81] hover:underline";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -302,16 +303,18 @@ export default function ComposerBloomMaterials({ event }: Props) {
   }
 
   return (
-    <div className="space-y-8 border-t border-white/10 pt-6">
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-medium text-white">Song Seed</h2>
-            <p className="mt-1 text-xs text-gray-500">
-              From agent interview transcripts. Participants need completed interviews first.
+    <div className="space-y-5 border-t border-white/10 pt-4">
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Song Seed
+            </h2>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              From agent interview transcripts.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {event.agentThemeId ? (
               <>
                 <Link
@@ -330,7 +333,7 @@ export default function ComposerBloomMaterials({ event }: Props) {
                 </button>
               </>
             ) : (
-              <p className="text-xs text-gray-500">
+              <p className="text-[11px] text-gray-500">
                 Attach an agent theme on the bloom to unlock Song Seed.
               </p>
             )}
@@ -425,15 +428,17 @@ export default function ComposerBloomMaterials({ event }: Props) {
         ) : null}
       </section>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-medium text-white">Submissions</h2>
-            <p className="mt-1 max-w-2xl text-xs text-gray-500">
-              Agent interviews sync from the server. Song Garden clips land with each person.
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
+          <div className="min-w-0">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Submissions
+            </h2>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              Interviews + Song Garden clips by person.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               disabled={wiping}
@@ -455,6 +460,7 @@ export default function ComposerBloomMaterials({ event }: Props) {
               disabled={exportingPack || clips.length === 0}
               onClick={() => void handleExportPack()}
               className={btnPrimary}
+              title="WAV zip for Ableton / MPC (drag pads also work from each clip)"
             >
               {exportingPack
                 ? "Building…"

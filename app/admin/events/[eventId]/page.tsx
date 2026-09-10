@@ -10,9 +10,9 @@ import { publicEventPath } from "@/lib/event-slug-aliases";
 import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
 const btnPrimary =
-  "rounded-lg bg-[#CFFF81] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#b8f06a]";
+  "rounded-md bg-[#CFFF81] px-2.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-[#b8f06a]";
 const btnSecondary =
-  "rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white";
+  "rounded-md border border-white/15 px-2.5 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[#CFFF81] hover:text-white";
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -129,7 +129,7 @@ export default function EventDetailPage() {
             </p>
           ) : null}
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Link href={`/admin/events/${event.id}/edit`} className={btnPrimary}>
+            <Link href={`/admin/events/${event.id}/edit`} className={btnSecondary}>
               Edit bloom
             </Link>
             <Link
@@ -140,7 +140,7 @@ export default function EventDetailPage() {
             >
               Open public link
             </Link>
-            <Link href={composerHref} className={btnSecondary}>
+            <Link href={composerHref} className={btnPrimary}>
               Open Composer
             </Link>
           </div>
@@ -155,19 +155,13 @@ export default function EventDetailPage() {
         ) : null}
       </div>
 
-      <section className="border-y border-white/10 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-medium text-white">Song Seed & submissions</h2>
-            <p className="mt-1 max-w-xl text-xs text-gray-500">
-              Song Seed, interviews, and sound packs live in Composer — same bloom library, one place
-              to form the music.
-            </p>
-          </div>
-          <Link href={composerHref} className={btnPrimary}>
-            Open in Composer
-          </Link>
-        </div>
+      <section className="border-y border-white/10 py-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          Song Seed & submissions
+        </h2>
+        <p className="mt-1 max-w-xl text-xs text-gray-500">
+          Song Seed, interviews, and sound packs live in Composer — use Open Composer above.
+        </p>
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
