@@ -227,6 +227,7 @@ export default function SalesCalendarClient() {
                   : event.organizerEmail
                     ? [event.organizerEmail]
                     : [];
+                const who = contactLine(event);
 
                 return (
                   <li key={event.googleEventId} className="list-none">
@@ -249,9 +250,7 @@ export default function SalesCalendarClient() {
                         {event.location ? (
                           <p className="mt-1 truncate text-xs text-gray-500">{event.location}</p>
                         ) : null}
-                        {contactLine(event) ? (
-                          <p className="mt-2 text-xs text-gray-300">{contactLine(event)}</p>
-                        ) : null}
+                        {who ? <p className="mt-2 text-xs text-gray-300">{who}</p> : null}
                       </div>
                       <span
                         aria-hidden
