@@ -155,15 +155,6 @@ export default function EventDetailPage() {
         ) : null}
       </div>
 
-      <section className="border-y border-white/10 py-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Song Seed & submissions
-        </h2>
-        <p className="mt-1 max-w-xl text-xs text-gray-500">
-          Song Seed, interviews, and sound packs live in Composer — use Open Composer above.
-        </p>
-      </section>
-
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
         <p className="text-xs text-gray-500">
           Delete this bloom (rare). Interviews, clips, and submissions are removed.
