@@ -16,8 +16,6 @@ async function payload() {
   const settings = await resolveDigestSettings();
   const gmail = await getGmailConnectionStatus().catch(() => ({ connected: false, email: null }));
   const transport = chooseDigestTransport({
-    resendApiKey: process.env.RESEND_API_KEY,
-    resendFrom: settings.fromEmail,
     configuredTo: settings.recipient,
     gmailConnected: gmail.connected,
     gmailEmail: gmail.email,
@@ -29,6 +27,7 @@ async function payload() {
     transportReason: transport.reason ?? null,
     effectiveRecipient: transport.to,
     gmailEmail: gmail.email,
+    /** Resend belongs to marketing campaigns — surfaced only as a FYI, never used for digest. */
     resendConfigured: Boolean(process.env.RESEND_API_KEY),
     cronSchedules: digestCronSchedules(),
   };

@@ -1,7 +1,7 @@
 import { readWorkspaceSettings } from "@/lib/settings/store";
 import { getDigestMinScore, getDigestTargetCount } from "./config";
 
-export const DEFAULT_DIGEST_FROM = "Crowdsource Sales <onboarding@resend.dev>";
+export const DEFAULT_DIGEST_FROM = "Crowdsource Sales <sing@crowdsourcechoir.com>";
 
 export type ResolvedDigestSettings = {
   /** Master on/off. Stored override wins; default is on. */
@@ -11,7 +11,7 @@ export type ResolvedDigestSettings = {
   /** Where the digest is delivered — stored override wins over SALES_DIGEST_TO_EMAIL. */
   recipient: string | null;
   fromEmail: string;
-  /** Resend key present and a recipient resolved. */
+  /** Recipient resolved (actual delivery still requires connected Gmail). */
   providerConfigured: boolean;
   envDefaults: { minScore: number; targetCount: number; recipient: string | null };
   overrides: { enabled: boolean | null; minScore: number | null; targetCount: number | null; recipient: string | null };
@@ -39,7 +39,7 @@ export async function resolveDigestSettings(): Promise<ResolvedDigestSettings> {
     targetCount: overrides.targetCount ?? envDefaults.targetCount,
     recipient,
     fromEmail: process.env.SALES_DIGEST_FROM_EMAIL || DEFAULT_DIGEST_FROM,
-    providerConfigured: Boolean(process.env.RESEND_API_KEY && recipient),
+    providerConfigured: Boolean(recipient),
     envDefaults,
     overrides,
     persisted,

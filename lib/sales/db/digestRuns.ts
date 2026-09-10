@@ -51,7 +51,7 @@ export async function finishDigestRun(
 }
 
 /** Most recent digest that actually completed a send (used by admin history / already-sent checks).
- * Deliberately excludes "skipped_no_provider" runs — a night with no RESEND_API_KEY configured
+ * Deliberately excludes "skipped_no_provider" runs — a night with Gmail disconnected
  * shouldn't count as "already covered." */
 export async function getLastSucceededDigestRun(): Promise<DigestRun | null> {
   const db = requireSupabaseAdmin();

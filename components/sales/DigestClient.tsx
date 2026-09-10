@@ -88,7 +88,7 @@ export default function DigestClient() {
 
         {noProviderConfigured && (
           <p className="mb-3 text-xs text-gray-500">
-            No mailer for the digest yet — connect Gmail on the Sales overview, or set a verified Resend sender.
+            No mailer for the digest yet — connect Gmail under Settings → Google connections.
           </p>
         )}
 

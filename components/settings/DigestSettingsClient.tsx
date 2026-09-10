@@ -20,7 +20,7 @@ type DigestSettings = {
   recipient: string | null;
   fromEmail: string;
   providerConfigured: boolean;
-  transport: "resend" | "gmail" | "none";
+  transport: "gmail" | "none";
   transportReason: string | null;
   effectiveRecipient: string | null;
   gmailEmail: string | null;
@@ -123,7 +123,7 @@ export default function DigestSettingsClient() {
             : r.status === "skipped_disabled"
               ? "Digest is turned off."
               : r.status === "skipped_no_provider"
-                ? r.error ?? "No mailer configured — connect Gmail or set a verified Resend sender."
+                ? r.error ?? "No mailer configured — connect Gmail under Settings → Google connections."
                 : r.status === "skipped_empty"
                   ? "Nothing qualifies right now."
                   : r.error ?? `Run finished: ${r.status ?? "unknown"}`
@@ -170,15 +170,15 @@ export default function DigestSettingsClient() {
       >
         <ToggleRow
           label="Daily digest enabled"
-          hint="Off stops cron and manual sends without touching Resend config."
+          hint="Off stops cron and manual sends without disconnecting Gmail."
           checked={Boolean(settings?.enabled)}
           disabled={busy || !settings}
           onChange={(next) => void patch({ enabled: next }, next ? "Digest turned on." : "Digest turned off.")}
         />
         {settings && settings.transport === "gmail" ? (
           <InlineNote>
-            Delivered from your connected Gmail ({settings.gmailEmail}) to itself. Resend needs a verified domain, so it
-            is not used.
+            Delivered from your connected Gmail ({settings.gmailEmail}) to itself. Resend is reserved for marketing
+            campaigns.
           </InlineNote>
         ) : null}
         {settings && settings.transport === "none" ? (
@@ -236,7 +236,7 @@ export default function DigestSettingsClient() {
           <Stat
             label="From"
             value={(settings?.transport === "gmail" ? settings.gmailEmail : settings?.fromEmail) ?? "—"}
-            hint={settings?.transport === "gmail" ? "Connected Gmail" : "SALES_DIGEST_FROM_EMAIL"}
+            hint={settings?.transport === "gmail" ? "Connected Gmail" : "Connect Gmail to send"}
           />
           <Stat
             label="Schedule"
@@ -245,7 +245,7 @@ export default function DigestSettingsClient() {
           />
           <Stat
             label="Sent via"
-            value={settings?.transport === "gmail" ? "Gmail" : settings?.transport === "resend" ? "Resend" : "Not configured"}
+            value={settings?.transport === "gmail" ? "Gmail" : "Not configured"}
             hint={settings?.effectiveRecipient ?? undefined}
           />
         </StatGrid>
