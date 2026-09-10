@@ -332,13 +332,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
   const activeChannel =
     availableChannels.length === 1 ? availableChannels[0] : selectedChannel;
-  const showChannelChooser =
-    position.phase === "step" && availableChannels.length > 1 && !selectedChannel;
   const useTextPad = activeChannel === "text";
   const useAudioPad = activeChannel === "audio" && Boolean(activeSound);
   const useVideoPad = activeChannel === "video";
   const usePhotoPad = activeChannel === "photo";
-  const showMomentPad = useTextPad || useVideoPad || usePhotoPad;
 
   const promptText = useMemo(() => {
     if (!activeStep) return "";
@@ -353,14 +350,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
   const responseHint = useMemo(() => {
     if (activeStep?.kind === "name") {
-      if (!useTextPad) return null;
       const custom = activeStep.responseHint?.trim();
       return custom || DEFAULT_NAME_RESPONSE_HINT;
     }
     if (activeStep?.kind === "prompt") {
       const custom = activeStep.responseHint?.trim();
       if (custom) return custom;
-      if (useTextPad) {
+      // Auto hints only apply once Type is the active channel (name/email heuristics).
+      if (useTextPad || availableChannels.includes("text")) {
         return questionResponseHint(promptText, {
           isName: false,
           isEmail: requiresEmailResponse,
@@ -369,7 +366,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       return null;
     }
     return null;
-  }, [promptText, requiresEmailResponse, useTextPad, activeStep]);
+  }, [promptText, requiresEmailResponse, useTextPad, availableChannels, activeStep]);
 
   const goToStep = useCallback(
     (index: number) => {
@@ -789,13 +786,15 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
             </div>
           )}
 
-          {position.phase === "step" && showChannelChooser && (
-            <div className="space-y-6 text-center">
+{position.phase === "step" && availableChannels.length > 0 && (
+            <div className="space-y-5 text-center">
               {chatError && (
-                <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-left text-sm text-red-300">
                   {chatError}
                 </p>
               )}
+
+              {/* One card: question + helper stay put; Type/Record expand inline. */}
               <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
                 <TypewriterText
                   key={displayPrompt(promptText)}
@@ -804,39 +803,43 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   className="inline"
                 />
               </p>
-              <div className="mx-auto flex max-w-xs flex-wrap items-center justify-center gap-4">
-                {availableChannels.map((channel) => (
-                  <button
-                    key={channel}
-                    type="button"
-                    onClick={() => setSelectedChannel(channel)}
-                    className="flex h-24 w-24 [touch-action:manipulation] select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide [-webkit-tap-highlight-color:transparent]"
-                    style={{
-                      background: `${world.accentColor}1f`,
-                      color: world.accentColor,
-                      border: `2px solid ${world.accentColor}`,
-                      boxShadow: `0 0 0 8px ${world.accentColor}14, 0 0 0 16px ${world.accentColor}0a`,
-                    }}
-                  >
-                    {CHANNEL_LABELS[channel]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {position.phase === "step" && showMomentPad && (
-            <div className="space-y-4">
-              {chatError && (
-                <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-sm text-red-300">
-                  {chatError}
+              {responseHint ? (
+                <p
+                  className="-mt-2 font-mono text-xs"
+                  style={{ color: world.accentColor, opacity: 0.85 }}
+                >
+                  {responseHint}
                 </p>
+              ) : null}
+
+              {availableChannels.length > 1 && !selectedChannel && (
+                <div className="mx-auto flex max-w-xs flex-wrap items-center justify-center gap-4">
+                  {availableChannels.map((channel) => (
+                    <button
+                      key={channel}
+                      type="button"
+                      onClick={() => setSelectedChannel(channel)}
+                      className="flex h-24 w-24 [touch-action:manipulation] select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide [-webkit-tap-highlight-color:transparent]"
+                      style={{
+                        background: `${world.accentColor}1f`,
+                        color: world.accentColor,
+                        border: `2px solid ${world.accentColor}`,
+                        boxShadow: `0 0 0 8px ${world.accentColor}14, 0 0 0 16px ${world.accentColor}0a`,
+                      }}
+                    >
+                      {CHANNEL_LABELS[channel]}
+                    </button>
+                  ))}
+                </div>
               )}
-              {sending && !conversationReady ? (
+
+              {sending && !conversationReady && activeChannel === "text" ? (
                 <div className="flex justify-center py-8">
                   <SpinnerDots accentColor={world.accentColor} />
                 </div>
-              ) : useTextPad ? (
+              ) : null}
+
+              {useTextPad && !(sending && !conversationReady) && (
                 <TextMomentPad
                   key={`text-${stepIndex}-${activeStep?.id ?? ""}`}
                   promptText={displayPrompt(promptText)}
@@ -854,6 +857,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   submitLabel={sending ? "Sending…" : "✓ Continue"}
                   accentColor={world.accentColor}
                   hint={responseHint}
+                  hidePrompt
+                  hideHint
                   inputMode={requiresEmailResponse ? "email" : "text"}
                   autoComplete={requiresEmailResponse ? "email" : isNameStep ? "given-name" : "off"}
                   inputRef={(el) => {
@@ -872,13 +877,17 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                     </div>
                   )}
                 </TextMomentPad>
-              ) : useVideoPad ? (
+              )}
+
+              {useVideoPad && (
                 <VideoMomentPad
                   key={`video-${stepIndex}-${activeStep?.id ?? ""}`}
                   promptText={displayPrompt(promptText)}
                   buttonLabel="Record"
                   accentColor={world.accentColor}
                   hint={responseHint}
+                  hidePrompt
+                  hideHint
                   recordMs={
                     activeStep?.kind === "prompt"
                       ? resolvePromptRecordMs(activeStep, "video")
@@ -887,46 +896,43 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   disabled={sending}
                   onSubmitted={handleVideoSubmitted}
                 />
-              ) : (
+              )}
+
+              {usePhotoPad && (
                 <PhotoMomentPad
                   key={`photo-${stepIndex}-${activeStep?.id ?? ""}`}
                   promptText={displayPrompt(promptText)}
                   buttonLabel="Snap"
                   accentColor={world.accentColor}
                   hint={responseHint}
+                  hidePrompt
+                  hideHint
                   disabled={sending}
                   onSubmitted={handlePhotoSubmitted}
                 />
               )}
-              {availableChannels.length > 1 && selectedChannel && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedChannel(null)}
-                  className="mx-auto block font-mono text-xs text-gray-400 underline decoration-white/20 underline-offset-4 hover:text-gray-200"
-                >
-                  ← Choose again
-                </button>
-              )}
-            </div>
-          )}
 
-          {position.phase === "step" && useAudioPad && activeSound && (
-            <div className="space-y-4">
-              <SoundMomentPad
-                key={activeSound.isFree ? `free-${activeSound.id}` : activeSound.slot.id}
-                eventId={event.id}
-                slot={activeSound.slot}
-                promptText={activeSound.prompt}
-                buttonLabel={activeSound.buttonLabel}
-                contributorName={contributorName.trim() || null}
-                accentColor={world.accentColor}
-                hint={responseHint}
-                recordMs={activeSound.recordMs}
-                progressSlotId={activeSound.isFree ? null : activeSound.slotId}
-                alternateSlots={activeSound.alternateSlots}
-                onSubmitted={handleSlotSubmitted}
-                onSkip={handleSlotSkipped}
-              />
+              {useAudioPad && activeSound && (
+                <SoundMomentPad
+                  key={activeSound.isFree ? `free-${activeSound.id}` : activeSound.slot.id}
+                  eventId={event.id}
+                  slot={activeSound.slot}
+                  promptText={activeSound.prompt}
+                  buttonLabel={activeSound.buttonLabel}
+                  contributorName={contributorName.trim() || null}
+                  accentColor={world.accentColor}
+                  hint={responseHint}
+                  hidePrompt
+                  hideHint
+                  autoStart={availableChannels.length > 1}
+                  recordMs={activeSound.recordMs}
+                  progressSlotId={activeSound.isFree ? null : activeSound.slotId}
+                  alternateSlots={activeSound.alternateSlots}
+                  onSubmitted={handleSlotSubmitted}
+                  onSkip={handleSlotSkipped}
+                />
+              )}
+
               {availableChannels.length > 1 && selectedChannel && (
                 <button
                   type="button"

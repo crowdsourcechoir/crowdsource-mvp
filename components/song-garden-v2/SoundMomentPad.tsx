@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import TypewriterText from "@/components/TypewriterText";
 import { submitSonggardenClip, getSonggardenContributorName } from "@/data/songgardenClient";
@@ -40,6 +40,12 @@ type SoundMomentPadProps = {
   onSubmitted: (meta?: { gardenCelebrationLine?: string | null }) => void;
   /** Optional — lets participants opt out before recording (e.g. skip singing). */
   onSkip?: () => void;
+  /** When true, parent already shows the question on the same card. */
+  hidePrompt?: boolean;
+  /** When true, parent already shows helper text on the same card. */
+  hideHint?: boolean;
+  /** Start capture once on mount (after channel pick on a shared card). */
+  autoStart?: boolean;
 };
 
 /**
@@ -60,6 +66,9 @@ export default function SoundMomentPad({
   alternateSlots,
   onSubmitted,
   onSkip,
+  hidePrompt = false,
+  hideHint = false,
+  autoStart = false,
 }: SoundMomentPadProps) {
   const hasChoices = !!alternateSlots?.length;
   const choices = hasChoices ? [slot, ...alternateSlots!] : [slot];
@@ -74,6 +83,7 @@ export default function SoundMomentPad({
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const playbackRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
+  const autoStartedRef = useRef(false);
 
   const isChoir = !!activeSlot.harmonyDegree;
   const label = hasChoices ? activeSlot.label : buttonLabel ?? activeSlot.label;
@@ -141,6 +151,17 @@ export default function SoundMomentPad({
     if (phase !== "idle" && phase !== "error") return;
     void runCapture();
   }, [phase, runCapture]);
+
+  useEffect(() => {
+    if (!autoStart || hasChoices || autoStartedRef.current) return;
+    if (phase !== "idle") return;
+    autoStartedRef.current = true;
+    const t = window.setTimeout(() => {
+      unlockReferenceTones();
+      void runCapture();
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [autoStart, hasChoices, phase, runCapture]);
 
   const handleStopEarly = useCallback(() => {
     stopRef.current?.();
@@ -211,12 +232,14 @@ export default function SoundMomentPad({
     phase === "recording" ? progress : phase === "countdown" && countdown ? 1 - countdown / 3 : 0;
 
   return (
-    <div className="space-y-6 text-center">
-      <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-        <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
-      </p>
-      {hint ? (
-        <p className="-mt-3 font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
+    <div className={`text-center ${hidePrompt ? "space-y-4" : "space-y-6"}`}>
+      {!hidePrompt && (
+        <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
+          <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
+        </p>
+      )}
+      {!hideHint && hint ? (
+        <p className={`${hidePrompt ? "" : "-mt-3 "}font-mono text-xs`} style={{ color: accentColor, opacity: 0.85 }}>
           {hint}
         </p>
       ) : null}

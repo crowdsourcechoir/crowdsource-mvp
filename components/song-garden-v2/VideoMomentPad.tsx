@@ -17,6 +17,10 @@ type VideoMomentPadProps = {
   recordMs?: number;
   disabled?: boolean;
   hint?: string | null;
+  /** When true, parent already shows the question on the same card. */
+  hidePrompt?: boolean;
+  /** When true, parent already shows helper text on the same card. */
+  hideHint?: boolean;
   /** Called with the captured clip when the participant confirms; parent should upload then advance. */
   onSubmitted: (blob: Blob) => void | Promise<void>;
 };
@@ -50,6 +54,8 @@ export default function VideoMomentPad({
   recordMs = DEFAULT_RECORD_MS,
   disabled = false,
   hint,
+  hidePrompt = false,
+  hideHint = false,
   onSubmitted,
 }: VideoMomentPadProps) {
   const [phase, setPhase] = useState<PadPhase>("idle");
@@ -303,12 +309,14 @@ export default function VideoMomentPad({
   const showLiveVideo = phase === "countdown" || phase === "recording";
 
   return (
-    <div className="space-y-6 text-center">
-      <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-        <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
-      </p>
-      {hint ? (
-        <p className="-mt-3 font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
+    <div className={`text-center ${hidePrompt ? "space-y-4" : "space-y-6"}`}>
+      {!hidePrompt && (
+        <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
+          <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
+        </p>
+      )}
+      {!hideHint && hint ? (
+        <p className={`${hidePrompt ? "" : "-mt-3 "}font-mono text-xs`} style={{ color: accentColor, opacity: 0.85 }}>
           {hint}
         </p>
       ) : null}

@@ -18,6 +18,10 @@ type TextMomentPadProps = {
   inputMode?: "text" | "email";
   autoComplete?: string;
   inputRef?: (el: HTMLTextAreaElement | null) => void;
+  /** When true, parent already shows the question on the same card. */
+  hidePrompt?: boolean;
+  /** When true, parent already shows helper text on the same card. */
+  hideHint?: boolean;
   /** Extra controls above the field (captcha, warnings). */
   children?: ReactNode;
 };
@@ -40,6 +44,8 @@ export default function TextMomentPad({
   inputMode = "text",
   autoComplete = "off",
   inputRef,
+  hidePrompt = false,
+  hideHint = false,
   children,
 }: TextMomentPadProps) {
   const localRef = useRef<HTMLTextAreaElement | null>(null);
@@ -52,10 +58,12 @@ export default function TextMomentPad({
   };
 
   return (
-    <div className="space-y-5 text-center">
-      <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-        <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
-      </p>
+    <div className={`text-center ${hidePrompt ? "space-y-3" : "space-y-5"}`}>
+      {!hidePrompt && (
+        <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
+          <TypewriterText key={promptText} text={promptText} speed={9} className="inline" />
+        </p>
+      )}
 
       {children}
 
@@ -81,13 +89,14 @@ export default function TextMomentPad({
           enterKeyHint="send"
           inputMode={inputMode}
           autoComplete={autoComplete}
+          autoFocus={hidePrompt}
           className="w-full resize-none rounded-2xl border-2 bg-black/20 px-4 py-3.5 text-center font-mono text-base text-white placeholder:text-gray-500 focus:outline-none"
           style={{
             borderColor: hasText ? accentColor : `${accentColor}66`,
             boxShadow: hasText ? `0 0 24px -12px ${accentColor}88` : undefined,
           }}
         />
-        {hint && (
+        {!hideHint && hint && (
           <p className="font-mono text-xs" style={{ color: accentColor, opacity: 0.85 }}>
             {hint}
           </p>
