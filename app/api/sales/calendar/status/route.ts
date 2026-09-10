@@ -3,8 +3,9 @@ import { getGmailConnectionStatus, getGmailConnection } from "@/lib/sales/db/gma
 import {
   CALENDAR_SYNC_NEXT_DAYS,
   CALENDAR_SYNC_PAST_DAYS,
-  GOOGLE_CALENDAR_READONLY_SCOPE,
+  GOOGLE_CALENDAR_SCOPE,
   hasCalendarReadonlyScope,
+  hasCalendarWriteScope,
 } from "@/lib/sales/calendar/constants";
 import { readCalendarStore } from "@/lib/sales/calendar/store";
 
@@ -21,6 +22,7 @@ export async function GET() {
     const scopes = connection?.scopes ?? [];
     const googleScopes = scopes.filter((s) => !s.startsWith("csc:"));
     const calendarGranted = hasCalendarReadonlyScope(scopes);
+    const calendarWriteGranted = hasCalendarWriteScope(scopes);
 
     return NextResponse.json(
       {
@@ -28,7 +30,8 @@ export async function GET() {
         email: status.email,
         configured: status.configured,
         calendarGranted,
-        requiredScope: GOOGLE_CALENDAR_READONLY_SCOPE,
+        calendarWriteGranted,
+        requiredScope: GOOGLE_CALENDAR_SCOPE,
         grantedScopes: googleScopes,
         window: {
           pastDays: CALENDAR_SYNC_PAST_DAYS,
@@ -38,6 +41,7 @@ export async function GET() {
         lastSyncError: stored.store.lastSyncError ?? stored.error,
         eventCount: stored.store.events.filter((e) => e.status !== "cancelled").length,
         matchedCount: stored.store.events.filter((e) => e.matchStatus === "matched").length,
+        bloomCount: stored.store.events.filter((e) => e.source === "bloom").length,
         unmatchedCount: stored.store.events.filter((e) => e.matchStatus === "unmatched").length,
       },
       { headers: { "Cache-Control": "no-store" } }

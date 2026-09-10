@@ -17,6 +17,7 @@ import {
 } from "@/lib/events-db";
 import { leanWorldConfigKeepingVibe, type WorldConfig } from "@/lib/song-garden-v2/world-config";
 import { PUBLIC_EVENT_CACHE, NO_STORE } from "@/lib/http/public-cache";
+import { scheduleBloomCalendarUpsert } from "@/lib/events/schedule-bloom-calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +131,9 @@ export async function POST(request: Request) {
         song_garden_config: row.song_garden_config ?? null,
         world_config: row.world_config ?? null,
       });
-      return NextResponse.json(rowToEvent(created as unknown as Record<string, unknown>));
+      const createdEvent = rowToEvent(created as unknown as Record<string, unknown>);
+      scheduleBloomCalendarUpsert(createdEvent);
+      return NextResponse.json(createdEvent);
     } catch (err) {
       return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
@@ -182,14 +185,15 @@ export async function POST(request: Request) {
         .select(EVENT_DETAIL_SELECT)
         .single();
       if (!worldError && withWorld) {
-        return NextResponse.json(
-          rowToEvent({
-            ...(withWorld as Record<string, unknown>),
-            ...(typeof row.hero_image === "string" ? { hero_image: row.hero_image } : {}),
-          })
-        );
+        const event = rowToEvent({
+          ...(withWorld as Record<string, unknown>),
+          ...(typeof row.hero_image === "string" ? { hero_image: row.hero_image } : {}),
+        });
+        scheduleBloomCalendarUpsert(event);
+        return NextResponse.json(event);
       }
       // Vibe (+ lean world) already saved — return that even if frames did not attach.
+      scheduleBloomCalendarUpsert(created);
       return NextResponse.json({
         ...created,
         _worldAttachError:
@@ -197,6 +201,7 @@ export async function POST(request: Request) {
           "Bloom saved with vibe/prompts, but storyboard frames did not attach. Use Restore bloom if stills are in storage.",
       });
     }
+    scheduleBloomCalendarUpsert(created);
     return NextResponse.json(created);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });

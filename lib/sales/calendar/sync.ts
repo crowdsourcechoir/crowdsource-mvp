@@ -1,13 +1,16 @@
 import type { calendar_v3 } from "googleapis";
 import { getCalendarClient } from "./client";
 import {
+  BLOOM_CALENDAR_PROP,
   CALENDAR_PRIMARY_ID,
   CALENDAR_SYNC_NEXT_DAYS,
   CALENDAR_SYNC_PAST_DAYS,
+  hasCalendarWriteScope,
 } from "./constants";
 import { matchMeetingAttendees } from "./match";
 import { EMPTY_CALENDAR_STORE, writeCalendarStore } from "./store";
 import type { CalendarSyncResult, SyncedCalendarEvent } from "./types";
+import { readBloomCalendarIds } from "@/lib/events/bloom-calendar-ids";
 
 function eventInstant(
   slot: calendar_v3.Schema$EventDateTime | null | undefined
@@ -67,6 +70,8 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
   const events: SyncedCalendarEvent[] = [];
   let pageToken: string | undefined;
   let cancelled = 0;
+  const bloomIds = await readBloomCalendarIds();
+  const googleIdToBloomId = new Map(Object.entries(bloomIds).map(([bloomId, gId]) => [gId, bloomId]));
 
   try {
     do {
@@ -98,6 +103,10 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
           selfEmail: bundle.email,
         });
 
+        const bloomIdFromProp = item.extendedProperties?.private?.[BLOOM_CALENDAR_PROP] ?? null;
+        const bloomId = bloomIdFromProp || googleIdToBloomId.get(item.id) || null;
+        const isBloom = Boolean(bloomId);
+
         events.push({
           googleEventId: item.id,
           calendarId: CALENDAR_PRIMARY_ID,
@@ -118,8 +127,11 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
           organizationId: match.organizationId,
           organizationName: match.organizationName,
           opportunityId: match.opportunityId,
-          matchStatus: match.matchStatus,
+          matchStatus: isBloom ? "self_only" : match.matchStatus,
           syncedAt,
+          source: isBloom ? "bloom" : "google",
+          bloomId,
+          bloomSlug: null,
         });
       }
 
@@ -153,6 +165,16 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
     window: { pastDays: CALENDAR_SYNC_PAST_DAYS, nextDays: CALENDAR_SYNC_NEXT_DAYS },
     events,
   });
+
+  // When Calendar write is granted, push Blooms in the window onto Google if missing.
+  if (hasCalendarWriteScope(bundle.scopes)) {
+    try {
+      const { syncBloomsInCalendarWindow } = await import("@/lib/events/bloom-calendar-backfill");
+      await syncBloomsInCalendarWindow({ timeMin, timeMax });
+    } catch (err) {
+      console.warn("[calendar-sync] bloom backfill skipped:", err);
+    }
+  }
 
   return {
     synced: events.length,

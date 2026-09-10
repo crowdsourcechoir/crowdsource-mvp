@@ -27,6 +27,7 @@ type CalendarStatus = {
   email: string | null;
   configured: boolean;
   calendarGranted: boolean;
+  calendarWriteGranted?: boolean;
   requiredScope: string;
   grantedScopes: string[];
   window: { pastDays: number; nextDays: number };
@@ -34,6 +35,7 @@ type CalendarStatus = {
   lastSyncError: string | null;
   eventCount: number;
   matchedCount: number;
+  bloomCount?: number;
   unmatchedCount: number;
 };
 
@@ -273,14 +275,18 @@ export default function GmailSettingsClient({
 
   const calendarTone = !status?.connected
     ? "neutral"
-    : calendar?.calendarGranted
+    : calendar?.calendarWriteGranted
       ? "ok"
-      : "warn";
+      : calendar?.calendarGranted
+        ? "warn"
+        : "warn";
   const calendarLabel = !status?.connected
     ? "Needs Google"
-    : calendar?.calendarGranted
+    : calendar?.calendarWriteGranted
       ? "Calendar on"
-      : "Reconnect needed";
+      : calendar?.calendarGranted
+        ? "Write needed"
+        : "Reconnect needed";
 
   const slidesTone = !status?.connected ? "neutral" : pitches?.slidesGranted ? "ok" : "warn";
   const slidesLabel = !status?.connected
@@ -332,11 +338,11 @@ export default function GmailSettingsClient({
       <SettingsPanel
         eyebrow="Calendar"
         title="Meeting sync"
-        description="Pulls primary-calendar meetings into Sales so you can see conversations with contacts on a calendar."
+        description="Pulls Google Calendar meetings into Sales, and pushes Blooms onto your Google Calendar (and this Calendar page)."
         actions={
           <>
             <StatusPill tone={calendarTone}>{calendarLabel}</StatusPill>
-            {status?.connected && !calendar?.calendarGranted ? (
+            {status?.connected && (!calendar?.calendarGranted || !calendar?.calendarWriteGranted) ? (
               <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
                 Reconnect for Calendar
               </SettingsButton>
@@ -354,11 +360,26 @@ export default function GmailSettingsClient({
           </>
         }
       >
+        {status?.connected && calendar?.calendarGranted && !calendar.calendarWriteGranted ? (
+          <InlineNote tone="warn">
+            Calendar can read meetings, but Blooms need write access. Reconnect Google and allow Calendar when prompted.
+          </InlineNote>
+        ) : null}
         <StatGrid>
           <Stat
             label="Access"
-            value={calendar?.calendarGranted ? "calendar.readonly" : "Not granted"}
-            hint={calendar?.calendarGranted ? undefined : "Reconnect and allow Google Calendar"}
+            value={
+              calendar?.calendarWriteGranted
+                ? "calendar (read + write)"
+                : calendar?.calendarGranted
+                  ? "calendar.readonly"
+                  : "Not granted"
+            }
+            hint={
+              calendar?.calendarWriteGranted
+                ? "Blooms sync to Google"
+                : "Reconnect and allow Google Calendar"
+            }
           />
           <Stat
             label="Window"
@@ -374,7 +395,7 @@ export default function GmailSettingsClient({
             value={calendar ? String(calendar.eventCount) : "—"}
             hint={
               calendar
-                ? `${calendar.matchedCount} with contacts · ${calendar.eventCount} total`
+                ? `${calendar.matchedCount} with contacts · ${calendar.bloomCount ?? 0} blooms · ${calendar.eventCount} total`
                 : undefined
             }
           />

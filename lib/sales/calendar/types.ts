@@ -22,6 +22,10 @@ export type SyncedCalendarEvent = {
   opportunityId: string | null;
   matchStatus: CalendarMatchStatus;
   syncedAt: string;
+  /** `bloom` when this Google event was created from a Crowdsource Bloom. */
+  source?: "google" | "bloom";
+  bloomId?: string | null;
+  bloomSlug?: string | null;
 };
 
 export type CalendarSyncStore = {

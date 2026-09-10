@@ -7,6 +7,10 @@ import {
 } from "@/lib/local-events-store";
 import { deleteEventById } from "@/lib/event-delete";
 import {
+  scheduleBloomCalendarDelete,
+  scheduleBloomCalendarUpsertIfRelevant,
+} from "@/lib/events/schedule-bloom-calendar";
+import {
   persistDataUrlMedia,
   resolveHeroImageForStorage,
 } from "@/lib/song-garden-v2/persist-generated-media";
@@ -139,7 +143,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         const existing = typeof updated.hero_image === "string" ? updated.hero_image : undefined;
         scheduleHeroMigration(id, existing);
       }
-      return NextResponse.json(rowToEvent(updated as unknown as Record<string, unknown>));
+      const event = rowToEvent(updated as unknown as Record<string, unknown>);
+      scheduleBloomCalendarUpsertIfRelevant(event, body as Record<string, unknown>);
+      return NextResponse.json(event);
     } catch (err) {
       return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
@@ -211,6 +217,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       scheduleHeroMigration(id);
     }
 
+    scheduleBloomCalendarUpsertIfRelevant(event, body as Record<string, unknown>);
     return NextResponse.json(event);
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -225,6 +232,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const deleted = await deleteEventById(id);
     if (!deleted) return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    scheduleBloomCalendarDelete(id);
     return NextResponse.json({ ok: true, deleted });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";

@@ -58,6 +58,9 @@ function normalizeEvent(raw: unknown): SyncedCalendarEvent | null {
         ? row.matchStatus
         : "unmatched",
     syncedAt: typeof row.syncedAt === "string" ? row.syncedAt : new Date().toISOString(),
+    source: row.source === "bloom" ? "bloom" : "google",
+    bloomId: typeof row.bloomId === "string" ? row.bloomId : null,
+    bloomSlug: typeof row.bloomSlug === "string" ? row.bloomSlug : null,
   };
 }
 
@@ -198,4 +201,28 @@ export async function listMeetingsForOpportunity(opportunityId: string): Promise
   return store.events
     .filter((e) => e.opportunityId === opportunityId && e.status !== "cancelled")
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
+}
+
+/** Insert or replace one event in the calendar store (used when a Bloom syncs to Google). */
+export async function upsertCalendarStoreEvent(event: SyncedCalendarEvent): Promise<void> {
+  const { store } = await readCalendarStore();
+  const normalized = normalizeEvent(event);
+  if (!normalized) return;
+  const without = store.events.filter(
+    (e) =>
+      e.googleEventId !== normalized.googleEventId &&
+      !(normalized.bloomId && e.bloomId === normalized.bloomId)
+  );
+  await writeCalendarStore({
+    ...store,
+    lastSyncedAt: store.lastSyncedAt ?? normalized.syncedAt,
+    events: [...without, normalized].sort((a, b) => a.startAt.localeCompare(b.startAt)),
+  });
+}
+
+export async function removeCalendarStoreEvent(googleEventId: string): Promise<void> {
+  const { store } = await readCalendarStore();
+  const next = store.events.filter((e) => e.googleEventId !== googleEventId);
+  if (next.length === store.events.length) return;
+  await writeCalendarStore({ ...store, events: next });
 }

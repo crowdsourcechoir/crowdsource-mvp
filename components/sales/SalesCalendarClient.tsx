@@ -42,7 +42,36 @@ function isToday(key: string): boolean {
   return key === new Date().toISOString().slice(0, 10);
 }
 
+function BloomGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M12 3.5c1.6 2.2 2.4 4.1 2.4 5.7A2.4 2.4 0 0 1 12 11.6 2.4 2.4 0 0 1 9.6 9.2C9.6 7.6 10.4 5.7 12 3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M20.5 12c-2.2 1.6-4.1 2.4-5.7 2.4A2.4 2.4 0 0 1 12.4 12a2.4 2.4 0 0 1 2.4-2.4c1.6 0 3.5.8 5.7 2.4Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M12 20.5c-1.6-2.2-2.4-4.1-2.4-5.7A2.4 2.4 0 0 1 12 12.4a2.4 2.4 0 0 1 2.4 2.4c0 1.6-.8 3.5-2.4 5.7Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M3.5 12c2.2-1.6 4.1-2.4 5.7-2.4A2.4 2.4 0 0 1 11.6 12a2.4 2.4 0 0 1-2.4 2.4C7.6 14.4 5.7 13.6 3.5 12Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
 function contactLine(event: SyncedCalendarEvent): string | null {
+  if (event.source === "bloom") return "Bloom";
   if (event.contactName) {
     return event.organizationName
       ? `${event.contactName} · ${event.organizationName}`
@@ -115,7 +144,9 @@ export default function SalesCalendarClient() {
   const filtered = useMemo(() => {
     const now = Date.now();
     let list = events.filter((e) => e.status !== "cancelled");
-    if (filter === "matched") list = list.filter((e) => e.matchStatus === "matched");
+    if (filter === "matched") {
+      list = list.filter((e) => e.matchStatus === "matched" || e.source === "bloom");
+    }
     if (filter === "upcoming") {
       list = list.filter((e) => {
         const end = e.endAt ? Date.parse(e.endAt) : Date.parse(e.startAt);
@@ -148,8 +179,8 @@ export default function SalesCalendarClient() {
             <p className="csc-eyebrow">Prospecting Intelligence</p>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Calendar</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-400">
-              Meetings from your Google Calendar (past 90 days · next 30). When an invitee is already
-              in Sales, their name and org show on the row.
+              Meetings from your Google Calendar (past 90 days · next 30), plus Blooms synced onto the
+              same calendar. Bloom rows show a flower icon.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -168,7 +199,7 @@ export default function SalesCalendarClient() {
         <div className="flex flex-wrap items-center gap-2">
           {(
             [
-              ["matched", "With contacts"],
+              ["matched", "Contacts & Blooms"],
               ["upcoming", "Upcoming"],
               ["all", "All synced"],
             ] as const
@@ -253,11 +284,26 @@ export default function SalesCalendarClient() {
                       >
                         <div className="min-w-0">
                           <p className="text-xs text-gray-500">{formatTime(event)}</p>
-                          <p className="mt-1 text-sm font-medium text-white">{event.summary}</p>
+                          <div className="mt-1 flex items-start gap-2">
+                            {event.source === "bloom" ? (
+                              <span
+                                title="Bloom"
+                                className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center text-[var(--csc-accent)]"
+                              >
+                                <BloomGlyph className="h-4 w-4" />
+                                <span className="sr-only">Bloom</span>
+                              </span>
+                            ) : null}
+                            <p className="text-sm font-medium text-white">{event.summary}</p>
+                          </div>
                           {event.location ? (
                             <p className="mt-1 truncate text-xs text-gray-500">{event.location}</p>
                           ) : null}
-                          {who ? <p className="mt-2 text-xs text-gray-300">{who}</p> : null}
+                          {who && event.source !== "bloom" ? (
+                            <p className="mt-2 text-xs text-gray-300">{who}</p>
+                          ) : event.source === "bloom" ? (
+                            <p className="mt-2 text-xs text-[var(--csc-accent)]">Bloom</p>
+                          ) : null}
                         </div>
                         <span
                           aria-hidden
@@ -346,6 +392,22 @@ export default function SalesCalendarClient() {
                           ) : null}
 
                           <div className="flex flex-wrap gap-3 pt-1">
+                            {event.source === "bloom" && event.bloomId ? (
+                              <Link
+                                href={`/admin/events/${event.bloomId}`}
+                                className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
+                              >
+                                Open Bloom →
+                              </Link>
+                            ) : null}
+                            {event.bloomSlug ? (
+                              <Link
+                                href={`/e/${event.bloomSlug}`}
+                                className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
+                              >
+                                Public page →
+                              </Link>
+                            ) : null}
                             {event.opportunityId ? (
                               <Link
                                 href={`/admin/sales/opportunities/${event.opportunityId}`}
