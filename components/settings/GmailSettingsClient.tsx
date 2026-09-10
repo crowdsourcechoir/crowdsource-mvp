@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
+  FieldLabel,
   InlineNote,
   SettingsButton,
   SettingsPanel,
   Stat,
   StatGrid,
   StatusPill,
+  TextField,
   ToggleRow,
 } from "@/components/settings/ui";
 
@@ -35,6 +37,14 @@ type CalendarStatus = {
   unmatchedCount: number;
 };
 
+type PitchesStatus = {
+  connected: boolean;
+  slidesGranted: boolean;
+  templates: { id: string; name: string; googleSlidesTemplateFileId: string }[];
+  settings: { defaultTemplateFileId: string | null };
+  pitchCount: number;
+};
+
 function formatWhen(iso: string | null): string {
   if (!iso) return "Never";
   const parsed = new Date(iso);
@@ -58,6 +68,9 @@ export default function GmailSettingsClient({
 }) {
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [calendar, setCalendar] = useState<CalendarStatus | null>(null);
+  const [pitches, setPitches] = useState<PitchesStatus | null>(null);
+  const [templateName, setTemplateName] = useState("CSC branded pitch");
+  const [templateFileId, setTemplateFileId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -66,9 +79,10 @@ export default function GmailSettingsClient({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [gmailRes, calendarRes] = await Promise.all([
+      const [gmailRes, calendarRes, pitchesRes] = await Promise.all([
         fetch("/api/sales/gmail/status", { cache: "no-store" }),
         fetch("/api/sales/calendar/status", { cache: "no-store" }),
+        fetch("/api/sales/pitches/status", { cache: "no-store" }),
       ]);
       const gmailData = (await gmailRes.json().catch(() => ({}))) as GmailStatus & { error?: string };
       if (typeof gmailData.configured === "boolean") {
@@ -81,10 +95,14 @@ export default function GmailSettingsClient({
       }
       const calendarData = (await calendarRes.json().catch(() => ({}))) as CalendarStatus & { error?: string };
       if (!calendarRes.ok && calendarData.error) {
-        // Non-fatal — Gmail panel can still work.
         setCalendar(null);
       } else if (typeof calendarData.calendarGranted === "boolean") {
         setCalendar(calendarData);
+      }
+      const pitchesData = (await pitchesRes.json().catch(() => ({}))) as PitchesStatus & { error?: string };
+      if (typeof pitchesData.slidesGranted === "boolean") {
+        setPitches(pitchesData);
+        setTemplateFileId((prev) => prev || pitchesData.settings?.defaultTemplateFileId || "");
       }
       if (!gmailRes.ok || gmailData.error) {
         throw new Error(
@@ -107,7 +125,7 @@ export default function GmailSettingsClient({
     const params = new URLSearchParams(window.location.search);
     if (params.get("gmail") === "connected") {
       setMessage(
-        "Google connected. Sending stays paused until you resume it. If Calendar was just granted, click Sync calendar now."
+        "Google connected. Sending stays paused until you resume it. If Calendar or Slides were just granted, use those panels below."
       );
     }
     if (params.get("gmail") === "error") {
@@ -217,6 +235,29 @@ export default function GmailSettingsClient({
     }
   }
 
+  async function savePitchTemplate() {
+    if (!templateFileId.trim()) {
+      setError("Paste a Google Slides template file id first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await post("/api/sales/pitches", {
+        action: "template",
+        name: templateName.trim() || "CSC branded pitch",
+        googleSlidesTemplateFileId: templateFileId.trim(),
+        setDefault: true,
+      });
+      setMessage("Pitch template saved.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save template failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const tone = !status?.configured ? "warn" : status.connected ? (status.sendsEnabled ? "ok" : "warn") : "warn";
   const label = loading
     ? "Checking"
@@ -239,6 +280,13 @@ export default function GmailSettingsClient({
       ? "Calendar on"
       : "Reconnect needed";
 
+  const slidesTone = !status?.connected ? "neutral" : pitches?.slidesGranted ? "ok" : "warn";
+  const slidesLabel = !status?.connected
+    ? "Needs Google"
+    : pitches?.slidesGranted
+      ? "Slides on"
+      : "Reconnect needed";
+
   const displayedScopes = calendar?.grantedScopes?.length ? calendar.grantedScopes : scopes;
 
   return (
@@ -246,7 +294,7 @@ export default function GmailSettingsClient({
       <SettingsPanel
         eyebrow="Connection"
         title="Google account"
-        description="One Google connection powers Gmail outreach and Calendar meeting sync for Sales."
+        description="One Google connection powers Gmail outreach, Calendar meeting sync, and Slides pitches for Sales."
         actions={
           <>
             <StatusPill tone={tone}>{label}</StatusPill>
@@ -330,6 +378,55 @@ export default function GmailSettingsClient({
           />
         </StatGrid>
         {calendar?.lastSyncError ? <InlineNote tone="warn">{calendar.lastSyncError}</InlineNote> : null}
+      </SettingsPanel>
+
+      <SettingsPanel
+        eyebrow="Pitches"
+        title="Google Slides"
+        description="Opportunity pitches are edited in Google Slides. Octo copies your branded template, fills placeholders, and attaches a protected share link to the queue draft."
+        actions={
+          <>
+            <StatusPill tone={slidesTone}>{slidesLabel}</StatusPill>
+            {status?.connected && !pitches?.slidesGranted ? (
+              <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
+                Reconnect for Slides
+              </SettingsButton>
+            ) : null}
+          </>
+        }
+      >
+        <StatGrid>
+          <Stat
+            label="Access"
+            value={pitches?.slidesGranted ? "presentations + drive.file" : "Not granted"}
+            hint={pitches?.slidesGranted ? undefined : "Reconnect and allow Google Slides / Drive"}
+          />
+          <Stat label="Templates" value={String(pitches?.templates?.length ?? 0)} />
+          <Stat label="Pitches" value={String(pitches?.pitchCount ?? 0)} />
+        </StatGrid>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <FieldLabel>Template name</FieldLabel>
+            <TextField value={templateName} onChange={setTemplateName} placeholder="CSC branded pitch" />
+          </div>
+          <div>
+            <FieldLabel hint="From the Slides URL: /presentation/d/FILE_ID/edit">Template file id</FieldLabel>
+            <TextField
+              value={templateFileId}
+              onChange={setTemplateFileId}
+              placeholder="1abc...xyz"
+            />
+          </div>
+        </div>
+        <div className="mt-3">
+          <SettingsButton variant="primary" disabled={busy || !status?.connected} onClick={() => void savePitchTemplate()}>
+            Save template
+          </SettingsButton>
+        </div>
+        <InlineNote>
+          Put placeholders in the master deck: {"{{org_name}}"}, {"{{opportunity_title}}"}, {"{{contact_name}}"},{" "}
+          {"{{contact_role}}"}, {"{{fit_blurb}}"}, {"{{event_or_initiative}}"}.
+        </InlineNote>
       </SettingsPanel>
 
       <SettingsPanel
