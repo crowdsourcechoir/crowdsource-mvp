@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import {
   CALENDAR_SYNC_NEXT_DAYS,
@@ -8,10 +10,12 @@ import type { CalendarSyncStore, SyncedCalendarEvent } from "./types";
 /**
  * Meeting store — JSON object in Supabase Storage (same pattern as workspace settings).
  * Good for a single operator's past-7 / next-30 day window without a schema migration.
+ * Falls back to `.data/google-calendar-events.json` when Supabase is not configured (local).
  */
 
 const BUCKET = process.env.SUPABASE_MEDIA_BUCKET || "agent-media";
 const OBJECT_PATH = "google-calendar/events-v1.json";
+const LOCAL_PATH = join(process.cwd(), ".data", "google-calendar-events.json");
 const CACHE_TTL_MS = 10_000;
 
 export const EMPTY_CALENDAR_STORE: CalendarSyncStore = {
@@ -78,11 +82,27 @@ export function invalidateCalendarStoreCache(): void {
   cache = null;
 }
 
+function readLocalStoreFile(): CalendarSyncStore {
+  try {
+    if (!existsSync(LOCAL_PATH)) return EMPTY_CALENDAR_STORE;
+    const text = readFileSync(LOCAL_PATH, "utf8");
+    if (!text.trim()) return EMPTY_CALENDAR_STORE;
+    return normalizeCalendarStore(JSON.parse(text));
+  } catch {
+    return EMPTY_CALENDAR_STORE;
+  }
+}
+
+function writeLocalStoreFile(store: CalendarSyncStore): void {
+  mkdirSync(join(process.cwd(), ".data"), { recursive: true });
+  writeFileSync(LOCAL_PATH, JSON.stringify(normalizeCalendarStore(store), null, 2), "utf8");
+}
+
 async function fetchStore(): Promise<{ store: CalendarSyncStore; error: string | null }> {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!baseUrl || !serviceKey) {
-    return { store: EMPTY_CALENDAR_STORE, error: "Supabase is not configured." };
+    return { store: readLocalStoreFile(), error: null };
   }
 
   const url = `${baseUrl.replace(/\/$/, "")}/storage/v1/object/${BUCKET}/${OBJECT_PATH}?ts=${Date.now()}`;
@@ -126,10 +146,16 @@ export async function readCalendarStore(options?: { skipCache?: boolean }): Prom
 }
 
 export async function writeCalendarStore(store: CalendarSyncStore): Promise<{ error: string | null }> {
-  if (!supabaseAdmin) {
-    return { error: "Supabase is not configured — calendar sync cannot persist." };
-  }
   const normalized = normalizeCalendarStore(store);
+  if (!supabaseAdmin) {
+    try {
+      writeLocalStoreFile(normalized);
+      cache = { value: normalized, expiresAt: Date.now() + CACHE_TTL_MS };
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Local calendar write failed" };
+    }
+  }
   const body = new Blob([JSON.stringify(normalized, null, 2)], { type: "application/json" });
   const { error } = await supabaseAdmin.storage.from(BUCKET).upload(OBJECT_PATH, body, {
     upsert: true,
