@@ -232,142 +232,150 @@ export default function SalesCalendarClient() {
                 return (
                   <li key={event.googleEventId} className="list-none">
                     <div
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={open}
-                      onClick={() => toggleExpanded(event.googleEventId)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          toggleExpanded(event.googleEventId);
-                        }
-                      }}
-                      className="csc-list-row"
+                      className={`outline outline-[length:var(--csc-outline-width,1px)] -outline-offset-1 transition-[outline-color] ${
+                        open
+                          ? "outline-[var(--csc-accent)]"
+                          : "outline-transparent hover:outline-[var(--csc-accent)] focus-within:outline-[var(--csc-accent)]"
+                      }`}
                     >
-                      <div className="min-w-0">
-                        <p className="text-xs text-gray-500">{formatTime(event)}</p>
-                        <p className="mt-1 text-sm font-medium text-white">{event.summary}</p>
-                        {event.location ? (
-                          <p className="mt-1 truncate text-xs text-gray-500">{event.location}</p>
-                        ) : null}
-                        {who ? <p className="mt-2 text-xs text-gray-300">{who}</p> : null}
-                      </div>
-                      <span
-                        aria-hidden
-                        className={`shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 transition-transform ${
-                          open ? "rotate-90 text-[var(--csc-accent)]" : ""
-                        }`}
-                      >
-                        ›
-                      </span>
-                    </div>
-
-                    {open ? (
                       <div
-                        className="space-y-4 px-4 pb-5 pt-1 text-sm"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={open}
+                        onClick={() => toggleExpanded(event.googleEventId)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleExpanded(event.googleEventId);
+                          }
+                        }}
+                        className="flex cursor-pointer flex-col gap-3 px-4 py-[var(--csc-row-padding-y,16px)] sm:flex-row sm:items-center sm:justify-between"
                       >
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div>
-                            <p className="csc-eyebrow text-gray-500">When</p>
-                            <p className="mt-1 text-gray-200">{formatTimeRange(event)}</p>
-                          </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-500">{formatTime(event)}</p>
+                          <p className="mt-1 text-sm font-medium text-white">{event.summary}</p>
                           {event.location ? (
-                            <div>
-                              <p className="csc-eyebrow text-gray-500">Where</p>
-                              <p className="mt-1 text-gray-200">{event.location}</p>
-                            </div>
+                            <p className="mt-1 truncate text-xs text-gray-500">{event.location}</p>
                           ) : null}
-                          {event.organizerEmail ? (
+                          {who ? <p className="mt-2 text-xs text-gray-300">{who}</p> : null}
+                        </div>
+                        <span
+                          aria-hidden
+                          className={`shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 transition-transform ${
+                            open ? "rotate-90 text-[var(--csc-accent)]" : ""
+                          }`}
+                        >
+                          ›
+                        </span>
+                      </div>
+
+                      {open ? (
+                        <div
+                          className="space-y-4 border-t border-[var(--csc-row-divider)] px-4 pb-5 pt-4 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <div className="grid gap-3 sm:grid-cols-2">
                             <div>
-                              <p className="csc-eyebrow text-gray-500">Organizer</p>
-                              <p className="mt-1 text-gray-200">{event.organizerEmail}</p>
+                              <p className="csc-eyebrow text-gray-500">When</p>
+                              <p className="mt-1 text-gray-200">{formatTimeRange(event)}</p>
                             </div>
-                          ) : null}
+                            {event.location ? (
+                              <div>
+                                <p className="csc-eyebrow text-gray-500">Where</p>
+                                <p className="mt-1 text-gray-200">{event.location}</p>
+                              </div>
+                            ) : null}
+                            {event.organizerEmail ? (
+                              <div>
+                                <p className="csc-eyebrow text-gray-500">Organizer</p>
+                                <p className="mt-1 text-gray-200">{event.organizerEmail}</p>
+                              </div>
+                            ) : null}
+                            <div>
+                              <p className="csc-eyebrow text-gray-500">Meeting link</p>
+                              {meetingUrl ? (
+                                <a
+                                  href={meetingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="csc-link mt-1 inline-block break-all text-sm"
+                                >
+                                  {meetingUrl}
+                                </a>
+                              ) : (
+                                <p className="mt-1 text-gray-500">No Meet / Zoom link on this event</p>
+                              )}
+                            </div>
+                          </div>
+
                           <div>
-                            <p className="csc-eyebrow text-gray-500">Meeting link</p>
-                            {meetingUrl ? (
-                              <a
-                                href={meetingUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="csc-link mt-1 inline-block break-all text-sm"
-                              >
-                                {meetingUrl}
-                              </a>
+                            <p className="csc-eyebrow text-gray-500">Invited</p>
+                            {invitees.length === 0 ? (
+                              <p className="mt-1 text-gray-500">No invitee emails synced</p>
                             ) : (
-                              <p className="mt-1 text-gray-500">No Meet / Zoom link on this event</p>
+                              <ul className="mt-2 space-y-1">
+                                {invitees.map((email) => {
+                                  const inSales =
+                                    event.matchStatus === "matched" &&
+                                    event.contactEmail &&
+                                    email.toLowerCase() === event.contactEmail.toLowerCase();
+                                  return (
+                                    <li
+                                      key={email}
+                                      className="flex flex-wrap items-center gap-2 text-gray-200"
+                                    >
+                                      <span>{email}</span>
+                                      {inSales ? (
+                                        <span className="text-xs text-[var(--csc-accent)]">
+                                          {event.contactName ?? "In Sales"}
+                                        </span>
+                                      ) : null}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
                             )}
                           </div>
-                        </div>
 
-                        <div>
-                          <p className="csc-eyebrow text-gray-500">Invited</p>
-                          {invitees.length === 0 ? (
-                            <p className="mt-1 text-gray-500">No invitee emails synced</p>
-                          ) : (
-                            <ul className="mt-2 space-y-1">
-                              {invitees.map((email) => {
-                                const inSales =
-                                  event.matchStatus === "matched" &&
-                                  event.contactEmail &&
-                                  email.toLowerCase() === event.contactEmail.toLowerCase();
-                                return (
-                                  <li
-                                    key={email}
-                                    className="flex flex-wrap items-center gap-2 text-gray-200"
-                                  >
-                                    <span>{email}</span>
-                                    {inSales ? (
-                                      <span className="text-xs text-[var(--csc-accent)]">
-                                        {event.contactName ?? "In Sales"}
-                                      </span>
-                                    ) : null}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </div>
+                          {event.description ? (
+                            <div>
+                              <p className="csc-eyebrow text-gray-500">Notes</p>
+                              <p className="mt-1 whitespace-pre-wrap text-gray-300">{event.description}</p>
+                            </div>
+                          ) : null}
 
-                        {event.description ? (
-                          <div>
-                            <p className="csc-eyebrow text-gray-500">Notes</p>
-                            <p className="mt-1 whitespace-pre-wrap text-gray-300">{event.description}</p>
+                          <div className="flex flex-wrap gap-3 pt-1">
+                            {event.opportunityId ? (
+                              <Link
+                                href={`/admin/sales/opportunities/${event.opportunityId}`}
+                                className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
+                              >
+                                Opportunity →
+                              </Link>
+                            ) : null}
+                            {event.organizationId ? (
+                              <Link
+                                href={`/admin/sales/organizations/${event.organizationId}`}
+                                className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
+                              >
+                                Org →
+                              </Link>
+                            ) : null}
+                            {event.htmlLink ? (
+                              <a
+                                href={event.htmlLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
+                              >
+                                Open in Google →
+                              </a>
+                            ) : null}
                           </div>
-                        ) : null}
-
-                        <div className="flex flex-wrap gap-3 pt-1">
-                          {event.opportunityId ? (
-                            <Link
-                              href={`/admin/sales/opportunities/${event.opportunityId}`}
-                              className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
-                            >
-                              Opportunity →
-                            </Link>
-                          ) : null}
-                          {event.organizationId ? (
-                            <Link
-                              href={`/admin/sales/organizations/${event.organizationId}`}
-                              className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
-                            >
-                              Org →
-                            </Link>
-                          ) : null}
-                          {event.htmlLink ? (
-                            <a
-                              href={event.htmlLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
-                            >
-                              Open in Google →
-                            </a>
-                          ) : null}
                         </div>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
                   </li>
                 );
               });
