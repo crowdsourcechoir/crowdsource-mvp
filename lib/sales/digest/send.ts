@@ -1,4 +1,3 @@
-import { Resend } from "resend";
 import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems, scoresByQueueItemId } from "../db/queue";
 import { assembleQueueItemDetailFromQueueItem } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
@@ -21,7 +20,6 @@ export type DigestSendResult = {
 };
 
 const DEFAULT_FALLBACK_LOOKBACK_HOURS = 24;
-const DEFAULT_FROM = "Crowdsource Sales <onboarding@resend.dev>";
 /** Leads listed in one email. The backlog total is reported separately, so this is a readability cap. */
 const MAX_DIGEST_ITEMS = 25;
 /** Each assemble is ~10 queries; fanning all of them out at once times out against Supabase. */
@@ -108,34 +106,12 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
   return { items, sinceIso, backlogCount };
 }
 
-async function sendViaResend(input: {
-  apiKey: string;
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}): Promise<string | null> {
-  const resend = new Resend(input.apiKey);
-  const { data, error } = await resend.emails.send({
-    from: input.from,
-    to: input.to,
-    subject: input.subject,
-    html: input.html,
-    text: input.text,
-  });
-  if (error) throw new Error(typeof error === "string" ? error : error.message);
-  return data?.id ?? null;
-}
-
 /**
  * Sends the "new leads since last digest" email — the actual "in my inbox every morning" piece.
  *
- * Delivery goes through Resend when a verified sender is configured, otherwise through the
- * connected Gmail account mailing itself. Resend's sandbox sender only reaches the Resend
- * account owner, which is why every cron tick failed before the Gmail path existed.
- * Missing both is recorded as `skipped_no_provider`, never an error — same graceful-degradation
- * contract as discovery/enrichment (see docs/sales-platform/roadmap.md).
+ * Delivery is Gmail-only (connected account mailing itself). Resend is reserved for OCTO
+ * marketing campaigns. Missing Gmail is recorded as `skipped_no_provider`, never an error —
+ * same graceful-degradation contract as discovery/enrichment.
  *
  * Only includes leads scoring >= SALES_DIGEST_MIN_SCORE (default 70). Cron callers should use
  * `ensureDigestTarget` so the email waits until SALES_DIGEST_TARGET_COUNT (default 10) qualify;
@@ -151,11 +127,8 @@ export async function sendDailyDigest(
     return { status: "skipped_disabled", itemCount: 0, minScore };
   }
 
-  const apiKey = process.env.RESEND_API_KEY?.trim() || null;
   const gmail = await getGmailConnectionStatus().catch(() => ({ connected: false, email: null }));
   const chosen = chooseDigestTransport({
-    resendApiKey: apiKey,
-    resendFrom: digestSettings.fromEmail || DEFAULT_FROM,
     configuredTo: digestSettings.recipient,
     gmailConnected: gmail.connected,
     gmailEmail: gmail.email,
@@ -179,39 +152,15 @@ export async function sendDailyDigest(
       siteUrl()
     );
 
-    const canFallBackToGmail = gmail.connected && gmail.email?.toLowerCase() === to.toLowerCase();
-    let transport = chosen.transport;
-    let providerMessageId: string | null = null;
-
-    if (transport === "resend" && apiKey) {
-      try {
-        providerMessageId = await sendViaResend({
-          apiKey,
-          from: digestSettings.fromEmail || DEFAULT_FROM,
-          to,
-          subject,
-          html,
-          text,
-        });
-      } catch (resendErr) {
-        if (!canFallBackToGmail) throw resendErr;
-        console.warn("[digest] Resend send failed, falling back to Gmail:", resendErr);
-        transport = "gmail";
-      }
-    }
-
-    if (transport === "gmail") {
-      const sent = await sendSelfEmailViaGmail({ subject, text, html });
-      providerMessageId = sent.messageId;
-    }
+    const sent = await sendSelfEmailViaGmail({ subject, text, html });
 
     await finishDigestRun(digestRun.id, {
       status: "succeeded",
       itemCount: loaded.items.length,
       recipient: to,
-      providerMessageId,
+      providerMessageId: sent.messageId,
     });
-    return { status: "succeeded", itemCount: loaded.items.length, minScore, transport };
+    return { status: "succeeded", itemCount: loaded.items.length, minScore, transport: "gmail" };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await finishDigestRun(digestRun.id, { status: "failed", recipient: to, error: message });

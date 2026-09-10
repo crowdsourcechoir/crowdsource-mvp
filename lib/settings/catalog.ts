@@ -119,7 +119,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         id: "digest",
         domain: "Sales",
         title: "Daily digest",
-        description: "Internal morning digest of high-confidence leads (Resend).",
+        description: "Internal morning digest of high-confidence leads (Gmail).",
         href: "/admin/settings/digest",
         statusLabel: "Manage",
         status: "live",
