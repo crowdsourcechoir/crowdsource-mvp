@@ -3,8 +3,13 @@
  * Tunable via env so the overnight top-up loop and the email filter stay in sync.
  */
 
+import type { QueueCategoryFilter } from "../queue/category";
+import { parseQueueCategory } from "../queue/category";
+
 const DEFAULT_MIN_SCORE = 70;
 const DEFAULT_TARGET_COUNT = 10;
+/** Morning digest is org leads only; for now conferences only (not sports/fundraisers/etc.). */
+const DEFAULT_CATEGORY_FILTER: QueueCategoryFilter = "conferences";
 /** Skip re-sending if a target-meeting digest already landed within this window. */
 const DEFAULT_ALREADY_SENT_WINDOW_HOURS = 18;
 /** Soft time budget for pipeline/discovery/near-miss top-up inside one digest cron invocation. */
@@ -30,6 +35,16 @@ export function getDigestMinScore(): number {
 
 export function getDigestTargetCount(): number {
   return readEnvInt("SALES_DIGEST_TARGET_COUNT", DEFAULT_TARGET_COUNT);
+}
+
+/**
+ * Which queue category appears in the morning digest.
+ * Default: conferences. Override with `SALES_DIGEST_CATEGORY` (`all` | sports | conferences | …).
+ */
+export function getDigestCategoryFilter(): QueueCategoryFilter {
+  const raw = process.env.SALES_DIGEST_CATEGORY?.trim();
+  if (!raw) return DEFAULT_CATEGORY_FILTER;
+  return parseQueueCategory(raw);
 }
 
 export function getDigestAlreadySentWindowMs(): number {

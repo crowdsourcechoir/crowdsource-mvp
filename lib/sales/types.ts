@@ -418,8 +418,14 @@ export type QueueItemDetail = {
   queueItem: ApprovalQueueItem;
   opportunity: Opportunity;
   opportunityTypeLabel: string | null;
+  /** opportunity_types.key — used for digest/queue category filters. */
+  opportunityTypeKey: string | null;
   organization: Organization;
   organizationTypeLabel: string | null;
+  /** organization_types.key — used for digest/queue category filters. */
+  organizationTypeKey: string | null;
+  /** sports | conferences | fundraisers | arts | entertainment | tech */
+  category: string;
   contact: Contact | null;
   /** All org contacts with usable emails — for the queue contact picker. */
   contacts: Contact[];

@@ -4,10 +4,15 @@ import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun } from "../
 import { getGmailConnectionStatus } from "../db/gmail";
 import { sendSelfEmailViaGmail } from "../gmail/send";
 import { renderDigestEmail } from "./render";
-import { getDigestMinScore, getDigestTargetCount } from "./config";
+import { getDigestMinScore, getDigestTargetCount, getDigestCategoryFilter } from "./config";
 import { resolveDigestSettings } from "./settings";
 import { chooseDigestTransport, type DigestTransport } from "./transport";
-import { filterDigestQualifyingItems, sortByScoreDesc } from "./qualify";
+import {
+  dedupeDigestItemsByOrganization,
+  filterDigestItemsByCategory,
+  filterDigestQualifyingItems,
+  sortByScoreDesc,
+} from "./qualify";
 import { siteUrl } from "@/lib/site-url";
 import type { ApprovalQueueItem, QueueItemDetail } from "../types";
 
@@ -29,6 +34,9 @@ const ASSEMBLE_CONCURRENCY = 4;
  * Rank by score with one batched query, then assemble details only for the leads that will
  * actually appear in the email. Assembling the whole pending backlog first is what made the
  * digest time out before it could send.
+ *
+ * Walks the score-ranked shortlist until `limit` conference (or configured-category) org leads
+ * are collected — one row per organization.
  */
 async function assembleQualifying(
   queueItems: ApprovalQueueItem[],
@@ -36,22 +44,30 @@ async function assembleQualifying(
   limit: number
 ): Promise<QueueItemDetail[]> {
   if (queueItems.length === 0 || limit <= 0) return [];
+  const category = getDigestCategoryFilter();
   const scores = await scoresByQueueItemId(queueItems);
-  const shortlist = queueItems
+  const ranked = queueItems
     .map((item) => ({ item, score: scores.get(item.id) ?? -1 }))
     .filter((entry) => entry.score >= minScore)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
     .map((entry) => entry.item);
 
   const details: QueueItemDetail[] = [];
-  for (let i = 0; i < shortlist.length; i += ASSEMBLE_CONCURRENCY) {
-    const batch = await Promise.all(
-      shortlist.slice(i, i + ASSEMBLE_CONCURRENCY).map((item) => assembleQueueItemDetailFromQueueItem(item))
-    );
-    details.push(...batch.filter((d): d is QueueItemDetail => d !== null));
+  const seenOrgs = new Set<string>();
+  for (let i = 0; i < ranked.length && details.length < limit; i += ASSEMBLE_CONCURRENCY) {
+    const batchItems = ranked.slice(i, i + ASSEMBLE_CONCURRENCY);
+    const batch = await Promise.all(batchItems.map((item) => assembleQueueItemDetailFromQueueItem(item)));
+    for (const detail of batch) {
+      if (!detail) continue;
+      if ((detail.score?.totalScore ?? -1) < minScore) continue;
+      if (!filterDigestItemsByCategory([detail], category).length) continue;
+      if (seenOrgs.has(detail.organization.id)) continue;
+      seenOrgs.add(detail.organization.id);
+      details.push(detail);
+      if (details.length >= limit) break;
+    }
   }
-  return sortByScoreDesc(filterDigestQualifyingItems(details, minScore));
+  return sortByScoreDesc(dedupeDigestItemsByOrganization(filterDigestQualifyingItems(details, minScore)));
 }
 
 /**
@@ -61,6 +77,9 @@ async function assembleQualifying(
  * sends cannot strand the pending backlog. Always backfills older pending leads (preferring
  * minScore+) up to the target count so the morning email can ship ~10 leads every day instead of
  * waiting forever for brand-new 70+ rows.
+ *
+ * Only organization leads in the configured category (default: conferences) are included —
+ * one entry per org.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
@@ -79,12 +98,15 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
 
   // Always fill toward the daily target from older pending leads (minScore first).
   if (items.length < targetCount) {
-    const seen = new Set(items.map((i) => i.queueItem.id));
-    const allPending = (await listQueueItems("pending")).filter((item) => !seen.has(item.id));
+    const seenQueue = new Set(items.map((i) => i.queueItem.id));
+    const seenOrgs = new Set(items.map((i) => i.organization.id));
+    const allPending = (await listQueueItems("pending")).filter((item) => !seenQueue.has(item.id));
     const need = Math.min(targetCount, MAX_DIGEST_ITEMS) - items.length;
-    const older = await assembleQualifying(allPending, minScore, need);
+    const older = (await assembleQualifying(allPending, minScore, need + 8)).filter(
+      (item) => !seenOrgs.has(item.organization.id)
+    );
     if (older.length > 0) {
-      items = [...items, ...older];
+      items = dedupeDigestItemsByOrganization([...items, ...older]).slice(0, Math.min(targetCount, MAX_DIGEST_ITEMS));
       backfilled = true;
     }
   }
@@ -92,12 +114,15 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   // Still short? Fill remaining slots with next-best pending leads below minScore so we still
   // ship ~targetCount daily ("10 new no matter what") instead of deferring forever.
   if (items.length < targetCount) {
-    const seen = new Set(items.map((i) => i.queueItem.id));
-    const allPending = (await listQueueItems("pending")).filter((item) => !seen.has(item.id));
+    const seenQueue = new Set(items.map((i) => i.queueItem.id));
+    const seenOrgs = new Set(items.map((i) => i.organization.id));
+    const allPending = (await listQueueItems("pending")).filter((item) => !seenQueue.has(item.id));
     const need = Math.min(targetCount, MAX_DIGEST_ITEMS) - items.length;
-    const filler = await assembleQualifying(allPending, 0, need);
+    const filler = (await assembleQualifying(allPending, 0, need + 8)).filter(
+      (item) => !seenOrgs.has(item.organization.id)
+    );
     if (filler.length > 0) {
-      items = [...items, ...filler];
+      items = dedupeDigestItemsByOrganization([...items, ...filler]).slice(0, Math.min(targetCount, MAX_DIGEST_ITEMS));
       backfilled = true;
     }
   }
@@ -164,7 +189,13 @@ export async function sendDailyDigest(
 
     const { subject, html, text } = renderDigestEmail(
       loaded.items,
-      { newCount: loaded.items.length, backlogCount: loaded.backlogCount, sinceIso: loaded.sinceIso, minScore },
+      {
+        newCount: loaded.items.length,
+        backlogCount: loaded.backlogCount,
+        sinceIso: loaded.sinceIso,
+        minScore,
+        category: getDigestCategoryFilter(),
+      },
       siteUrl()
     );
 

@@ -125,6 +125,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "On / Off (stored override, gates cron + manual sends)",
           "Recipient override + from readout",
           "Min score + target lead count",
+          "Category filter (orgs only; default conferences)",
           "Cron schedule readout",
           "Recent runs; Send now / Force send",
         ],

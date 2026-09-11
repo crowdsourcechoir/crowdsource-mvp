@@ -11,7 +11,7 @@ export default function DigestSettingsPage() {
     <SettingsSubpage
       eyebrow="Integrations"
       title={card?.title ?? "Daily digest"}
-      description="Internal morning lead email — sends once a day with your target count (default 10), backfilling from the queue when needed."
+      description="Internal morning email of organization leads — conference orgs only for now (one per org), target count default 10."
     >
       <DigestSettingsClient />
     </SettingsSubpage>

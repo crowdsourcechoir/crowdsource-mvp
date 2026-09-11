@@ -1,4 +1,7 @@
 import type { QueueItemDetail } from "../types";
+import { digestCategoryLabel } from "./qualify";
+import { getDigestCategoryFilter } from "./config";
+import type { QueueCategoryFilter } from "../queue/category";
 
 export type DigestStats = {
   newCount: number;
@@ -6,6 +9,8 @@ export type DigestStats = {
   sinceIso: string;
   /** Quality bar applied to the list (e.g. 70). Included in copy so the inbox subject matches the gate. */
   minScore: number;
+  /** Queue category included in this send (default conferences). */
+  category?: QueueCategoryFilter;
 };
 
 function escapeHtml(value: string): string {
@@ -63,13 +68,21 @@ function itemToHtmlBlock(item: QueueItemDetail, baseUrl: string): string {
 export function renderDigestEmail(items: QueueItemDetail[], stats: DigestStats, baseUrl: string): { subject: string; html: string; text: string } {
   const queueUrl = `${baseUrl}/admin/sales/queue`;
   const barLabel = `${stats.minScore}+`;
+  const category = stats.category ?? getDigestCategoryFilter();
+  const categoryLabel = digestCategoryLabel(category);
+  const noun =
+    category === "all"
+      ? "orgs"
+      : category === "conferences"
+        ? "conference orgs"
+        : `${categoryLabel.toLowerCase()} orgs`;
   const subject =
     stats.newCount === 0
-      ? `Crowdsource Sales: no new ${barLabel} leads yet (still working)`
-      : `Crowdsource Sales: ${stats.newCount} new ${barLabel} lead${stats.newCount === 1 ? "" : "s"} ready for review`;
+      ? `Crowdsource Sales: no new ${barLabel} ${noun} yet (still working)`
+      : `Crowdsource Sales: ${stats.newCount} new ${barLabel} ${noun} ready for review`;
 
-  const introEmpty = `No new opportunities scoring ${barLabel} reached the review queue since the last digest — the pipeline is still working toward that bar.`;
-  const introSome = `${stats.newCount} new opportunit${stats.newCount === 1 ? "y" : "ies"} scoring ${barLabel} reached the review queue:`;
+  const introEmpty = `No new ${noun} scoring ${barLabel} reached the review queue since the last digest — the pipeline is still working toward that bar.`;
+  const introSome = `${stats.newCount} new ${noun} scoring ${barLabel} reached the review queue:`;
 
   const text = [
     stats.newCount === 0 ? introEmpty : introSome,

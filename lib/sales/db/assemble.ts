@@ -10,6 +10,7 @@ import { listActivitiesForOpportunity, listRepliedActivitiesForOpportunities } f
 import { contactOutreachById } from "../outreach/contact-outreach";
 import { latestLiveCorrespondent } from "../outreach/reply-correspondent";
 import { hasVerifiedEmail, isSelectableContact } from "../dedupe";
+import { classifyQueueCategory } from "../queue/category";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
 import { decodeHtmlEntities } from "../outreach/email-body-format";
 
@@ -144,15 +145,15 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
     listDraftsForOpportunity(opportunity.id),
     scoreQuery,
     opportunity.opportunityTypeId
-      ? db.from("opportunity_types").select("label").eq("id", opportunity.opportunityTypeId).maybeSingle()
-      : Promise.resolve({ data: null as { label: string } | null }),
+      ? db.from("opportunity_types").select("label, key").eq("id", opportunity.opportunityTypeId).maybeSingle()
+      : Promise.resolve({ data: null as { label: string; key: string } | null }),
     listActivitiesForOpportunity(opportunity.id).catch(() => []),
   ]);
   if (!organization) return null;
 
   const orgTypeRes = organization.organizationTypeId
-    ? await db.from("organization_types").select("label").eq("id", organization.organizationTypeId).maybeSingle()
-    : { data: null as { label: string } | null };
+    ? await db.from("organization_types").select("label, key").eq("id", organization.organizationTypeId).maybeSingle()
+    : { data: null as { label: string; key: string } | null };
 
   const contactsList = orgContacts ?? [];
   const draftsList = allDrafts ?? [];
@@ -171,13 +172,29 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
   }
 
   const scoreRow = (scoreRes?.data as Record<string, unknown> | null) ?? null;
+  const opportunityTypeKey = oppTypeRes?.data?.key ?? null;
+  const organizationTypeKey = orgTypeRes.data?.key ?? null;
+  const salesInitiative =
+    typeof organization.importMetadata?.salesInitiative === "string"
+      ? organization.importMetadata.salesInitiative
+      : null;
+  const category = classifyQueueCategory({
+    organizationName: organization.name,
+    opportunityTitle: opportunity.title,
+    opportunityTypeKey,
+    organizationTypeKey,
+    salesInitiative,
+  });
 
   return {
     queueItem: queueItem ?? emptyQueueItem(opportunity.id, opportunity.createdAt),
     opportunity,
     opportunityTypeLabel: oppTypeRes?.data?.label ?? null,
+    opportunityTypeKey,
     organization,
     organizationTypeLabel: orgTypeRes.data?.label ?? null,
+    organizationTypeKey,
+    category,
     contact,
     contacts,
     contactDrafts: Array.from(latestByContact.values()),

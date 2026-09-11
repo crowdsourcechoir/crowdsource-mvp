@@ -150,7 +150,7 @@ export default function DigestSettingsClient() {
       <SettingsPanel
         eyebrow="Delivery"
         title="Morning digest"
-        description="An internal email of high-confidence leads. Prospects never receive this."
+        description="An internal email of high-confidence organization leads. Prospects never receive this. For now: conference orgs only (one entry per org)."
         actions={
           <>
             <StatusPill tone={tone}>{label}</StatusPill>
@@ -181,6 +181,9 @@ export default function DigestSettingsClient() {
             campaigns.
           </InlineNote>
         ) : null}
+        <InlineNote>
+          Includes conference organization leads only (not sports, fundraisers, arts, or tech). One entry per org.
+        </InlineNote>
         {settings && settings.transport === "none" ? (
           <InlineNote tone="warn">{settings.transportReason ?? "No mailer configured — sends will be skipped."}</InlineNote>
         ) : null}
@@ -196,7 +199,7 @@ export default function DigestSettingsClient() {
       <SettingsPanel
         eyebrow="Thresholds"
         title="When it sends and to whom"
-        description="Sends once per day with up to the target lead count. Prefers high-score leads, then backfills from the pending backlog so it still goes out."
+        description="Sends once per day with up to the target org count. Prefers high-score conference orgs, then backfills from that backlog so it still goes out."
         actions={
           <SettingsButton
             variant="primary"
@@ -222,7 +225,7 @@ export default function DigestSettingsClient() {
             <TextField type="number" value={minScore} onChange={setMinScore} disabled={busy} />
           </div>
           <div>
-            <FieldLabel hint={`Env default ${settings?.envDefaults.targetCount ?? "—"}`}>Daily lead count</FieldLabel>
+            <FieldLabel hint={`Env default ${settings?.envDefaults.targetCount ?? "—"}`}>Daily org count</FieldLabel>
             <TextField type="number" value={targetCount} onChange={setTargetCount} disabled={busy} />
           </div>
           <div>
