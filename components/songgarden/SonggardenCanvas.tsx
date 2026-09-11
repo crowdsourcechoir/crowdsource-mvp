@@ -8,9 +8,10 @@ import { SONGGARDEN_CATEGORIES } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 import { deleteSonggardenClip } from "@/data/songgardenClient";
+import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
 
 type ComposerScope = "bloom" | "garden" | "master";
-type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
+export type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
 
 type GardenLink = { id: string; slug: string; title: string };
 type ChapterLink = { id: string; eventId: string; label: string; index: number };
@@ -22,6 +23,8 @@ type TextItem = {
   content: string;
   createdAt: string;
   eventId: string;
+  audioUrl: string | null;
+  videoUrl: string | null;
 };
 
 type VideoItem = {
@@ -44,6 +47,9 @@ type Props = {
   initialScope?: ComposerScope;
   /** Compact library switcher (Master / gardens / blooms). Replaces scope pills. */
   libraryPicker?: ReactNode;
+  /** Controlled Content filter (Composer page lifts this for Song Seed / materials). */
+  contentView?: ContentView;
+  onContentViewChange?: (next: ContentView) => void;
 };
 
 function normalizeName(value: string | null | undefined): string {
@@ -57,6 +63,8 @@ export default function SonggardenCanvas({
   gardenId = "",
   initialScope,
   libraryPicker,
+  contentView: contentViewProp,
+  onContentViewChange,
 }: Props) {
   const gardenOnly = Boolean(gardenId) && !eventId;
   const masterOnly = !eventId && !gardenId;
@@ -72,7 +80,12 @@ export default function SonggardenCanvas({
   const [scope, setScope] = useState<ComposerScope>(
     initialScope ?? (gardenOnly ? "garden" : masterOnly ? "master" : "bloom")
   );
-  const [contentView, setContentView] = useState<ContentView>("sounds");
+  const [contentViewInternal, setContentViewInternal] = useState<ContentView>("sounds");
+  const contentView = contentViewProp ?? contentViewInternal;
+  function setContentView(next: ContentView) {
+    if (contentViewProp === undefined) setContentViewInternal(next);
+    onContentViewChange?.(next);
+  }
   const [categoryFilter, setCategoryFilter] = useState<SonggardenCategoryId | "all">("all");
   const [bloomFilterEventId, setBloomFilterEventId] = useState("all");
   const [search, setSearch] = useState("");
@@ -254,6 +267,7 @@ export default function SonggardenCanvas({
                   createdAt: string;
                   content: string;
                   questionText: string | null;
+                  audioUrl: string | null;
                   videoUrl: string | null;
                   videoTranscript: string | null;
                 }>;
@@ -261,22 +275,28 @@ export default function SonggardenCanvas({
             };
             for (const item of data.items ?? []) {
               item.answers.forEach((answer, index) => {
-                if (answer.content?.trim()) {
+                const text = answer.content?.trim() ?? "";
+                const audioUrl = answer.audioUrl?.trim() || null;
+                const videoUrl = answer.videoUrl?.trim() || null;
+                // Text filter only wants typed text — skip media-only turns.
+                if (text) {
                   texts.push({
                     id: `${item.conversationId}-t-${index}`,
                     participantName: item.participantName,
                     questionText: answer.questionText,
-                    content: answer.content.trim(),
+                    content: text,
                     createdAt: answer.createdAt,
                     eventId: id,
+                    audioUrl,
+                    videoUrl,
                   });
                 }
-                if (answer.videoUrl) {
+                if (videoUrl) {
                   videos.push({
                     id: `${item.conversationId}-v-${index}`,
                     participantName: item.participantName,
                     questionText: answer.questionText,
-                    videoUrl: answer.videoUrl,
+                    videoUrl,
                     transcript: answer.videoTranscript,
                     createdAt: answer.createdAt,
                     eventId: id,
@@ -339,6 +359,10 @@ export default function SonggardenCanvas({
     if (scope === "garden" && bloomFilterEventId !== "all") {
       list = list.filter((item) => item.eventId === bloomFilterEventId);
     }
+    // Content=Text: typed words only — never surface media-only rows here.
+    if (contentView === "text") {
+      list = list.filter((item) => item.content.trim().length > 0);
+    }
     const query = search.trim().toLowerCase();
     if (query) {
       list = list.filter((item) =>
@@ -348,7 +372,24 @@ export default function SonggardenCanvas({
       );
     }
     return list;
-  }, [textItems, scope, bloomFilterEventId, search]);
+  }, [textItems, scope, bloomFilterEventId, search, contentView]);
+
+  const textByPrompt = useMemo(
+    () =>
+      groupAnswersByPrompt(
+        filteredText.map((item) => ({
+          id: item.id,
+          participantName: item.participantName,
+          questionText: item.questionText,
+          content: item.content,
+          createdAt: item.createdAt,
+          audioUrl: item.audioUrl,
+          videoUrl: item.videoUrl,
+          eventId: item.eventId,
+        }))
+      ),
+    [filteredText]
+  );
 
   const filteredVideo = useMemo(() => {
     let list = videoItems;
@@ -365,6 +406,22 @@ export default function SonggardenCanvas({
     }
     return list;
   }, [videoItems, scope, bloomFilterEventId, search]);
+
+  const videoByPrompt = useMemo(
+    () =>
+      groupAnswersByPrompt(
+        filteredVideo.map((item) => ({
+          id: item.id,
+          participantName: item.participantName,
+          questionText: item.questionText,
+          content: item.transcript?.trim() || "",
+          createdAt: item.createdAt,
+          videoUrl: item.videoUrl,
+          eventId: item.eventId,
+        }))
+      ),
+    [filteredVideo]
+  );
 
   const lyricByContributor = useMemo(() => {
     const map = new Map<string, string>();
@@ -678,70 +735,80 @@ export default function SonggardenCanvas({
       ) : null}
 
       {showTextAlone ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
-            Text responses ({filteredText.length})
+        <section className="space-y-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Text by prompt ({filteredText.length})
           </h2>
           {filteredText.length === 0 ? (
             <p className="text-sm text-gray-500">No text responses in this scope.</p>
           ) : (
-            <ul className="space-y-2">
-              {filteredText.map((item) => (
-                <li
-                  key={item.id}
-                  className="rounded-xl border border-white/10 bg-black/30 px-4 py-3"
-                >
-                  <p className="text-xs text-gray-500">
-                    {item.participantName}
-                    {item.questionText ? ` · ${item.questionText}` : ""}
-                  </p>
-                  <p className="mt-1 text-sm text-white">{item.content}</p>
-                </li>
+            <div className="space-y-5">
+              {textByPrompt.map((group) => (
+                <div key={group.key} className="space-y-2">
+                  <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
+                  <ul className="space-y-1 border-l border-white/10 pl-3">
+                    {group.answers.map((item) => (
+                      <li key={item.id} className="text-sm leading-snug text-gray-200">
+                        <span className="text-gray-500">
+                          {item.participantName || "Anonymous"} ·{" "}
+                        </span>
+                        <span className="whitespace-pre-wrap">{item.content}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </section>
       ) : null}
 
       {showVideo ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
-            Video & photo ({filteredVideo.length})
+        <section className="space-y-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Video & photo by prompt ({filteredVideo.length})
           </h2>
           {filteredVideo.length === 0 ? (
             <p className="text-sm text-gray-500">No video or photo responses in this scope.</p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredVideo.map((item) => {
-                const isPhoto = /\.(jpe?g|png|webp|gif)(\?|$)/i.test(item.videoUrl) ||
-                  /\/photo-/i.test(item.videoUrl);
-                return (
-                <figure
-                  key={item.id}
-                  className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
-                >
-                  {isPhoto ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- contributor upload URL
-                    <img
-                      src={item.videoUrl}
-                      alt=""
-                      className="aspect-video w-full bg-black object-cover"
-                    />
-                  ) : (
-                    <video src={item.videoUrl} controls className="aspect-video w-full bg-black" />
-                  )}
-                  <figcaption className="space-y-1 px-3 py-2">
-                    <p className="text-xs text-gray-500">{item.participantName}</p>
-                    {item.questionText ? (
-                      <p className="text-[11px] text-gray-400">{item.questionText}</p>
-                    ) : null}
-                    {item.transcript ? (
-                      <p className="line-clamp-3 text-xs text-gray-300">{item.transcript}</p>
-                    ) : null}
-                  </figcaption>
-                </figure>
-                );
-              })}
+            <div className="space-y-5">
+              {videoByPrompt.map((group) => (
+                <div key={group.key} className="space-y-2">
+                  <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.answers.map((item) => {
+                      const url = item.videoUrl || "";
+                      const isPhoto =
+                        /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url) || /\/photo-/i.test(url);
+                      return (
+                        <figure
+                          key={item.id}
+                          className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                        >
+                          {isPhoto ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- contributor upload URL
+                            <img
+                              src={url}
+                              alt=""
+                              className="aspect-video w-full bg-black object-cover"
+                            />
+                          ) : (
+                            <video src={url} controls className="aspect-video w-full bg-black" />
+                          )}
+                          <figcaption className="space-y-1 px-3 py-2">
+                            <p className="text-xs text-gray-500">
+                              {item.participantName || "Anonymous"}
+                            </p>
+                            {item.content ? (
+                              <p className="line-clamp-3 text-xs text-gray-300">{item.content}</p>
+                            ) : null}
+                          </figcaption>
+                        </figure>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>

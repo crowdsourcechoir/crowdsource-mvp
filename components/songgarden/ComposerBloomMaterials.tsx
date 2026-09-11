@@ -28,7 +28,11 @@ import {
   buildSoundPackLayout,
   soundPackReadme,
 } from "@/lib/songgarden/sound-pack";
-import SoundClipRow from "@/components/songgarden/SoundClipRow";
+import type { ContentView } from "@/components/songgarden/SonggardenCanvas";
+import {
+  groupAnswersByPrompt,
+  type ComposerAnswerRow,
+} from "@/lib/composer/group-answers-by-prompt";
 
 type InterviewSubmissionItem = {
   participantName: string;
@@ -59,10 +63,14 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-type Props = { event: Event };
+type Props = {
+  event: Event;
+  /** Composer Content filter — drives whether person/sound rows are shown. */
+  contentView?: ContentView;
+};
 
-/** Bloom Song Seed + submissions in Composer. Lime primary / outline secondary only. */
-export default function ComposerBloomMaterials({ event }: Props) {
+/** Bloom Song Seed + pack actions. Interview answers render by prompt in the canvas. */
+export default function ComposerBloomMaterials({ event, contentView = "sounds" }: Props) {
   const [songSeed, setSongSeed] = useState<SongSeed | null>(null);
   const [loadingSongSeed, setLoadingSongSeed] = useState(false);
   const [songSeedError, setSongSeedError] = useState<string | null>(null);
@@ -77,7 +85,6 @@ export default function ComposerBloomMaterials({ event }: Props) {
   const [exportingPack, setExportingPack] = useState(false);
   const [packError, setPackError] = useState<string | null>(null);
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
-  const [activePadId, setActivePadId] = useState<string | null>(null);
 
   const loadSubmissions = useCallback(async () => {
     setLoadingSubmissions(true);
@@ -165,37 +172,53 @@ export default function ComposerBloomMaterials({ event }: Props) {
   }, [interviews, clips]);
 
   const copyText = useMemo(() => {
-    if (!personCards.length) return "";
-    const parts: string[] = [];
-    for (const card of personCards) {
-      parts.push(`Participant: ${card.displayName}`);
-      for (const item of card.conversations) {
-        item.answers.forEach((a, idx) => {
-          const q = a.questionText?.trim();
-          if (q) parts.push(`Q: ${q}`);
-          parts.push(`A${idx + 1}: ${a.content || "(media only)"}`);
-          if (a.audioTranscript?.trim()) {
-            parts.push(`  Audio transcript: ${a.audioTranscript.trim()}`);
-          }
-          if (a.videoTranscript?.trim()) {
-            parts.push(`  Video transcript: ${a.videoTranscript.trim()}`);
-          }
+    const rows: ComposerAnswerRow[] = [];
+    for (const item of interviews) {
+      item.answers.forEach((a, idx) => {
+        rows.push({
+          id: `${item.conversationId}_${idx}`,
+          participantName: item.participantName?.trim() || "Anonymous",
+          questionText: a.questionText,
+          content: a.content || "",
+          createdAt: a.createdAt,
+          audioUrl: a.audioUrl,
+          videoUrl: a.videoUrl,
+          audioTranscript: a.audioTranscript,
+          videoTranscript: a.videoTranscript,
         });
-      }
-      card.clips.forEach((clip, idx) => {
-        const prompt = clip.label?.trim() || songgardenCategoryLabel(clip.category);
-        const dur =
-          clip.durationMs != null && Number.isFinite(clip.durationMs)
-            ? ` ${Math.round(clip.durationMs / 1000)}s`
-            : "";
-        parts.push(
-          `Sound ${idx + 1}: ${prompt} (${songgardenCategoryLabel(clip.category)}${dur})`
-        );
       });
+    }
+    const groups = groupAnswersByPrompt(rows);
+    if (!groups.length && !clips.length) return "";
+    const parts: string[] = [];
+    for (const group of groups) {
+      parts.push(`Prompt: ${group.prompt}`);
+      for (const a of group.answers) {
+        parts.push(`- ${a.participantName}: ${a.content || "(media only)"}`);
+        if (a.audioTranscript?.trim()) {
+          parts.push(`  Audio transcript: ${a.audioTranscript.trim()}`);
+        }
+        if (a.videoTranscript?.trim()) {
+          parts.push(`  Video transcript: ${a.videoTranscript.trim()}`);
+        }
+      }
       parts.push("");
     }
+    if (clips.length) {
+      parts.push("Sounds:");
+      clips.forEach((clip, idx) => {
+        const prompt = clip.label?.trim() || songgardenCategoryLabel(clip.category);
+        parts.push(
+          `  ${idx + 1}. ${clip.contributorName || "Anonymous"} — ${prompt} (${songgardenCategoryLabel(clip.category)})`
+        );
+      });
+    }
     return parts.join("\n").trim();
-  }, [personCards]);
+  }, [interviews, clips]);
+
+  /** Person cards only as a rare admin fallback when Content=All and we need delete-interview. */
+  const showPersonAdmin =
+    contentView === "all" && personCards.some((c) => c.conversations.length > 0);
 
   async function handleGenerateSeed() {
     setLoadingSongSeed(true);
@@ -432,10 +455,10 @@ export default function ComposerBloomMaterials({ event }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
           <div className="min-w-0">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Submissions
+              Pack & cleanup
             </h2>
             <p className="mt-0.5 text-[11px] text-gray-500">
-              Interviews + Song Garden clips by person.
+              Answers appear by prompt via the Content filter. Sounds stay in the card grid.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -473,107 +496,46 @@ export default function ComposerBloomMaterials({ event }: Props) {
         {loadingSubmissions ? (
           <p className="text-sm text-gray-500">Loading submissions…</p>
         ) : null}
-        {!loadingSubmissions && personCards.length === 0 ? (
-          <p className="text-sm text-gray-500">No interview answers or Song Garden sounds yet.</p>
-        ) : null}
 
-        {personCards.length > 0 ? (
-          <ul className="space-y-4">
-            {personCards.map((card) => {
-              const answerCount = card.conversations.reduce(
-                (n, c) => n + c.answers.length,
-                0
-              );
-              const answers = card.conversations.flatMap((item) =>
-                item.answers.map((a, idx) => ({
-                  ...a,
-                  key: `${item.conversationId}_${a.createdAt}_${idx}`,
-                }))
-              );
-              const deleting = card.conversations.some(
-                (c) => deletingConversationId === c.conversationId
-              );
-
-              return (
-                <li
-                  key={card.key}
-                  className="rounded-xl border border-white/10 bg-black/40 p-4"
-                >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium text-white">{card.displayName}</p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {answerCount} answer{answerCount === 1 ? "" : "s"}
-                        {card.clips.length
-                          ? ` · ${card.clips.length} sound${card.clips.length === 1 ? "" : "s"}`
-                          : ""}
-                      </p>
-                    </div>
-                    {card.conversations.length > 0 ? (
-                      <button
-                        type="button"
-                        disabled={deleting}
-                        onClick={() =>
-                          void handleDeleteConversation(
-                            card.conversations[0].conversationId,
-                            card.displayName
-                          )
-                        }
-                        className={btnSecondary}
-                      >
-                        {deleting ? "Deleting…" : "Delete interview"}
-                      </button>
-                    ) : null}
-                  </div>
-
-                  {answers.length > 0 ? (
-                    <ul className="mb-4 divide-y divide-white/10 rounded-lg border border-white/10">
-                      {answers.map((a) => (
-                        <li key={a.key} className="px-3 py-2">
-                          <p className="text-[11px] text-gray-500">
-                            {a.questionText?.trim() || "Answer"}
-                          </p>
-                          {a.content?.trim() ? (
-                            <p className="mt-0.5 whitespace-pre-wrap text-sm text-gray-200">
-                              {a.content}
-                            </p>
-                          ) : (
-                            <p className="mt-0.5 text-sm italic text-gray-600">(media only)</p>
-                          )}
-                          {a.audioUrl ? (
-                            <audio
-                              src={a.audioUrl}
-                              controls
-                              className="mt-1.5 h-8 max-w-full"
-                              preload="metadata"
-                            />
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-
-                  {card.clips.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Sounds
-                      </p>
-                      {card.clips.map((clip) => (
-                        <SoundClipRow
-                          key={clip.id}
-                          eventId={clip.eventId || event.id}
-                          event={event}
-                          clip={clip}
-                          siblings={card.clips}
-                          activePadId={activePadId}
-                          onActivate={setActivePadId}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
+        {showPersonAdmin ? (
+          <ul className="space-y-2">
+            {personCards
+              .filter((card) => card.conversations.length > 0)
+              .map((card) => {
+                const deleting = card.conversations.some(
+                  (c) => deletingConversationId === c.conversationId
+                );
+                const answerCount = card.conversations.reduce(
+                  (n, c) => n + c.answers.length,
+                  0
+                );
+                return (
+                  <li
+                    key={card.key}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2"
+                  >
+                    <p className="text-sm text-gray-200">
+                      {card.displayName}{" "}
+                      <span className="text-xs text-gray-500">
+                        · {answerCount} answer{answerCount === 1 ? "" : "s"}
+                      </span>
+                    </p>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={() =>
+                        void handleDeleteConversation(
+                          card.conversations[0].conversationId,
+                          card.displayName
+                        )
+                      }
+                      className={btnSecondary}
+                    >
+                      {deleting ? "Deleting…" : "Delete interview"}
+                    </button>
+                  </li>
+                );
+              })}
           </ul>
         ) : null}
       </section>

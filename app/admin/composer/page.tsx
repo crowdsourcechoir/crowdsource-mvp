@@ -4,7 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { getAllEvents, getEventById, getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
-import SonggardenCanvas from "@/components/songgarden/SonggardenCanvas";
+import SonggardenCanvas, {
+  type ContentView,
+} from "@/components/songgarden/SonggardenCanvas";
 import ComposerBloomMaterials from "@/components/songgarden/ComposerBloomMaterials";
 import ComposerLibraryPicker, {
   type LibraryGardenNode,
@@ -41,6 +43,11 @@ function ComposerPageInner() {
   const [resolvedGarden, setResolvedGarden] = useState<GardenRow | null>(null);
   const [gardenLoading, setGardenLoading] = useState(Boolean(gardenParam) && !bloomParam);
   const [gardenError, setGardenError] = useState<string | null>(null);
+  const [contentView, setContentView] = useState<ContentView>("sounds");
+
+  useEffect(() => {
+    setContentView("sounds");
+  }, [bloomParam, gardenParam]);
 
   // Library tree: gardens → blooms, plus unattached blooms
   useEffect(() => {
@@ -290,7 +297,8 @@ function ComposerPageInner() {
 
       {!resolving && !resolveError ? (
         bloomParam && resolvedBloom ? (
-          <div className="space-y-8">
+          <div className="space-y-6">
+            <ComposerBloomMaterials event={resolvedBloom} contentView={contentView} />
             <SonggardenCanvas
               key={canvasKey}
               eventId={resolvedBloom.id}
@@ -298,8 +306,9 @@ function ComposerPageInner() {
               eventSlug={resolvedBloom.slug}
               initialScope="bloom"
               libraryPicker={picker}
+              contentView={contentView}
+              onContentViewChange={setContentView}
             />
-            <ComposerBloomMaterials event={resolvedBloom} />
           </div>
         ) : gardenParam && resolvedGarden ? (
           <div className="space-y-6">
