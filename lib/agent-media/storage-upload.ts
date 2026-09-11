@@ -101,38 +101,92 @@ export async function verifyAgentMediaObject(path: string): Promise<boolean> {
   return data.some((f) => f.name === name);
 }
 
+function conversationsPathFromDecoded(pathOrQuery: string): string | null {
+  const cleaned = pathOrQuery.replace(/^\/+/, "").split("?")[0] ?? "";
+  // Require a path segment boundary so "not-conversations/..." does not match.
+  const match = cleaned.match(/(?:^|\/)(conversations\/.+)$/);
+  if (!match?.[1]) return null;
+  const path = match[1];
+  if (path.includes("..")) return null;
+  return path;
+}
+
 /** Extract storage object path from a public URL, or return a bare path as-is. */
 export function agentMediaPathFromUrlOrPath(urlOrPath: string): string | null {
   const raw = urlOrPath.trim();
   if (!raw) return null;
-  if (!/^https?:\/\//i.test(raw)) {
-    const path = raw.replace(/^\/+/, "");
-    return path.startsWith("conversations/") ? path : null;
+
+  // Already a same-origin proxy URL.
+  if (raw.startsWith("/api/agent/media?")) {
+    try {
+      const q = new URL(raw, "http://local.invalid").searchParams.get("path");
+      return q ? conversationsPathFromDecoded(decodeURIComponent(q)) : null;
+    } catch {
+      return null;
+    }
   }
+
+  if (!/^https?:\/\//i.test(raw)) {
+    return conversationsPathFromDecoded(raw);
+  }
+
+  // data:/blob: stay as-is (caller should not proxy these).
+  if (/^(data|blob):/i.test(raw)) return null;
+
   try {
     const u = new URL(raw);
-    const publicMarker = `/storage/v1/object/public/${AGENT_MEDIA_BUCKET}/`;
-    const signMarker = `/storage/v1/object/sign/${AGENT_MEDIA_BUCKET}/`;
-    const authMarker = `/storage/v1/object/authenticated/${AGENT_MEDIA_BUCKET}/`;
-    for (const marker of [publicMarker, signMarker, authMarker]) {
-      const idx = u.pathname.indexOf(marker);
+    const pathname = decodeURIComponent(u.pathname);
+
+    // Preferred: known bucket + object access style.
+    const markers = [
+      `/storage/v1/object/public/${AGENT_MEDIA_BUCKET}/`,
+      `/storage/v1/object/sign/${AGENT_MEDIA_BUCKET}/`,
+      `/storage/v1/object/authenticated/${AGENT_MEDIA_BUCKET}/`,
+      `/storage/v1/render/image/public/${AGENT_MEDIA_BUCKET}/`,
+    ];
+    for (const marker of markers) {
+      const idx = pathname.indexOf(marker);
       if (idx >= 0) {
-        const path = decodeURIComponent(u.pathname.slice(idx + marker.length));
-        return path.startsWith("conversations/") ? path : null;
+        return conversationsPathFromDecoded(pathname.slice(idx + marker.length));
       }
     }
+
+    // Fallback: any Storage object/render URL that embeds conversations/…
+    // (covers renamed buckets / legacy env mismatches without leaking public CDN URLs).
+    const generic = pathname.match(
+      /\/storage\/v1\/(?:object\/(?:public|sign|authenticated)|render\/image\/public)\/[^/]+\/(.+)$/
+    );
+    if (generic?.[1]) {
+      return conversationsPathFromDecoded(generic[1]);
+    }
+
+    return conversationsPathFromDecoded(pathname);
   } catch {
     return null;
   }
-  return null;
 }
 
-/** Same-origin proxy URL so Composer never depends on a public Storage CDN. */
+/**
+ * Same-origin proxy URL so Composer never depends on a public Storage CDN.
+ * Never returns a raw Supabase Storage URL — those 403 when the bucket is private.
+ */
 export function proxiedAgentMediaUrl(urlOrPath: string | null | undefined): string | null {
   if (!urlOrPath?.trim()) return null;
-  const path = agentMediaPathFromUrlOrPath(urlOrPath);
-  if (!path) return urlOrPath.trim();
-  return `/api/agent/media?path=${encodeURIComponent(path)}`;
+  const trimmed = urlOrPath.trim();
+  if (/^(data|blob):/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("/api/agent/media?")) return trimmed;
+
+  const path = agentMediaPathFromUrlOrPath(trimmed);
+  if (path) return `/api/agent/media?path=${encodeURIComponent(path)}`;
+
+  // External non-Storage URLs (rare) pass through; Supabase Storage URLs must not.
+  if (/\/storage\/v1\//i.test(trimmed) || /\.supabase\.co\//i.test(trimmed)) {
+    console.error("agent media URL could not be proxied:", trimmed.slice(0, 180));
+    // Empty string keeps the Composer card visible with an explicit load error
+    // (null would drop the answer from the Video tab entirely).
+    return "";
+  }
+  return trimmed;
 }
 
 /** Download via service role (works for private or public buckets). */

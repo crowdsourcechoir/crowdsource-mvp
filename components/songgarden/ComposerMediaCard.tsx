@@ -3,11 +3,21 @@
 import { useState } from "react";
 
 function isPhotoUrl(url: string): boolean {
-  return (
-    /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url) ||
-    /\/photo-/i.test(url) ||
-    /photo-/i.test(decodeURIComponent(url))
-  );
+  if (/^data:image\//i.test(url)) return true;
+  try {
+    const decoded = decodeURIComponent(url);
+    return (
+      /\.(jpe?g|png|webp|gif)(\?|$)/i.test(decoded) ||
+      /\/photo-/i.test(decoded) ||
+      /(^|[/?&=])photo-/i.test(decoded)
+    );
+  } catch {
+    return (
+      /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url) ||
+      /\/photo-/i.test(url) ||
+      /photo-/i.test(url)
+    );
+  }
 }
 
 /** Composer video/photo card with explicit load-error state. */
@@ -22,6 +32,19 @@ export default function ComposerMediaCard({
 }) {
   const [failed, setFailed] = useState(false);
   const photo = isPhotoUrl(url);
+
+  if (!url.trim()) {
+    return (
+      <figure className="overflow-hidden rounded-xl border border-red-800/40 bg-red-950/30">
+        <p className="flex aspect-video items-center justify-center px-3 text-center text-xs text-red-300">
+          Could not load media for this response.
+        </p>
+        <figcaption className="space-y-1 px-3 py-2">
+          <p className="text-xs text-gray-500">{participantName || "Anonymous"}</p>
+        </figcaption>
+      </figure>
+    );
+  }
 
   return (
     <figure className="overflow-hidden rounded-xl border border-white/10 bg-black/30">
@@ -41,6 +64,8 @@ export default function ComposerMediaCard({
         <video
           src={url}
           controls
+          playsInline
+          preload="metadata"
           className="aspect-video w-full bg-black"
           onError={() => setFailed(true)}
         />
