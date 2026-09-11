@@ -4,10 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { getAllEvents, getEventById, getEventBySlug } from "@/data/eventsClient";
 import type { Event } from "@/data/mockEvents";
-import SonggardenCanvas, {
-  type ContentView,
-} from "@/components/songgarden/SonggardenCanvas";
-import ComposerBloomMaterials from "@/components/songgarden/ComposerBloomMaterials";
+import SonggardenCanvas from "@/components/songgarden/SonggardenCanvas";
 import ComposerLibraryPicker, {
   type LibraryGardenNode,
   type LibraryTarget,
@@ -43,11 +40,6 @@ function ComposerPageInner() {
   const [resolvedGarden, setResolvedGarden] = useState<GardenRow | null>(null);
   const [gardenLoading, setGardenLoading] = useState(Boolean(gardenParam) && !bloomParam);
   const [gardenError, setGardenError] = useState<string | null>(null);
-  const [contentView, setContentView] = useState<ContentView>("sounds");
-
-  useEffect(() => {
-    setContentView("sounds");
-  }, [bloomParam, gardenParam]);
 
   // Library tree: gardens → blooms, plus unattached blooms
   useEffect(() => {
@@ -297,43 +289,29 @@ function ComposerPageInner() {
 
       {!resolving && !resolveError ? (
         bloomParam && resolvedBloom ? (
-          <div className="space-y-6">
-            <ComposerBloomMaterials event={resolvedBloom} contentView={contentView} />
-            <SonggardenCanvas
-              key={canvasKey}
-              eventId={resolvedBloom.id}
-              eventTitle={resolvedBloom.title}
-              eventSlug={resolvedBloom.slug}
-              initialScope="bloom"
-              libraryPicker={picker}
-              contentView={contentView}
-              onContentViewChange={setContentView}
-            />
-          </div>
+          <SonggardenCanvas
+            key={canvasKey}
+            eventId={resolvedBloom.id}
+            eventTitle={resolvedBloom.title}
+            eventSlug={resolvedBloom.slug}
+            agentThemeId={resolvedBloom.agentThemeId}
+            initialScope="bloom"
+            libraryPicker={picker}
+          />
         ) : gardenParam && resolvedGarden ? (
-          <div className="space-y-6">
-            <SonggardenCanvas
-              key={canvasKey}
-              gardenId={resolvedGarden.id}
-              eventTitle={resolvedGarden.title}
-              initialScope="garden"
-              libraryPicker={picker}
-            />
-            <p className="text-sm text-gray-500">
-              Select a bloom in the library to work with Song Seed and submissions.
-            </p>
-          </div>
+          <SonggardenCanvas
+            key={canvasKey}
+            gardenId={resolvedGarden.id}
+            eventTitle={resolvedGarden.title}
+            initialScope="garden"
+            libraryPicker={picker}
+          />
         ) : !bloomParam && !gardenParam ? (
-          <div className="space-y-6">
-            <SonggardenCanvas
-              key={canvasKey}
-              initialScope="master"
-              libraryPicker={picker}
-            />
-            <p className="text-sm text-gray-500">
-              Select a bloom in the library to work with Song Seed and submissions.
-            </p>
-          </div>
+          <SonggardenCanvas
+            key={canvasKey}
+            initialScope="master"
+            libraryPicker={picker}
+          />
         ) : null
       ) : null}
     </div>

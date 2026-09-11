@@ -7,6 +7,7 @@ import { useSonggardenPoll } from "./useSonggardenPoll";
 import { SONGGARDEN_CATEGORIES } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
+import ComposerActionsMenu from "@/components/songgarden/ComposerActionsMenu";
 import { deleteSonggardenClip } from "@/data/songgardenClient";
 import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
 
@@ -47,7 +48,9 @@ type Props = {
   initialScope?: ComposerScope;
   /** Compact library switcher (Master / gardens / blooms). Replaces scope pills. */
   libraryPicker?: ReactNode;
-  /** Controlled Content filter (Composer page lifts this for Song Seed / materials). */
+  /** Agent theme — unlocks Generate Song Seed in the Actions menu. */
+  agentThemeId?: string | null;
+  /** Controlled Content filter. */
   contentView?: ContentView;
   onContentViewChange?: (next: ContentView) => void;
 };
@@ -63,6 +66,7 @@ export default function SonggardenCanvas({
   gardenId = "",
   initialScope,
   libraryPicker,
+  agentThemeId = null,
   contentView: contentViewProp,
   onContentViewChange,
 }: Props) {
@@ -472,10 +476,44 @@ export default function SonggardenCanvas({
   }
 
   function selectCategory(category: SonggardenCategoryId) {
-    setSelectedIds(
-      new Set(filteredClips.filter((clip) => clip.category === category).map((clip) => clip.id))
-    );
+    const ids = filteredClips
+      .filter((clip) => clip.category === category)
+      .map((clip) => clip.id);
+    setSelectedIds(new Set(ids));
   }
+
+  function deselectCategory(category: SonggardenCategoryId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const clip of filteredClips) {
+        if (clip.category === category) next.delete(clip.id);
+      }
+      return next;
+    });
+  }
+
+  function categoryAllSelected(category: SonggardenCategoryId): boolean {
+    const ids = filteredClips
+      .filter((clip) => clip.category === category)
+      .map((clip) => clip.id);
+    return ids.length > 0 && ids.every((id) => selectedIds.has(id));
+  }
+
+  function selectAllFiltered() {
+    setSelectedIds(new Set(filteredClips.map((clip) => clip.id)));
+  }
+
+  function deselectAllFiltered() {
+    const visible = new Set(filteredClips.map((clip) => clip.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of Array.from(visible)) next.delete(id);
+      return next;
+    });
+  }
+
+  const allFilteredSelected =
+    filteredClips.length > 0 && filteredClips.every((clip) => selectedIds.has(clip.id));
 
   async function handleDeleteSelected() {
     if (selectedClips.length === 0) return;
@@ -646,6 +684,15 @@ export default function SonggardenCanvas({
               />
             ) : null}
 
+            {eventId ? (
+              <ComposerActionsMenu
+                eventId={eventId}
+                eventSlug={eventSlug || eventId}
+                agentThemeId={agentThemeId}
+                clips={bloomClips}
+              />
+            ) : null}
+
             <input
               type="search"
               value={search}
@@ -706,6 +753,7 @@ export default function SonggardenCanvas({
             ? SONGGARDEN_CATEGORIES.map((category) => {
                 const list = grouped.get(category.id) ?? [];
                 if (list.length === 0) return null;
+                const allSelected = categoryAllSelected(category.id);
                 return (
                   <section key={category.id}>
                     <div className="mb-3 flex items-center justify-between gap-2">
@@ -714,10 +762,14 @@ export default function SonggardenCanvas({
                       </h2>
                       <button
                         type="button"
-                        onClick={() => selectCategory(category.id)}
+                        onClick={() =>
+                          allSelected
+                            ? deselectCategory(category.id)
+                            : selectCategory(category.id)
+                        }
                         className="text-xs text-[#CFFF81] hover:underline"
                       >
-                        Select all
+                        {allSelected ? "Deselect all" : "Select all"}
                       </button>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -727,8 +779,23 @@ export default function SonggardenCanvas({
                 );
               })
             : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredClips.map(renderClipCard)}
+              <div className="space-y-3">
+                {filteredClips.length > 0 ? (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        allFilteredSelected ? deselectAllFiltered() : selectAllFiltered()
+                      }
+                      className="text-xs text-[#CFFF81] hover:underline"
+                    >
+                      {allFilteredSelected ? "Deselect all" : "Select all"}
+                    </button>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {filteredClips.map(renderClipCard)}
+                </div>
               </div>
             )}
         </>
