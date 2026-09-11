@@ -4,18 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import TypewriterText from "@/components/TypewriterText";
 
-// #region agent log
-function dbgLog(hypothesisId: string, location: string, message: string, data: Record<string, unknown> = {}) {
-  const payload = { hypothesisId, location, message, data, timestamp: Date.now() };
-  console.info(message, data);
-  void fetch("/api/_debug/agent-log", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch(() => {});
-}
-// #endregion
-
 type PadPhase = "idle" | "preview" | "review" | "uploading" | "done" | "error";
 
 type PhotoMomentPadProps = {
@@ -103,16 +91,6 @@ export default function PhotoMomentPad({
   const openCamera = useCallback(async () => {
     setError(null);
     cancelledRef.current = false;
-    // #region agent log
-    const secure = typeof window !== "undefined" ? window.isSecureContext : null;
-    const hasMD = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-    dbgLog("A,E", "PhotoMomentPad.tsx:openCamera:start", "[PhotoMomentPad] openCamera start", {
-      secure,
-      hasMD,
-      phase,
-      disabled,
-    });
-    // #endregion
     try {
       const stream = await navigator.mediaDevices
         .getUserMedia({
@@ -130,13 +108,6 @@ export default function PhotoMomentPad({
           })
         );
 
-      // #region agent log
-      dbgLog("A", "PhotoMomentPad.tsx:openCamera:gotStream", "[PhotoMomentPad] getUserMedia resolved", {
-        cancelled: cancelledRef.current,
-        tracks: stream.getTracks().length,
-      });
-      // #endregion
-
       if (cancelledRef.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
@@ -145,18 +116,12 @@ export default function PhotoMomentPad({
       streamRef.current = stream;
       setPhase("preview");
     } catch (err) {
-      // #region agent log
-      dbgLog("C,E", "PhotoMomentPad.tsx:openCamera:catch", "[PhotoMomentPad] openCamera failed", {
-        err: err instanceof Error ? err.message : String(err),
-        name: err instanceof Error ? err.name : typeof err,
-      });
-      // #endregion
       releaseStream();
       setPhase("error");
       setError(err instanceof Error ? err.message : "Could not open the camera. Try again.");
       window.setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 1800);
     }
-  }, [releaseStream, phase, disabled]);
+  }, [releaseStream]);
 
   const snapPhoto = useCallback(async () => {
     const video = liveVideoRef.current;
@@ -193,13 +158,6 @@ export default function PhotoMomentPad({
   }, [releaseStream]);
 
   const handleIdleTap = useCallback(() => {
-    // #region agent log
-    dbgLog("B", "PhotoMomentPad.tsx:handleIdleTap", "[PhotoMomentPad] idle tap", {
-      disabled,
-      phase,
-      willOpen: !disabled && (phase === "idle" || phase === "error"),
-    });
-    // #endregion
     if (disabled) return;
     if (phase !== "idle" && phase !== "error") return;
     void openCamera();
@@ -212,29 +170,14 @@ export default function PhotoMomentPad({
   }, [openCamera]);
 
   const handleKeep = useCallback(async () => {
-    // #region agent log
-    dbgLog("D", "PhotoMomentPad.tsx:handleKeep", "[PhotoMomentPad] keep pressed", {
-      hasBlob: !!pendingBlob,
-      disabled,
-      blobSize: pendingBlob?.size ?? null,
-    });
-    // #endregion
     if (!pendingBlob || disabled) return;
     setPhase("uploading");
     setError(null);
     try {
       await onSubmitted(pendingBlob);
-      // #region agent log
-      dbgLog("D", "PhotoMomentPad.tsx:handleKeep:done", "[PhotoMomentPad] onSubmitted resolved", {});
-      // #endregion
       setPendingBlob(null);
       setPhase("done");
     } catch (err) {
-      // #region agent log
-      dbgLog("D", "PhotoMomentPad.tsx:handleKeep:err", "[PhotoMomentPad] onSubmitted failed", {
-        err: err instanceof Error ? err.message : String(err),
-      });
-      // #endregion
       setPhase("review");
       setError(err instanceof Error ? err.message : "Couldn't send that. Try again.");
     }

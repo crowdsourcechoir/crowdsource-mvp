@@ -389,39 +389,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
 
   const ensureConversation = useCallback(async (): Promise<string | null> => {
     if (conversationId && conversationReady) return conversationId;
-    if (ensuringConversation.current) {
-      // #region agent log
-      console.info("[WorldJourney] ensureConversation reentrant", { conversationId });
-      void fetch("/api/_debug/agent-log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hypothesisId: "B",
-          location: "WorldJourney.tsx:ensureConversation:reentrant",
-          message: "[WorldJourney] ensureConversation already in flight",
-          data: { conversationId, conversationReady },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      return conversationId;
-    }
+    if (ensuringConversation.current) return conversationId;
     ensuringConversation.current = true;
     setSending(true);
-    // #region agent log
-    console.info("[WorldJourney] ensureConversation start → sending=true");
-    void fetch("/api/_debug/agent-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        hypothesisId: "B",
-        location: "WorldJourney.tsx:ensureConversation:start",
-        message: "[WorldJourney] ensureConversation start sending=true",
-        data: { conversationId, conversationReady, journeyManaged },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     try {
       const token = getOrCreateSessionToken(event.id, interviewVersion);
       setActiveSessionToken(token);
@@ -468,20 +438,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     } finally {
       ensuringConversation.current = false;
       setSending(false);
-      // #region agent log
-      console.info("[WorldJourney] ensureConversation end → sending=false");
-      void fetch("/api/_debug/agent-log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hypothesisId: "B",
-          location: "WorldJourney.tsx:ensureConversation:end",
-          message: "[WorldJourney] ensureConversation end sending=false",
-          data: {},
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
     }
   }, [conversationId, conversationReady, event.id, interviewVersion, journeyManaged]);
 
@@ -492,24 +448,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     if (conversationReady) return;
     void ensureConversation();
   }, [position.phase, activeStep, conversationReady, ensureConversation]);
-
-  // #region agent log
-  useEffect(() => {
-    if (!usePhotoPad) return;
-    console.info("[WorldJourney] PhotoMomentPad props", { sending, conversationReady, disabled: sending });
-    void fetch("/api/_debug/agent-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        hypothesisId: "B",
-        location: "WorldJourney.tsx:PhotoMomentPad:props",
-        message: "[WorldJourney] PhotoMomentPad disabled/sending state",
-        data: { sending, conversationReady, disabled: sending, stepIndex },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }, [usePhotoPad, sending, conversationReady, stepIndex]);
-  // #endregion
 
   // Skip already-completed audio steps when resuming.
   useEffect(() => {
@@ -694,39 +632,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       unlockReferenceTones();
       setChatError(null);
       setSending(true);
-      // #region agent log
-      console.info("[WorldJourney] handlePhotoSubmitted start", { size: blob.size, type: blob.type });
-      void fetch("/api/_debug/agent-log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hypothesisId: "D",
-          location: "WorldJourney.tsx:handlePhotoSubmitted:start",
-          message: "[WorldJourney] photo upload/send start",
-          data: { size: blob.size, type: blob.type },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       try {
         const convId = await ensureConversation();
         if (!convId) {
           setSending(false);
           throw new Error("Could not start the conversation. Try again.");
         }
-        // #region agent log
-        void fetch("/api/_debug/agent-log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            hypothesisId: "D",
-            location: "WorldJourney.tsx:handlePhotoSubmitted:upload",
-            message: "[WorldJourney] uploadTurnMedia(photo) begin",
-            data: { convId },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         const { storagePath, publicUrl } = await uploadTurnMedia(convId, "photo", blob);
         // Photos reuse video_url column (image URLs) — no schema migration.
         const sent = await sendMessage(convId, "(photo)", {
@@ -735,19 +646,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           deviceId: getOrCreateSonggardenDeviceId(),
           journeyManaged,
         });
-        // #region agent log
-        void fetch("/api/_debug/agent-log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            hypothesisId: "D",
-            location: "WorldJourney.tsx:handlePhotoSubmitted:done",
-            message: "[WorldJourney] photo upload/send done",
-            data: { storagePath },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         setSending(false);
         growNode("video");
         pulseHaptic();
@@ -757,19 +655,6 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           goToStep(stepIndex + 1);
         });
       } catch (err) {
-        // #region agent log
-        void fetch("/api/_debug/agent-log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            hypothesisId: "D",
-            location: "WorldJourney.tsx:handlePhotoSubmitted:err",
-            message: "[WorldJourney] photo upload/send failed",
-            data: { err: err instanceof Error ? err.message : String(err) },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         setSending(false);
         throw err instanceof Error ? err : new Error("Submit failed");
       }
