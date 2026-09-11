@@ -19,7 +19,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   let found = false;
-  await updateMarketingStore((store) => {
+  const { error } = await updateMarketingStore((store) => {
     const campaign = store.campaigns.find((c) => c.id === id);
     if (!campaign) return;
     found = true;
@@ -45,6 +45,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   });
   if (!found) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (error) return NextResponse.json({ error }, { status: 500 });
   const { store } = await readMarketingStore();
   return NextResponse.json({
     campaign: store.campaigns.find((c) => c.id === id),

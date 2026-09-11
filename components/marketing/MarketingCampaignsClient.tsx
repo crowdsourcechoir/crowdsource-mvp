@@ -5,6 +5,28 @@ import { useCallback, useEffect, useState } from "react";
 import { SettingsButton, SettingsPanel, StatusPill } from "@/components/settings/ui";
 import type { MarketingCampaign, MarketingEmail } from "@/lib/marketing/types";
 
+async function parseJson(res: Response): Promise<{
+  error?: string;
+  campaigns?: MarketingCampaign[];
+  emails?: MarketingEmail[];
+  campaign?: MarketingCampaign;
+}> {
+  const text = await res.text();
+  if (!text.trim()) {
+    return { error: res.ok ? undefined : `Request failed (${res.status})` };
+  }
+  try {
+    return JSON.parse(text) as {
+      error?: string;
+      campaigns?: MarketingCampaign[];
+      emails?: MarketingEmail[];
+      campaign?: MarketingCampaign;
+    };
+  } catch {
+    return { error: `Invalid response (${res.status})` };
+  }
+}
+
 export default function MarketingCampaignsClient() {
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [emails, setEmails] = useState<MarketingEmail[]>([]);
@@ -14,7 +36,7 @@ export default function MarketingCampaignsClient() {
 
   const load = useCallback(async () => {
     const res = await fetch("/api/marketing/campaigns", { cache: "no-store" });
-    const data = await res.json();
+    const data = await parseJson(res);
     if (!res.ok) throw new Error(data.error ?? "Failed to load campaigns");
     setCampaigns(data.campaigns ?? []);
     setEmails(data.emails ?? []);
@@ -33,7 +55,7 @@ export default function MarketingCampaignsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim() || "Weekly newsletter" }),
       });
-      const data = await res.json();
+      const data = await parseJson(res);
       if (!res.ok) throw new Error(data.error ?? "Create failed");
       setName("");
       await load();

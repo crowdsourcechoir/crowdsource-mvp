@@ -46,9 +46,12 @@ export async function POST(request: Request) {
     createdAt: now,
     updatedAt: now,
   };
-  await updateMarketingStore((s) => {
+  const { error } = await updateMarketingStore((s) => {
     s.campaigns.unshift(campaign);
     s.emails.unshift(email);
   });
+  if (error) {
+    return NextResponse.json({ error }, { status: 500 });
+  }
   return NextResponse.json({ campaign, email });
 }
