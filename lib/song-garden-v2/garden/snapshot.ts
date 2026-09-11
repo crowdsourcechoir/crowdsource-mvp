@@ -2,6 +2,7 @@ import {
   resolveStoryboardFrame,
   type WorldConfig,
 } from "@/lib/song-garden-v2/world-config";
+import { resolveBrandOverlays } from "@/lib/song-garden-v2/brand-overlays";
 import type {
   BrandKit,
   Garden,
@@ -131,6 +132,7 @@ export function worldConfigFromBrand(brand: BrandKit, fallback: WorldConfig): Wo
     heroArtworkUrl: brand.heroArtworkUrl ?? fallback.heroArtworkUrl,
     animationPreset: brand.animationPreset || fallback.animationPreset,
     ambientSoundtrackUrl: brand.ambientSoundtrackUrl ?? fallback.ambientSoundtrackUrl,
+    brandOverlays: resolveBrandOverlays(brand),
     // Prefer garden bloom storyboard for shared energy; keep event storyboard if garden has none.
     worldStoryboard: brand.bloomStoryboard.length
       ? brand.bloomStoryboard
