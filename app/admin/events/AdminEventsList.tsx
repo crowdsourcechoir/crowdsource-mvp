@@ -10,7 +10,6 @@ import { getAgentThemes, type AgentTheme } from "@/data/agentInterview";
 import AdminIndeterminateProgress from "@/components/AdminIndeterminateProgress";
 import AdminEventsLoadingSkeleton from "@/components/AdminEventsLoadingSkeleton";
 import { isEventUpcoming } from "@/lib/formatDate";
-import { draftToRestorePayload, readEventFormDraft } from "@/lib/event-form-draft";
 
 const LAST_CREATED_EVENT_KEY = "csc_last_created_event";
 
@@ -25,8 +24,6 @@ export default function AdminEventsList() {
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoadError, setEventsLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [orphans, setOrphans] = useState<Array<{ prefix: string; frameCount: number }>>([]);
-  const [recoveringPrefix, setRecoveringPrefix] = useState<string | null>(null);
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
   const [baseUrl, setBaseUrl] = useState("https://app.crowdsourcechoir.com");
   const [themes, setThemes] = useState<AgentTheme[]>([]);
@@ -70,49 +67,7 @@ export default function AdminEventsList() {
       setThemes([]);
     }
     setLoading(false);
-    void fetch("/api/events/storyboard-orphans", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((body) => {
-        setOrphans(Array.isArray(body?.orphans) ? body.orphans : []);
-      })
-      .catch(() => setOrphans([]));
   }, []);
-
-  async function recoverOrphan(prefix: string) {
-    setRecoveringPrefix(prefix);
-    try {
-      const draft = readEventFormDraft();
-      const draftPayload =
-        draft &&
-        (!draft.slug.trim() ||
-          draft.slug.trim().toLowerCase() === prefix.toLowerCase() ||
-          Date.now() - draft.savedAt < 48 * 60 * 60 * 1000)
-          ? draftToRestorePayload(draft)
-          : {};
-      const res = await fetch("/api/events/storyboard-orphans", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prefix, ...draftPayload }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body as { error?: string }).error || "Recover failed");
-      const id = (body as { event?: { id?: string }; eventId?: string }).event?.id
-        || (body as { eventId?: string }).eventId;
-      const promptsRestored = Boolean((body as { promptsRestored?: boolean }).promptsRestored);
-      await loadData();
-      if (id) {
-        router.push(
-          promptsRestored
-            ? `/admin/events/${id}/edit?restoredPrompts=1`
-            : `/admin/events/${id}`
-        );
-      }
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not recover world.");
-    } finally {
-      setRecoveringPrefix(null);
-    }
-  }
 
   useEffect(() => {
     if (pathname !== "/admin/events") return;
@@ -168,33 +123,6 @@ export default function AdminEventsList() {
         </div>
       )}
 
-      {orphans.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-          <p className="font-medium">Unattached generated worlds</p>
-          <p className="mt-1 text-xs text-amber-200/80">
-            Runway stills/loops are in storage but not on a bloom yet — restore so those credits
-            aren’t lost. If you still have a form draft in this browser, journey prompts are
-            restored with the world.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {orphans.map((o) => (
-              <li key={o.prefix} className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs">
-                  {o.prefix} · {o.frameCount} frame{o.frameCount === 1 ? "" : "s"}
-                </span>
-                <button
-                  type="button"
-                  disabled={recoveringPrefix === o.prefix}
-                  onClick={() => void recoverOrphan(o.prefix)}
-                  className="rounded-lg bg-[#CFFF81] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#bdf25e] disabled:opacity-50"
-                >
-                  {recoveringPrefix === o.prefix ? "Restoring…" : "Restore bloom"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
       {showCreatedBanner && (
         <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-green-700/60 bg-green-900/20 px-4 py-3 text-sm text-green-200">
           <span>Bloom created. Click it below to open.</span>
