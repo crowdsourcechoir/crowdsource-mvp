@@ -9,6 +9,10 @@ import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/type
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 import ComposerActionsMenu from "@/components/songgarden/ComposerActionsMenu";
 import { deleteSonggardenClip } from "@/data/songgardenClient";
+import {
+  isAnonymousPersonName,
+  normalizePersonKey,
+} from "@/lib/agent-interview-qa";
 import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
 
 type ComposerScope = "bloom" | "garden" | "master";
@@ -84,7 +88,7 @@ export default function SonggardenCanvas({
   const [scope, setScope] = useState<ComposerScope>(
     initialScope ?? (gardenOnly ? "garden" : masterOnly ? "master" : "bloom")
   );
-  const [contentViewInternal, setContentViewInternal] = useState<ContentView>("sounds");
+  const [contentViewInternal, setContentViewInternal] = useState<ContentView>("all");
   const contentView = contentViewProp ?? contentViewInternal;
   function setContentView(next: ContentView) {
     if (contentViewProp === undefined) setContentViewInternal(next);
@@ -232,13 +236,8 @@ export default function SonggardenCanvas({
   }, [scope, garden?.id]);
 
   useEffect(() => {
-    const needsResponses =
-      contentView === "sounds_lyrics" ||
-      contentView === "text" ||
-      contentView === "video" ||
-      contentView === "all";
-    if (!needsResponses) return;
-
+    // Always load interview answers so Content=All (default) and the people/contrib
+    // indicator stay accurate even after switching filters.
     const fromClips = (scope === "master" ? masterClips : gardenClips).map((c) => c.eventId);
     const rawIds =
       scope === "bloom"
@@ -327,7 +326,7 @@ export default function SonggardenCanvas({
     return () => {
       cancelled = true;
     };
-  }, [contentView, scope, eventId, chapters, gardenClips, masterClips]);
+  }, [scope, eventId, chapters, gardenClips, masterClips]);
 
   const baseClips = useMemo(() => {
     if (scope === "garden") return gardenClips;
@@ -462,9 +461,45 @@ export default function SonggardenCanvas({
   const showLyricsUnderSounds = contentView === "sounds_lyrics" || contentView === "all";
   const showVideo = contentView === "video" || contentView === "all";
 
+  /** Scope totals (not search/category filtered) — foundation for richer analytics later. */
+  const contributionStats = useMemo(() => {
+    let texts = textItems;
+    let videos = videoItems;
+    if (scope === "garden" && bloomFilterEventId !== "all") {
+      texts = texts.filter((item) => item.eventId === bloomFilterEventId);
+      videos = videos.filter((item) => item.eventId === bloomFilterEventId);
+    }
+    const people = new Set<string>();
+    for (const clip of scopedClips) {
+      const name = clip.contributorName;
+      people.add(
+        isAnonymousPersonName(name)
+          ? `clip:${clip.id}`
+          : `name:${normalizePersonKey(name)}`
+      );
+    }
+    for (const item of texts) {
+      people.add(
+        isAnonymousPersonName(item.participantName)
+          ? `text:${item.id}`
+          : `name:${normalizePersonKey(item.participantName)}`
+      );
+    }
+    for (const item of videos) {
+      people.add(
+        isAnonymousPersonName(item.participantName)
+          ? `video:${item.id}`
+          : `name:${normalizePersonKey(item.participantName)}`
+      );
+    }
+    return {
+      people: people.size,
+      contributions: scopedClips.length + texts.length + videos.length,
+    };
+  }, [scopedClips, textItems, videoItems, scope, bloomFilterEventId]);
+
   const loading =
-    (scope === "bloom" ? bloomLoading : scopeLoading) ||
-    ((showTextAlone || showLyricsUnderSounds || showVideo) && responsesLoading);
+    (scope === "bloom" ? bloomLoading : scopeLoading) || responsesLoading;
 
   function toggleSelect(clipId: string, multi: boolean) {
     setSelectedIds((prev) => {
@@ -596,7 +631,21 @@ export default function SonggardenCanvas({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
+          <p
+            className="mt-0.5 text-[11px] tabular-nums text-gray-500"
+            title="Unique people and total contributions in this scope (sounds + text + video/photo). Counts ignore search and category filters."
+          >
+            {contributionStats.people}{" "}
+            {contributionStats.people === 1 ? "person" : "people"}
+            <span className="mx-1.5 text-gray-700" aria-hidden>
+              ·
+            </span>
+            {contributionStats.contributions}{" "}
+            {contributionStats.contributions === 1 ? "contrib" : "contribs"}
+          </p>
+        </div>
         <div className="flex max-w-3xl flex-1 flex-col items-stretch gap-2 sm:max-w-none sm:items-end">
           <div className="flex flex-wrap items-center justify-end gap-2">
             {libraryPicker ? (
@@ -643,11 +692,11 @@ export default function SonggardenCanvas({
               label="Content"
               value={contentView}
               options={[
+                { key: "all", label: "All" },
                 { key: "sounds", label: "Sounds" },
                 { key: "sounds_lyrics", label: "Sounds + lyrics" },
                 { key: "text", label: "Text" },
                 { key: "video", label: "Video" },
-                { key: "all", label: "All" },
               ]}
               onChange={setContentView}
             />
