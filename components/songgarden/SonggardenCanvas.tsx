@@ -280,8 +280,8 @@ export default function SonggardenCanvas({
             for (const item of data.items ?? []) {
               item.answers.forEach((answer, index) => {
                 const text = answer.content?.trim() ?? "";
-                const audioUrl = answer.audioUrl?.trim() || null;
-                const videoUrl = answer.videoUrl?.trim() || null;
+                const audioUrl = answer.audioUrl == null ? null : answer.audioUrl.trim();
+                const videoUrl = answer.videoUrl == null ? null : answer.videoUrl.trim();
                 // Text filter only wants typed text — skip media-only turns.
                 if (text) {
                   texts.push({
@@ -295,7 +295,7 @@ export default function SonggardenCanvas({
                     videoUrl,
                   });
                 }
-                if (videoUrl) {
+                if (videoUrl !== null) {
                   videos.push({
                     id: `${item.conversationId}-v-${index}`,
                     participantName: item.participantName,

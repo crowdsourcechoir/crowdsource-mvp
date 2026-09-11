@@ -172,7 +172,14 @@ export default function ClipDetailPanel({
           </button>
         </div>
 
-        <audio key={activeUrl} src={activeUrl} controls className="mt-4 h-10 w-full" />
+        <audio
+          key={activeUrl}
+          src={activeUrl}
+          controls
+          className="mt-4 h-10 w-full"
+          onError={() => setError("Could not load audio for this clip.")}
+          onLoadedData={() => setError(null)}
+        />
 
         <div
           draggable

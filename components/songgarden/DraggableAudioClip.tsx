@@ -89,14 +89,33 @@ export default function DraggableAudioClip({
       .catch(async () => {
         if (cancelled) return;
         // Last resort after queued fetch fails — stream for playback, still try bytes for waveform.
-        setSrc(streamUrl);
         try {
           const res = await fetch(streamUrl, { cache: "no-store" });
-          if (!res.ok || cancelled) return;
+          if (!res.ok || cancelled) {
+            if (!cancelled) setError(true);
+            return;
+          }
+          const contentType = (res.headers.get("content-type") || "").toLowerCase();
+          if (contentType.includes("application/json") || contentType.includes("text/html")) {
+            if (!cancelled) setError(true);
+            return;
+          }
           const buf = await res.arrayBuffer();
-          if (!cancelled) setArrayBuffer(buf);
+          if (cancelled) return;
+          if (buf.byteLength === 0) {
+            setError(true);
+            return;
+          }
+          const blob = new Blob([buf], { type: clip.mimeType || "audio/wav" });
+          objectUrl = URL.createObjectURL(blob);
+          fileCacheRef.current = new File([blob], clip.filename, {
+            type: clip.mimeType || "audio/wav",
+          });
+          setSrc(objectUrl);
+          setArrayBuffer(buf);
+          setError(false);
         } catch {
-          // Playback may still work via <audio src={streamUrl}>.
+          if (!cancelled) setError(true);
         }
       })
       .finally(() => {
