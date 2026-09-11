@@ -27,7 +27,7 @@ import {
   resolveTiedStoryboardFrameIndex,
   type JourneyStep,
 } from "@/lib/songgarden/journey-steps";
-import { isCompletionButtonVisible } from "@/lib/songgarden/config";
+import { isCompletionButtonVisible, resolveCompletionButtonUrl } from "@/lib/songgarden/config";
 import { uploadTurnMedia } from "@/lib/agent-media/direct-upload-client";
 import {
   conversationIdKey,
@@ -689,6 +689,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const completionButtonText =
     event.songGardenConfig?.completionButtonText?.trim() || DEFAULT_COMPLETION_BUTTON_TEXT;
   const completionButtonOn = isCompletionButtonVisible(event.songGardenConfig);
+  const completionButtonUrl = resolveCompletionButtonUrl(event.songGardenConfig);
   const momentKey = `${position.phase}:${stepIndex}:${activeStep?.kind ?? ""}:${promptText}`;
 
   let eyebrow: string | undefined;
@@ -950,16 +951,27 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
               <p className="mx-auto max-w-md font-mono text-base leading-snug text-gray-100 sm:text-lg">
                 <TypewriterText key={finalMessage} text={finalMessage} speed={9} className="inline" />
               </p>
-              {completionButtonOn && (
-                <button
-                  type="button"
-                  onClick={handleParticipateAgain}
-                  className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
-                  style={{ borderColor: world.accentColor, color: world.accentColor }}
-                >
-                  {completionButtonText}
-                </button>
-              )}
+              {completionButtonOn &&
+                (completionButtonUrl ? (
+                  <a
+                    href={completionButtonUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
+                    style={{ borderColor: world.accentColor, color: world.accentColor }}
+                  >
+                    {completionButtonText}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleParticipateAgain}
+                    className="flex min-h-[52px] w-full items-center justify-center rounded-2xl border px-6 py-3 font-mono text-base font-semibold tracking-wide"
+                    style={{ borderColor: world.accentColor, color: world.accentColor }}
+                  >
+                    {completionButtonText}
+                  </button>
+                ))}
             </div>
           )}
         </MomentOverlay>
