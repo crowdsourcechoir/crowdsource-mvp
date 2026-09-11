@@ -250,10 +250,11 @@ export default function VideoMomentPad({
   }, [clearStopTimer, recordMs, releaseStream, stopRecording]);
 
   const handleTap = useCallback(() => {
-    if (disabled) return;
+    // Allow starting capture while the parent boots the conversation.
+    // `disabled` still blocks Keep/upload after recording.
     if (phase !== "idle" && phase !== "error") return;
     void runCapture();
-  }, [disabled, phase, runCapture]);
+  }, [phase, runCapture]);
 
   const handleStopEarly = useCallback(() => {
     stopRecording();
@@ -364,7 +365,6 @@ export default function VideoMomentPad({
           type="button"
           onClick={phase === "recording" ? handleStopEarly : handleTap}
           disabled={
-            disabled ||
             phase === "countdown" ||
             phase === "uploading" ||
             phase === "review" ||

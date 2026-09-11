@@ -4,12 +4,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import TypewriterText from "@/components/TypewriterText";
 
-type PadPhase = "idle" | "preview" | "review" | "uploading" | "done" | "error";
+type PadPhase =
+  | "idle"
+  | "opening"
+  | "preview"
+  | "review"
+  | "uploading"
+  | "done"
+  | "error";
+
+const RING_CIRC = 2 * Math.PI * 45;
+const CAMERA_TIMEOUT_MS = 20_000;
 
 type PhotoMomentPadProps = {
   promptText: string;
   buttonLabel?: string;
   accentColor: string;
+  /**
+   * Blocks Keep/upload only. Opening the camera stays available so conversation
+   * bootstrap (`sending` in WorldJourney) cannot silently freeze Snap.
+   */
   disabled?: boolean;
   hint?: string | null;
   /** When true, parent already shows the question on the same card. */
@@ -19,6 +33,73 @@ type PhotoMomentPadProps = {
   /** Called with a JPEG blob when the participant keeps the snapshot. */
   onSubmitted: (blob: Blob) => void | Promise<void>;
 };
+
+function cameraErrorMessage(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : "";
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return "Camera permission blocked. Allow camera access and try again.";
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "No camera found on this device.";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "Camera is busy in another app. Close it and try again.";
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return "Could not open the camera. Try again.";
+}
+
+async function getCameraStream(): Promise<MediaStream> {
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    throw new Error("Camera needs a secure connection (HTTPS).");
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Camera isn't available in this browser.");
+  }
+
+  const withTimeout = <T,>(promise: Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        reject(new Error("Camera is taking too long. Check permissions and try again."));
+      }, CAMERA_TIMEOUT_MS);
+      promise.then(
+        (value) => {
+          window.clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          window.clearTimeout(timer);
+          reject(err);
+        }
+      );
+    });
+
+  try {
+    return await withTimeout(
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+        },
+        audio: false,
+      })
+    );
+  } catch (firstErr) {
+    if (
+      firstErr instanceof Error &&
+      /taking too long|secure connection|isn't available/i.test(firstErr.message)
+    ) {
+      throw firstErr;
+    }
+    return await withTimeout(
+      navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      })
+    );
+  }
+}
 
 /**
  * Still-photo capture for journey prompts — open camera, snap, review, keep.
@@ -91,22 +172,9 @@ export default function PhotoMomentPad({
   const openCamera = useCallback(async () => {
     setError(null);
     cancelledRef.current = false;
+    setPhase("opening");
     try {
-      const stream = await navigator.mediaDevices
-        .getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
-          },
-          audio: false,
-        })
-        .catch(() =>
-          navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          })
-        );
+      const stream = await getCameraStream();
 
       if (cancelledRef.current) {
         stream.getTracks().forEach((t) => t.stop());
@@ -118,8 +186,16 @@ export default function PhotoMomentPad({
     } catch (err) {
       releaseStream();
       setPhase("error");
-      setError(err instanceof Error ? err.message : "Could not open the camera. Try again.");
-      window.setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 1800);
+      setError(cameraErrorMessage(err));
+      const sticky =
+        (err instanceof DOMException &&
+          (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) ||
+        (err instanceof Error &&
+          /secure connection|isn't available|taking too long/i.test(err.message));
+      window.setTimeout(
+        () => setPhase((p) => (p === "error" ? "idle" : p)),
+        sticky ? 5000 : 2200
+      );
     }
   }, [releaseStream]);
 
@@ -129,6 +205,9 @@ export default function PhotoMomentPad({
     if (!video || !stream) return;
 
     try {
+      if (!video.videoWidth || !video.videoHeight) {
+        await new Promise((r) => window.setTimeout(r, 250));
+      }
       const w = video.videoWidth || 1280;
       const h = video.videoHeight || 720;
       const canvas = document.createElement("canvas");
@@ -153,18 +232,19 @@ export default function PhotoMomentPad({
       releaseStream();
       setPhase("error");
       setError(err instanceof Error ? err.message : "Could not capture that. Try again.");
-      window.setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 1800);
+      window.setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 2200);
     }
   }, [releaseStream]);
 
   const handleIdleTap = useCallback(() => {
-    if (disabled) return;
+    // Do not gate on `disabled` — parent sets that while booting the conversation.
     if (phase !== "idle" && phase !== "error") return;
     void openCamera();
-  }, [disabled, openCamera, phase]);
+  }, [openCamera, phase]);
 
   const handleRetry = useCallback(() => {
     setPendingBlob(null);
+    setError(null);
     setPhase("idle");
     void openCamera();
   }, [openCamera]);
@@ -184,6 +264,7 @@ export default function PhotoMomentPad({
   }, [disabled, onSubmitted, pendingBlob]);
 
   const handleCancelPreview = useCallback(() => {
+    cancelledRef.current = true;
     releaseStream();
     setPhase("idle");
   }, [releaseStream]);
@@ -196,7 +277,10 @@ export default function PhotoMomentPad({
         </p>
       )}
       {!hideHint && hint ? (
-        <p className={`${hidePrompt ? "" : "-mt-3 "}font-mono text-xs`} style={{ color: accentColor, opacity: 0.85 }}>
+        <p
+          className={`${hidePrompt ? "" : "-mt-3 "}font-mono text-xs`}
+          style={{ color: accentColor, opacity: 0.85 }}
+        >
           {hint}
         </p>
       ) : null}
@@ -204,7 +288,7 @@ export default function PhotoMomentPad({
       <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
         <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
           <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
-          <circle
+          <motion.circle
             cx="50"
             cy="50"
             r="45"
@@ -212,8 +296,27 @@ export default function PhotoMomentPad({
             stroke={accentColor}
             strokeWidth="4"
             strokeLinecap="round"
-            strokeDasharray={2 * Math.PI * 45}
-            strokeDashoffset={phase === "preview" || phase === "review" ? 0 : 2 * Math.PI * 45 * 0.85}
+            strokeDasharray={RING_CIRC}
+            initial={false}
+            animate={
+              phase === "opening"
+                ? {
+                    strokeDashoffset: [RING_CIRC * 0.85, RING_CIRC * 0.15],
+                    opacity: [0.55, 1, 0.55],
+                  }
+                : {
+                    strokeDashoffset:
+                      phase === "preview" || phase === "review" || phase === "uploading"
+                        ? 0
+                        : RING_CIRC * 0.85,
+                    opacity: 1,
+                  }
+            }
+            transition={
+              phase === "opening"
+                ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+                : { duration: 0.35 }
+            }
           />
         </svg>
 
@@ -237,20 +340,21 @@ export default function PhotoMomentPad({
           />
         )}
 
-        {(phase === "idle" || phase === "error" || phase === "done") && (
+        {(phase === "idle" || phase === "error" || phase === "done" || phase === "opening") && (
           <motion.button
             type="button"
             onClick={handleIdleTap}
-            disabled={disabled || phase === "done"}
-            whileTap={{ scale: 0.96 }}
-            className="relative z-10 flex h-28 w-28 select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide [touch-action:manipulation] disabled:opacity-40"
+            disabled={phase === "done" || phase === "opening"}
+            whileTap={phase === "opening" ? undefined : { scale: 0.96 }}
+            className="relative z-10 flex h-28 w-28 select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide [touch-action:manipulation] disabled:opacity-70"
             style={{
               background: `${accentColor}1f`,
               color: accentColor,
               border: `2px solid ${accentColor}`,
             }}
+            aria-busy={phase === "opening"}
           >
-            {phase === "done" ? "✓" : label}
+            {phase === "done" ? "✓" : phase === "opening" ? "Opening…" : label}
           </motion.button>
         )}
 
@@ -287,18 +391,20 @@ export default function PhotoMomentPad({
           <button
             type="button"
             onClick={handleRetry}
-            className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-white/20 font-mono text-xs text-gray-200"
+            disabled={disabled}
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-white/20 font-mono text-xs text-gray-200 disabled:opacity-40"
           >
             Retake
           </button>
           <motion.button
             type="button"
             onClick={() => void handleKeep()}
+            disabled={disabled}
             whileTap={{ scale: 0.97 }}
-            className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl font-mono text-xs font-semibold"
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl font-mono text-xs font-semibold disabled:opacity-40"
             style={{ background: accentColor, color: "#1a1530" }}
           >
-            Keep
+            {disabled ? "Starting…" : "Keep"}
           </motion.button>
         </div>
       )}
