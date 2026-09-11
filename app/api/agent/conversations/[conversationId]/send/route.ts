@@ -162,8 +162,13 @@ async function ensureMediaBucket() {
   mediaBucketChecked = true;
   const { data: existing, error: listErr } = await supabaseAdmin.storage.listBuckets();
   if (listErr) return;
-  if (!existing?.some((b) => b.name === MEDIA_BUCKET)) {
+  const bucket = existing?.find((b) => b.name === MEDIA_BUCKET);
+  if (!bucket) {
     await supabaseAdmin.storage.createBucket(MEDIA_BUCKET, { public: true });
+    return;
+  }
+  if (!bucket.public) {
+    await supabaseAdmin.storage.updateBucket(MEDIA_BUCKET, { public: true });
   }
 }
 
