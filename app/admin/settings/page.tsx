@@ -5,15 +5,21 @@ import type { ReactNode } from "react";
 import { SETTINGS_GROUPS, type SettingsCard } from "@/lib/settings/catalog";
 
 function SettingsCardView({ card }: { card: SettingsCard }) {
+  const eyebrow =
+    card.status === "coming_next"
+      ? "Coming next"
+      : card.status === "policy"
+        ? "Policy"
+        : "Open";
+
   return (
     <Link
       href={card.href}
-      className="rounded-xl border border-[var(--csc-row-divider)] bg-transparent p-5 transition-[outline-color] hover:outline hover:outline-[length:var(--csc-outline-width)] hover:outline-[var(--csc-accent)] hover:-outline-offset-1"
+      className="rounded-xl border border-[var(--csc-row-divider)] px-4 py-5 transition-[border-color] hover:border-[var(--csc-accent)]"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">{card.domain}</p>
-      <h3 className="mt-2 text-base font-semibold text-white">{card.title}</h3>
-      <p className="mt-2 text-sm leading-6 text-gray-400">{card.description}</p>
-      <span className="csc-link mt-4 inline-flex text-xs font-medium">{card.statusLabel} →</span>
+      <p className="csc-eyebrow">{eyebrow}</p>
+      <h2 className="mt-2 text-base font-semibold text-white">{card.title}</h2>
+      <p className="mt-1 text-sm text-gray-400">{card.description}</p>
     </Link>
   );
 }
@@ -33,7 +39,7 @@ function Section({
         <h2 className="text-lg font-semibold text-white">{heading}</h2>
         <p className="mt-1 text-sm text-gray-400">{blurb}</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{children}</div>
     </section>
   );
 }
