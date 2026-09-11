@@ -280,10 +280,17 @@ function readLocalFile(): MarketingStore {
   }
 }
 
-function writeLocalFile(store: MarketingStore): void {
-  const dir = path.dirname(localPath());
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(localPath(), JSON.stringify(store, null, 2), "utf8");
+/** Local mirror for dev. Never throws — Vercel FS is read-only outside /tmp. */
+function writeLocalFile(store: MarketingStore): string | null {
+  try {
+    const dir = path.dirname(localPath());
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(localPath(), JSON.stringify(store, null, 2), "utf8");
+    return null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Local write failed";
+    return message;
+  }
 }
 
 async function fetchRemote(): Promise<{ store: MarketingStore; error: string | null }> {
@@ -326,8 +333,8 @@ async function writeRemote(store: MarketingStore): Promise<string | null> {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!baseUrl || !serviceKey) {
-    writeLocalFile(store);
-    return null;
+    const localError = writeLocalFile(store);
+    return localError ? `Marketing store write failed: ${localError}` : null;
   }
 
   const url = `${baseUrl.replace(/\/$/, "")}/storage/v1/object/${BUCKET}/${OBJECT_PATH}`;
@@ -343,10 +350,11 @@ async function writeRemote(store: MarketingStore): Promise<string | null> {
   });
   if (!res.ok) {
     const detail = (await res.text().catch(() => "")).slice(0, 200);
-    // Still persist locally so operator work is not lost in this environment.
+    // Best-effort local mirror (may no-op on read-only hosts).
     writeLocalFile(store);
     return `Marketing store write failed (${res.status})${detail ? `: ${detail}` : ""}`;
   }
+  // Remote is source of truth; local mirror is best-effort only.
   writeLocalFile(store);
   return null;
 }
