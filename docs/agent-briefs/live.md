@@ -1,0 +1,228 @@
+# LIVE Agent — runtime tools for active Blooms
+
+| | |
+|---|---|
+| **Admin home** | `/admin/live` |
+| **Public surface** | `/live/[slug]`, `/resonance` |
+| **Code prefixes** | `app/admin/live`, `app/admin/live-prompt-game`, `app/admin/resonance`, `app/live`, `app/resonance`, `app/api/live-prompt-game`, `app/api/resonance` |
+| **Primary tables** | `prompt_game_sessions`, `prompt_game_rounds`, `prompt_game_submissions`, `prompt_game_votes`, `prompt_game_ai_outputs` |
+| **Reference docs** | `Protocols/resonance-native-haptics-bridge.md`, `Protocols/tech-mapping-spec.md` |
+
+## 1. Mission
+
+Live is the control surface for what is happening right now in the room: prompt sessions the
+host drives, phones in the audience's hands, collective voting, and signal experiments. It is
+the runtime layer, not the event business — a Bloom is the event, Live is what the operator
+holds during it.
+
+## 2. Scope
+
+### Owns
+
+- Live home and mode selection: `app/admin/live/page.tsx`
+- The prompt game end to end: host control room, audience join, voting, moderation, export
+- Signal: collective harmonic voting and the Ableton trigger contract
+- Resonance: the color field and hold-to-resonate surface
+- The conductor operator UI at `app/admin/conductor/**` (ROOTS owns the model behind it)
+- Anything that has to respond within the length of a song
+
+### Does not own
+
+| Belongs to | When it comes up |
+|---|---|
+| BLOOM | The event record, pre-show participant journey, `/e/[slug]` |
+| ROOTS | Which participation modes are allowed and why; the show arc model |
+| COMPOSER | What gets made from what the room produced — but note the coupling: `lib/composition/gather-inputs.ts` reads your `prompt_block` and device-id conventions directly, so Signal's schema is a contract you owe Composer |
+| GARDEN | Persisting the night into a world |
+| OCTO | Chrome and Settings |
+
+## 3. Start a new LIVE agent
+
+```text
+You are the LIVE agent for Crowdsource Choir. You own runtime tools for active Blooms: the
+prompt game (host control room, audience phones, voting, moderation), Signal harmonic
+voting, the Resonance field, and the conductor operator UI.
+
+Read these first:
+- docs/agent-briefs/live.md — your brief, including open threads
+- Protocols/resonance-native-haptics-bridge.md — the native haptics contract
+- docs/octo-living-system-workspace.md — living-system vocabulary
+
+There is no realtime transport in this app. Everything polls. Design demos around that.
+The show arc and participation taxonomy are ROOTS'; the event record is BLOOM's.
+
+Before this chat is archived, update your brief per docs/agent-briefs/README.md.
+```
+
+## 4. Code map
+
+### Routes
+
+| URL | File | Purpose |
+|---|---|---|
+| `/admin/live` | `app/admin/live/page.tsx` | Pick a mode (Game, Fishbowl, Signal), optionally link a Bloom, launch a session |
+| `/admin/live-prompt-game/sessions` | `app/admin/live-prompt-game/sessions/page.tsx` | Past sessions |
+| `/admin/live-prompt-game/sessions/[id]` | `app/admin/live-prompt-game/sessions/[id]/page.tsx` | **Host control room**: stage state, QR, send prompts, category queue, Signal, moderate cards, voting, CSV export, Song Pack |
+| `/admin/conductor/[eventId]` | `app/admin/conductor/[eventId]/ConductorPageClient.tsx` | Per-Bloom facilitator view over the show arc |
+| `/admin/resonance` | `app/admin/resonance/page.tsx` | Conductor field picker: Violet, Teal, Yellow, Blue |
+| `/live/[slug]` | `app/live/[slug]/page.tsx` | Audience phone: wait, respond, vote |
+| `/live/[slug]/display` | `app/live/[slug]/display/page.tsx` | Full-screen QR only — not a results board |
+| `/resonance` | `app/resonance/page.tsx` | Audience color field with hold-to-resonate |
+
+### API
+
+| Endpoint | Methods | Purpose |
+|---|---|---|
+| `/api/live-prompt-game/sessions` | GET, POST | List, resolve by `?slug=`, create |
+| `/api/live-prompt-game/sessions/[id]` | GET, PATCH | Fetch; update `state`, `current_round_id`, `ended_at` |
+| `/api/live-prompt-game/sessions/[id]/rounds` | GET, POST | List; create a round and move the session to `RESPONDING`, or `VOTING` for Signal |
+| `/api/live-prompt-game/sessions/[id]/rounds/[roundId]` | PATCH | Close a round |
+| `/api/live-prompt-game/sessions/[id]/submissions` | GET, POST | List; audience submit |
+| `/api/live-prompt-game/sessions/[id]/submissions/[submissionId]` | PATCH | Moderate: hide or lock |
+| `/api/live-prompt-game/sessions/[id]/votes` | GET, POST | My votes; cast a vote |
+| `/api/live-prompt-game/sessions/[id]/phrase-cards` | GET | Deduped, spam-filtered cards with vote counts, top 12 |
+| `/api/live-prompt-game/sessions/[id]/ai-process` | POST | Generate a Song Pack into `prompt_game_ai_outputs` |
+| `/api/live-prompt-game/sessions/[id]/song-pack` | GET | Latest Song Pack |
+| `/api/live-prompt-game/sessions/[id]/export` | GET | Raw submissions as CSV |
+| `/api/resonance/state` | GET, POST | Read and set the active field |
+| `/api/resonance/hold` | POST | Record a completed hold |
+
+There are no conductor or cueing APIs. Conductor state is `localStorage` only.
+
+### Libraries and components
+
+| File | Purpose |
+|---|---|
+| `data/livePromptGame.ts` | Client wrapper for every prompt-game endpoint |
+| `data/signalPromptBlock.ts` | The Signal block schema, `parsePromptBlock`, the `__signal_choice__:` device-id prefix, and stub Ableton trigger ids |
+| `data/signalPromptCatalog.ts` | Six layer presets across harmonic, rhythm, energy, bass, FX, and vocal — **currently imported by nothing** |
+| `data/resonanceSignal.ts` | Field definitions and the fixed `resonance-live` slug |
+| `lib/resonance-signal-store.ts` | Server store, with an in-memory fallback when Supabase is absent |
+| `app/admin/conductor/[eventId]/ConductorView.tsx` | Stage purpose, cues, allowed modes, recovery move |
+| `lib/song-garden-v2/haptics.ts` | `pulseHaptic()` — used by **Garden**, not by Live |
+
+### Database
+
+| Table | Defined in | Holds |
+|---|---|---|
+| `prompt_game_sessions` | `supabase/prompt-game-tables.sql` | `slug`, `name`, `state`, `current_round_id`, `linked_event_id`, `ended_at` |
+| `prompt_game_rounds` | same, plus `supabase/prompt-round-prompt-block.sql` | `prompt_text`, `response_type`, limits, `closed_at`, `prompt_block` JSON |
+| `prompt_game_submissions` | `supabase/prompt-game-tables.sql` | `device_id`, `raw_text`, `hidden`, `locked` |
+| `prompt_game_votes` | same | Unique on `(submission_id, device_id)` |
+| `prompt_game_ai_outputs` | same | `kind` and `payload`; also stores Composer's composition briefs |
+
+RLS is enabled with no anon policies via `supabase/security-enable-rls-public-tables.sql`.
+
+### Environment
+
+`OPENAI_API_KEY` for Song Pack generation. Otherwise Supabase URL and service role key.
+
+## 5. State of play
+
+### Alive now
+
+- **Game prompt sessions**: launch, QR, submit, reveal, vote, moderate, export — the full loop
+- Pre-populated song-shape question queues (genre, mood, tempo, energy, style, theme)
+- The display page as a join screen
+- **Resonance**: field selection, hold interaction, haptics with graceful fallbacks
+
+### Growing now
+
+- **Fishbowl** — same Game host flow today; next step is its own facilitation controls (and
+  picking Fishbowl currently hides Signal, which is worth knowing)
+- **Signal** — one harmonic round ships; six layer presets already live in
+  `data/signalPromptCatalog.ts` waiting to be wired into the host UI. Ableton trigger ids are
+  named stubs until a transport is chosen (`Protocols/tech-mapping-spec.md`)
+- **Conductor** — strong facilitation guidance per Bloom; next step is shared state across
+  operator devices (today: per-browser `localStorage`)
+- **Room display** — join QR works; next step is a projection board. The ranked payload already
+  exists at `/phrase-cards`; `app/live/[slug]/display/page.tsx` just needs a session fetch and
+  a board that follows WAITING → RESPONDING → VOTING
+
+### Growing into
+
+- Cueing, playback, and full projection surfaces for the room
+- Moderation beyond hide and lock
+- Realtime transport under the poll layer (sub-second collective response)
+- Dedicated Resonance tables (today: intentionally shared with prompt-game under `resonance-live`)
+- DAW / Ableton wiring for Signal winners
+
+## 6. Rules and gotchas
+
+1. **There is no realtime.** No Supabase channels, no `postgres_changes`, no SSE. Everything
+   polls: host control room 2500ms, audience 2500ms, resonance admin 1500ms, resonance
+   audience 850ms. Expect roughly a second of lag and design demos accordingly.
+2. **Two different things decide "mode", and the important one is not the session name.**
+   The session `name` — the strings `Game`, `Signal`, `Fishbowl`, plus the legacy default
+   `Live Prompt Game` that the host treats as Game — only controls which host buttons appear.
+   The audience phone and the vote-counting rule ignore it entirely and branch on the current
+   round's `prompt_block` via `parsePromptBlock`. So a round typed into the host's prompt box
+   has no block and behaves as Game even inside a session named Signal. When a mode looks
+   wrong, check the round's `prompt_block` first. Note also that the session `PATCH` route
+   accepts only `state`, `current_round_id`, and `ended_at` — the name is write-once at
+   creation, so the fix is relaunching, not renaming.
+3. **Resonance reuses the prompt-game tables,** and more heavily than it sounds. A fixed
+   session slug `resonance-live`; every field change **inserts a round** whose `prompt_text`
+   is JSON `{ kind: "resonance-signal", ... }` and flips that shared session to `RESPONDING`;
+   every audience hold **inserts a submission**. An hour of conducting writes unbounded rows
+   into Live's tables. These sessions are **not** filtered out of the sessions list today, so
+   "Resonance Signal" sits in Past Sessions right now — a defect, not a convention.
+4. **`RESONANCE_FIELDS` is positional and fails silently.** `DEFAULT_RESONANCE_FIELD_ID` is
+   `RESONANCE_FIELDS[0].id`, so inserting a new color at the top silently changes the default
+   for every device, and `getResonanceField()` falls back to index 0 on an unknown id rather
+   than erroring — renaming an id makes every historical round re-render as Violet with no
+   warning. Append new fields; never reorder or rename.
+5. **Resonance holds are write-only.** Nothing in the repo reads them back. The totals shown
+   on `/resonance` are local React state, not a room aggregate. "Show the room's collective
+   resonance" is a new data path, not a query.
+6. **Signal's schema is a cross-domain contract.** `lib/composition/gather-inputs.ts` reads
+   `prompt_block` and parses the `__signal_choice__:` device-id prefix to resolve round
+   winners into Composer's composition brief. Changing the block shape or that prefix breaks
+   Composer, not just Live.
+7. **Signal seeds fake submissions.** One per choice, with `device_id` values like
+   `__signal_choice__:…`. Do not treat them as audience input.
+8. **Voting rules differ by mode.** Non-Signal allows up to three votes per device per round
+   and re-voting an already-voted phrase returns 400. Signal is a single vote that deletes
+   the prior one.
+9. **Phrase cards dedupe by lowercased text** and attach vote counts to the first submission
+   id for that text. The card you see is not always the row you think.
+10. **Device identity is anonymous `localStorage`** — `csc_live_device_id` and
+    `csc_resonance_device_id`. Trivially resettable; do not build anything that assumes
+    identity.
+11. **`pulseHaptic()` is not the Resonance bridge.** The Garden buzz is a one-shot
+    `navigator.vibrate` wrapper. Resonance implements the `resonance-haptics` contract — a
+    `preview`, `start`, `update`, `stop` lifecycle carrying continuous intensity, with a
+    three-tier fallback: native bridge, then `navigator.vibrate`, then an opt-in Web Audio
+    sub-bass rumble near 88Hz for iPhones with no vibration API. That rumble looks like dead
+    code and is not. Swapping in `pulseHaptic()` would delete the interaction.
+12. **Resonance falls back to an in-memory store** when the Supabase admin client is missing.
+    That works on one server instance and silently breaks across instances.
+13. **Bloom is `events`.** The link column is `prompt_game_sessions.linked_event_id`.
+
+## 7. Open threads
+
+| Thread | Why it matters | Where to start |
+|---|---|---|
+| Make the display page a real projection surface | It has no session fetch at all, but the hard part is done: `/phrase-cards` already returns deduped, ranked, moderated cards. Add slug resolution, a 2500ms poll, and a board that switches on session state | `app/live/[slug]/display/page.tsx` |
+| Ship the six Signal presets | They are written and wired to nothing — the highest-leverage change in the domain | `data/signalPromptCatalog.ts` |
+| Give Fishbowl its own host controls | The mode exists in name only, and picking it hides Signal | `app/admin/live-prompt-game/sessions/[id]/page.tsx` |
+| Filter Resonance sessions out of the sessions list | `resonance-live` shows up as a past game today | `app/api/live-prompt-game/sessions/route.ts` |
+| Decide whether Signal gets real DAW wiring | Trigger ids are stubs. `Protocols/tech-mapping-spec.md` specifies scene naming and fallbacks but no transport, so this thread starts by choosing one | `data/signalPromptBlock.ts` |
+| Move off polling | Sub-second collective response is impossible today | Supabase realtime, coordinate with OCTO |
+| Give Resonance its own tables | Borrowing prompt-game tables makes both harder to reason about | `lib/resonance-signal-store.ts` |
+| Sync conductor state across devices | One laptop only | `lib/experience/conductor-state.ts`, coordinate with ROOTS |
+
+## 8. Handoff log
+
+### 2026-09-06 — brief created and corrected by a cold-takeover test
+
+- Changed: nothing in the domain. The brief was written from a code survey, then handed to a
+  fresh agent with no other context to see where it failed. Seven corrections came back and
+  were verified against the code before being folded in.
+- Learned: the first draft said mode is the session name. That is only true of the host UI —
+  the audience and the vote-counting rule branch on the round's `prompt_block`, so the brief
+  would have sent a debugging agent to the wrong layer. Also missed entirely:
+  `data/signalPromptCatalog.ts` (six presets, imported by nothing) and the fact that Composer
+  reads Signal's schema directly.
+- Watch out: Resonance sessions appear in the Past Sessions list today. That is a live defect,
+  not a convention.
