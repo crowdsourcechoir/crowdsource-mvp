@@ -1,6 +1,6 @@
 import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems, scoresByQueueItemId } from "../db/queue";
 import { assembleQueueItemDetailFromQueueItem } from "../db/assemble";
-import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun, getLastSucceededDigestRun } from "../db/digestRuns";
+import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun } from "../db/digestRuns";
 import { getGmailConnectionStatus } from "../db/gmail";
 import { sendSelfEmailViaGmail } from "../gmail/send";
 import { renderDigestEmail } from "./render";
@@ -55,12 +55,12 @@ async function assembleQualifying(
 }
 
 /**
- * Loads pending queue items that clear the digest min-score bar.
+ * Loads pending queue items for the daily digest.
  *
  * Cutoff uses the last digest that actually delivered leads (item_count > 0), so empty heartbeat
- * sends cannot strand the pending 70+ backlog. If the most recent succeeded digest was empty and
- * we still don't have enough "new" leads, backfill from older pending 70+ leads until the target
- * count — a one-shot recovery that stops once a real digest lands.
+ * sends cannot strand the pending backlog. Always backfills older pending leads (preferring
+ * minScore+) up to the target count so the morning email can ship ~10 leads every day instead of
+ * waiting forever for brand-new 70+ rows.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
@@ -68,7 +68,7 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   backlogCount: number;
   backfilled: boolean;
 }> {
-  const [lastDelivered, lastSucceeded] = await Promise.all([getLastDeliveredDigestRun(), getLastSucceededDigestRun()]);
+  const lastDelivered = await getLastDeliveredDigestRun();
   const sinceIso =
     lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
   const targetCount = getDigestTargetCount();
@@ -77,13 +77,29 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   let items = await assembleQualifying(newQueueItems, minScore, MAX_DIGEST_ITEMS);
   let backfilled = false;
 
-  const shouldBackfill = items.length < targetCount && (!lastSucceeded || lastSucceeded.itemCount === 0);
-  if (shouldBackfill) {
+  // Always fill toward the daily target from older pending leads (minScore first).
+  if (items.length < targetCount) {
     const seen = new Set(items.map((i) => i.queueItem.id));
     const allPending = (await listQueueItems("pending")).filter((item) => !seen.has(item.id));
-    const older = await assembleQualifying(allPending, minScore, MAX_DIGEST_ITEMS - items.length);
-    items = [...items, ...older];
-    backfilled = items.length > 0;
+    const need = Math.min(targetCount, MAX_DIGEST_ITEMS) - items.length;
+    const older = await assembleQualifying(allPending, minScore, need);
+    if (older.length > 0) {
+      items = [...items, ...older];
+      backfilled = true;
+    }
+  }
+
+  // Still short? Fill remaining slots with next-best pending leads below minScore so we still
+  // ship ~targetCount daily ("10 new no matter what") instead of deferring forever.
+  if (items.length < targetCount) {
+    const seen = new Set(items.map((i) => i.queueItem.id));
+    const allPending = (await listQueueItems("pending")).filter((item) => !seen.has(item.id));
+    const need = Math.min(targetCount, MAX_DIGEST_ITEMS) - items.length;
+    const filler = await assembleQualifying(allPending, 0, need);
+    if (filler.length > 0) {
+      items = [...items, ...filler];
+      backfilled = true;
+    }
   }
 
   return { items, sinceIso, backlogCount, backfilled };
@@ -113,9 +129,9 @@ export async function loadAllPendingDigestItems(minScore = getDigestMinScore()):
  * marketing campaigns. Missing Gmail is recorded as `skipped_no_provider`, never an error —
  * same graceful-degradation contract as discovery/enrichment.
  *
- * Only includes leads scoring >= SALES_DIGEST_MIN_SCORE (default 70). Cron callers should use
- * `ensureDigestTarget` so the email waits until SALES_DIGEST_TARGET_COUNT (default 10) qualify;
- * manual/admin sends still go out with whatever currently qualifies (including zero) for testing.
+ * Prefers leads scoring >= SALES_DIGEST_MIN_SCORE (default 70), then backfills to the daily
+ * target from the pending backlog (including lower scores if needed). Cron callers use
+ * `ensureDigestTarget`, which tops up then sends once per day rather than waiting forever.
  */
 export async function sendDailyDigest(
   trigger: "manual" | "cron" = "cron",

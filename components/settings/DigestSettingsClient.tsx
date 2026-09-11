@@ -196,7 +196,7 @@ export default function DigestSettingsClient() {
       <SettingsPanel
         eyebrow="Thresholds"
         title="When it sends and to whom"
-        description="The digest waits until enough leads clear the score bar, then emails once."
+        description="Sends once per day with up to the target lead count. Prefers high-score leads, then backfills from the pending backlog so it still goes out."
         actions={
           <SettingsButton
             variant="primary"
@@ -222,7 +222,7 @@ export default function DigestSettingsClient() {
             <TextField type="number" value={minScore} onChange={setMinScore} disabled={busy} />
           </div>
           <div>
-            <FieldLabel hint={`Env default ${settings?.envDefaults.targetCount ?? "—"}`}>Target lead count</FieldLabel>
+            <FieldLabel hint={`Env default ${settings?.envDefaults.targetCount ?? "—"}`}>Daily lead count</FieldLabel>
             <TextField type="number" value={targetCount} onChange={setTargetCount} disabled={busy} />
           </div>
           <div>

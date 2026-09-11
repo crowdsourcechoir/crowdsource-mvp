@@ -69,12 +69,13 @@ async function listNearMissOrganizationIds(limit: number): Promise<string[]> {
 }
 
 /**
- * Cron orchestrator: keep the overnight pipeline working until at least
- * `SALES_DIGEST_TARGET_COUNT` queue items scoring >= `SALES_DIGEST_MIN_SCORE` exist, then send
- * the email. One Vercel invocation can't process the whole backlog (see architecture.md §6), so
- * this is intentionally resumable — later digest/pipeline cron ticks (and self-chained digest
- * continuations when still under target) pick up where earlier ones left off. `deferred` runs
- * do NOT advance the "new since" cutoff.
+ * Cron orchestrator for the daily digest.
+ *
+ * Tops up the pipeline toward `SALES_DIGEST_TARGET_COUNT` leads (preferring
+ * `SALES_DIGEST_MIN_SCORE`+), then sends. Under-target is no longer a hard stop: after the
+ * top-up budget we send whatever is ready (backfilled from the pending backlog) so the email
+ * actually lands every day. `deferred` is only used when nothing is ready yet but more
+ * pipeline/salvage work remains — those runs do NOT advance the "new since" cutoff.
  */
 export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): Promise<DigestEnsureResult> {
   const digestSettings = await resolveDigestSettings();
@@ -99,11 +100,8 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
   }
 
   const lastSucceeded = await getLastSucceededDigestRun();
-  if (
-    lastSucceeded?.finishedAt &&
-    Date.now() - Date.parse(lastSucceeded.finishedAt) < alreadySentWindowMs &&
-    lastSucceeded.itemCount >= targetCount
-  ) {
+  // Once-per-window gate: any successful send (even a partial) counts so we don't spam every tick.
+  if (lastSucceeded?.finishedAt && Date.now() - Date.parse(lastSucceeded.finishedAt) < alreadySentWindowMs) {
     return {
       status: "already_sent",
       qualifyingCount: lastSucceeded.itemCount,
@@ -172,8 +170,11 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
     break;
   }
 
-  if (loaded.items.length < targetCount) {
-    // Intentionally no digest_runs row: only `succeeded` advances the "new since" cutoff.
+  // Reload after top-up so always-on backfill (including below-minScore fill) is applied.
+  loaded = await loadQualifyingDigestItems(minScore);
+
+  if (loaded.items.length === 0) {
+    // Nothing to email yet. Keep deferring only while salvage/pipeline work remains.
     const [stillUnprocessed, stillNearMiss, stillAwaiting] = await Promise.all([
       listUnprocessedOrganizations(1),
       listNearMissOrganizationIds(1),
@@ -183,7 +184,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       stillUnprocessed.length > 0 || stillNearMiss.length > 0 || stillAwaiting.some((r) => r.score >= minScore);
     return {
       status: "deferred",
-      qualifyingCount: loaded.items.length,
+      qualifyingCount: 0,
       targetCount,
       minScore,
       topupBatches,
@@ -193,11 +194,12 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       pipelineSummaries,
       continuationRecommended,
       error: continuationRecommended
-        ? `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). Continuing overnight top-up until the target is met.`
-        : `Waiting for ${targetCount} leads scoring ${minScore}+ (have ${loaded.items.length}). No unprocessed orgs, awaiting-contact salvage, or near-miss salvage left — add orgs/contacts in the queue.`,
+        ? `No digest leads ready yet — continuing top-up toward ${targetCount}.`
+        : `No pending leads available to digest. Add orgs/contacts in the queue.`,
     };
   }
 
+  // Daily send: targetCount is a fill goal, not a hard gate.
   const send = await sendDailyDigest(trigger, {
     items: loaded.items,
     sinceIso: loaded.sinceIso,
