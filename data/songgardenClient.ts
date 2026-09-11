@@ -193,10 +193,20 @@ export async function fetchClipFile(
 ): Promise<File> {
   const res = await fetch(
     songgardenAudioUrl(eventId, clip.id, clip.submittedAt, { original: opts?.original }),
-    { cache: "no-store" }
+    { cache: "no-store", redirect: "follow" }
   );
-  if (!res.ok) throw new Error(opts?.original ? "Failed to fetch original audio" : "Failed to fetch audio");
+  if (!res.ok) {
+    throw new Error(opts?.original ? "Failed to fetch original audio" : "Failed to fetch audio");
+  }
+  const contentType = (res.headers.get("content-type") || "").toLowerCase();
+  // Reject JSON/HTML error bodies that some misconfigured redirects used to return as 200.
+  if (contentType.includes("application/json") || contentType.includes("text/html")) {
+    throw new Error(opts?.original ? "Failed to fetch original audio" : "Failed to fetch audio");
+  }
   const blob = await res.blob();
+  if (blob.size === 0) {
+    throw new Error(opts?.original ? "Failed to fetch original audio" : "Failed to fetch audio");
+  }
   const name = opts?.original
     ? clip.filename.replace(/(\.[^.]+)?$/, ".original$1")
     : clip.filename;

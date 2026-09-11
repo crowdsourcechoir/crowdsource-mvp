@@ -12,8 +12,14 @@ export async function ensureParticipantClipsBucket(): Promise<void> {
   bucketChecked = true;
   const { data: existing, error } = await supabaseAdmin.storage.listBuckets();
   if (error) return;
-  if (!existing?.some((b) => b.name === PARTICIPANT_CLIPS_BUCKET)) {
+  const bucket = existing?.find((b) => b.name === PARTICIPANT_CLIPS_BUCKET);
+  if (!bucket) {
     await supabaseAdmin.storage.createBucket(PARTICIPANT_CLIPS_BUCKET, { public: true });
+    return;
+  }
+  // Older buckets may have been created private; public URLs then 403 in the browser.
+  if (!bucket.public) {
+    await supabaseAdmin.storage.updateBucket(PARTICIPANT_CLIPS_BUCKET, { public: true });
   }
 }
 
@@ -21,6 +27,23 @@ export function clipStoragePublicUrl(path: string): string {
   if (!supabaseAdmin) return "";
   const { data } = supabaseAdmin.storage.from(PARTICIPANT_CLIPS_BUCKET).getPublicUrl(path);
   return data.publicUrl;
+}
+
+/** Download clip bytes via service role (works for private or public buckets). */
+export async function downloadClipObject(
+  path: string
+): Promise<{ buffer: Buffer; contentType: string | null } | null> {
+  if (!supabaseAdmin || !path.trim()) return null;
+  const { data, error } = await supabaseAdmin.storage
+    .from(PARTICIPANT_CLIPS_BUCKET)
+    .download(path.trim());
+  if (error || !data) {
+    console.error("clip storage download failed:", path, error?.message);
+    return null;
+  }
+  const buffer = Buffer.from(await data.arrayBuffer());
+  if (buffer.length === 0) return null;
+  return { buffer, contentType: data.type || null };
 }
 
 export function sanitizeClipStorageKey(value: string): string {

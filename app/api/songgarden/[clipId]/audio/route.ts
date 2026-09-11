@@ -2,9 +2,27 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { localSonggardenReadAudio } from "@/lib/local-songgarden-store";
 import { decodeSupabaseBytea } from "@/lib/supabase-bytea";
-import { clipStoragePublicUrl } from "@/lib/songgarden/storage-upload";
+import {
+  downloadClipObject,
+  ensureParticipantClipsBucket,
+} from "@/lib/songgarden/storage-upload";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
+
+function audioResponse(
+  buffer: Buffer,
+  opts: { mimeType: string; filename: string; wantOriginal: boolean }
+) {
+  return new NextResponse(new Uint8Array(buffer), {
+    headers: {
+      "Content-Type": opts.mimeType || "audio/wav",
+      "Content-Disposition": `inline; filename="${opts.filename}"`,
+      "Cache-Control": "public, max-age=3600",
+      "X-Songgarden-Audio": opts.wantOriginal ? "original" : "playable",
+      "Content-Length": String(buffer.length),
+    },
+  });
+}
 
 export async function GET(
   request: Request,
@@ -28,13 +46,10 @@ export async function GET(
     const filename = wantOriginal
       ? result.clip.filename.replace(/(\.[^.]+)?$/, ".original$1")
       : result.clip.filename;
-    return new NextResponse(new Uint8Array(result.buffer), {
-      headers: {
-        "Content-Type": result.clip.mimeType || "audio/wav",
-        "Content-Disposition": `inline; filename="${filename}"`,
-        "Cache-Control": "public, max-age=3600",
-        "X-Songgarden-Audio": wantOriginal ? "original" : "playable",
-      },
+    return audioResponse(Buffer.from(result.buffer), {
+      mimeType: result.clip.mimeType || "audio/wav",
+      filename,
+      wantOriginal,
     });
   }
 
@@ -61,7 +76,7 @@ export async function GET(
       data = (full.data as Record<string, unknown> | null) ?? null;
       error = full.error;
     } else {
-      // Prefer storage path first so we can redirect without pulling bytea.
+      // Prefer storage path first so we can stream without pulling bytea.
       const light = await supabaseAdmin
         .from("songgarden_clips")
         .select("filename, mime_type, audio_storage_path")
@@ -99,28 +114,44 @@ export async function GET(
       ? (row.audio_original_storage_path as string | null)
       : (row.audio_storage_path as string | null);
 
+    const filename = String(row.filename ?? "clip.wav");
+    const outName = wantOriginal
+      ? filename.replace(/(\.[^.]+)?$/, ".original$1")
+      : filename;
+    const mimeType = (row.mime_type as string) || "audio/wav";
+
+    // Stream via service role instead of 302 to a public URL. Public redirects fail when the
+    // bucket is private (or object missing from CDN), which surfaces as "Could not load audio".
     if (storagePath?.trim()) {
-      const url = clipStoragePublicUrl(storagePath.trim());
-      if (url) {
-        return NextResponse.redirect(url, {
-          status: 302,
-          headers: {
-            "Cache-Control": "public, max-age=3600",
-            "X-Songgarden-Audio": wantOriginal ? "original" : "playable",
-          },
+      await ensureParticipantClipsBucket();
+      const downloaded = await downloadClipObject(storagePath.trim());
+      if (downloaded) {
+        return audioResponse(downloaded.buffer, {
+          mimeType: downloaded.contentType || mimeType,
+          filename: outName,
+          wantOriginal,
         });
       }
+      // Fall through to bytea if the object is gone from storage but still in the row.
     }
 
     let buffer: Buffer;
     if (wantOriginal) {
       if (!row.audio_data_original) {
-        return jsonError("No original audio stored for this clip.", 404);
+        return jsonError(
+          storagePath?.trim()
+            ? "Stored audio file missing from storage."
+            : "No original audio stored for this clip.",
+          404
+        );
       }
       buffer = decodeSupabaseBytea(row.audio_data_original);
     } else {
       if (!row.audio_data) {
-        return jsonError("Audio not found.", 404);
+        return jsonError(
+          storagePath?.trim() ? "Stored audio file missing from storage." : "Audio not found.",
+          404
+        );
       }
       buffer = decodeSupabaseBytea(row.audio_data);
     }
@@ -129,19 +160,7 @@ export async function GET(
       return jsonError("Audio data is empty.", 404);
     }
 
-    const filename = String(row.filename ?? "clip.wav");
-    const outName = wantOriginal
-      ? filename.replace(/(\.[^.]+)?$/, ".original$1")
-      : filename;
-
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        "Content-Type": (row.mime_type as string) || "audio/wav",
-        "Content-Disposition": `inline; filename="${outName}"`,
-        "Cache-Control": "public, max-age=3600",
-        "X-Songgarden-Audio": wantOriginal ? "original" : "playable",
-      },
-    });
+    return audioResponse(buffer, { mimeType, filename: outName, wantOriginal });
   } catch (err) {
     console.error("Songgarden audio GET error:", err);
     return jsonError(err instanceof Error ? err.message : "Server error", 500);
