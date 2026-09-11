@@ -15,8 +15,14 @@ export async function ensureAgentMediaBucket(): Promise<void> {
   bucketChecked = true;
   const { data: existing, error } = await supabaseAdmin.storage.listBuckets();
   if (error) return;
-  if (!existing?.some((b) => b.name === AGENT_MEDIA_BUCKET)) {
+  const bucket = existing?.find((b) => b.name === AGENT_MEDIA_BUCKET);
+  if (!bucket) {
     await supabaseAdmin.storage.createBucket(AGENT_MEDIA_BUCKET, { public: true });
+    return;
+  }
+  // Older buckets may be private — public URLs then 403 in <img>/<video>.
+  if (!bucket.public) {
+    await supabaseAdmin.storage.updateBucket(AGENT_MEDIA_BUCKET, { public: true });
   }
 }
 
@@ -93,4 +99,71 @@ export async function verifyAgentMediaObject(path: string): Promise<boolean> {
   });
   if (error || !data?.length) return false;
   return data.some((f) => f.name === name);
+}
+
+/** Extract storage object path from a public URL, or return a bare path as-is. */
+export function agentMediaPathFromUrlOrPath(urlOrPath: string): string | null {
+  const raw = urlOrPath.trim();
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw)) {
+    const path = raw.replace(/^\/+/, "");
+    return path.startsWith("conversations/") ? path : null;
+  }
+  try {
+    const u = new URL(raw);
+    const publicMarker = `/storage/v1/object/public/${AGENT_MEDIA_BUCKET}/`;
+    const signMarker = `/storage/v1/object/sign/${AGENT_MEDIA_BUCKET}/`;
+    const authMarker = `/storage/v1/object/authenticated/${AGENT_MEDIA_BUCKET}/`;
+    for (const marker of [publicMarker, signMarker, authMarker]) {
+      const idx = u.pathname.indexOf(marker);
+      if (idx >= 0) {
+        const path = decodeURIComponent(u.pathname.slice(idx + marker.length));
+        return path.startsWith("conversations/") ? path : null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** Same-origin proxy URL so Composer never depends on a public Storage CDN. */
+export function proxiedAgentMediaUrl(urlOrPath: string | null | undefined): string | null {
+  if (!urlOrPath?.trim()) return null;
+  const path = agentMediaPathFromUrlOrPath(urlOrPath);
+  if (!path) return urlOrPath.trim();
+  return `/api/agent/media?path=${encodeURIComponent(path)}`;
+}
+
+/** Download via service role (works for private or public buckets). */
+export async function downloadAgentMediaObject(
+  path: string
+): Promise<{ buffer: Buffer; contentType: string | null } | null> {
+  if (!supabaseAdmin || !path.trim()) return null;
+  if (!path.startsWith("conversations/") || path.includes("..")) return null;
+  const { data, error } = await supabaseAdmin.storage
+    .from(AGENT_MEDIA_BUCKET)
+    .download(path.trim());
+  if (error || !data) {
+    console.error("agent media download failed:", path, error?.message);
+    return null;
+  }
+  const buffer = Buffer.from(await data.arrayBuffer());
+  if (buffer.length === 0) return null;
+  return { buffer, contentType: data.type || null };
+}
+
+export function guessAgentMediaContentType(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".mp3")) return "audio/mpeg";
+  if (lower.endsWith(".m4a")) return "audio/mp4";
+  if (lower.endsWith(".ogg")) return "audio/ogg";
+  if (lower.endsWith(".wav")) return "audio/wav";
+  return "application/octet-stream";
 }

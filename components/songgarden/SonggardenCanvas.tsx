@@ -14,6 +14,7 @@ import {
   normalizePersonKey,
 } from "@/lib/agent-interview-qa";
 import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
+import ComposerMediaCard from "@/components/songgarden/ComposerMediaCard";
 
 type ComposerScope = "bloom" | "garden" | "master";
 export type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
@@ -892,36 +893,14 @@ export default function SonggardenCanvas({
                 <div key={group.key} className="space-y-2">
                   <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {group.answers.map((item) => {
-                      const url = item.videoUrl || "";
-                      const isPhoto =
-                        /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url) || /\/photo-/i.test(url);
-                      return (
-                        <figure
-                          key={item.id}
-                          className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
-                        >
-                          {isPhoto ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- contributor upload URL
-                            <img
-                              src={url}
-                              alt=""
-                              className="aspect-video w-full bg-black object-cover"
-                            />
-                          ) : (
-                            <video src={url} controls className="aspect-video w-full bg-black" />
-                          )}
-                          <figcaption className="space-y-1 px-3 py-2">
-                            <p className="text-xs text-gray-500">
-                              {item.participantName || "Anonymous"}
-                            </p>
-                            {item.content ? (
-                              <p className="line-clamp-3 text-xs text-gray-300">{item.content}</p>
-                            ) : null}
-                          </figcaption>
-                        </figure>
-                      );
-                    })}
+                    {group.answers.map((item) => (
+                      <ComposerMediaCard
+                        key={item.id}
+                        url={item.videoUrl || ""}
+                        participantName={item.participantName || "Anonymous"}
+                        caption={item.content}
+                      />
+                    ))}
                   </div>
                 </div>
               ))}

@@ -6,6 +6,7 @@ import {
   participantDisplayName,
 } from "@/lib/agent-participant-db";
 import { pairInterviewAnswers, type PairedInterviewAnswer } from "@/lib/agent-interview-qa";
+import { proxiedAgentMediaUrl } from "@/lib/agent-media/storage-upload";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -15,6 +16,15 @@ type InterviewSubmissionItem = {
   conversationId: string;
   answers: PairedInterviewAnswer[];
 };
+
+/** Point Composer at the same-origin media proxy (private Storage buckets otherwise 403). */
+function withProxiedMediaUrls(answers: PairedInterviewAnswer[]): PairedInterviewAnswer[] {
+  return answers.map((a) => ({
+    ...a,
+    audioUrl: proxiedAgentMediaUrl(a.audioUrl),
+    videoUrl: proxiedAgentMediaUrl(a.videoUrl),
+  }));
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -27,7 +37,7 @@ export async function GET(request: Request) {
       participantName: t.participantName,
       email: t.email ?? null,
       conversationId: t.conversationId,
-      answers: pairInterviewAnswers(t.turns),
+      answers: withProxiedMediaUrls(pairInterviewAnswers(t.turns)),
     }));
 
     return NextResponse.json({ items });
@@ -89,7 +99,7 @@ export async function GET(request: Request) {
         participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
         conversationId: conv.id,
         email: identityById.get(conv.participant_id)?.email ?? null,
-        answers: pairInterviewAnswers(convTurns),
+        answers: withProxiedMediaUrls(pairInterviewAnswers(convTurns)),
       };
     });
 
