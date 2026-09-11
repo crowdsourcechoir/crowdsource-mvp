@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import TypewriterText from "@/components/TypewriterText";
 import { runPadCountdown } from "@/lib/songgarden/pad-countdown";
+import CameraCaptureShell from "./CameraCaptureShell";
 
-type PadPhase = "idle" | "countdown" | "recording" | "review" | "uploading" | "done" | "error";
+type PadPhase = "idle" | "opening" | "countdown" | "recording" | "review" | "uploading" | "done" | "error";
 
 const DEFAULT_RECORD_MS = 20_000;
 
@@ -130,7 +131,7 @@ export default function VideoMomentPad({
   }, []);
 
   useEffect(() => {
-    if (phase === "countdown" || phase === "recording") {
+    if (phase === "opening" || phase === "countdown" || phase === "recording") {
       attachLivePreview();
     }
   }, [phase, attachLivePreview]);
@@ -146,6 +147,7 @@ export default function VideoMomentPad({
   const runCapture = useCallback(async () => {
     setError(null);
     cancelledRef.current = false;
+    setPhase("opening");
     try {
       // Prefer video+audio; fall back to video-only so video prompts work without a mic.
       let stream: MediaStream;
@@ -305,9 +307,34 @@ export default function VideoMomentPad({
     }
   }, [disabled, onSubmitted, pendingClip]);
 
-  const ringPct =
-    phase === "recording" ? progress : phase === "countdown" && countdown ? 1 - countdown / 3 : 0;
-  const showLiveVideo = phase === "countdown" || phase === "recording";
+  const handleCancelCamera = useCallback(() => {
+    cancelledRef.current = true;
+    clearStopTimer();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    mediaRecorderRef.current = null;
+    releaseStream();
+    reviewVideoRef.current?.pause();
+    setPreviewPlaying(false);
+    setPendingClip(null);
+    setCountdown(null);
+    setSecondsLeft(null);
+    setProgress(0);
+    setPhase("idle");
+  }, [clearStopTimer, releaseStream]);
+
+
+  const inCameraUi =
+    phase === "opening" ||
+    phase === "countdown" ||
+    phase === "recording" ||
+    phase === "review" ||
+    phase === "uploading";
 
   return (
     <div className={`text-center ${hidePrompt ? "space-y-4" : "space-y-6"}`}>
@@ -322,132 +349,157 @@ export default function VideoMomentPad({
         </p>
       ) : null}
 
-      <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
-        <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
-          <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
-          <motion.circle
-            cx="50"
-            cy="50"
-            r="45"
-            fill="none"
-            stroke={phase === "recording" ? "#f87171" : accentColor}
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeDasharray={2 * Math.PI * 45}
-            animate={{ strokeDashoffset: 2 * Math.PI * 45 * (1 - ringPct) }}
-            transition={{ duration: 0.15 }}
-          />
-        </svg>
-
-        {showLiveVideo && (
-          <video
-            ref={liveVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="pointer-events-none absolute h-28 w-28 rounded-full object-cover"
-            style={{ transform: "scaleX(-1)" }}
-            aria-hidden
-          />
-        )}
-
-        {phase === "review" && previewUrl && (
-          <video
-            ref={reviewVideoRef}
-            src={previewUrl}
-            playsInline
-            className="pointer-events-none absolute h-28 w-28 rounded-full object-cover"
-            aria-hidden
-          />
-        )}
-
-        <motion.button
-          type="button"
-          onClick={phase === "recording" ? handleStopEarly : handleTap}
-          disabled={
-            phase === "countdown" ||
-            phase === "uploading" ||
-            phase === "review" ||
-            phase === "done"
-          }
-          whileTap={{ scale: 0.94 }}
-          animate={phase === "done" ? { scale: [1, 1.12, 1] } : {}}
-          transition={{ duration: 0.4 }}
-          className="relative z-10 flex h-28 w-28 [touch-action:manipulation] select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide transition [-webkit-tap-highlight-color:transparent] [-webkit-user-select:none] disabled:cursor-default"
-          style={{
-            background:
-              phase === "recording" || showLiveVideo
-                ? "rgba(26,21,48,0.45)"
-                : phase === "done"
-                  ? accentColor
-                  : phase === "review"
-                    ? "rgba(26,21,48,0.55)"
-                    : `${accentColor}1f`,
-            color:
-              phase === "recording"
-                ? "#fecaca"
-                : phase === "done"
-                  ? "#1a1530"
-                  : accentColor,
-            border: `2px solid ${phase === "recording" ? "#f87171" : accentColor}`,
-            boxShadow:
-              phase === "recording" || phase === "done" || phase === "review"
-                ? undefined
-                : `0 0 0 10px ${accentColor}14, 0 0 0 20px ${accentColor}0a`,
-          }}
-        >
-          {phase === "idle" && <span>{label}</span>}
-          {phase === "error" && <span>Try again</span>}
-          {phase === "countdown" && <span className="text-3xl tabular-nums drop-shadow">{countdown}</span>}
-          {phase === "recording" && (
-            <>
-              <span className="text-2xl tabular-nums drop-shadow">{secondsLeft}s</span>
-              <span className="mt-1 text-[10px] drop-shadow">tap to stop</span>
-            </>
-          )}
-          {phase === "uploading" && <span>Sending…</span>}
-          {phase === "review" && <span className="drop-shadow">Got it</span>}
-          {phase === "done" && <span className="text-2xl">✓</span>}
-        </motion.button>
-      </div>
-
-      {phase === "review" && pendingClip && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mx-auto grid max-w-xs grid-cols-2 gap-2"
-        >
-          <button
+      {!inCameraUi && (
+        <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
+          <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
+            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
+            <circle
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke={accentColor}
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 45}
+              strokeDashoffset={2 * Math.PI * 45 * 0.85}
+            />
+          </svg>
+          <motion.button
             type="button"
-            disabled={previewPlaying || disabled}
-            onClick={() => void handlePreview()}
-            className="min-h-[44px] select-none rounded-xl border px-3 py-2 font-mono text-xs [touch-action:manipulation] disabled:opacity-50"
-            style={{ borderColor: accentColor, color: accentColor }}
+            onClick={handleTap}
+            disabled={phase === "done"}
+            whileTap={{ scale: 0.94 }}
+            animate={phase === "done" ? { scale: [1, 1.12, 1] } : {}}
+            transition={{ duration: 0.4 }}
+            className="relative z-10 flex h-28 w-28 select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide [touch-action:manipulation] disabled:opacity-70"
+            style={{
+              background: phase === "done" ? accentColor : `${accentColor}1f`,
+              color: phase === "done" ? "#1a1530" : accentColor,
+              border: `2px solid ${accentColor}`,
+              boxShadow: phase === "done" ? undefined : `0 0 0 10px ${accentColor}14, 0 0 0 20px ${accentColor}0a`,
+            }}
           >
-            {previewPlaying ? "▶ …" : "▶ Watch"}
-          </button>
-          <button
-            type="button"
-            disabled={previewPlaying || disabled}
-            onClick={handleRetry}
-            className="min-h-[44px] select-none rounded-xl border px-3 py-2 font-mono text-xs [touch-action:manipulation] disabled:opacity-50"
-            style={{ borderColor: accentColor, color: accentColor }}
-          >
-            ↻ Again
-          </button>
-          <button
-            type="button"
-            disabled={previewPlaying || disabled}
-            onClick={() => void handleKeep()}
-            className="col-span-2 min-h-[44px] select-none rounded-xl px-3 py-2 font-mono text-xs font-semibold [touch-action:manipulation] disabled:opacity-50"
-            style={{ background: accentColor, color: "#1a1530" }}
-          >
-            ✓ Continue
-          </button>
-        </motion.div>
+            {phase === "done" ? "✓" : phase === "error" ? "Try again" : label}
+          </motion.button>
+        </div>
       )}
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {error && !inCameraUi ? <p className="text-sm text-red-300">{error}</p> : null}
+
+      {inCameraUi ? (
+        <CameraCaptureShell
+          modeLabel="VIDEO"
+          accentColor={accentColor}
+          onClose={handleCancelCamera}
+          status={
+            phase === "opening"
+              ? "Opening camera…"
+              : phase === "countdown" && countdown != null
+                ? `Starting in ${countdown}…`
+                : phase === "recording" && secondsLeft != null
+                  ? `${secondsLeft}s · tap stop when you're done`
+                  : phase === "uploading"
+                    ? "Sending…"
+                    : phase === "review"
+                      ? "Looks good?"
+                      : null
+          }
+          media={
+            <>
+              {(phase === "opening" || phase === "countdown" || phase === "recording") && (
+                <video
+                  ref={liveVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="absolute inset-0 h-full w-full object-cover"
+                  style={{ transform: "scaleX(-1)" }}
+                />
+              )}
+              {(phase === "review" || phase === "uploading") && previewUrl ? (
+                <video
+                  ref={reviewVideoRef}
+                  src={previewUrl}
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : null}
+              {phase === "countdown" && countdown != null ? (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <span className="font-mono text-7xl font-semibold text-white drop-shadow-lg tabular-nums">
+                    {countdown}
+                  </span>
+                </div>
+              ) : null}
+              {phase === "recording" ? (
+                <div className="absolute left-4 top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5">
+                  <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                  <span className="font-mono text-xs tabular-nums text-white">{secondsLeft ?? 0}s</span>
+                </div>
+              ) : null}
+              {error ? (
+                <p className="absolute inset-x-4 bottom-4 rounded-xl bg-black/70 px-3 py-2 text-center font-mono text-xs text-red-200">
+                  {error}
+                </p>
+              ) : null}
+            </>
+          }
+          leftAction={
+            phase === "review" || phase === "uploading" ? (
+              <div className="flex flex-col items-start gap-1">
+                <button
+                  type="button"
+                  disabled={previewPlaying || disabled || phase === "uploading"}
+                  onClick={() => void handlePreview()}
+                  className="min-h-[40px] rounded-full px-2 font-mono text-xs text-white/90 disabled:opacity-40"
+                >
+                  {previewPlaying ? "…" : "Watch"}
+                </button>
+                <button
+                  type="button"
+                  disabled={previewPlaying || disabled || phase === "uploading"}
+                  onClick={handleRetry}
+                  className="min-h-[40px] rounded-full px-2 font-mono text-xs text-white/90 disabled:opacity-40"
+                >
+                  Again
+                </button>
+              </div>
+            ) : (
+              <span />
+            )
+          }
+          shutter={
+            phase === "opening" || phase === "countdown" ? (
+              <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white/40">
+                <span className="h-4 w-4 animate-pulse rounded-full bg-red-500" />
+              </div>
+            ) : phase === "recording" ? (
+              <motion.button
+                type="button"
+                aria-label="Stop recording"
+                onClick={handleStopEarly}
+                whileTap={{ scale: 0.94 }}
+                className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white"
+              >
+                <span className="h-7 w-7 rounded-md bg-red-500" />
+              </motion.button>
+            ) : (
+              <motion.button
+                type="button"
+                aria-label="Keep video"
+                disabled={disabled || phase === "uploading" || previewPlaying}
+                onClick={() => void handleKeep()}
+                whileTap={{ scale: 0.96 }}
+                className="flex h-[72px] w-[72px] items-center justify-center rounded-full font-mono text-xs font-semibold disabled:opacity-50"
+                style={{ background: accentColor, color: "#1a1530" }}
+              >
+                {phase === "uploading" || disabled ? "…" : "Keep"}
+              </motion.button>
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }

@@ -705,7 +705,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       soundtrackUnlocked={worldUnlocked}
       growthNodes={growthNodes}
     >
-      <header className="mx-auto w-full max-w-lg px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
+      <header className="mx-auto w-full max-w-lg shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] text-center sm:pt-[max(1rem,env(safe-area-inset-top))]">
         <p
           className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em]"
           style={{ color: world.accentColor, opacity: 0.85 }}

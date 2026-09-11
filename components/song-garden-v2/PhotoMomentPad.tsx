@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import TypewriterText from "@/components/TypewriterText";
+import CameraCaptureShell from "./CameraCaptureShell";
 
 type PadPhase =
   | "idle"
@@ -102,8 +103,9 @@ async function getCameraStream(): Promise<MediaStream> {
 }
 
 /**
- * Still-photo capture for journey prompts — open camera, snap, review, keep.
- * Prefers the environment (rear) camera so people can show their world.
+ * Still-photo capture for journey prompts.
+ * Idle Snap stays on the glass card; once the camera opens we switch to a
+ * full-screen phone-camera viewfinder (large preview + bottom shutter).
  */
 export default function PhotoMomentPad({
   promptText,
@@ -125,6 +127,8 @@ export default function PhotoMomentPad({
   const cancelledRef = useRef(false);
 
   const label = buttonLabel.trim() || "Snap";
+  const inCameraUi =
+    phase === "opening" || phase === "preview" || phase === "review" || phase === "uploading";
 
   const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -166,7 +170,7 @@ export default function PhotoMomentPad({
   }, []);
 
   useEffect(() => {
-    if (phase === "preview") attachLivePreview();
+    if (phase === "preview" || phase === "opening") attachLivePreview();
   }, [phase, attachLivePreview]);
 
   const openCamera = useCallback(async () => {
@@ -237,7 +241,6 @@ export default function PhotoMomentPad({
   }, [releaseStream]);
 
   const handleIdleTap = useCallback(() => {
-    // Do not gate on `disabled` — parent sets that while booting the conversation.
     if (phase !== "idle" && phase !== "error") return;
     void openCamera();
   }, [openCamera, phase]);
@@ -263,9 +266,10 @@ export default function PhotoMomentPad({
     }
   }, [disabled, onSubmitted, pendingBlob]);
 
-  const handleCancelPreview = useCallback(() => {
+  const handleCancelCamera = useCallback(() => {
     cancelledRef.current = true;
     releaseStream();
+    setPendingBlob(null);
     setPhase("idle");
   }, [releaseStream]);
 
@@ -285,131 +289,120 @@ export default function PhotoMomentPad({
         </p>
       ) : null}
 
-      <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
-        <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
-          <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
-          <motion.circle
-            cx="50"
-            cy="50"
-            r="45"
-            fill="none"
-            stroke={accentColor}
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeDasharray={RING_CIRC}
-            initial={false}
-            animate={
-              phase === "opening"
-                ? {
-                    strokeDashoffset: [RING_CIRC * 0.85, RING_CIRC * 0.15],
-                    opacity: [0.55, 1, 0.55],
-                  }
-                : {
-                    strokeDashoffset:
-                      phase === "preview" || phase === "review" || phase === "uploading"
-                        ? 0
-                        : RING_CIRC * 0.85,
-                    opacity: 1,
-                  }
-            }
-            transition={
-              phase === "opening"
-                ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
-                : { duration: 0.35 }
-            }
-          />
-        </svg>
-
-        {phase === "preview" && (
-          <video
-            ref={liveVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="pointer-events-none absolute h-28 w-28 rounded-full object-cover"
-            aria-hidden
-          />
-        )}
-
-        {phase === "review" && previewUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- blob preview
-          <img
-            src={previewUrl}
-            alt=""
-            className="pointer-events-none absolute h-28 w-28 rounded-full object-cover"
-          />
-        )}
-
-        {(phase === "idle" || phase === "error" || phase === "done" || phase === "opening") && (
+      {/* Idle circle CTA on the glass card */}
+      {!inCameraUi && (
+        <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
+          <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100" aria-hidden>
+            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
+            <circle
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke={accentColor}
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={RING_CIRC}
+              strokeDashoffset={RING_CIRC * 0.85}
+            />
+          </svg>
           <motion.button
             type="button"
             onClick={handleIdleTap}
-            disabled={phase === "done" || phase === "opening"}
-            whileTap={phase === "opening" ? undefined : { scale: 0.96 }}
+            disabled={phase === "done"}
+            whileTap={{ scale: 0.96 }}
             className="relative z-10 flex h-28 w-28 select-none flex-col items-center justify-center rounded-full font-mono text-xs font-semibold uppercase tracking-wide [touch-action:manipulation] disabled:opacity-70"
             style={{
               background: `${accentColor}1f`,
               color: accentColor,
               border: `2px solid ${accentColor}`,
             }}
-            aria-busy={phase === "opening"}
           >
-            {phase === "done" ? "✓" : phase === "opening" ? "Opening…" : label}
-          </motion.button>
-        )}
-
-        {phase === "preview" && (
-          <motion.button
-            type="button"
-            onClick={() => void snapPhoto()}
-            whileTap={{ scale: 0.96 }}
-            className="relative z-10 flex h-28 w-28 select-none flex-col items-center justify-center rounded-full bg-black/35 font-mono text-xs font-semibold uppercase tracking-wide text-white [touch-action:manipulation]"
-          >
-            Snap
-          </motion.button>
-        )}
-
-        {phase === "uploading" && (
-          <div className="relative z-10 font-mono text-xs" style={{ color: accentColor }}>
-            Sending…
-          </div>
-        )}
-      </div>
-
-      {phase === "preview" && (
-        <button
-          type="button"
-          onClick={handleCancelPreview}
-          className="mx-auto block font-mono text-xs text-gray-400 underline decoration-white/20 underline-offset-4 hover:text-gray-200"
-        >
-          Cancel
-        </button>
-      )}
-
-      {phase === "review" && (
-        <div className="mx-auto flex max-w-xs gap-2">
-          <button
-            type="button"
-            onClick={handleRetry}
-            disabled={disabled}
-            className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-white/20 font-mono text-xs text-gray-200 disabled:opacity-40"
-          >
-            Retake
-          </button>
-          <motion.button
-            type="button"
-            onClick={() => void handleKeep()}
-            disabled={disabled}
-            whileTap={{ scale: 0.97 }}
-            className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl font-mono text-xs font-semibold disabled:opacity-40"
-            style={{ background: accentColor, color: "#1a1530" }}
-          >
-            {disabled ? "Starting…" : "Keep"}
+            {phase === "done" ? "✓" : label}
           </motion.button>
         </div>
       )}
 
-      {error && <p className="font-mono text-xs text-red-300">{error}</p>}
+      {error && !inCameraUi ? <p className="font-mono text-xs text-red-300">{error}</p> : null}
+
+      {inCameraUi ? (
+        <CameraCaptureShell
+          modeLabel="PHOTO"
+          accentColor={accentColor}
+          onClose={handleCancelCamera}
+          status={
+            phase === "opening"
+              ? "Opening camera…"
+              : phase === "uploading"
+                ? "Sending…"
+                : phase === "review"
+                  ? "Looks good?"
+                  : null
+          }
+          media={
+            <>
+              {(phase === "opening" || phase === "preview") && (
+                <video
+                  ref={liveVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+              {(phase === "review" || phase === "uploading") && previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- blob preview
+                <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : null}
+              {error ? (
+                <p className="absolute inset-x-4 bottom-4 rounded-xl bg-black/70 px-3 py-2 text-center font-mono text-xs text-red-200">
+                  {error}
+                </p>
+              ) : null}
+            </>
+          }
+          leftAction={
+            phase === "review" || phase === "uploading" ? (
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={disabled || phase === "uploading"}
+                className="min-h-[44px] rounded-full px-2 font-mono text-xs text-white/90 disabled:opacity-40"
+              >
+                Retake
+              </button>
+            ) : (
+              <span />
+            )
+          }
+          shutter={
+            phase === "preview" || phase === "opening" ? (
+              <motion.button
+                type="button"
+                aria-label="Take photo"
+                disabled={phase === "opening"}
+                onClick={() => void snapPhoto()}
+                whileTap={{ scale: 0.94 }}
+                className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white bg-white disabled:opacity-50"
+              >
+                <span className="h-[58px] w-[58px] rounded-full bg-white ring-2 ring-black/20" />
+              </motion.button>
+            ) : (
+              <motion.button
+                type="button"
+                aria-label="Keep photo"
+                disabled={disabled || phase === "uploading"}
+                onClick={() => void handleKeep()}
+                whileTap={{ scale: 0.96 }}
+                className="flex h-[72px] w-[72px] items-center justify-center rounded-full font-mono text-xs font-semibold disabled:opacity-50"
+                style={{ background: accentColor, color: "#1a1530" }}
+              >
+                {phase === "uploading" || disabled ? "…" : "Keep"}
+              </motion.button>
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }

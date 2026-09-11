@@ -187,7 +187,7 @@ export default function WorldStage({
         <audio ref={audioRef} src={world.ambientSoundtrackUrl} loop preload="none" />
       )}
 
-      <div className="relative z-10 flex min-h-[100dvh] flex-col pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="relative z-10 flex min-h-[100dvh] flex-col pb-[max(1.75rem,env(safe-area-inset-bottom))]">
         {children}
       </div>
     </div>
