@@ -18,10 +18,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json().catch(() => ({}))) as { runPipeline?: boolean; limit?: number };
+    const body = (await request.json().catch(() => ({}))) as {
+      runPipeline?: boolean;
+      limit?: number;
+      offset?: number;
+    };
     const result = await seedNationalKeynoteTargets({
       runPipeline: body.runPipeline !== false,
       limit: typeof body.limit === "number" ? body.limit : undefined,
+      offset: typeof body.offset === "number" ? body.offset : undefined,
     });
     return NextResponse.json(result);
   } catch (err) {

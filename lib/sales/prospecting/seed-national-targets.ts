@@ -74,13 +74,16 @@ async function upsertNationalTarget(target: NationalKeynoteTarget): Promise<{
 export async function seedNationalKeynoteTargets(options?: {
   runPipeline?: boolean;
   limit?: number;
+  offset?: number;
 }): Promise<SeedNationalTargetsResult> {
   const runPipeline = options?.runPipeline !== false;
+  const offset =
+    options?.offset && options.offset > 0 ? Math.min(options.offset, NATIONAL_KEYNOTE_TARGETS.length) : 0;
   const limit =
     options?.limit && options.limit > 0
-      ? Math.min(options.limit, NATIONAL_KEYNOTE_TARGETS.length)
-      : NATIONAL_KEYNOTE_TARGETS.length;
-  const targets = NATIONAL_KEYNOTE_TARGETS.slice(0, limit);
+      ? Math.min(options.limit, NATIONAL_KEYNOTE_TARGETS.length - offset)
+      : NATIONAL_KEYNOTE_TARGETS.length - offset;
+  const targets = NATIONAL_KEYNOTE_TARGETS.slice(offset, offset + limit);
 
   const result: SeedNationalTargetsResult = {
     attempted: targets.length,
