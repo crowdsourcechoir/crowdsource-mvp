@@ -648,107 +648,109 @@ export default function SonggardenCanvas({
           </p>
         </div>
         <div className="flex max-w-3xl flex-1 flex-col items-stretch gap-2 sm:max-w-none sm:items-end">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {libraryPicker ? (
-              libraryPicker
-            ) : (
-              <>
-                {!masterOnly && !gardenOnly ? (
-                  <QueueFilterSelect
-                    label="Scope"
-                    value={scope}
-                    options={[
-                      { key: "bloom", label: "This bloom" },
-                      {
-                        key: "garden",
-                        label: garden ? "Song Garden" : "Song Garden (n/a)",
-                      },
-                      { key: "master", label: "Master" },
-                    ]}
-                    onChange={(next) => {
-                      if (next === "garden" && !garden) return;
-                      setScope(next);
-                    }}
-                  />
-                ) : null}
-                {gardenOnly || masterOnly ? (
-                  <QueueFilterSelect
-                    label="Scope"
-                    value={scope}
-                    options={
-                      gardenOnly
-                        ? [
-                            { key: "garden", label: "This garden" },
-                            { key: "master", label: "Master" },
-                          ]
-                        : [{ key: "master", label: "Master" }]
-                    }
-                    onChange={setScope}
-                  />
-                ) : null}
-              </>
-            )}
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
+              {libraryPicker ? (
+                <div className="min-w-0 sm:contents">{libraryPicker}</div>
+              ) : (
+                <>
+                  {!masterOnly && !gardenOnly ? (
+                    <QueueFilterSelect
+                      label="Scope"
+                      value={scope}
+                      options={[
+                        { key: "bloom", label: "This bloom" },
+                        {
+                          key: "garden",
+                          label: garden ? "Song Garden" : "Song Garden (n/a)",
+                        },
+                        { key: "master", label: "Master" },
+                      ]}
+                      onChange={(next) => {
+                        if (next === "garden" && !garden) return;
+                        setScope(next);
+                      }}
+                    />
+                  ) : null}
+                  {gardenOnly || masterOnly ? (
+                    <QueueFilterSelect
+                      label="Scope"
+                      value={scope}
+                      options={
+                        gardenOnly
+                          ? [
+                              { key: "garden", label: "This garden" },
+                              { key: "master", label: "Master" },
+                            ]
+                          : [{ key: "master", label: "Master" }]
+                      }
+                      onChange={setScope}
+                    />
+                  ) : null}
+                </>
+              )}
 
-            <QueueFilterSelect
-              label="Content"
-              value={contentView}
-              options={[
-                { key: "all", label: "All" },
-                { key: "sounds", label: "Sounds" },
-                { key: "sounds_lyrics", label: "Sounds + lyrics" },
-                { key: "text", label: "Text" },
-                { key: "video", label: "Video" },
-              ]}
-              onChange={setContentView}
-            />
-
-            {showSounds ? (
               <QueueFilterSelect
-                label="Category"
-                value={categoryFilter}
+                label="Content"
+                value={contentView}
                 options={[
-                  { key: "all", label: "All", count: scopedClips.length },
-                  ...SONGGARDEN_CATEGORIES.map((category) => ({
-                    key: category.id as SonggardenCategoryId | "all",
-                    label: category.label,
-                    count: scopedClips.filter((clip) => clip.category === category.id)
-                      .length,
-                  })),
+                  { key: "all", label: "All" },
+                  { key: "sounds", label: "Sounds" },
+                  { key: "sounds_lyrics", label: "Sounds + lyrics" },
+                  { key: "text", label: "Text" },
+                  { key: "video", label: "Video" },
                 ]}
-                onChange={setCategoryFilter}
+                onChange={setContentView}
               />
-            ) : null}
 
-            {scope === "garden" && chapters.length > 1 ? (
-              <QueueFilterSelect
-                label="Bloom"
-                value={bloomFilterEventId}
-                options={[
-                  { key: "all", label: "All blooms" },
-                  ...chapters.map((chapter) => ({
-                    key: chapter.eventId,
-                    label: chapter.label,
-                  })),
-                ]}
-                onChange={setBloomFilterEventId}
-              />
-            ) : null}
+              {showSounds ? (
+                <QueueFilterSelect
+                  label="Category"
+                  value={categoryFilter}
+                  options={[
+                    { key: "all", label: "All", count: scopedClips.length },
+                    ...SONGGARDEN_CATEGORIES.map((category) => ({
+                      key: category.id as SonggardenCategoryId | "all",
+                      label: category.label,
+                      count: scopedClips.filter((clip) => clip.category === category.id)
+                        .length,
+                    })),
+                  ]}
+                  onChange={setCategoryFilter}
+                />
+              ) : null}
 
-            {eventId ? (
-              <ComposerActionsMenu
-                eventId={eventId}
-                eventSlug={eventSlug || eventId}
-                agentThemeId={agentThemeId}
-                clips={bloomClips}
-              />
-            ) : null}
+              {scope === "garden" && chapters.length > 1 ? (
+                <QueueFilterSelect
+                  label="Bloom"
+                  value={bloomFilterEventId}
+                  options={[
+                    { key: "all", label: "All blooms" },
+                    ...chapters.map((chapter) => ({
+                      key: chapter.eventId,
+                      label: chapter.label,
+                    })),
+                  ]}
+                  onChange={setBloomFilterEventId}
+                />
+              ) : null}
+
+              {eventId ? (
+                <ComposerActionsMenu
+                  eventId={eventId}
+                  eventSlug={eventSlug || eventId}
+                  agentThemeId={agentThemeId}
+                  clips={bloomClips}
+                />
+              ) : null}
+            </div>
 
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search…"
-              className="w-36 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white placeholder:text-gray-500 sm:w-44"
+              className="w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white placeholder:text-gray-500 min-[420px]:w-36 sm:w-44"
             />
 
             {selectedClips.length > 0 ? (

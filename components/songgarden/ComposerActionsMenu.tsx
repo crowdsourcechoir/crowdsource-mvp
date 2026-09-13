@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import JSZip from "jszip";
 import {
   generateSongSeed,
@@ -13,6 +14,7 @@ import {
   buildSoundPackLayout,
   soundPackReadme,
 } from "@/lib/songgarden/sound-pack";
+import { useFixedMenuPosition } from "@/hooks/useFixedMenuPosition";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -38,17 +40,32 @@ export default function ComposerActionsMenu({
   clips,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [loadingSeed, setLoadingSeed] = useState(false);
   const [exportingPack, setExportingPack] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const menuId = useId();
+  const placement = useFixedMenuPosition({
+    open,
+    triggerRef,
+    preferredWidth: 208,
+    align: "right",
+  });
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -124,31 +141,20 @@ export default function ComposerActionsMenu({
   const busy = loadingSeed || exportingPack;
   const briefHref = compositionBriefAdminUrl({ eventId });
 
-  return (
-    <div className="flex flex-col items-stretch gap-1 sm:items-end">
-      <div ref={rootRef} className="relative">
-        <button
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-controls={menuId}
-          disabled={busy}
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex max-w-[14rem] items-center gap-2 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <span className="truncate text-gray-500">Actions</span>
-          <span className="truncate text-white">
-            {busy ? (loadingSeed ? "Generating…" : "Building…") : "Song & pack"}
-          </span>
-          <span className="text-gray-500" aria-hidden>
-            ▾
-          </span>
-        </button>
-        {open ? (
+  const menu =
+    open && placement && mounted
+      ? createPortal(
           <ul
+            ref={menuRef}
             id={menuId}
             role="menu"
-            className="absolute right-0 z-30 mt-1 min-w-[13rem] overflow-hidden rounded-lg border border-white/15 bg-black py-1 shadow-xl sm:left-0 sm:right-auto"
+            className="fixed z-[200] overflow-hidden rounded-lg border border-white/15 bg-black py-1 shadow-xl"
+            style={{
+              top: placement.top,
+              left: placement.left,
+              width: placement.width,
+              maxHeight: placement.maxHeight,
+            }}
           >
             <li role="none">
               <Link
@@ -190,8 +196,33 @@ export default function ComposerActionsMenu({
                   : `Download sound pack${clips.length ? ` (${clips.length})` : ""}`}
               </button>
             </li>
-          </ul>
-        ) : null}
+          </ul>,
+          document.body
+        )
+      : null;
+
+  return (
+    <div className="flex flex-col items-stretch gap-1 sm:items-end">
+      <div ref={rootRef} className="relative min-w-0">
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={menuId}
+          disabled={busy}
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex max-w-full items-center gap-2 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-[14rem]"
+        >
+          <span className="truncate text-gray-500">Actions</span>
+          <span className="truncate text-white">
+            {busy ? (loadingSeed ? "Generating…" : "Building…") : "Song & pack"}
+          </span>
+          <span className="text-gray-500" aria-hidden>
+            ▾
+          </span>
+        </button>
+        {menu}
       </div>
       {error ? <p className="max-w-xs text-[11px] text-rose-400">{error}</p> : null}
       {status === "seed" && !error ? (
