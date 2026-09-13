@@ -299,7 +299,7 @@ export const NATIONAL_KEYNOTE_TARGETS: NationalKeynoteTarget[] = [
     websiteUrl: "https://www.cta.tech",
     organizationTypeKey: "association",
     salesInitiative: "tech_conferences",
-    notes: "CES — mega consumer tech keynote stage",
+    notes: "CES — mega consumer tech keynote stage (org name CTA / Consumer Technology Association)",
   },
   {
     name: "HIMSS",

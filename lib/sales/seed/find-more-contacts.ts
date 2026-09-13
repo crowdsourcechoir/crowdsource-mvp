@@ -1,12 +1,18 @@
 import { createContact, listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
-import { getOrganization } from "@/lib/sales/db/organizations";
+import { getOrganization, updateOrganization } from "@/lib/sales/db/organizations";
 import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { createOrUpdateQueueItem, getQueueItem } from "@/lib/sales/db/queue";
 import { extractDomain, isPlausibleEmail, looksLikePersonName, normalizeEmail } from "@/lib/sales/dedupe";
 import { getHunterAccountCredits } from "@/lib/sales/enrichment/hunter-account";
 import { describeFindQuery, hunterPersonMatchesQuery, parseFindQuery } from "@/lib/sales/enrichment/find-query";
 import { searchHunterDomain, type HunterDomainSearchPerson } from "@/lib/sales/enrichment/hunter-domain-search";
+import {
+  hunterContactSlotsRemaining,
+  hunterCreditBudgetRemaining,
+  pickTopHunterPeople,
+  withHunterCreditsSpent,
+} from "@/lib/sales/enrichment/hunter-org-budget";
 import { getEnrichmentConfigStatus } from "@/lib/sales/enrichment/config-status";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { isDoNotProspect } from "@/lib/sales/prospecting/do-not-prospect";
@@ -15,7 +21,8 @@ import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import { parseContactPaste } from "@/lib/sales/seed/parse-contact-paste";
 import type { QueueItemDetail } from "@/lib/sales/types";
 
-const MAX_RESULTS = 10;
+/** Domain Search returns 1–10 emails per credit; we only keep the top N for the org. */
+const MAX_RESULTS_PER_SEARCH = 3;
 
 export type FindMoreContactsInput = {
   itemId: string;
@@ -141,10 +148,37 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   if (parsed.keywords.length === 0 && parsed.jobTitles.length === 0 && parsed.departments.length === 0) {
     throw new Error("Say who to look for — e.g. events team, director of development.");
   }
+
+  // Cap: top 3 Hunter contacts / ≤3 credits per org — spend the rest on new orgs.
+  const existing = await listContactsForOrganization(organization.id);
+  const slotsLeft = hunterContactSlotsRemaining(existing);
+  const creditBudget = hunterCreditBudgetRemaining(organization);
+  if (slotsLeft <= 0 || creditBudget < 1) {
+    const detail = await assembleQueueItemDetailFromQueueItem(item);
+    const reason =
+      slotsLeft <= 0
+        ? "Already have 3 Hunter contacts on this org — spend credits on new orgs instead."
+        : "Already spent 3 Hunter credits on this org — spend the rest on new orgs instead.";
+    return {
+      detail,
+      added: [],
+      skippedExisting: 0,
+      skippedInvalid: 0,
+      hunterReturned: 0,
+      matched: 0,
+      query,
+      domain,
+      credits: emptyCredits,
+      hunter: { attempted: false, error: null },
+      message: reason,
+    };
+  }
+
+  const searchLimit = Math.min(MAX_RESULTS_PER_SEARCH, slotsLeft);
   const before = await getHunterAccountCredits();
   let search = await searchHunterDomain({
     domain,
-    limit: MAX_RESULTS,
+    limit: searchLimit,
     type: "personal",
     requiredFields: ["full_name"],
     jobTitles: parsed.jobTitles,
@@ -162,6 +196,11 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   };
 
   if (!search.ok) {
+    if ((credits.delta ?? 0) > 0) {
+      await updateOrganization(organization.id, {
+        importMetadata: withHunterCreditsSpent(organization.importMetadata, credits.delta ?? 0),
+      });
+    }
     return {
       detail: await assembleQueueItemDetailFromQueueItem(item),
       added: [],
@@ -196,13 +235,17 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   let people = search.people;
   let matchedPeople = people.filter(matchesQuery);
 
+  // Broad fallback only when the filtered search returned nobody AND we still have
+  // credit budget for another Domain Search (1 credit).
+  const spentSoFar = credits.delta ?? 0;
   if (
     people.length === 0 &&
-    (parsed.jobTitles.length > 0 || parsed.departments.length > 0)
+    (parsed.jobTitles.length > 0 || parsed.departments.length > 0) &&
+    creditBudget - spentSoFar >= 1
   ) {
     const broad = await searchHunterDomain({
       domain,
-      limit: MAX_RESULTS,
+      limit: searchLimit,
       type: "personal",
       requiredFields: ["full_name"],
     });
@@ -219,6 +262,11 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   }
 
   if (!search.ok && people.length === 0) {
+    if ((credits.delta ?? 0) > 0) {
+      await updateOrganization(organization.id, {
+        importMetadata: withHunterCreditsSpent(organization.importMetadata, credits.delta ?? 0),
+      });
+    }
     return {
       detail: await assembleQueueItemDetailFromQueueItem(item),
       added: [],
@@ -234,7 +282,6 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     };
   }
 
-  const existing = await listContactsForOrganization(organization.id);
   const existingEmails = new Set(
     existing.map((c) => c.normalizedEmail ?? normalizeEmail(c.email)).filter((e): e is string => Boolean(e))
   );
@@ -242,11 +289,19 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     existing.map((c) => (c.fullName ?? "").trim().toLowerCase()).filter(Boolean)
   );
 
+  // Rank by seniority and only keep enough candidates to fill remaining slots.
+  const ranked = pickTopHunterPeople(matchedPeople, slotsLeft);
+
   const added: FindMoreContactsResult["added"] = [];
   let skippedExisting = 0;
   let skippedInvalid = 0;
 
-  for (const person of matchedPeople) {
+  for (const person of ranked) {
+    if (added.length >= slotsLeft) break;
+    // Stop before another verify if we've already hit the per-org credit cap.
+    const liveDelta = creditDelta(credits.beforeUsed, (await getHunterAccountCredits()).creditsUsed) ?? 0;
+    if (creditBudget - liveDelta < 0.5 && added.length > 0) break;
+
     const fullName = personFullName(person);
     if (!fullName) continue;
     const email = person.email;
@@ -295,6 +350,16 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
       fullName: contact.fullName,
       email: contact.email,
       roleTitle: contact.roleTitle,
+    });
+  }
+
+  const afterAll = await getHunterAccountCredits();
+  credits.afterUsed = afterAll.creditsUsed;
+  credits.delta = creditDelta(credits.beforeUsed, afterAll.creditsUsed);
+  credits.available = afterAll.creditsAvailable;
+  if ((credits.delta ?? 0) > 0) {
+    await updateOrganization(organization.id, {
+      importMetadata: withHunterCreditsSpent(organization.importMetadata, credits.delta ?? 0),
     });
   }
 

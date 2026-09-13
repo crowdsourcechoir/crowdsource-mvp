@@ -1,0 +1,19 @@
+---
+description: Hunter find-contacts — top 3 per org, ≤3 credits
+globs: lib/sales/seed/find-more-contacts.ts,lib/sales/enrichment/hunter-org-budget.ts,lib/sales/enrichment/policy.ts
+alwaysApply: false
+---
+
+# Hunter per-org budget (mandatory)
+
+Joel would rather spend Hunter on **new orgs / opportunities** than deep-mine one contact grid (e.g. 9 Seattle Symphony Hunter rows).
+
+## Rule
+
+- **Top 3** Hunter-sourced contacts per organization (ranked by seniority / title).
+- **≤ 3 Hunter credits** spent on find-more for that org (Domain Search + Verifier).
+- When the cap is hit, refuse further Domain Search and say so — do not broaden the query to pull more people.
+- Manual / pasted contacts do **not** count against the 3 Hunter slots.
+
+Constants: `MAX_HUNTER_CONTACTS_PER_ORG`, `MAX_HUNTER_CREDITS_PER_ORG` in `lib/sales/enrichment/hunter-org-budget.ts`.
+Spend tracked on `organization.importMetadata.hunterCreditsSpent`.

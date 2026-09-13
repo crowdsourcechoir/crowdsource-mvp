@@ -38,6 +38,10 @@ async function main() {
     false,
     "add-manual must not refuse accept_all / risky"
   );
+  assert.match(findMore, /MAX_RESULTS_PER_SEARCH\s*=\s*3/, "find-more must cap Domain Search at 3");
+  assert.match(findMore, /hunterContactSlotsRemaining/, "find-more must enforce top-3 Hunter contacts per org");
+  assert.match(findMore, /hunterCreditBudgetRemaining/, "find-more must enforce ≤3 Hunter credits per org");
+  assert.match(findMore, /pickTopHunterPeople/, "find-more must rank by seniority before adding");
   console.log("find-more-contacts decided-item regression tests passed");
 }
 
