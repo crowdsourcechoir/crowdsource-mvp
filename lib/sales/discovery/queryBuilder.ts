@@ -10,10 +10,10 @@ import {
  * Generic event/gathering phrasings for the default org-type rotation.
  */
 const QUERY_MODIFIERS = [
-  "annual conference",
-  "national convention",
-  "regional conference schedule",
-  "member conference agenda",
+  "national annual conference convention center",
+  "national convention 2000 attendees",
+  "national meeting keynote convention center",
+  "largest national association annual meeting",
 ];
 
 /** How many queries a single discovery run spends by default. */
@@ -68,8 +68,8 @@ function buildConventionCenterQueries(cities: string[], year: number, maxQueries
     }
   }
   // Always include a couple of national aggregator queries for hall-scale events.
-  combos.push(`largest association conferences convention centers ${year}`);
-  combos.push(`associations booking convention centers annual meeting ${year} 1000+ attendees`);
+  combos.push(`largest national association conferences convention centers ${year} 2000+ attendees`);
+  combos.push(`national associations booking convention centers annual meeting ${year} 2000+ attendees`);
   return rotateSlice(combos, rotation, maxQueries);
 }
 
@@ -80,7 +80,7 @@ function buildCustomQueries(focus: string, year: number, maxQueries: number, cit
     `${base} annual conference ${year}`,
     `${base} national convention ${year}`,
     `${base} association meeting convention center ${year}`,
-    `${base} large conference 1000 attendees ${year}`,
+    `${base} large conference 2000 attendees ${year}`,
     `${base} events calendar ${year}`,
   ];
   for (const city of (cities ?? []).slice(0, 6)) {

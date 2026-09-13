@@ -28,7 +28,8 @@ const BASE_SYSTEM_PROMPT = `You extract candidate organizations (associations, c
 - websiteUrl must be the organization's own official site if it's identifiable from the result's url/content; otherwise null. Never guess a domain.
 - sourceUrl must be the exact url of the specific search result you extracted this candidate from.
 - rationale is one short sentence on why this looks like a plausible fit (e.g. "hosts an annual member conference with several hundred attendees").
-- Prefer mid-size to large annual conferences / association meetings that book halls or convention centers over tiny meetups, webinars, or news outlets.
+- Prefer NATIONAL / hall-scale annual conferences and association meetings that book convention centers (roughly 2,000+ attendees, keynote-tier budgets) over state/regional chapters, tiny meetups, webinars, or news outlets.
+- SKIP state and regional associations/chapters (e.g. "Oregon Library Association", "Michigan Society of Association Executives", "Washington State Hospital Association", state nurses/library/festival associations). Only keep associations that are clearly national (or international).
 - DIRECTORIES / LISTICLES / venue calendars: extract every distinct hosting organization clearly named (up to 8).
 - Skip pure news/media outlets, ticketing mega-platforms (Eventbrite, Ticketmaster) as the organization itself, and skip the convention center / CVB venue operator unless they clearly host their own programming brand.
 - If nothing in the results names a real, usable organization, return an empty candidates array — do not force a result.`;

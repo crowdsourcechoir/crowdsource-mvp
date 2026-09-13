@@ -6,6 +6,7 @@ import { listFindingsForOrganization } from "../db/research";
 import { getLatestScoreForOpportunity } from "../db/scores";
 import { looksLikePersonName, isSendableContact } from "../dedupe";
 import { ensureBookLinks } from "../outreach/ensureBookLinks";
+import { isDoNotProspect } from "../prospecting/do-not-prospect";
 import { claimLooksLikeCalendarDate } from "../research/extractEventDates";
 import type { Contact, PipelineStage } from "../types";
 
@@ -44,7 +45,12 @@ function missingInfoSuggestsDateGap(missingInformation: string[]): boolean {
 
 export type PipelineRunSummary = {
   pipelineRunId: string | null;
-  status: "succeeded" | "failed" | "partially_failed" | "skipped_existing_client";
+  status:
+    | "succeeded"
+    | "failed"
+    | "partially_failed"
+    | "skipped_existing_client"
+    | "skipped_do_not_prospect";
   stagesRun: { stage: PipelineStage; status: string; error?: string }[];
   opportunityIds: string[];
 };
@@ -81,6 +87,11 @@ export async function runPipelineForOrganization(
   // customer — checked before creating any pipeline_run row at all, not just before queueing.
   if (org.isExistingClient) {
     return { pipelineRunId: null, status: "skipped_existing_client", stagesRun: [], opportunityIds: [] };
+  }
+
+  // Soft hide (e.g. state/regional associations): keep the org row, but do not research, enrich, or re-queue.
+  if (isDoNotProspect(org.importMetadata)) {
+    return { pipelineRunId: null, status: "skipped_do_not_prospect", stagesRun: [], opportunityIds: [] };
   }
 
   // Cheap idempotent repair: stale templates/drafts that still say "I've attached..." get the

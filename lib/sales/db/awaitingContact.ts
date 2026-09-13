@@ -1,6 +1,8 @@
 import { requireSupabaseAdmin } from "./client";
+import { getOrganization } from "./organizations";
 import { getDigestMinScore } from "../digest/config";
 import { DEEPEN_MIN_SCORE } from "../pipeline/stages/deepenResearch";
+import { isDoNotProspect } from "../prospecting/do-not-prospect";
 
 /**
  * Orgs blocked on the verified-contact gate whose latest score is already solid (or near-miss).
@@ -31,6 +33,12 @@ export async function listAwaitingContactOrganizationIds(
   for (const opp of opps) {
     const organizationId = opp.organization_id as string;
     if (seenOrg.has(organizationId)) continue;
+
+    const org = await getOrganization(organizationId);
+    if (!org || org.isExistingClient || isDoNotProspect(org.importMetadata)) {
+      seenOrg.add(organizationId);
+      continue;
+    }
 
     const { data: scoreRow, error: scoreErr } = await db
       .from("prospect_scores")

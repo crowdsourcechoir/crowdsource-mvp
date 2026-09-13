@@ -9,6 +9,7 @@ import { describeFindQuery, hunterPersonMatchesQuery, parseFindQuery } from "@/l
 import { searchHunterDomain, type HunterDomainSearchPerson } from "@/lib/sales/enrichment/hunter-domain-search";
 import { getEnrichmentConfigStatus } from "@/lib/sales/enrichment/config-status";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
+import { isDoNotProspect } from "@/lib/sales/prospecting/do-not-prospect";
 import { addPastedContactsForQueueItem } from "@/lib/sales/seed/add-pasted-contacts";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import { parseContactPaste } from "@/lib/sales/seed/parse-contact-paste";
@@ -85,6 +86,9 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   if (!opportunity) throw new Error("Opportunity not found.");
   const organization = await getOrganization(opportunity.organizationId);
   if (!organization) throw new Error("Organization not found.");
+  if (isDoNotProspect(organization.importMetadata)) {
+    throw new Error("This organization is marked do-not-prospect (hidden state/regional association).");
+  }
 
   // Pasted "Name: email" lists — add those people and pull titles from Hunter on the
   // email domain (not a role keyword search against this org's domain).

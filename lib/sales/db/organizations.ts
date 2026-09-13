@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import { normalizeOrgName, extractDomain } from "../dedupe";
+import { isDoNotProspect } from "../prospecting/do-not-prospect";
 import type { Organization } from "../types";
 
 function rowToOrganization(row: Record<string, unknown>): Organization {
@@ -67,7 +68,9 @@ export async function listUnprocessedOrganizations(limit: number): Promise<Organ
     .limit(2000);
   if (orgsError) throw new Error(orgsError.message);
 
-  const candidates = (orgs ?? []).map(rowToOrganization).filter((o) => !processedIds.has(o.id));
+  const candidates = (orgs ?? [])
+    .map(rowToOrganization)
+    .filter((o) => !processedIds.has(o.id) && !isDoNotProspect(o.importMetadata));
 
   const priorityOf = (o: Organization) =>
     String((o.importMetadata as { Priority?: string } | null)?.Priority ?? "Z");

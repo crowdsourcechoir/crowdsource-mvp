@@ -4,6 +4,7 @@ import { classifyQueueCategory } from "../queue/category";
 import { readSalesInitiative } from "../initiatives";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
+import { isDoNotProspect } from "../prospecting/do-not-prospect";
 import { loadSalesTodayTasks } from "./follow-ups";
 import type { QueueScope } from "../queue/scope";
 import type { ApprovalQueueItem, ApprovalQueueItemKind, ApprovalQueueItemStatus, QueueSidebarItem, RelationshipStage } from "../types";
@@ -292,6 +293,9 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
     if (!opportunity) continue;
     const organization = orgById.get(opportunity.organization_id);
     if (!organization) continue;
+    // Soft-hidden orgs (e.g. uncontacted state associations) stay out of the queue UI.
+    // Already-contacted threads are never flagged do-not-prospect, so they remain visible.
+    if (isDoNotProspect(organization.import_metadata)) continue;
     const opportunityTypeKey = opportunity.opportunity_type_id
       ? oppTypeKeyById.get(opportunity.opportunity_type_id) ?? null
       : null;
