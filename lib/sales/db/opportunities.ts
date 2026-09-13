@@ -1,4 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
+import { normalizeEventDateEstimate } from "../dates/normalizeEventDateEstimate";
 import type { Opportunity, OpportunityStatus, RelationshipStage } from "../types";
 
 function rowToOpportunity(row: Record<string, unknown>): Opportunity {
@@ -89,7 +90,7 @@ export async function createOpportunity(input: CreateOpportunityInput): Promise<
     opportunity_type_id: input.opportunityTypeId ?? null,
     title: input.title,
     event_or_initiative_name: input.eventOrInitiativeName ?? null,
-    event_date_estimate: input.eventDateEstimate ?? null,
+    event_date_estimate: normalizeEventDateEstimate(input.eventDateEstimate),
     event_date_confidence: input.eventDateConfidence ?? null,
     description: input.description ?? null,
     status: input.status ?? "new",
