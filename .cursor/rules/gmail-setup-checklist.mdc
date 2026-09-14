@@ -1,20 +1,22 @@
----
-description: Gmail reconnect is OAuth + Resume sending (SQL is optional)
-alwaysApply: true
----
+# Gmail — connected and sending
 
-# Gmail — reconnect (OAuth is already configured in Vercel)
+Setup is done. Production `GET /api/sales/gmail/status` returns `connected: true`,
+`configured: true`, `sendsEnabled: true` for `sing@crowdsourcechoir.com`. No action is
+pending from Joel.
 
-Production `GET /api/sales/gmail/status` is `configured: true`. Same-contact multi-send is guarded in code. Resume sending does **not** require a SQL migration (uses a scopes marker if `sends_enabled` is missing).
+Nothing sends without him approving a queue item and confirming **Yes, send now**.
 
-## Joel still needs to do
+## Emergency off
 
-1. Open `https://app.crowdsourcechoir.com/admin/sales` → **Connect Gmail** → Google consent.
-2. Click **Resume sending**. Reconnect alone stays paused.
-3. Send from the queue with **Send** → **Yes, send now**. Pause sending anytime without disconnecting.
+1. **Pause sending** in `/admin/sales` — keeps the connection, stops outbound.
+2. **Disconnect** — drops the OAuth connection entirely.
+3. Vercel `SALES_GMAIL_SENDS_ENABLED=false` — overrides the UI toggle.
 
-Skip the Supabase SQL Editor. The unique-index script timed out and is optional.
+## Worth remembering
 
-Emergency off: **Pause sending**, **Disconnect**, or Vercel `SALES_GMAIL_SENDS_ENABLED=false`.
+- Reconnecting after a disconnect leaves sending **paused**. Resume is a separate click.
+- The optional unique-index migration
+  (`supabase/sales-platform-add-gmail-send-safety-index.sql`) was never applied; it timed out
+  and is not required. The same-contact send guard does not depend on it.
 
-When Gmail is connected and sending is resumed, delete or update this rule so it stops surfacing as pending.
+Full domain context: `docs/agent-briefs/sales.md`.
