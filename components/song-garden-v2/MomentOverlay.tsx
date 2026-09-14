@@ -13,6 +13,11 @@ type MomentOverlayProps = {
   primaryColor: string;
   /** When set, dot trail renders at the top of the prompt card. */
   progress?: { completed: number; total: number } | null;
+  /**
+   * Photo/video capture: drop card padding so the glass border is the media
+   * frame. Progress + eyebrow stay hidden while capturing.
+   */
+  mediaFill?: boolean;
   children: React.ReactNode;
 };
 
@@ -26,6 +31,7 @@ export default function MomentOverlay({
   accentColor,
   primaryColor,
   progress,
+  mediaFill = false,
   children,
 }: MomentOverlayProps) {
   return (
@@ -37,16 +43,22 @@ export default function MomentOverlay({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -14, scale: 0.99 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-3xl p-4 sm:p-8"
+          className={
+            mediaFill
+              ? "overflow-hidden rounded-3xl p-0"
+              : "rounded-3xl p-4 sm:p-8"
+          }
           style={{
-            background: `linear-gradient(
+            background: mediaFill
+              ? "transparent"
+              : `linear-gradient(
               165deg,
               color-mix(in srgb, ${primaryColor} 82%, transparent) 0%,
               color-mix(in srgb, ${primaryColor} 74%, transparent) 50%,
               color-mix(in srgb, color-mix(in srgb, ${primaryColor} 88%, ${accentColor}) 70%, transparent) 100%
             )`,
-            backdropFilter: "blur(14px) saturate(1.12)",
-            WebkitBackdropFilter: "blur(14px) saturate(1.12)",
+            backdropFilter: mediaFill ? undefined : "blur(14px) saturate(1.12)",
+            WebkitBackdropFilter: mediaFill ? undefined : "blur(14px) saturate(1.12)",
             border: `1px solid color-mix(in srgb, ${accentColor} 48%, transparent)`,
             boxShadow: `
               0 18px 48px -18px rgba(0,0,0,0.6),
@@ -54,7 +66,7 @@ export default function MomentOverlay({
             `,
           }}
         >
-          {progress && progress.total > 0 ? (
+          {!mediaFill && progress && progress.total > 0 ? (
             <div className="mb-4">
               <WorldProgressTrail
                 completed={progress.completed}
@@ -63,7 +75,7 @@ export default function MomentOverlay({
               />
             </div>
           ) : null}
-          {eyebrow && (
+          {!mediaFill && eyebrow ? (
             <p
               className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.25em]"
               style={{
@@ -73,8 +85,14 @@ export default function MomentOverlay({
             >
               <TypewriterText key={eyebrow} text={eyebrow} speed={9} className="inline" />
             </p>
-          )}
-          <div style={{ textShadow: "0 1px 2px rgba(0,0,0,0.7), 0 2px 14px rgba(0,0,0,0.4)" }}>
+          ) : null}
+          <div
+            style={
+              mediaFill
+                ? undefined
+                : { textShadow: "0 1px 2px rgba(0,0,0,0.7), 0 2px 14px rgba(0,0,0,0.4)" }
+            }
+          >
             {children}
           </div>
         </motion.div>

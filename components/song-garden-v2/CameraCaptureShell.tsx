@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
 
 /** Shared portrait frame for journey capture + Composer (iPhone-ish 9:16). */
 export const PORTRAIT_MEDIA_ASPECT_CLASS = "aspect-[9/16]";
@@ -11,7 +10,7 @@ type CameraCaptureShellProps = {
   modeLabel: "PHOTO" | "VIDEO";
   accentColor: string;
   onClose: () => void;
-  /** Live camera or review media — fills the phone viewfinder. */
+  /** Live camera or review media — fills the card viewfinder. */
   media: ReactNode;
   /** Shutter / stop / keep controls — centered in the bottom dock. */
   shutter: ReactNode;
@@ -24,9 +23,9 @@ type CameraCaptureShellProps = {
 };
 
 /**
- * Phone-camera shell for journey photo/video.
- * Mobile: near full-bleed. Desktop: centered tall phone bezel so capture
- * doesn't eat the whole monitor — same 9:16 shape Composer uses later.
+ * In-card portrait capture frame for journey photo/video.
+ * Stays inside the glass prompt card so the garden background, logo, and
+ * card outline remain — no full-screen black portal.
  */
 export default function CameraCaptureShell({
   modeLabel,
@@ -38,105 +37,65 @@ export default function CameraCaptureShell({
   rightAction,
   status,
 }: CameraCaptureShellProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
-  if (!mounted) return null;
-
-  return createPortal(
+  return (
     <div
-      className="fixed inset-0 z-[200] flex items-stretch justify-center bg-black sm:items-center sm:bg-black/72 sm:p-6"
-      role="dialog"
-      aria-modal="true"
+      className={[
+        // Fill the glass card width; card border is the media outline.
+        "relative w-full overflow-hidden",
+        PORTRAIT_MEDIA_ASPECT_CLASS,
+        "max-h-[min(72dvh,760px)]",
+      ].join(" ")}
+      role="group"
       aria-label={`${modeLabel} capture`}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
-      {/*
-        Phone chassis: full viewport on mobile; tall portrait bezel on desktop
-        (taller than the glass prompt card, same 9:16 family as Composer).
-      */}
-      <div
-        className={[
-          "relative flex w-full flex-col overflow-hidden bg-black",
-          "h-[100dvh] max-h-[100dvh]",
-          "sm:h-[min(92dvh,880px)] sm:w-auto sm:max-w-[min(420px,calc((92dvh-0px)*9/16))]",
-          "sm:aspect-[9/16] sm:rounded-[2.15rem] sm:shadow-[0_28px_90px_-24px_rgba(0,0,0,0.9)]",
-          "sm:ring-1 sm:ring-white/25",
-        ].join(" ")}
-      >
-        {/* Slim side rails — reads as a phone edge on desktop */}
-        <div
-          className="pointer-events-none absolute inset-y-10 left-0 z-20 hidden w-[3px] rounded-full bg-white/10 sm:block"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-y-10 right-0 z-20 hidden w-[3px] rounded-full bg-white/10 sm:block"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute left-1/2 top-2 z-20 hidden h-1.5 w-16 -translate-x-1/2 rounded-full bg-white/15 sm:block"
-          aria-hidden
-        />
+      {/* Viewfinder — clipped by the parent glass card’s rounded outline when flush */}
+      <div className="absolute inset-0 bg-black/25">
+        <div className="absolute inset-0">{media}</div>
+      </div>
 
-        {/* Viewfinder */}
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
-          <div className="absolute inset-0">{media}</div>
-
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/55 to-transparent pb-10 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <div className="pointer-events-auto flex items-center justify-between px-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="min-h-[44px] rounded-full px-3 font-mono text-sm text-white/90 [touch-action:manipulation]"
-              >
-                Cancel
-              </button>
-              <span
-                className="rounded-full px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.2em]"
-                style={{
-                  color: accentColor,
-                  background: "rgba(0,0,0,0.45)",
-                  border: `1px solid color-mix(in srgb, ${accentColor} 45%, transparent)`,
-                }}
-              >
-                {modeLabel}
-              </span>
-              <span className="w-[64px]" aria-hidden />
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom dock */}
-        <div className="shrink-0 bg-black px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
-          {status ? (
-            <div className="mb-3 text-center font-mono text-xs text-white/80">{status}</div>
-          ) : null}
-          <div className="grid grid-cols-3 items-center gap-2">
-            <div className="flex justify-start">{leftAction}</div>
-            <div className="flex flex-col items-center gap-2">
-              {shutter}
-              <span
-                className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em]"
-                style={{ color: accentColor }}
-              >
-                {modeLabel}
-              </span>
-            </div>
-            <div className="flex justify-end">{rightAction}</div>
-          </div>
+      {/* Top chrome */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/50 via-black/20 to-transparent pb-12 pt-3">
+        <div className="pointer-events-auto flex items-center justify-between px-3 sm:px-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-[44px] rounded-full px-2 font-mono text-sm text-white/95 [touch-action:manipulation]"
+          >
+            Cancel
+          </button>
+          <span
+            className="rounded-full px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.2em]"
+            style={{
+              color: accentColor,
+              background: "rgba(0,0,0,0.35)",
+              border: `1px solid color-mix(in srgb, ${accentColor} 45%, transparent)`,
+            }}
+          >
+            {modeLabel}
+          </span>
+          <span className="w-[56px]" aria-hidden />
         </div>
       </div>
-    </div>,
-    document.body
+
+      {/* Bottom dock — translucent so the card/garden still read */}
+      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/65 via-black/35 to-transparent px-3 pb-4 pt-14 sm:px-4 sm:pb-5">
+        {status ? (
+          <div className="mb-3 text-center font-mono text-xs text-white/85">{status}</div>
+        ) : null}
+        <div className="grid grid-cols-3 items-center gap-2">
+          <div className="flex justify-start">{leftAction}</div>
+          <div className="flex flex-col items-center gap-2">
+            {shutter}
+            <span
+              className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em]"
+              style={{ color: accentColor }}
+            >
+              {modeLabel}
+            </span>
+          </div>
+          <div className="flex justify-end">{rightAction}</div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -205,6 +205,8 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const [burstMessage, setBurstMessage] = useState("Got it");
   const [localGrowthNodes, setLocalGrowthNodes] = useState<WorldGrowthNode[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<AnswerChannel | null>(null);
+  /** Photo/video viewfinder is open — flush the glass card around the media. */
+  const [captureActive, setCaptureActive] = useState(false);
 
   const growthNodes = useMemo((): WorldGrowthNode[] => {
     if (!gardenSnap.linked || !gardenSnap.snapshot) return localGrowthNodes;
@@ -334,6 +336,10 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const useAudioPad = activeChannel === "audio" && Boolean(activeSound);
   const useVideoPad = activeChannel === "video";
   const usePhotoPad = activeChannel === "photo";
+
+  useEffect(() => {
+    setCaptureActive(false);
+  }, [stepIndex, activeChannel]);
 
   const promptText = useMemo(() => {
     if (!activeStep) return "";
@@ -729,11 +735,14 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
       {!celebration.active ? (
         <MomentOverlay
           momentKey={momentKey}
-          eyebrow={eyebrow}
+          eyebrow={captureActive ? undefined : eyebrow}
           accentColor={world.accentColor}
           primaryColor={world.primaryColor}
+          mediaFill={captureActive}
           progress={
-            showProgress ? { completed: progress.completed, total: progress.total } : null
+            captureActive || !showProgress
+              ? null
+              : { completed: progress.completed, total: progress.total }
           }
         >
           {position.phase === "landing" && (
@@ -786,32 +795,36 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           )}
 
 {position.phase === "step" && availableChannels.length > 0 && (
-            <div className="space-y-5 text-center">
-              {chatError && (
+            <div className={captureActive ? undefined : "space-y-5 text-center"}>
+              {chatError && !captureActive && (
                 <p className="rounded-xl border border-red-800/60 bg-red-900/20 px-4 py-3 text-left text-sm text-red-300">
                   {chatError}
                 </p>
               )}
 
               {/* One card: question + helper stay put; Type/Record expand inline. */}
-              <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
-                <TypewriterText
-                  key={displayPrompt(promptText)}
-                  text={displayPrompt(promptText)}
-                  speed={9}
-                  className="inline"
-                />
-              </p>
-              {responseHint ? (
-                <p
-                  className="-mt-2 font-mono text-xs"
-                  style={{ color: world.accentColor, opacity: 0.85 }}
-                >
-                  {responseHint}
-                </p>
-              ) : null}
+              {!captureActive && (
+                <>
+                  <p className="mx-auto max-w-xs font-mono text-[1.0625rem] leading-snug text-gray-100 sm:text-lg">
+                    <TypewriterText
+                      key={displayPrompt(promptText)}
+                      text={displayPrompt(promptText)}
+                      speed={9}
+                      className="inline"
+                    />
+                  </p>
+                  {responseHint ? (
+                    <p
+                      className="-mt-2 font-mono text-xs"
+                      style={{ color: world.accentColor, opacity: 0.85 }}
+                    >
+                      {responseHint}
+                    </p>
+                  ) : null}
+                </>
+              )}
 
-              {availableChannels.length > 1 && !selectedChannel && (
+              {!captureActive && availableChannels.length > 1 && !selectedChannel && (
                 <div className="mx-auto flex max-w-xs flex-wrap items-center justify-center gap-4">
                   {availableChannels.map((channel) => (
                     <button
@@ -887,6 +900,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   hint={responseHint}
                   hidePrompt
                   hideHint
+                  onCaptureActiveChange={setCaptureActive}
                   recordMs={
                     activeStep?.kind === "prompt"
                       ? resolvePromptRecordMs(activeStep, "video")
@@ -906,6 +920,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                   hint={responseHint}
                   hidePrompt
                   hideHint
+                  onCaptureActiveChange={setCaptureActive}
                   disabled={sending}
                   onSubmitted={handlePhotoSubmitted}
                 />
@@ -932,7 +947,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
                 />
               )}
 
-              {availableChannels.length > 1 && selectedChannel && (
+              {!captureActive && availableChannels.length > 1 && selectedChannel && (
                 <button
                   type="button"
                   onClick={() => setSelectedChannel(null)}

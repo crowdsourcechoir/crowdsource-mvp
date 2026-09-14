@@ -31,6 +31,8 @@ type PhotoMomentPadProps = {
   hidePrompt?: boolean;
   /** When true, parent already shows helper text on the same card. */
   hideHint?: boolean;
+  /** Fires when the in-card camera UI opens/closes so the parent can flush the glass card. */
+  onCaptureActiveChange?: (active: boolean) => void;
   /** Called with a JPEG blob when the participant keeps the snapshot. */
   onSubmitted: (blob: Blob) => void | Promise<void>;
 };
@@ -107,7 +109,7 @@ async function getCameraStream(): Promise<MediaStream> {
 /**
  * Still-photo capture for journey prompts.
  * Idle Snap stays on the glass card; once the camera opens we switch to a
- * portrait phone-frame viewfinder (tall on desktop, full-bleed on mobile).
+ * viewfinder that expands inside the same glass card (garden + logo stay visible).
  */
 export default function PhotoMomentPad({
   promptText,
@@ -117,6 +119,7 @@ export default function PhotoMomentPad({
   hint,
   hidePrompt = false,
   hideHint = false,
+  onCaptureActiveChange,
   onSubmitted,
 }: PhotoMomentPadProps) {
   const [phase, setPhase] = useState<PadPhase>("idle");
@@ -131,6 +134,11 @@ export default function PhotoMomentPad({
   const label = buttonLabel.trim() || "Snap";
   const inCameraUi =
     phase === "opening" || phase === "preview" || phase === "review" || phase === "uploading";
+
+  useEffect(() => {
+    onCaptureActiveChange?.(inCameraUi);
+    return () => onCaptureActiveChange?.(false);
+  }, [inCameraUi, onCaptureActiveChange]);
 
   const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
