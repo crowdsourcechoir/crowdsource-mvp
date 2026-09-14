@@ -61,18 +61,6 @@ type ParticipantJourneyProps = {
   onActiveChange?: (active: boolean) => void;
 };
 
-function loadJourneyPosition(eventId: string, interviewVersion: string): JourneyPosition | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(journeyPositionKey(eventId));
-    if (!raw) return null;
-    const saved = JSON.parse(raw) as JourneyPosition;
-    if (saved.interviewVersion !== interviewVersion) return null;
-    return saved;
-  } catch {
-    return null;
-  }
-}
 
 function saveJourneyPosition(eventId: string, position: JourneyPosition): void {
   if (typeof window === "undefined") return;
@@ -107,22 +95,25 @@ export default function ParticipantJourney({
   const stripSlotOrder = useMemo(() => compositionStripSlotOrder(event), [event]);
 
   const [position, setPosition] = useState<JourneyPosition>(() => {
-    if (startAtGarden) {
-      const done = loadDoneSlots(event.id);
-      if (allGardenSlotsDone(event, done)) {
-        return { phase: "final", gardenSlotIndex: Math.max(0, gardenSteps.length - 1) };
-      }
-      return { phase: "garden", gardenSlotIndex: firstIncompleteGardenIndex(event, done) };
+    // Full page load (incl. hard refresh) always restarts — do not resume mid-journey.
+    let sessionToken: string | null = null;
+    try {
+      sessionToken = localStorage.getItem(sessionTokenKey(event.id, interviewVersion));
+    } catch {
+      sessionToken = null;
     }
-    const saved = loadJourneyPosition(event.id, interviewVersion);
-    if (saved) return saved;
+    clearJourneySession(event, interviewVersion, sessionToken);
+    clearDoneSlots(event.id);
+    if (startAtGarden) {
+      return { phase: "garden", gardenSlotIndex: 0, interviewVersion };
+    }
     return { phase: "landing", gardenSlotIndex: 0, interviewVersion };
   });
   const [lyricQuestionIndex, setLyricQuestionIndex] = useState(0);
-  const [doneSlots, setDoneSlots] = useState<Set<GardenSlotId>>(() => loadDoneSlots(event.id));
+  const [doneSlots, setDoneSlots] = useState<Set<GardenSlotId>>(() => new Set());
   const [transitionReady, setTransitionReady] = useState(false);
 
-  const [journeyStarted, setJourneyStarted] = useState(position.phase !== "landing");
+  const [journeyStarted, setJourneyStarted] = useState(startAtGarden);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [activeSessionToken, setActiveSessionToken] = useState<string | null>(null);
   const [currentMessage, setCurrentMessage] = useState<string | null>(null);

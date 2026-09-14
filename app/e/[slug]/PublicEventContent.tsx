@@ -6,7 +6,6 @@ import type { Event } from "@/data/mockEvents";
 import { formatDateLong } from "@/lib/formatDate";
 import ParticipantJourney from "@/components/participant-journey/ParticipantJourney";
 import JourneyHeader from "@/components/participant-journey/JourneyHeader";
-import { readJourneyActiveFromStorage } from "@/lib/participant-journey/read-journey-active";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -26,9 +25,8 @@ export default function PublicEventContent({
 }: PublicEventContentProps) {
   const [photoMode] = useState<"bw" | "color">(event.heroImageMode === "color" ? "color" : "bw");
   const startAtGarden = initialPanel === "songgarden";
-  const [journeyActive, setJourneyActive] = useState(() =>
-    readJourneyActiveFromStorage(event, startAtGarden)
-  );
+  // Hard refresh restarts the journey — do not restore "active" from localStorage.
+  const [journeyActive, setJourneyActive] = useState(startAtGarden);
   const compactHeader = journeyActive || startAtGarden;
 
   return (

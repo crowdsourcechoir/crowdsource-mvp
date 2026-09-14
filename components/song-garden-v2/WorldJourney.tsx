@@ -64,7 +64,6 @@ import { writeWorldThemeCache, firstWorldSceneUrl } from "@/lib/song-garden-v2/w
 import {
   appendGrowthNode,
   clearGrowthNodes,
-  loadGrowthNodes,
   type WorldGrowthNode,
 } from "@/lib/song-garden-v2/growth-nodes";
 import {
@@ -98,22 +97,6 @@ const CHANNEL_LABELS: Record<AnswerChannel, string> = {
   photo: "Photo",
 };
 
-function loadJourneyPosition(eventId: string, interviewVersion: string): JourneyPosition | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(journeyPositionKey(eventId));
-    if (!raw) return null;
-    const saved = JSON.parse(raw) as JourneyPosition;
-    if (saved.interviewVersion !== interviewVersion) return null;
-    // Migrate legacy lyric/garden positions → restart landing (version bump usually handles this).
-    if (saved.phase === "lyric" || saved.phase === "garden" || saved.phase === "sound_transition") {
-      return null;
-    }
-    return saved;
-  } catch {
-    return null;
-  }
-}
 
 function saveJourneyPosition(eventId: string, position: JourneyPosition): void {
   if (typeof window === "undefined") return;
@@ -134,6 +117,23 @@ function clearJourneySession(event: Event, interviewVersion: string, sessionToke
   } catch {
     // ignore
   }
+}
+
+/**
+ * Hard refresh / full remount always restarts at landing.
+ * Keeps device id + contributor name so clip uploads stay attributed.
+ */
+function resetJourneyProgressForFreshLoad(event: Event, interviewVersion: string): void {
+  if (typeof window === "undefined") return;
+  let sessionToken: string | null = null;
+  try {
+    sessionToken = localStorage.getItem(sessionTokenKey(event.id, interviewVersion));
+  } catch {
+    sessionToken = null;
+  }
+  clearJourneySession(event, interviewVersion, sessionToken);
+  clearDoneSlots(event.id);
+  clearGrowthNodes(event.id);
 }
 
 function suggestedTypesForStep(step: JourneyStep): AgentNextMessageResponse["suggestedAnswerTypes"] {
@@ -182,12 +182,12 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   }, [event.slug, world]);
 
   const [position, setPosition] = useState<JourneyPosition>(() => {
-    const saved = loadJourneyPosition(event.id, interviewVersion);
-    if (saved) return saved;
+    // Full page load (incl. hard refresh) always restarts — do not resume mid-journey.
+    resetJourneyProgressForFreshLoad(event, interviewVersion);
     return { phase: "landing", gardenSlotIndex: 0, stepIndex: 0, interviewVersion };
   });
 
-  const [journeyStarted, setJourneyStarted] = useState(position.phase !== "landing");
+  const [journeyStarted, setJourneyStarted] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [activeSessionToken, setActiveSessionToken] = useState<string | null>(null);
   const [conversationReady, setConversationReady] = useState(false);
@@ -203,9 +203,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const contributionConsentLabel = contributionConsentText(event);
   const [worldUnlocked, setWorldUnlocked] = useState(false);
   const [burstMessage, setBurstMessage] = useState("Got it");
-  const [localGrowthNodes, setLocalGrowthNodes] = useState<WorldGrowthNode[]>(() =>
-    loadGrowthNodes(event.id)
-  );
+  const [localGrowthNodes, setLocalGrowthNodes] = useState<WorldGrowthNode[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<AnswerChannel | null>(null);
 
   const growthNodes = useMemo((): WorldGrowthNode[] => {
@@ -679,6 +677,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
     setSelectedChannel(null);
     setSending(false);
   }
+
 
   // Name is only asked when Joel adds an explicit name step to the journey.
   const finalMessage = event.anthemCompletionMessage?.trim() || DEFAULT_JOURNEY_FINAL_MESSAGE;
