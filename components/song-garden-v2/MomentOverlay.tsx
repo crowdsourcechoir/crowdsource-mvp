@@ -29,7 +29,7 @@ export default function MomentOverlay({
   children,
 }: MomentOverlayProps) {
   return (
-    <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-end overflow-y-auto px-3 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-2 sm:justify-center sm:px-6 sm:pb-6 sm:pt-6">
+    <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-start overflow-y-auto px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 sm:justify-start sm:px-6 sm:pb-6 sm:pt-2">
       <AnimatePresence mode="wait">
         <motion.div
           key={momentKey}

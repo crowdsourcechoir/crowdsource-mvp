@@ -155,9 +155,11 @@ export default function VideoMomentPad({
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
-            width: { ideal: 640, max: 960 },
-            height: { ideal: 360, max: 540 },
-            frameRate: { ideal: 20, max: 24 },
+            // Prefer portrait so the phone viewfinder / Composer frame match.
+            width: { ideal: 720, max: 1080 },
+            height: { ideal: 1280, max: 1920 },
+            aspectRatio: { ideal: 9 / 16 },
+            frameRate: { ideal: 24, max: 30 },
           },
           audio: {
             echoCancellation: true,
@@ -169,9 +171,10 @@ export default function VideoMomentPad({
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
-            width: { ideal: 640, max: 960 },
-            height: { ideal: 360, max: 540 },
-            frameRate: { ideal: 20, max: 24 },
+            width: { ideal: 720, max: 1080 },
+            height: { ideal: 1280, max: 1920 },
+            aspectRatio: { ideal: 9 / 16 },
+            frameRate: { ideal: 24, max: 30 },
           },
           audio: false,
         });

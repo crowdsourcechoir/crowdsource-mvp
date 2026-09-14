@@ -18,7 +18,7 @@ export default function WorldBloomLogo({ url, maxWidthPx }: Props) {
       <img
         src={src}
         alt=""
-        className="h-auto w-auto max-h-[18vh] max-w-[min(100%,42vw)] opacity-95 drop-shadow-lg sm:max-h-none sm:max-w-full"
+        className="h-auto w-auto max-h-[14vh] max-w-[min(100%,38vw)] opacity-95 drop-shadow-lg sm:max-h-[16vh] sm:max-w-[min(100%,280px)]"
         style={{ maxWidth: width }}
       />
     </div>

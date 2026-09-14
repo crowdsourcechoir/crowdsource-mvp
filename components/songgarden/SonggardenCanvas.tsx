@@ -894,7 +894,7 @@ export default function SonggardenCanvas({
               {videoByPrompt.map((group) => (
                 <div key={group.key} className="space-y-2">
                   <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {group.answers.map((item) => (
                       <ComposerMediaCard
                         key={item.id}

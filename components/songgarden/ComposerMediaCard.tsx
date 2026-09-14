@@ -36,7 +36,7 @@ export default function ComposerMediaCard({
   if (!url.trim()) {
     return (
       <figure className="overflow-hidden rounded-xl border border-red-800/40 bg-red-950/30">
-        <p className="flex aspect-video items-center justify-center px-3 text-center text-xs text-red-300">
+        <p className="flex aspect-[9/16] max-h-[420px] items-center justify-center px-3 text-center text-xs text-red-300">
           Could not load media for this response.
         </p>
         <figcaption className="space-y-1 px-3 py-2">
@@ -47,9 +47,9 @@ export default function ComposerMediaCard({
   }
 
   return (
-    <figure className="overflow-hidden rounded-xl border border-white/10 bg-black/30">
+    <figure className="mx-auto w-full max-w-[280px] overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/30 shadow-[0_12px_40px_-20px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
       {failed ? (
-        <p className="flex aspect-video items-center justify-center border border-red-800/40 bg-red-950/30 px-3 text-center text-xs text-red-300">
+        <p className="flex aspect-[9/16] items-center justify-center border border-red-800/40 bg-red-950/30 px-3 text-center text-xs text-red-300">
           Could not load {photo ? "photo" : "video"} for this response.
         </p>
       ) : photo ? (
@@ -57,7 +57,7 @@ export default function ComposerMediaCard({
         <img
           src={url}
           alt=""
-          className="aspect-video w-full bg-black object-cover"
+          className="aspect-[9/16] w-full bg-black object-cover"
           onError={() => setFailed(true)}
         />
       ) : (
@@ -66,7 +66,7 @@ export default function ComposerMediaCard({
           controls
           playsInline
           preload="metadata"
-          className="aspect-video w-full bg-black"
+          className="aspect-[9/16] w-full bg-black object-cover"
           onError={() => setFailed(true)}
         />
       )}

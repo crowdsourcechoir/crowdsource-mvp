@@ -722,7 +722,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         <WorldPresenceTicker
           eventId={event.id}
           accentColor={world.accentColor}
-          className={world.logoUrl ? "mt-2" : "mt-4"}
+          className={world.logoUrl ? "mt-1.5" : "mt-3"}
         />
       )}
 

@@ -80,8 +80,10 @@ async function getCameraStream(): Promise<MediaStream> {
       navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
+          // Prefer portrait so the phone viewfinder / Composer frame match.
+          width: { ideal: 1080, max: 1920 },
+          height: { ideal: 1920, max: 2560 },
+          aspectRatio: { ideal: 9 / 16 },
         },
         audio: false,
       })
@@ -105,7 +107,7 @@ async function getCameraStream(): Promise<MediaStream> {
 /**
  * Still-photo capture for journey prompts.
  * Idle Snap stays on the glass card; once the camera opens we switch to a
- * full-screen phone-camera viewfinder (large preview + bottom shutter).
+ * portrait phone-frame viewfinder (tall on desktop, full-bleed on mobile).
  */
 export default function PhotoMomentPad({
   promptText,
