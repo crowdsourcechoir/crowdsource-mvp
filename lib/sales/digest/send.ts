@@ -23,7 +23,6 @@ import {
 import {
   appendDigestedQueueItemIds,
   bootstrapDigestedIdsIfEmpty,
-  readDigestedQueueItemIds,
 } from "./digested-ids";
 import { siteUrl } from "@/lib/site-url";
 import type { ApprovalQueueItem, QueueItemDetail } from "../types";
@@ -81,13 +80,11 @@ async function assembleQualifying(
 /**
  * Loads pending queue items for the daily digest — net-new high scorers only.
  *
- * Preference order:
- * 1. Pending ≥ minScore never included in a prior digest (`last_digested_at` null)
- * 2. Soft-store fallback when the column isn't migrated yet
- * 3. Brand-new since last delivered digest (created_at cutoff)
- *
- * Does NOT recycle already-emailed pending leads. Under-target is fine — pipeline
- * top-up in `ensureDigestTarget` should mint net-new rows overnight.
+ * Only includes pending rows created since the last delivered digest (or the
+ * lookback window), minus anything already marked digested in Postgres
+ * (`last_digested_at`) or the soft-store. Never fills from older pending —
+ * that path recycled the same 70+ conference orgs every morning when marks
+ * were missing. Under-target is fine; `ensureDigestTarget` tops up overnight.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
@@ -102,36 +99,29 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   const backlogCount = await countPendingQueueItems();
 
   const neverDigested = await listPendingNeverDigestedQueueItems();
-  if (neverDigested) {
-    // Prefer brand-new never-digested (created since last digest). Older never-digested
-    // are stranded net-new (never emailed) — fill with those only after fresh ones.
-    const fresh = neverDigested.filter((item) => item.createdAt >= sinceIso);
-    let items = await assembleQualifying(fresh, minScore, targetCount);
-    if (items.length < targetCount) {
-      const seen = new Set(items.map((i) => i.queueItem.id));
-      const stranded = neverDigested.filter((item) => !seen.has(item.id));
-      const more = await assembleQualifying(stranded, minScore, targetCount - items.length);
-      if (more.length > 0) {
-        items = dedupeDigestItemsByOrganization([...items, ...more]).slice(0, targetCount);
-      }
-    }
-    return { items, sinceIso, backlogCount, backfilled: false };
-  }
-
-  // Column missing — soft store + created_at cutoff.
-  const allPending = await listQueueItems("pending");
+  const allPending = neverDigested ?? (await listQueueItems("pending"));
+  // Seed soft-store from historical pending so already-surfaced leads stay out
+  // even when last_digested_at was never written by older digest sends.
   const digested = await bootstrapDigestedIdsIfEmpty(allPending, sinceIso);
-  const undigestedPending = allPending.filter((item) => !digested.has(item.id));
-  let items = await assembleQualifying(undigestedPending, minScore, targetCount);
 
-  if (items.length < targetCount) {
-    const seen = new Set(items.map((i) => i.queueItem.id));
-    const fresh = (await listQueueItemsCreatedSince(sinceIso)).filter((item) => !seen.has(item.id) && !digested.has(item.id));
-    const more = await assembleQualifying(fresh, minScore, targetCount - items.length);
-    if (more.length > 0) {
-      items = dedupeDigestItemsByOrganization([...items, ...more]).slice(0, targetCount);
+  const freshUndigested = allPending.filter(
+    (item) => item.createdAt >= sinceIso && !digested.has(item.id)
+  );
+  // Also pull created_at-since from the DB in case the never-digested query
+  // paginated / truncated the in-memory list.
+  const sinceRows = (await listQueueItemsCreatedSince(sinceIso)).filter((item) => !digested.has(item.id));
+  const byId = new Map<string, (typeof allPending)[number]>();
+  for (const item of [...freshUndigested, ...sinceRows]) byId.set(item.id, item);
+  // When the column exists, drop anything already marked digested there.
+  if (neverDigested) {
+    const neverSet = new Set(neverDigested.map((i) => i.id));
+    for (const id of [...byId.keys()]) {
+      if (!neverSet.has(id)) byId.delete(id);
     }
   }
+
+  const candidates = [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const items = await assembleQualifying(candidates, minScore, targetCount);
 
   return { items, sinceIso, backlogCount, backfilled: false };
 }

@@ -1,7 +1,9 @@
-import type { QueueItemDetail } from "../types";
+import type { Contact, QueueItemDetail } from "../types";
 import { digestCategoryLabel } from "./qualify";
 import { getDigestCategoryFilter } from "./config";
 import type { QueueCategoryFilter } from "../queue/category";
+import { MAX_HUNTER_CONTACTS_PER_ORG, hunterPersonRank } from "../enrichment/hunter-org-budget";
+import { hasVerifiedEmail } from "../dedupe";
 
 export type DigestStats = {
   newCount: number;
@@ -13,17 +15,56 @@ export type DigestStats = {
   category?: QueueCategoryFilter;
 };
 
+/** Digest shows at most top-3 contacts — matches Hunter per-org credit cap. */
+export const MAX_DIGEST_CONTACTS_PER_ORG = MAX_HUNTER_CONTACTS_PER_ORG;
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 }
 
-function contactLine(item: QueueItemDetail): string {
-  if (!item.contact) return "No contact on file yet";
-  const status = item.contact.emailVerificationStatus;
-  const statusLabel = status === "verified_deliverable" ? "verified" : status === "valid_format" ? "valid format" : status;
-  const name = item.contact.fullName ?? "Unnamed contact";
-  const email = item.contact.email ?? "no email";
-  return `${name} — ${item.contact.roleTitle ?? "role unknown"} (${email}, ${statusLabel})`;
+function formatContactLine(contact: Contact): string {
+  const status = contact.emailVerificationStatus;
+  const statusLabel =
+    status === "verified_deliverable" ? "verified" : status === "valid_format" ? "valid format" : status ?? "unknown";
+  const name = contact.fullName ?? "Unnamed contact";
+  const email = contact.email ?? "no email";
+  return `${name} — ${contact.roleTitle ?? "role unknown"} (${email}, ${statusLabel})`;
+}
+
+/** Rank selectable contacts: verified/email first, then seniority — cap at top 3. */
+export function pickDigestContacts(item: QueueItemDetail, limit = MAX_DIGEST_CONTACTS_PER_ORG): Contact[] {
+  const pool = item.contacts.length > 0 ? item.contacts : item.contact ? [item.contact] : [];
+  if (pool.length === 0) return [];
+  const ranked = [...pool].sort((a, b) => {
+    const emailRank = (c: Contact) => (hasVerifiedEmail(c) ? 0 : c.email ? 1 : 2);
+    const byEmail = emailRank(a) - emailRank(b);
+    if (byEmail !== 0) return byEmail;
+    return (
+      hunterPersonRank({ seniority: null, position: b.roleTitle, confidence: null }) -
+      hunterPersonRank({ seniority: null, position: a.roleTitle, confidence: null })
+    );
+  });
+  // Keep primary draft contact first when present.
+  if (item.contact) {
+    const primaryId = item.contact.id;
+    ranked.sort((a, b) => Number(b.id === primaryId) - Number(a.id === primaryId));
+  }
+  const seen = new Set<string>();
+  const out: Contact[] = [];
+  for (const c of ranked) {
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    out.push(c);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function contactLines(item: QueueItemDetail): string[] {
+  const contacts = pickDigestContacts(item);
+  if (contacts.length === 0) return ["No contact on file yet"];
+  if (contacts.length === 1) return [`Contact: ${formatContactLine(contacts[0]!)}`];
+  return contacts.map((c, i) => `Contact ${i + 1}: ${formatContactLine(c)}`);
 }
 
 function itemToPlainLines(item: QueueItemDetail, baseUrl: string): string[] {
@@ -32,7 +73,7 @@ function itemToPlainLines(item: QueueItemDetail, baseUrl: string): string[] {
   return [
     `${item.organization.name} — ${item.opportunity.title} (score: ${score})`,
     `  ${item.opportunityTypeLabel ?? "Uncategorized"}${item.organizationTypeLabel ? ` · ${item.organizationTypeLabel}` : ""}`,
-    `  Contact: ${contactLine(item)}`,
+    ...contactLines(item).map((line) => `  ${line}`),
     item.queueItem.duplicateWarning ? "  ⚠ possible duplicate — check before approving" : "",
     `  Review: ${opportunityUrl}`,
   ].filter(Boolean);
@@ -41,6 +82,12 @@ function itemToPlainLines(item: QueueItemDetail, baseUrl: string): string[] {
 function itemToHtmlBlock(item: QueueItemDetail, baseUrl: string): string {
   const score = item.score ? `${item.score.totalScore}/100` : "not scored";
   const opportunityUrl = `${baseUrl}/admin/sales/opportunities/${item.opportunity.id}`;
+  const contactsHtml = contactLines(item)
+    .map(
+      (line) =>
+        `<div style="font-size:13px;color:#d4d4d8;margin-top:4px;">${escapeHtml(line)}</div>`
+    )
+    .join("");
   return `
     <tr>
       <td style="padding:14px 0;border-bottom:1px solid #27272a;">
@@ -52,7 +99,7 @@ function itemToHtmlBlock(item: QueueItemDetail, baseUrl: string): string {
             item.organizationTypeLabel ? ` · ${escapeHtml(item.organizationTypeLabel)}` : ""
           }
         </div>
-        <div style="font-size:13px;color:#d4d4d8;margin-top:6px;">Contact: ${escapeHtml(contactLine(item))}</div>
+        ${contactsHtml}
         ${
           item.queueItem.duplicateWarning
             ? `<div style="font-size:13px;color:#fbbf24;margin-top:4px;">⚠ Possible duplicate — check before approving</div>`
