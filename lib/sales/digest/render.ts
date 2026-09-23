@@ -76,13 +76,12 @@ export function renderDigestEmail(items: QueueItemDetail[], stats: DigestStats, 
       : category === "conferences"
         ? "conference orgs"
         : `${categoryLabel.toLowerCase()} orgs`;
+  const introEmpty = `No new ${noun} scoring ${barLabel} reached the review queue since the last digest — the pipeline is still working toward that bar.`;
+  const introSome = `${stats.newCount} net-new ${noun} scoring ${barLabel} reached the review queue:`;
   const subject =
     stats.newCount === 0
       ? `Crowdsource Sales: no new ${barLabel} ${noun} yet (still working)`
-      : `Crowdsource Sales: ${stats.newCount} new ${barLabel} ${noun} ready for review`;
-
-  const introEmpty = `No new ${noun} scoring ${barLabel} reached the review queue since the last digest — the pipeline is still working toward that bar.`;
-  const introSome = `${stats.newCount} new ${noun} scoring ${barLabel} reached the review queue:`;
+      : `Crowdsource Sales: ${stats.newCount} net-new ${barLabel} ${noun} ready for review`;
 
   const text = [
     stats.newCount === 0 ? introEmpty : introSome,

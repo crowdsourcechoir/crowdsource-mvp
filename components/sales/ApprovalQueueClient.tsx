@@ -41,7 +41,7 @@ import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrg
 import AddContactForm from "@/components/sales/AddContactForm";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
-import FollowUpControls from "@/components/sales/FollowUpControls";
+import QueueOrgWorkspace from "@/components/sales/QueueOrgWorkspace";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import FillQueueClient from "@/components/sales/FillQueueClient";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
@@ -1117,18 +1117,22 @@ export default function ApprovalQueueClient() {
           ) : null}
 
           {current.opportunity.id ? (
-            <div className="mt-4">
-              <FollowUpControls
-                opportunityId={current.opportunity.id}
-                nextFollowUpAt={current.opportunity.nextFollowUpAt}
-                onSaved={(nextFollowUpAt) => {
-                  replaceDetail(current.queueItem.id, {
-                    ...current,
-                    opportunity: { ...current.opportunity, nextFollowUpAt },
-                  });
-                }}
-              />
-            </div>
+            <QueueOrgWorkspace
+              organization={current.organization}
+              opportunity={current.opportunity}
+              onOrganizationSaved={(organization) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  organization,
+                });
+              }}
+              onFollowUpSaved={(nextFollowUpAt) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  opportunity: { ...current.opportunity, nextFollowUpAt },
+                });
+              }}
+            />
           ) : null}
 
           {current.brief && (

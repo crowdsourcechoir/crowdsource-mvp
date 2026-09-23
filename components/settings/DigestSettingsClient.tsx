@@ -183,6 +183,7 @@ export default function DigestSettingsClient() {
         ) : null}
         <InlineNote>
           Includes conference organization leads only (not sports, fundraisers, arts, or tech). One entry per org.
+          Only net-new never-digested leads — yesterday&apos;s set will not reappear.
         </InlineNote>
         {settings && settings.transport === "none" ? (
           <InlineNote tone="warn">{settings.transportReason ?? "No mailer configured — sends will be skipped."}</InlineNote>
@@ -199,7 +200,7 @@ export default function DigestSettingsClient() {
       <SettingsPanel
         eyebrow="Thresholds"
         title="When it sends and to whom"
-        description="Sends once per day with up to the target org count. Prefers high-score conference orgs, then backfills from that backlog so it still goes out."
+        description="Sends once per day with up to the target count of net-new high-score conference orgs. Already-emailed leads are not recycled."
         actions={
           <SettingsButton
             variant="primary"

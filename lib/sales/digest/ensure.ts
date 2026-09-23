@@ -71,11 +71,11 @@ async function listNearMissOrganizationIds(limit: number): Promise<string[]> {
 /**
  * Cron orchestrator for the daily digest.
  *
- * Tops up the pipeline toward `SALES_DIGEST_TARGET_COUNT` leads (preferring
- * `SALES_DIGEST_MIN_SCORE`+), then sends. Under-target is no longer a hard stop: after the
- * top-up budget we send whatever is ready (backfilled from the pending backlog) so the email
- * actually lands every day. `deferred` is only used when nothing is ready yet but more
- * pipeline/salvage work remains — those runs do NOT advance the "new since" cutoff.
+ * Tops up the pipeline toward `SALES_DIGEST_TARGET_COUNT` net-new ≥ minScore leads,
+ * then sends. Never recycles already-digested pending rows — under-target means send
+ * what is newly ready (or defer if zero) rather than re-emailing yesterday's set.
+ * `deferred` is only used when nothing net-new is ready yet but more pipeline/salvage
+ * work remains — those runs do NOT advance the "new since" cutoff.
  */
 export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): Promise<DigestEnsureResult> {
   const digestSettings = await resolveDigestSettings();
@@ -170,7 +170,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
     break;
   }
 
-  // Reload after top-up so always-on backfill (including below-minScore fill) is applied.
+  // Reload after top-up so newly queued net-new leads are included.
   loaded = await loadQualifyingDigestItems(minScore);
 
   if (loaded.items.length === 0) {

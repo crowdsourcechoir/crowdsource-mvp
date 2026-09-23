@@ -293,6 +293,8 @@ export type ApprovalQueueItem = {
   decidedBy: string | null;
   decidedAt: string | null;
   deferredUntil: string | null;
+  /** Set when this row was included in a morning digest (null until migration / first send). */
+  lastDigestedAt: string | null;
   createdAt: string;
 };
 

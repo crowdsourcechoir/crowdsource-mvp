@@ -28,6 +28,7 @@ function stubItem(overrides: {
       decidedBy: null,
       decidedAt: null,
       deferredUntil: null,
+      lastDigestedAt: null,
       createdAt: new Date().toISOString(),
     },
     opportunity: {
@@ -39,7 +40,7 @@ function stubItem(overrides: {
       eventDateEstimate: null,
       eventDateConfidence: null,
       description: null,
-      status: "identified",
+      status: "researching",
       targetContactRoleHint: null,
       relationshipStage: null,
       stageUpdatedAt: null,

@@ -1,4 +1,11 @@
-import { listQueueItems, listQueueItemsCreatedSince, countPendingQueueItems, scoresByQueueItemId } from "../db/queue";
+import {
+  listQueueItems,
+  listQueueItemsCreatedSince,
+  listPendingNeverDigestedQueueItems,
+  markQueueItemsDigested,
+  countPendingQueueItems,
+  scoresByQueueItemId,
+} from "../db/queue";
 import { assembleQueueItemDetailFromQueueItem } from "../db/assemble";
 import { createDigestRun, finishDigestRun, getLastDeliveredDigestRun } from "../db/digestRuns";
 import { getGmailConnectionStatus } from "../db/gmail";
@@ -13,6 +20,11 @@ import {
   filterDigestQualifyingItems,
   sortByScoreDesc,
 } from "./qualify";
+import {
+  appendDigestedQueueItemIds,
+  bootstrapDigestedIdsIfEmpty,
+  readDigestedQueueItemIds,
+} from "./digested-ids";
 import { siteUrl } from "@/lib/site-url";
 import type { ApprovalQueueItem, QueueItemDetail } from "../types";
 
@@ -32,11 +44,7 @@ const ASSEMBLE_CONCURRENCY = 4;
 
 /**
  * Rank by score with one batched query, then assemble details only for the leads that will
- * actually appear in the email. Assembling the whole pending backlog first is what made the
- * digest time out before it could send.
- *
- * Walks the score-ranked shortlist until `limit` conference (or configured-category) org leads
- * are collected — one row per organization.
+ * actually appear in the email.
  */
 async function assembleQualifying(
   queueItems: ApprovalQueueItem[],
@@ -71,15 +79,15 @@ async function assembleQualifying(
 }
 
 /**
- * Loads pending queue items for the daily digest.
+ * Loads pending queue items for the daily digest — net-new high scorers only.
  *
- * Cutoff uses the last digest that actually delivered leads (item_count > 0), so empty heartbeat
- * sends cannot strand the pending backlog. Always backfills older pending leads (preferring
- * minScore+) up to the target count so the morning email can ship ~10 leads every day instead of
- * waiting forever for brand-new 70+ rows.
+ * Preference order:
+ * 1. Pending ≥ minScore never included in a prior digest (`last_digested_at` null)
+ * 2. Soft-store fallback when the column isn't migrated yet
+ * 3. Brand-new since last delivered digest (created_at cutoff)
  *
- * Only organization leads in the configured category (default: conferences) are included —
- * one entry per org.
+ * Does NOT recycle already-emailed pending leads. Under-target is fine — pipeline
+ * top-up in `ensureDigestTarget` should mint net-new rows overnight.
  */
 export async function loadQualifyingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
@@ -90,73 +98,65 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   const lastDelivered = await getLastDeliveredDigestRun();
   const sinceIso =
     lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
-  const targetCount = getDigestTargetCount();
+  const targetCount = Math.min(getDigestTargetCount(), MAX_DIGEST_ITEMS);
+  const backlogCount = await countPendingQueueItems();
 
-  const [newQueueItems, backlogCount] = await Promise.all([listQueueItemsCreatedSince(sinceIso), countPendingQueueItems()]);
-  let items = await assembleQualifying(newQueueItems, minScore, MAX_DIGEST_ITEMS);
-  let backfilled = false;
+  const neverDigested = await listPendingNeverDigestedQueueItems();
+  if (neverDigested) {
+    // Prefer brand-new never-digested (created since last digest). Older never-digested
+    // are stranded net-new (never emailed) — fill with those only after fresh ones.
+    const fresh = neverDigested.filter((item) => item.createdAt >= sinceIso);
+    let items = await assembleQualifying(fresh, minScore, targetCount);
+    if (items.length < targetCount) {
+      const seen = new Set(items.map((i) => i.queueItem.id));
+      const stranded = neverDigested.filter((item) => !seen.has(item.id));
+      const more = await assembleQualifying(stranded, minScore, targetCount - items.length);
+      if (more.length > 0) {
+        items = dedupeDigestItemsByOrganization([...items, ...more]).slice(0, targetCount);
+      }
+    }
+    return { items, sinceIso, backlogCount, backfilled: false };
+  }
 
-  // Always fill toward the daily target from older pending leads (minScore first).
+  // Column missing — soft store + created_at cutoff.
+  const allPending = await listQueueItems("pending");
+  const digested = await bootstrapDigestedIdsIfEmpty(allPending, sinceIso);
+  const undigestedPending = allPending.filter((item) => !digested.has(item.id));
+  let items = await assembleQualifying(undigestedPending, minScore, targetCount);
+
   if (items.length < targetCount) {
-    const seenQueue = new Set(items.map((i) => i.queueItem.id));
-    const seenOrgs = new Set(items.map((i) => i.organization.id));
-    const allPending = (await listQueueItems("pending")).filter((item) => !seenQueue.has(item.id));
-    const need = Math.min(targetCount, MAX_DIGEST_ITEMS) - items.length;
-    const older = (await assembleQualifying(allPending, minScore, need + 8)).filter(
-      (item) => !seenOrgs.has(item.organization.id)
-    );
-    if (older.length > 0) {
-      items = dedupeDigestItemsByOrganization([...items, ...older]).slice(0, Math.min(targetCount, MAX_DIGEST_ITEMS));
-      backfilled = true;
+    const seen = new Set(items.map((i) => i.queueItem.id));
+    const fresh = (await listQueueItemsCreatedSince(sinceIso)).filter((item) => !seen.has(item.id) && !digested.has(item.id));
+    const more = await assembleQualifying(fresh, minScore, targetCount - items.length);
+    if (more.length > 0) {
+      items = dedupeDigestItemsByOrganization([...items, ...more]).slice(0, targetCount);
     }
   }
 
-  // Still short? Fill remaining slots with next-best pending leads below minScore so we still
-  // ship ~targetCount daily ("10 new no matter what") instead of deferring forever.
-  if (items.length < targetCount) {
-    const seenQueue = new Set(items.map((i) => i.queueItem.id));
-    const seenOrgs = new Set(items.map((i) => i.organization.id));
-    const allPending = (await listQueueItems("pending")).filter((item) => !seenQueue.has(item.id));
-    const need = Math.min(targetCount, MAX_DIGEST_ITEMS) - items.length;
-    const filler = (await assembleQualifying(allPending, 0, need + 8)).filter(
-      (item) => !seenOrgs.has(item.organization.id)
-    );
-    if (filler.length > 0) {
-      items = dedupeDigestItemsByOrganization([...items, ...filler]).slice(0, Math.min(targetCount, MAX_DIGEST_ITEMS));
-      backfilled = true;
-    }
-  }
-
-  return { items, sinceIso, backlogCount, backfilled };
+  return { items, sinceIso, backlogCount, backfilled: false };
 }
 
-/** All pending queue items at/above the digest min score — used for force-resend with corrected links. */
+/** Force-resend path: still prefer never-digested so we don't re-spam the same set. */
 export async function loadAllPendingDigestItems(minScore = getDigestMinScore()): Promise<{
   items: QueueItemDetail[];
   sinceIso: string;
   backlogCount: number;
 }> {
-  const [allPending, backlogCount, lastDelivered] = await Promise.all([
-    listQueueItems("pending"),
-    countPendingQueueItems(),
-    getLastDeliveredDigestRun(),
-  ]);
-  const sinceIso =
-    lastDelivered?.finishedAt ?? new Date(Date.now() - DEFAULT_FALLBACK_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
-  const items = await assembleQualifying(allPending, minScore, MAX_DIGEST_ITEMS);
-  return { items, sinceIso, backlogCount };
+  const loaded = await loadQualifyingDigestItems(minScore);
+  return { items: loaded.items, sinceIso: loaded.sinceIso, backlogCount: loaded.backlogCount };
+}
+
+async function recordDigested(items: QueueItemDetail[]): Promise<void> {
+  const ids = items.map((i) => i.queueItem.id);
+  await markQueueItemsDigested(ids);
+  await appendDigestedQueueItemIds(ids);
 }
 
 /**
- * Sends the "new leads since last digest" email — the actual "in my inbox every morning" piece.
+ * Sends the morning digest of net-new high-scoring leads.
  *
- * Delivery is Gmail-only (connected account mailing itself). Resend is reserved for OCTO
- * marketing campaigns. Missing Gmail is recorded as `skipped_no_provider`, never an error —
- * same graceful-degradation contract as discovery/enrichment.
- *
- * Prefers leads scoring >= SALES_DIGEST_MIN_SCORE (default 70), then backfills to the daily
- * target from the pending backlog (including lower scores if needed). Cron callers use
- * `ensureDigestTarget`, which tops up then sends once per day rather than waiting forever.
+ * Delivery is Gmail-only. Prefers ≥ SALES_DIGEST_MIN_SCORE never-digested conference orgs.
+ * Marks included rows so they cannot reappear tomorrow.
  */
 export async function sendDailyDigest(
   trigger: "manual" | "cron" = "cron",
@@ -187,6 +187,16 @@ export async function sendDailyDigest(
         ? { items: options.items, sinceIso: options.sinceIso, backlogCount: options.backlogCount }
         : await loadQualifyingDigestItems(minScore);
 
+    if (loaded.items.length === 0) {
+      await finishDigestRun(digestRun.id, {
+        status: "succeeded",
+        itemCount: 0,
+        recipient: to,
+        providerMessageId: null,
+      });
+      return { status: "succeeded", itemCount: 0, minScore, transport: "gmail" };
+    }
+
     const { subject, html, text } = renderDigestEmail(
       loaded.items,
       {
@@ -207,10 +217,16 @@ export async function sendDailyDigest(
       recipient: to,
       providerMessageId: sent.messageId,
     });
+    await recordDigested(loaded.items);
     return { status: "succeeded", itemCount: loaded.items.length, minScore, transport: "gmail" };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await finishDigestRun(digestRun.id, { status: "failed", recipient: to, error: message });
     return { status: "failed", itemCount: 0, minScore, transport: chosen.transport, error: message };
   }
+}
+
+/** Test helper — soft store read. */
+export async function __testReadDigestedIds(): Promise<Set<string>> {
+  return readDigestedQueueItemIds();
 }

@@ -37,14 +37,62 @@ export async function GET(_request: Request, { params }: { params: Promise<{ org
   }
 }
 
+function optionalString(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ orgId: string }> }) {
   try {
     const { orgId } = await params;
-    const body = await request.json();
-    if (typeof body?.isExistingClient !== "boolean") {
-      return NextResponse.json({ error: "isExistingClient (boolean) is required" }, { status: 400 });
+    const existing = await getOrganization(orgId);
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const body = await request.json().catch(() => ({}));
+    const patch: Parameters<typeof updateOrganization>[1] = {};
+
+    const name = optionalString(body?.name);
+    if (name !== undefined) {
+      if (!name) return NextResponse.json({ error: "name cannot be empty" }, { status: 400 });
+      patch.name = name;
     }
-    const organization = await updateOrganization(orgId, { isExistingClient: body.isExistingClient });
+
+    const websiteUrl = optionalString(body?.websiteUrl);
+    if (websiteUrl !== undefined) patch.websiteUrl = websiteUrl;
+
+    const locationCity = optionalString(body?.locationCity);
+    if (locationCity !== undefined) patch.locationCity = locationCity;
+
+    const locationRegion = optionalString(body?.locationRegion);
+    if (locationRegion !== undefined) patch.locationRegion = locationRegion;
+
+    const locationCountry = optionalString(body?.locationCountry);
+    if (locationCountry !== undefined) patch.locationCountry = locationCountry;
+
+    if (typeof body?.isExistingClient === "boolean") {
+      patch.isExistingClient = body.isExistingClient;
+    }
+
+    const operatorNotes = optionalString(body?.operatorNotes);
+    if (operatorNotes !== undefined) {
+      patch.importMetadata = {
+        ...(existing.importMetadata ?? {}),
+        operatorNotes: operatorNotes ?? null,
+        operatorNotesUpdatedAt: new Date().toISOString(),
+      };
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json(
+        { error: "Provide at least one of: name, websiteUrl, locationCity, locationRegion, locationCountry, isExistingClient, operatorNotes" },
+        { status: 400 }
+      );
+    }
+
+    const organization = await updateOrganization(orgId, patch);
     return NextResponse.json({ organization });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
