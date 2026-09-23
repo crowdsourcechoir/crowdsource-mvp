@@ -31,6 +31,7 @@ export type WorldStoryboardFrame = {
 
 /** Lightweight, additive world configuration. Every field has a derived default — nothing here is required. */
 export type WorldConfig = {
+  /** Persistent journey chrome — does not switch to the event title mid-journey. */
   title: string;
   heroArtworkUrl: string | null;
   logoUrl: string | null;
