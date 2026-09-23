@@ -23,6 +23,7 @@ import {
 import {
   appendDigestedQueueItemIds,
   bootstrapDigestedIdsIfEmpty,
+  readDigestedQueueItemIds,
 } from "./digested-ids";
 import { siteUrl } from "@/lib/site-url";
 import type { ApprovalQueueItem, QueueItemDetail } from "../types";
@@ -115,12 +116,12 @@ export async function loadQualifyingDigestItems(minScore = getDigestMinScore()):
   // When the column exists, drop anything already marked digested there.
   if (neverDigested) {
     const neverSet = new Set(neverDigested.map((i) => i.id));
-    for (const id of [...byId.keys()]) {
+    for (const id of Array.from(byId.keys())) {
       if (!neverSet.has(id)) byId.delete(id);
     }
   }
 
-  const candidates = [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const candidates = Array.from(byId.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const items = await assembleQualifying(candidates, minScore, targetCount);
 
   return { items, sinceIso, backlogCount, backfilled: false };
