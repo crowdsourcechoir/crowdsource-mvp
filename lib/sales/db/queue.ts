@@ -378,20 +378,31 @@ export async function listQueueItemsCreatedSince(sinceIso: string): Promise<Appr
 /**
  * Pending queue items that have never been included in a digest email.
  * Returns `null` when the `last_digested_at` column isn't migrated yet so callers can fall back.
+ * Paginated — PostgREST silently caps unpaged selects at 1000 rows.
  */
 export async function listPendingNeverDigestedQueueItems(): Promise<ApprovalQueueItem[] | null> {
   const db = requireSupabaseAdmin();
-  const { data, error } = await db
-    .from("approval_queue_items")
-    .select("*")
-    .eq("status", "pending")
-    .is("last_digested_at", null)
-    .order("created_at", { ascending: false });
-  if (error) {
-    if (isMissingLastDigestedColumn(error.message)) return null;
-    throw new Error(error.message);
+  const pageSize = 1000;
+  const out: ApprovalQueueItem[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await db
+      .from("approval_queue_items")
+      .select("*")
+      .eq("status", "pending")
+      .is("last_digested_at", null)
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      if (isMissingLastDigestedColumn(error.message)) return null;
+      throw new Error(error.message);
+    }
+    const rows = (data ?? []).map(rowToQueueItem);
+    out.push(...rows);
+    if (rows.length < pageSize || from > 8000) break;
+    from += pageSize;
   }
-  return (data ?? []).map(rowToQueueItem);
+  return out;
 }
 
 /**

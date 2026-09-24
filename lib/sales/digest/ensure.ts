@@ -1,6 +1,6 @@
 import { listUnprocessedOrganizations } from "../db/organizations";
 import { listAwaitingContactOrganizationIds } from "../db/awaitingContact";
-import { getLastSucceededDigestRun } from "../db/digestRuns";
+import { getLastDeliveredDigestRun } from "../db/digestRuns";
 import { listQueueItems } from "../db/queue";
 import { assembleQueueItemDetail } from "../db/assemble";
 import { runPipelineBatch, type PipelineBatchSummary } from "../pipeline/run-pipeline-batch";
@@ -71,11 +71,11 @@ async function listNearMissOrganizationIds(limit: number): Promise<string[]> {
 /**
  * Cron orchestrator for the daily digest.
  *
- * Tops up the pipeline toward `SALES_DIGEST_TARGET_COUNT` net-new ≥ minScore leads,
- * then sends. Never recycles already-digested pending rows — under-target means send
- * what is newly ready (or defer if zero) rather than re-emailing yesterday's set.
- * `deferred` is only used when nothing net-new is ready yet but more pipeline/salvage
- * work remains — those runs do NOT advance the "new since" cutoff.
+ * Sends net-new ≥ minScore leads as soon as any are ready. Only runs pipeline
+ * top-up when the net-new pool is empty — do not hold the morning email hostage
+ * while filling toward targetCount (that delayed today's send until mid-morning).
+ * Never recycles already-digested pending rows. `deferred` is only used when
+ * nothing net-new is ready yet but more pipeline/salvage work remains.
  */
 export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): Promise<DigestEnsureResult> {
   const digestSettings = await resolveDigestSettings();
@@ -99,12 +99,13 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
     };
   }
 
-  const lastSucceeded = await getLastSucceededDigestRun();
-  // Once-per-window gate: any successful send (even a partial) counts so we don't spam every tick.
-  if (lastSucceeded?.finishedAt && Date.now() - Date.parse(lastSucceeded.finishedAt) < alreadySentWindowMs) {
+  // Only a real lead delivery blocks the window — empty/heartbeat succeeds must not
+  // prevent a later send once net-new leads appear.
+  const lastDelivered = await getLastDeliveredDigestRun();
+  if (lastDelivered?.finishedAt && Date.now() - Date.parse(lastDelivered.finishedAt) < alreadySentWindowMs) {
     return {
       status: "already_sent",
-      qualifyingCount: lastSucceeded.itemCount,
+      qualifyingCount: lastDelivered.itemCount,
       targetCount,
       minScore,
       topupBatches: 0,
@@ -124,6 +125,29 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
   const nearMissTried = new Set<string>();
   const awaitingTried = new Set<string>();
 
+  // Already have net-new → send now. Overnight pipeline crons own the fill-toward-10 work.
+  if (loaded.items.length > 0) {
+    const send = await sendDailyDigest(trigger, {
+      items: loaded.items,
+      sinceIso: loaded.sinceIso,
+      backlogCount: loaded.backlogCount,
+      minScore,
+    });
+    return {
+      status: send.status === "succeeded" ? "succeeded" : send.status,
+      qualifyingCount: loaded.items.length,
+      targetCount,
+      minScore,
+      topupBatches: 0,
+      discoveryRuns: 0,
+      nearMissReprocesses: 0,
+      awaitingContactReprocesses: 0,
+      pipelineSummaries: [],
+      send,
+      error: send.error,
+    };
+  }
+
   const startedAt = Date.now();
   while (loaded.items.length < targetCount && Date.now() - startedAt < topupBudgetMs) {
     // Highest ROI: solid scorers stuck only on the contact gate.
@@ -137,6 +161,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
         awaitingContactReprocesses += 1;
         await runPipelineForOrganization(orgId, "reprocess_request");
         loaded = await loadQualifyingDigestItems(minScore);
+        if (loaded.items.length > 0) break;
         continue;
       }
     }
@@ -149,6 +174,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       topupBatches += 1;
       if (summary.attempted === 0) break;
       loaded = await loadQualifyingDigestItems(minScore);
+      if (loaded.items.length > 0) break;
       continue;
     }
 
@@ -164,6 +190,7 @@ export async function ensureDigestTarget(trigger: "manual" | "cron" = "cron"): P
       nearMissReprocesses += 1;
       await runPipelineForOrganization(orgId, "reprocess_request");
       loaded = await loadQualifyingDigestItems(minScore);
+      if (loaded.items.length > 0) break;
       continue;
     }
 
