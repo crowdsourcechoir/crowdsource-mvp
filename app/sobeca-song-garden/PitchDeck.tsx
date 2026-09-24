@@ -134,7 +134,7 @@ export default function PitchDeck({
   }, []);
 
   return (
-    <main ref={rootRef} className={`${monoClass} bg-black text-white`}>
+    <main id="sobeca-top" ref={rootRef} className={`${monoClass} bg-black text-white`}>
       <style>{`
         @keyframes pitch-rise {
           from { opacity: 0; transform: translateY(18px); }
@@ -167,7 +167,17 @@ export default function PitchDeck({
               }`}
             >
               <div>
-                <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="pitch-rise mb-10 h-10 w-auto sm:h-12" />
+                <a
+                  href="#sobeca-top"
+                  aria-label="Back to top"
+                  className="pitch-rise mb-10 inline-block"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="h-10 w-auto sm:h-12" />
+                </a>
                 {(slide.id === "title" ? slide.blocks.filter((block) => block.type === "title" || block.type === "kicker") : slide.blocks).map(
                   (block, blockIndex) => (
                     <div key={`${slide.id}-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${blockIndex * 70}ms` }}>
