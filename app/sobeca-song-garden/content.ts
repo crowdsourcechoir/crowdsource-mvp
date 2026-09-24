@@ -13,6 +13,8 @@ export type PitchSlide = {
   image: string;
   imageAlt: string;
   blocks: CopyBlock[];
+  /** Body copy color for this section. Labels and headers stay lime. */
+  copyColor?: string;
 };
 
 export const slides: PitchSlide[] = [

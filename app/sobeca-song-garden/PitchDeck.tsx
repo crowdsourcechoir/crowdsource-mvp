@@ -77,8 +77,11 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
         <tbody>
           {block.rows.map((row) => (
             <tr key={row.join("|")} className="align-top">
-              {row.map((cell) => (
-                <td key={cell} className="border-b border-white/15 py-4 pr-6 leading-relaxed">
+              {row.map((cell, index) => (
+                <td
+                  key={cell}
+                  className={`border-b border-white/15 py-4 pr-6 leading-relaxed ${index === 0 ? "text-[#CFFF81]" : ""}`}
+                >
                   {cell}
                 </td>
               ))}
@@ -92,12 +95,10 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
 
 export default function PitchDeck({
   slides,
-  copyColor,
   displayClass,
   monoClass,
 }: {
   slides: PitchSlide[];
-  copyColor: string;
   displayClass: string;
   monoClass: string;
 }) {
@@ -169,7 +170,7 @@ export default function PitchDeck({
               className={`relative z-10 flex w-full flex-col px-6 py-16 sm:px-12 sm:py-20 lg:px-16 ${
                 slide.id === "title" ? "min-h-[100dvh] justify-between" : ""
               }`}
-              style={{ color: copyColor }}
+              style={{ color: slide.copyColor || "#FFFFFF" }}
             >
               <div>
                 <a

@@ -16,12 +16,5 @@ export const metadata: Metadata = {
 
 export default async function SobecaSongGardenPage() {
   const pitch = await resolveSongGardenPitch();
-  return (
-    <PitchDeck
-      slides={pitch.slides}
-      copyColor={pitch.copyColor}
-      displayClass={display.className}
-      monoClass={mono.className}
-    />
-  );
+  return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
 }

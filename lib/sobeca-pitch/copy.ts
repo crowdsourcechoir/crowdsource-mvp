@@ -81,21 +81,24 @@ function colorFrom(stored: unknown): unknown {
 /** Keep structure from code. Saved words, background URLs, and copy color replace the defaults. */
 export function applyStoredCopy(stored: unknown): SongGardenPitch {
   const incomingSlides = slidesFrom(stored);
+  const fallbackColor = safeCopyColor(colorFrom(stored));
   const nextSlides = slides.map((slide) => {
-    if (!Array.isArray(incomingSlides)) return slide;
+    if (!Array.isArray(incomingSlides)) return { ...slide, copyColor: DEFAULT_COPY_COLOR };
     const match = incomingSlides.find(
       (item) => item && typeof item === "object" && (item as PitchSlide).id === slide.id
     ) as PitchSlide | undefined;
-    if (!match) return slide;
+    if (!match) return { ...slide, copyColor: fallbackColor };
+    const ownColor = typeof match.copyColor === "string" ? safeCopyColor(match.copyColor) : fallbackColor;
     return {
       ...slide,
       image: safeImage(match.image, slide.image),
+      copyColor: ownColor,
       blocks: Array.isArray(match.blocks)
         ? slide.blocks.map((block, index) => overlayBlock(block, match.blocks[index]))
         : slide.blocks,
     };
   });
-  return { slides: nextSlides, copyColor: safeCopyColor(colorFrom(stored)) };
+  return { slides: nextSlides, copyColor: fallbackColor };
 }
 
 export async function resolveSongGardenPitch(): Promise<SongGardenPitch> {

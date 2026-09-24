@@ -17,7 +17,6 @@ function updateBlock(slide: PitchSlide, index: number, block: CopyBlock): PitchS
 
 export default function SongGardenPitchEditor() {
   const [slides, setSlides] = useState<PitchSlide[] | null>(null);
-  const [copyColor, setCopyColor] = useState(DEFAULT_COPY_COLOR);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -28,24 +27,22 @@ export default function SongGardenPitchEditor() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Could not load copy");
         setSlides(data.slides);
-        if (typeof data.copyColor === "string") setCopyColor(data.copyColor);
       })
       .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load copy"));
   }, []);
 
-  async function save(next: PitchSlide[] | null, color = copyColor) {
+  async function save(next: PitchSlide[] | null) {
     setSaving(true);
     setStatus(null);
     try {
       const res = await fetch("/api/sobeca-song-garden/copy", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next ? { slides: next, copyColor: color } : { reset: true }),
+        body: JSON.stringify(next ? { slides: next } : { reset: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       setSlides(data.slides);
-      if (typeof data.copyColor === "string") setCopyColor(data.copyColor);
       setStatus(next ? "Saved. The public page is using this copy." : "Reset to the copy in the site file.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed");
@@ -106,20 +103,24 @@ export default function SongGardenPitchEditor() {
         </a>
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
-      <label className="flex flex-wrap items-center gap-3 text-sm text-white">
-        Copy color
-        <input
-          type="color"
-          value={copyColor}
-          aria-label="Copy color"
-          className="h-8 w-12 cursor-pointer bg-transparent"
-          onChange={(event) => setCopyColor(event.target.value.toUpperCase())}
-        />
-        <span className="font-mono text-xs text-white/70">{copyColor}</span>
-      </label>
       {slides.map((slide, slideIndex) => (
         <section key={slide.id} className="space-y-4">
           <h2 className="csc-eyebrow">{slideLabel(slide)}</h2>
+          <label className="flex flex-wrap items-center gap-3 text-sm text-white">
+            Copy color
+            <input
+              type="color"
+              value={slide.copyColor || DEFAULT_COPY_COLOR}
+              aria-label={`Copy color for ${slideLabel(slide)}`}
+              className="h-8 w-12 cursor-pointer bg-transparent"
+              onChange={(event) => {
+                const next = slides.slice();
+                next[slideIndex] = { ...slide, copyColor: event.target.value.toUpperCase() };
+                setSlides(next);
+              }}
+            />
+            <span className="font-mono text-xs text-white/70">{slide.copyColor || DEFAULT_COPY_COLOR}</span>
+          </label>
           <div className="max-w-xl">
             <img src={slide.image} alt="" className="h-40 w-full object-cover" />
             <label className="csc-link mt-2 inline-block text-sm">
