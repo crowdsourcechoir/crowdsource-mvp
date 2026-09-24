@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import CscDatePicker from "@/components/ui/CscDatePicker";
 import {
   formatFollowUpDay,
   ymdInSalesZone,
@@ -57,9 +58,9 @@ export default function FollowUpControls({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-black p-3">
+    <div className="rounded-lg border border-white/10 bg-[var(--csc-shell-bg,#000)] p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow up</p>
+        <p className="csc-eyebrow">Follow up</p>
         <p className="text-sm text-white">{value ? formatFollowUpDay(value) : "Not set"}</p>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -83,19 +84,21 @@ export default function FollowUpControls({
           Clear
         </button>
       </div>
-      <label className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-        Custom
-        <input
-          type="date"
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        <span>Custom</span>
+        <CscDatePicker
           value={custom}
           disabled={busy}
-          onChange={(e) => {
-            setCustom(e.target.value);
-            if (e.target.value) void save({ date: e.target.value });
+          onChange={(ymd) => {
+            setCustom(ymd);
+            if (ymd) void save({ date: ymd });
           }}
-          className="rounded-lg border border-white/15 bg-black px-2 py-1 text-xs text-white accent-[var(--csc-accent)] [color-scheme:dark] focus:border-[var(--csc-accent)] focus:outline-none disabled:opacity-50"
+          onClear={() => {
+            setCustom("");
+            if (value) void save({ clear: true });
+          }}
         />
-      </label>
+      </div>
       {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
     </div>
   );
