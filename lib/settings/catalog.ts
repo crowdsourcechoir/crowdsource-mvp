@@ -260,7 +260,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         controls: [
           "Section headings and paragraphs",
           "Background photo for each section",
-          "Copy color",
+          "Copy color for each section",
+          "Optional page password",
           "Save to the live page or reset to the file",
         ],
       },

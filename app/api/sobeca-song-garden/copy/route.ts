@@ -7,7 +7,8 @@ import {
   getRootAuthExpectedToken,
   hasRootAuthPasswordConfigured,
 } from "@/lib/root-page-auth";
-import { writeWorkspaceSettings } from "@/lib/settings/store";
+import { passwordHashFrom } from "@/lib/sobeca-pitch/access";
+import { readWorkspaceSettings, writeWorkspaceSettings } from "@/lib/settings/store";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,16 @@ export async function PATCH(request: Request) {
     slides?: unknown;
     reset?: boolean;
   };
-  const songGarden = body.reset ? null : { slides: applyStoredCopy({ slides: body.slides }).slides };
+  const current = await readWorkspaceSettings({ skipCache: true });
+  const passwordHash = passwordHashFrom(current.settings.songGarden);
+  const slidesOnly = body.reset ? undefined : applyStoredCopy({ slides: body.slides }).slides;
+  const songGarden =
+    slidesOnly === undefined && !passwordHash
+      ? null
+      : {
+          ...(slidesOnly !== undefined ? { slides: slidesOnly } : {}),
+          ...(passwordHash ? { passwordHash } : {}),
+        };
   const written = await writeWorkspaceSettings({ songGarden });
   if (written.error) {
     return NextResponse.json({ error: written.error }, { status: 503 });

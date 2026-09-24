@@ -20,8 +20,16 @@ export default function SongGardenPitchEditor() {
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [pagePassword, setPagePassword] = useState("");
+  const [passwordOn, setPasswordOn] = useState(false);
 
   useEffect(() => {
+    fetch("/api/sobeca-song-garden/access", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok) setPasswordOn(Boolean(data.protected));
+      })
+      .catch(() => undefined);
     fetch("/api/sobeca-song-garden/copy", { cache: "no-store" })
       .then(async (res) => {
         const data = await res.json();
@@ -103,6 +111,81 @@ export default function SongGardenPitchEditor() {
         </a>
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
+      <form
+        className="max-w-md space-y-3 border border-white/15 p-4"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setSaving(true);
+          setStatus(null);
+          try {
+            const res = await fetch("/api/sobeca-song-garden/access", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password: pagePassword }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "Could not save the password");
+            setPasswordOn(true);
+            setPagePassword("");
+            setStatus("Password saved. The public page now asks for it.");
+          } catch (err) {
+            setStatus(err instanceof Error ? err.message : "Could not save the password");
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        <p className="text-sm text-white">{passwordOn ? "This page asks for a password." : "This page is public."}</p>
+        <label className="block text-sm text-white/70">
+          Page password
+          <input
+            type="password"
+            value={pagePassword}
+            autoComplete="new-password"
+            placeholder={passwordOn ? "Enter a new password to replace it" : "Leave blank to keep the page public"}
+            onChange={(event) => setPagePassword(event.target.value)}
+            className="mt-2 w-full border border-white/15 bg-black px-3 py-2 text-white"
+          />
+        </label>
+        <div className="flex flex-wrap gap-4">
+          <button
+            type="submit"
+            disabled={saving || !pagePassword.trim()}
+            className="rounded-full border border-[var(--csc-accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--csc-accent)] hover:bg-[var(--csc-accent)] hover:text-black disabled:opacity-50"
+          >
+            Save password
+          </button>
+          {passwordOn ? (
+            <button
+              type="button"
+              className="csc-link text-sm"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                setStatus(null);
+                try {
+                  const res = await fetch("/api/sobeca-song-garden/access", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ clear: true }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error ?? "Could not remove the password");
+                  setPasswordOn(false);
+                  setPagePassword("");
+                  setStatus("Password removed. The page is public.");
+                } catch (err) {
+                  setStatus(err instanceof Error ? err.message : "Could not remove the password");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              Remove password
+            </button>
+          ) : null}
+        </div>
+      </form>
       {slides.map((slide, slideIndex) => (
         <section key={slide.id} className="space-y-4">
           <h2 className="csc-eyebrow">{slideLabel(slide)}</h2>
