@@ -4,6 +4,7 @@ export type CopyBlock =
   | { type: "heading"; text: string }
   | { type: "paragraph"; text: string }
   | { type: "line"; text: string }
+  | { type: "image"; src: string; alt: string }
   | { type: "table"; headers: string[]; rows: string[][] }
   | { type: "list"; items: string[] };
 
@@ -177,7 +178,11 @@ export const slides: PitchSlide[] = [
           ],
         ],
       },
-      { type: "line", text: "PLANT → GROW → GATHER → BLOOM → RETURN → REGENERATE → PLANT AGAIN" },
+      {
+        type: "image",
+        src: "/sobeca-song-garden/cycle-loop.png",
+        alt: "Plant, grow, gather, bloom, return, regenerate",
+      },
     ],
   },
   {

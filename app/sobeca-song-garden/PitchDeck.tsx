@@ -46,6 +46,11 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   if (block.type === "paragraph") {
     return <p className="mt-5 max-w-3xl text-base leading-relaxed text-white/95 sm:text-lg">{block.text}</p>;
   }
+  if (block.type === "image") {
+    return (
+      <img src={block.src} alt={block.alt} className="mt-10 w-full max-w-4xl" />
+    );
+  }
   if (block.type === "list") {
     return (
       <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed text-white/95 sm:text-lg">
