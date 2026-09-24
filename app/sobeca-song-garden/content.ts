@@ -182,10 +182,10 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "november",
-    image: "/sobeca-song-garden/sobeca-hero-choir.jpg",
-    imageAlt: "A circle of people singing on a lawn",
+    image: "/sobeca-song-garden/sobeca-hero-warehouse.jpg",
+    imageAlt: "An intimate choir show inside a warehouse",
     blocks: [
-      { type: "heading", text: "November: The First Growing Cycle" },
+      { type: "heading", text: "November: The First Bloom" },
       {
         type: "paragraph",
         text: "The November 2026 public launch of Inspiring Creativity, presenting the SoBECA Song Garden, becomes the first opportunity to put this model into practice.",
@@ -203,8 +203,8 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "core",
-    image: "/sobeca-song-garden/sobeca-hero-district.jpg",
-    imageAlt: "A walkable creative district street at dusk",
+    image: "/sobeca-song-garden/sobeca-hero-core.jpg",
+    imageAlt: "A small team planning in a warehouse studio",
     blocks: [
       { type: "heading", text: "The Core" },
       { type: "paragraph", text: "At the center is a small stewarding team:" },
@@ -231,8 +231,8 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "bloom-team",
-    image: "/sobeca-song-garden/sobeca-hero-camp.jpg",
-    imageAlt: "A grassy courtyard between low buildings",
+    image: "/sobeca-song-garden/sobeca-hero-crew.jpg",
+    imageAlt: "Artists and a crew setting up inside a warehouse",
     blocks: [
       { type: "heading", text: "The November Bloom Team" },
       {
@@ -264,8 +264,8 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "catalyst",
-    image: "/sobeca-song-garden/sobeca-hero-voices.jpg",
-    imageAlt: "People singing together outdoors",
+    image: "/sobeca-song-garden/sobeca-hero-after.jpg",
+    imageAlt: "People lingering together after a gathering",
     blocks: [
       { type: "heading", text: "November as a Catalyst" },
       {
@@ -312,8 +312,8 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "building",
-    image: "/sobeca-song-garden/sobeca-hero-garden.jpg",
-    imageAlt: "An outdoor listening garden in a courtyard",
+    image: "/sobeca-song-garden/sobeca-hero-projection.jpg",
+    imageAlt: "Projections across creative-district warehouses at night",
     blocks: [
       { type: "heading", text: "What We’re Building Toward" },
       {
@@ -351,8 +351,8 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "growing",
-    image: "/sobeca-song-garden/sobeca-hero-night.jpg",
-    imageAlt: "An arts district street in the evening",
+    image: "/sobeca-song-garden/sobeca-hero-expand.jpg",
+    imageAlt: "Installations along a walkable arts-district street",
     blocks: [
       { type: "heading", text: "Growing the Garden" },
       {
@@ -407,7 +407,7 @@ export const slides: PitchSlide[] = [
   {
     id: "invitation",
     image: "/sobeca-song-garden/sobeca-hero-choir.jpg",
-    imageAlt: "A circle of people singing on a lawn",
+    imageAlt: "People gathered outdoors to sing",
     blocks: [
       { type: "heading", text: "An Invitation to Create Together" },
       {
