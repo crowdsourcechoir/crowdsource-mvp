@@ -250,6 +250,20 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     blurb: "Operator-facing preferences for this Crowdsource workspace.",
     cards: [
       {
+        id: "song-garden-pitch",
+        domain: "Content",
+        title: "Song Garden pitch",
+        description: "Words on the public SoBECA page",
+        href: "/admin/settings/song-garden-pitch",
+        statusLabel: "Edit copy",
+        status: "live",
+        controls: [
+          "Section headings and paragraphs",
+          "Participation, cycle, and role tables",
+          "Save to the live page or reset to the file",
+        ],
+      },
+      {
         id: "design-system",
         domain: "Appearance",
         title: "Design system",

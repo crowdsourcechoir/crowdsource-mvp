@@ -22,11 +22,14 @@ export type DigestSettingsOverrides = {
 
 export type WorkspaceSettings = {
   digest: DigestSettingsOverrides;
+  /** Public SoBECA Song Garden copy override. Null uses the copy in code. */
+  songGarden: unknown;
   updatedAt: string | null;
 };
 
 export const EMPTY_WORKSPACE_SETTINGS: WorkspaceSettings = {
   digest: { enabled: null, minScore: null, targetCount: null, recipient: null },
+  songGarden: null,
   updatedAt: null,
 };
 
@@ -101,6 +104,7 @@ export function normalizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
       targetCount: coerceNumber(digest.targetCount, 1, 100),
       recipient: coerceEmail(digest.recipient),
     },
+    songGarden: source.songGarden === undefined ? null : source.songGarden,
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : null,
   };
 }
@@ -142,7 +146,7 @@ export async function readWorkspaceSettings(options?: { skipCache?: boolean }): 
 }
 
 export async function writeWorkspaceSettings(
-  patch: Partial<{ digest: Partial<DigestSettingsOverrides> }>
+  patch: Partial<{ digest: Partial<DigestSettingsOverrides>; songGarden: unknown }>
 ): Promise<WorkspaceSettingsRead> {
   if (!supabaseAdmin) {
     return {
@@ -156,6 +160,9 @@ export async function writeWorkspaceSettings(
   const current = await readWorkspaceSettings({ skipCache: true });
   const merged = normalizeWorkspaceSettings({
     digest: { ...current.settings.digest, ...(patch.digest ?? {}) },
+    songGarden: Object.prototype.hasOwnProperty.call(patch, "songGarden")
+      ? patch.songGarden
+      : current.settings.songGarden,
     updatedAt: new Date().toISOString(),
   });
 
