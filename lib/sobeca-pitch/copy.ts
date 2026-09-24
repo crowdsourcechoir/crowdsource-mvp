@@ -1,6 +1,32 @@
 import { slides, type CopyBlock, type PitchSlide } from "@/app/sobeca-song-garden/content";
 import { readWorkspaceSettings } from "@/lib/settings/store";
 
+export const DEFAULT_COPY_COLOR = "#FFFFFF";
+
+export type SongGardenPitch = {
+  slides: PitchSlide[];
+  copyColor: string;
+};
+
+function safeImage(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const url = value.trim();
+  if (url.startsWith("/") && !url.startsWith("//")) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:") return url;
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
+export function safeCopyColor(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_COPY_COLOR;
+  const color = value.trim();
+  return /^#([0-9a-fA-F]{6})$/.test(color) ? color.toUpperCase() : DEFAULT_COPY_COLOR;
+}
+
 function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   if (!incoming || typeof incoming !== "object") return base;
   const next = incoming as CopyBlock;
@@ -39,22 +65,40 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   return base;
 }
 
-/** Keep images and structure from code. Only saved words replace the defaults. */
-export function applyStoredCopy(stored: unknown): PitchSlide[] {
-  if (!Array.isArray(stored)) return slides;
-  return slides.map((slide) => {
-    const match = stored.find((item) => item && typeof item === "object" && (item as PitchSlide).id === slide.id) as
-      | PitchSlide
-      | undefined;
-    if (!match || !Array.isArray(match.blocks)) return slide;
-    return {
-      ...slide,
-      blocks: slide.blocks.map((block, index) => overlayBlock(block, match.blocks[index])),
-    };
-  });
+function slidesFrom(stored: unknown): unknown {
+  if (Array.isArray(stored)) return stored;
+  if (stored && typeof stored === "object" && "slides" in stored) return (stored as { slides?: unknown }).slides;
+  return null;
 }
 
-export async function resolveSongGardenSlides(): Promise<PitchSlide[]> {
+function colorFrom(stored: unknown): unknown {
+  if (stored && typeof stored === "object" && !Array.isArray(stored) && "copyColor" in stored) {
+    return (stored as { copyColor?: unknown }).copyColor;
+  }
+  return null;
+}
+
+/** Keep structure from code. Saved words, background URLs, and copy color replace the defaults. */
+export function applyStoredCopy(stored: unknown): SongGardenPitch {
+  const incomingSlides = slidesFrom(stored);
+  const nextSlides = slides.map((slide) => {
+    if (!Array.isArray(incomingSlides)) return slide;
+    const match = incomingSlides.find(
+      (item) => item && typeof item === "object" && (item as PitchSlide).id === slide.id
+    ) as PitchSlide | undefined;
+    if (!match) return slide;
+    return {
+      ...slide,
+      image: safeImage(match.image, slide.image),
+      blocks: Array.isArray(match.blocks)
+        ? slide.blocks.map((block, index) => overlayBlock(block, match.blocks[index]))
+        : slide.blocks,
+    };
+  });
+  return { slides: nextSlides, copyColor: safeCopyColor(colorFrom(stored)) };
+}
+
+export async function resolveSongGardenPitch(): Promise<SongGardenPitch> {
   const stored = await readWorkspaceSettings({ skipCache: true });
   return applyStoredCopy(stored.settings.songGarden);
 }

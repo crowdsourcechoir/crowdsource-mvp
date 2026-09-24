@@ -259,7 +259,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         status: "live",
         controls: [
           "Section headings and paragraphs",
-          "Participation, cycle, and role tables",
+          "Background photo for each section",
+          "Copy color",
           "Save to the live page or reset to the file",
         ],
       },

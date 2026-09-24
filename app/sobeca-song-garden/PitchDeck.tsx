@@ -15,7 +15,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-5xl text-5xl leading-[0.92] tracking-wide text-white sm:text-7xl`}>
+      <h2 className={`${display} max-w-5xl text-5xl leading-[0.92] tracking-wide sm:text-7xl`}>
         {block.text}
       </h2>
     );
@@ -44,7 +44,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
     );
   }
   if (block.type === "paragraph") {
-    return <p className="mt-5 max-w-3xl text-base leading-relaxed text-white/95 sm:text-lg">{block.text}</p>;
+    return <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{block.text}</p>;
   }
   if (block.type === "image") {
     return (
@@ -53,7 +53,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   }
   if (block.type === "list") {
     return (
-      <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed text-white/95 sm:text-lg">
+      <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed sm:text-lg">
         {block.items.map((item) => (
           <li key={item} className="border-l-2 border-[#CFFF81] pl-4">
             {item}
@@ -77,11 +77,8 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
         <tbody>
           {block.rows.map((row) => (
             <tr key={row.join("|")} className="align-top">
-              {row.map((cell, index) => (
-                <td
-                  key={cell}
-                  className={`border-b border-white/15 py-4 pr-6 leading-relaxed ${index === 0 ? "text-[#CFFF81]" : ""}`}
-                >
+              {row.map((cell) => (
+                <td key={cell} className="border-b border-white/15 py-4 pr-6 leading-relaxed">
                   {cell}
                 </td>
               ))}
@@ -95,10 +92,12 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
 
 export default function PitchDeck({
   slides,
+  copyColor,
   displayClass,
   monoClass,
 }: {
   slides: PitchSlide[];
+  copyColor: string;
   displayClass: string;
   monoClass: string;
 }) {
@@ -170,6 +169,7 @@ export default function PitchDeck({
               className={`relative z-10 flex w-full flex-col px-6 py-16 sm:px-12 sm:py-20 lg:px-16 ${
                 slide.id === "title" ? "min-h-[100dvh] justify-between" : ""
               }`}
+              style={{ color: copyColor }}
             >
               <div>
                 <a

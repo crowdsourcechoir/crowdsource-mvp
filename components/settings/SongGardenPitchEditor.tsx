@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 
 function slideLabel(slide: PitchSlide): string {
   const titled = slide.blocks.find((block) => block.type === "title" || block.type === "heading");
@@ -16,8 +17,10 @@ function updateBlock(slide: PitchSlide, index: number, block: CopyBlock): PitchS
 
 export default function SongGardenPitchEditor() {
   const [slides, setSlides] = useState<PitchSlide[] | null>(null);
+  const [copyColor, setCopyColor] = useState(DEFAULT_COPY_COLOR);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/sobeca-song-garden/copy", { cache: "no-store" })
@@ -25,27 +28,58 @@ export default function SongGardenPitchEditor() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Could not load copy");
         setSlides(data.slides);
+        if (typeof data.copyColor === "string") setCopyColor(data.copyColor);
       })
       .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load copy"));
   }, []);
 
-  async function save(next: PitchSlide[] | null) {
+  async function save(next: PitchSlide[] | null, color = copyColor) {
     setSaving(true);
     setStatus(null);
     try {
       const res = await fetch("/api/sobeca-song-garden/copy", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next ? { slides: next } : { reset: true }),
+        body: JSON.stringify(next ? { slides: next, copyColor: color } : { reset: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       setSlides(data.slides);
+      if (typeof data.copyColor === "string") setCopyColor(data.copyColor);
       setStatus(next ? "Saved. The public page is using this copy." : "Reset to the copy in the site file.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function replacePhoto(slide: PitchSlide, file: File) {
+    setUploadingId(slide.id);
+    setStatus(null);
+    try {
+      const prepared = await fetch("/api/sobeca-song-garden/background", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slideId: slide.id, name: file.name, contentType: file.type, size: file.size }),
+      });
+      const prep = await prepared.json();
+      if (!prepared.ok) throw new Error(prep.error ?? "Could not prepare upload");
+      const put = await fetch(prep.upload.signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": prep.upload.contentType },
+        body: file,
+      });
+      if (!put.ok) throw new Error("Upload failed");
+      const next = (slides ?? []).map((item) =>
+        item.id === slide.id ? { ...item, image: prep.upload.publicUrl as string } : item
+      );
+      setSlides(next);
+      await save(next);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingId(null);
     }
   }
 
@@ -72,9 +106,37 @@ export default function SongGardenPitchEditor() {
         </a>
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
+      <label className="flex flex-wrap items-center gap-3 text-sm text-white">
+        Copy color
+        <input
+          type="color"
+          value={copyColor}
+          aria-label="Copy color"
+          className="h-8 w-12 cursor-pointer bg-transparent"
+          onChange={(event) => setCopyColor(event.target.value.toUpperCase())}
+        />
+        <span className="font-mono text-xs text-white/70">{copyColor}</span>
+      </label>
       {slides.map((slide, slideIndex) => (
         <section key={slide.id} className="space-y-4">
           <h2 className="csc-eyebrow">{slideLabel(slide)}</h2>
+          <div className="max-w-xl">
+            <img src={slide.image} alt="" className="h-40 w-full object-cover" />
+            <label className="csc-link mt-2 inline-block text-sm">
+              {uploadingId === slide.id ? "Uploading…" : "Replace photo"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="sr-only"
+                disabled={uploadingId !== null || saving}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void replacePhoto(slide, file);
+                }}
+              />
+            </label>
+          </div>
           {slide.blocks.map((block, blockIndex) => {
             if (block.type === "image") return null;
             if (block.type === "list") {

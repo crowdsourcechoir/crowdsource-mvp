@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Bebas_Neue, Space_Mono } from "next/font/google";
 import PitchDeck from "./PitchDeck";
-import { resolveSongGardenSlides } from "@/lib/sobeca-pitch/copy";
+import { resolveSongGardenPitch } from "@/lib/sobeca-pitch/copy";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default async function SobecaSongGardenPage() {
-  const slides = await resolveSongGardenSlides();
-  return <PitchDeck slides={slides} displayClass={display.className} monoClass={mono.className} />;
+  const pitch = await resolveSongGardenPitch();
+  return (
+    <PitchDeck
+      slides={pitch.slides}
+      copyColor={pitch.copyColor}
+      displayClass={display.className}
+      monoClass={mono.className}
+    />
+  );
 }
