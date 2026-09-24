@@ -31,8 +31,8 @@ export default function PitchPasswordGate() {
 
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-black px-6 text-white">
-      <form onSubmit={submit} className="w-full max-w-sm">
-        <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="mb-8 h-10 w-auto" />
+      <form onSubmit={submit} className="w-full max-w-sm text-center">
+        <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="mx-auto mb-8 h-10 w-auto" />
         <h1 className="text-2xl font-bold">SoBECA Song Garden</h1>
         <p className="mt-2 text-sm text-white/70">Enter the password to view this page.</p>
         <input
