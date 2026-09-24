@@ -13,6 +13,8 @@ export type ComposerAnswerRow = {
   audioTranscript?: string | null;
   videoTranscript?: string | null;
   eventId?: string;
+  conversationId?: string;
+  turnId?: string | null;
 };
 
 export type PromptAnswerGroup = {

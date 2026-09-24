@@ -9,6 +9,8 @@ import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/type
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 import ComposerActionsMenu from "@/components/songgarden/ComposerActionsMenu";
 import { deleteSonggardenClip } from "@/data/songgardenClient";
+import { deleteInterviewContribution } from "@/data/interviewSubmissionsClient";
+import ContributionActionsMenu from "@/components/songgarden/ContributionActionsMenu";
 import {
   isAnonymousPersonName,
   normalizePersonKey,
@@ -31,6 +33,8 @@ type TextItem = {
   eventId: string;
   audioUrl: string | null;
   videoUrl: string | null;
+  conversationId: string;
+  turnId: string | null;
 };
 
 type VideoItem = {
@@ -41,6 +45,8 @@ type VideoItem = {
   transcript: string | null;
   createdAt: string;
   eventId: string;
+  conversationId: string;
+  turnId: string | null;
 };
 
 type Props = {
@@ -113,6 +119,7 @@ export default function SonggardenCanvas({
   const [textItems, setTextItems] = useState<TextItem[]>([]);
   const [videoItems, setVideoItems] = useState<VideoItem[]>([]);
   const [responsesLoading, setResponsesLoading] = useState(false);
+  const [responsesNonce, setResponsesNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -268,6 +275,7 @@ export default function SonggardenCanvas({
                 participantName: string;
                 conversationId: string;
                 answers: Array<{
+                  turnId: string | null;
                   createdAt: string;
                   content: string;
                   questionText: string | null;
@@ -293,6 +301,8 @@ export default function SonggardenCanvas({
                     eventId: id,
                     audioUrl,
                     videoUrl,
+                    conversationId: item.conversationId,
+                    turnId: answer.turnId,
                   });
                 }
                 if (videoUrl !== null) {
@@ -304,6 +314,8 @@ export default function SonggardenCanvas({
                     transcript: answer.videoTranscript,
                     createdAt: answer.createdAt,
                     eventId: id,
+                    conversationId: item.conversationId,
+                    turnId: answer.turnId,
                   });
                 }
               });
@@ -327,7 +339,7 @@ export default function SonggardenCanvas({
     return () => {
       cancelled = true;
     };
-  }, [scope, eventId, chapters, gardenClips, masterClips]);
+  }, [scope, eventId, chapters, gardenClips, masterClips, responsesNonce]);
 
   const baseClips = useMemo(() => {
     if (scope === "garden") return gardenClips;
@@ -390,6 +402,8 @@ export default function SonggardenCanvas({
           audioUrl: item.audioUrl,
           videoUrl: item.videoUrl,
           eventId: item.eventId,
+          conversationId: item.conversationId,
+          turnId: item.turnId,
         }))
       ),
     [filteredText]
@@ -422,6 +436,8 @@ export default function SonggardenCanvas({
           createdAt: item.createdAt,
           videoUrl: item.videoUrl,
           eventId: item.eventId,
+          conversationId: item.conversationId,
+          turnId: item.turnId,
         }))
       ),
     [filteredVideo]
@@ -577,6 +593,14 @@ export default function SonggardenCanvas({
     }
   }
 
+  async function deleteAnswer(conversationId: string | undefined, turnId: string | null | undefined) {
+    if (!conversationId || !turnId) {
+      throw new Error("This contribution cannot be deleted yet.");
+    }
+    await deleteInterviewContribution(conversationId, turnId);
+    setResponsesNonce((n) => n + 1);
+  }
+
   async function refreshAll() {
     if (scope === "bloom") {
       await refreshBloom();
@@ -619,6 +643,17 @@ export default function SonggardenCanvas({
           onSelectToggle={toggleSelect}
           onPlayed={() => clearNewHighlight(clip.id)}
           onOpenDetail={setDetailClip}
+          onDelete={async (target) => {
+            await deleteSonggardenClip(target.eventId || eventId, target.id);
+            setSelectedIds((prev) => {
+              if (!prev.has(target.id)) return prev;
+              const next = new Set(prev);
+              next.delete(target.id);
+              return next;
+            });
+            if (detailClip?.id === target.id) setDetailClip(null);
+            await refreshAll();
+          }}
         />
         {showLyricsUnderSounds ? (
           <p className="line-clamp-3 px-1 text-[11px] leading-snug text-gray-400">
@@ -867,11 +902,18 @@ export default function SonggardenCanvas({
                   <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
                   <ul className="space-y-1 border-l border-white/10 pl-3">
                     {group.answers.map((item) => (
-                      <li key={item.id} className="text-sm leading-snug text-gray-200">
-                        <span className="text-gray-500">
-                          {item.participantName || "Anonymous"} ·{" "}
-                        </span>
-                        <span className="whitespace-pre-wrap">{item.content}</span>
+                      <li key={item.id} className="flex items-start justify-between gap-2 text-sm leading-snug text-gray-200">
+                        <p className="min-w-0">
+                          <span className="text-gray-500">
+                            {item.participantName || "Anonymous"} ·{" "}
+                          </span>
+                          <span className="whitespace-pre-wrap">{item.content}</span>
+                        </p>
+                        <ContributionActionsMenu
+                          kindLabel="text"
+                          disabled={!item.turnId}
+                          onDelete={() => deleteAnswer(item.conversationId, item.turnId)}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -901,6 +943,11 @@ export default function SonggardenCanvas({
                         url={item.videoUrl || ""}
                         participantName={item.participantName || "Anonymous"}
                         caption={item.content}
+                        onDelete={
+                          item.turnId
+                            ? () => deleteAnswer(item.conversationId, item.turnId)
+                            : undefined
+                        }
                       />
                     ))}
                   </div>

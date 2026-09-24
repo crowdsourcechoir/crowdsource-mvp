@@ -248,6 +248,18 @@ export async function localWipeEventAgentData(eventId: string): Promise<number> 
   return participantIds.size;
 }
 
+/** Remove one user turn. Returns false when the turn is missing or not on this conversation. */
+export async function localDeleteTurn(conversationId: string, turnId: string): Promise<boolean> {
+  const store = await loadStore();
+  const turn = store.turns.find((t) => t.id === turnId && t.conversationId === conversationId);
+  if (!turn || turn.role !== "user") return false;
+  store.turns = store.turns.filter((t) => t.id !== turnId);
+  const conv = store.conversations.find((c) => c.id === conversationId);
+  if (conv) conv.updatedAt = new Date().toISOString();
+  await saveStore(store);
+  return true;
+}
+
 export async function localDeleteConversation(conversationId: string): Promise<boolean> {
   const store = await loadStore();
   const conversation = store.conversations.find((c) => c.id === conversationId) ?? null;

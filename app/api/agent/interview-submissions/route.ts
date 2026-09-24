@@ -78,7 +78,7 @@ export async function GET(request: Request) {
     const { data: turns, error: eTurns } = await supabaseAdmin
       .from("agent_conversation_turns")
       .select(
-        "conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
+        "id, conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
       )
       .in("conversation_id", conversationIds);
     if (eTurns || !Array.isArray(turns)) {

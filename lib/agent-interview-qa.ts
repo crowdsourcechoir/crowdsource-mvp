@@ -3,6 +3,7 @@
  */
 
 export type InterviewTurnLike = {
+  id?: string;
   role: string;
   content?: string | null;
   createdAt?: string;
@@ -20,6 +21,8 @@ export type InterviewTurnLike = {
 };
 
 export type PairedInterviewAnswer = {
+  /** User turn id — required to delete one contribution. */
+  turnId: string | null;
   createdAt: string;
   content: string;
   questionText: string | null;
@@ -62,6 +65,7 @@ export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedIntervie
     if (role !== "user") continue;
 
     answers.push({
+      turnId: typeof turn.id === "string" && turn.id.trim() ? turn.id.trim() : null,
       createdAt: createdAtOf(turn) || new Date().toISOString(),
       content: contentOf(turn),
       questionText: lastQuestion,
