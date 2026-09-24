@@ -223,7 +223,7 @@ export const slides: PitchSlide[] = [
           ],
           [
             "Crowdsource Choir",
-            "Serves as Initiative + Creative Lead and brings its established Song Garden experience and methodology to SoBECA—leading creative direction, participation design, curation, artist integration, music, and Bloom experience development.",
+            "Serves as Founding Creative Lead and brings its established Song Garden experience and methodology to SoBECA—leading creative direction, participation design, curation, artist integration, music, and Bloom experience development.",
           ],
           [
             "Program / Production Leadership",
@@ -323,35 +323,30 @@ export const slides: PitchSlide[] = [
       { type: "heading", text: "What We’re Building Toward" },
       {
         type: "paragraph",
-        text: "November plants the conditions. The larger opportunity is for the SoBECA Song Garden to become an ongoing creative system embedded throughout the district—connecting people, artists, businesses, venues, spaces, and resources through a continually evolving cycle of participation and creation.",
+        text: "November plants the conditions for the SoBECA Song Garden to become an ongoing creative system embedded throughout the district—connecting people, artists, businesses, places, and resources through a continuous cycle of participation and creation.",
       },
       {
         type: "paragraph",
-        text: "As the Garden grows, more people contribute. More places become entry points. More artists work with what emerges. New collaborations form. Each Bloom creates new work, relationships, resources, learning, and possibilities that feed the next growing cycle.",
+        text: "As the Garden grows, participation generates creative material, creative material sparks collaboration, and each Bloom returns new work, relationships, learning, and resources to the community—feeding the next cycle.",
       },
       { type: "paragraph", text: "Over time, this could include:" },
       {
         type: "list",
         items: [
-          "A growing network of Song Garden nodes throughout SoBECA—businesses, venues, gathering places, installations, and other spaces where people can encounter and participate in the Garden.",
-          "Ongoing community participation through digital and physical invitations that continually generate new stories, voices, sounds, images, ideas, and other creative source material.",
-          "A growing community of artists and collaborators working across disciplines and responding to both the Garden and one another.",
-          "Increasingly ambitious Blooms that can range from intimate gatherings and pop-ups to larger multidisciplinary experiences spanning multiple spaces throughout the district.",
-          "A persistent physical and digital presence that makes the Garden visible between Blooms and creates new ways for people to encounter, contribute to, and experience what is growing.",
-          "Creative work that returns to the community through music, installations, films, projections, performances, stories, public art, digital experiences, and other forms.",
-          "An expanding ecosystem of partners and resources—businesses, venues, funders, sponsors, civic partners, production partners, volunteers, and in-kind contributors who help increase what the system is capable of producing.",
+          "Song Garden nodes throughout businesses, venues, gathering places, and public spaces.",
+          "Ongoing participation through physical and digital invitations.",
+          "A growing artist network collaborating across disciplines.",
+          "Blooms of increasing scale, from intimate gatherings to district-wide experiences.",
+          "Persistent installations and digital experiences connecting the cycles between Blooms.",
+          "Creative work returned to the community through music, film, performance, projection, installation, public art, and more.",
+          "An expanding partner ecosystem of businesses, venues, funders, civic partners, and contributors.",
         ],
       },
-      { type: "paragraph", text: "The goal is not simply to produce more events." },
       {
         type: "paragraph",
-        text: "It is to cultivate an increasingly connected and capable creative ecosystem—one in which participation generates creative material, creative material generates collaboration, collaboration generates shared experiences, and those experiences generate new participation, relationships, and resources.",
+        text: "The goal is not simply to produce more events. It is to cultivate an increasingly connected and capable creative ecosystem.",
       },
-      {
-        type: "paragraph",
-        text: "As the ecosystem becomes stronger, the scope of what it can create can become larger and more ambitious without requiring a permanently larger organization.",
-      },
-      { type: "paragraph", text: "The Garden grows by increasing the creative capacity of the system around it." },
+      { type: "paragraph", text: "The Garden grows by growing the creative capacity of SoBECA itself." },
     ],
   },
   {
