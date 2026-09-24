@@ -5,7 +5,7 @@ import type { CopyBlock, PitchSlide } from "./content";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 
-function Block({ block, display }: { block: CopyBlock; display: string }) {
+function Block({ block, display, footer = false }: { block: CopyBlock; display: string; footer?: boolean }) {
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-6xl text-6xl leading-[0.9] tracking-wide sm:text-8xl`}>
@@ -34,7 +34,9 @@ function Block({ block, display }: { block: CopyBlock; display: string }) {
         className={`${display} mt-8 text-[#CFFF81] ${
           cycle
             ? "max-w-none text-[clamp(1.35rem,2.35vw,3rem)] leading-none tracking-wide max-lg:whitespace-normal lg:whitespace-nowrap"
-            : "max-w-5xl text-3xl leading-tight tracking-wide sm:text-5xl"
+            : footer
+              ? "max-w-3xl text-2xl leading-tight tracking-wide sm:text-3xl"
+              : "max-w-5xl text-3xl leading-tight tracking-wide sm:text-5xl"
         }`}
       >
         {block.text}
@@ -154,15 +156,37 @@ export default function PitchDeck({
               alt={slide.imageAlt}
               className="absolute left-0 top-[-12%] h-[130%] w-full object-cover will-change-transform"
             />
-            <div className="absolute inset-0 mix-blend-multiply" style={{ backgroundColor: tint, opacity: 0.72 }} />
+            <div
+              className="absolute inset-0 mix-blend-multiply"
+              style={{ backgroundColor: tint, opacity: slide.id === "invitation" ? 0.38 : 0.72 }}
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/55 to-black/35" />
-            <div className="relative z-10 w-full px-6 py-16 sm:px-12 sm:py-20 lg:px-16">
-              <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="pitch-rise mb-10 h-10 w-auto sm:h-12" />
-              {slide.blocks.map((block, blockIndex) => (
-                <div key={`${slide.id}-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${blockIndex * 70}ms` }}>
-                  <Block block={block} display={displayClass} />
+            <div
+              className={`relative z-10 flex w-full flex-col px-6 py-16 sm:px-12 sm:py-20 lg:px-16 ${
+                slide.id === "title" ? "min-h-[100dvh] justify-between" : ""
+              }`}
+            >
+              <div>
+                <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="pitch-rise mb-10 h-10 w-auto sm:h-12" />
+                {(slide.id === "title" ? slide.blocks.filter((block) => block.type === "title" || block.type === "kicker") : slide.blocks).map(
+                  (block, blockIndex) => (
+                    <div key={`${slide.id}-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${blockIndex * 70}ms` }}>
+                      <Block block={block} display={displayClass} />
+                    </div>
+                  ),
+                )}
+              </div>
+              {slide.id === "title" ? (
+                <div className="max-w-3xl pb-4">
+                  {slide.blocks
+                    .filter((block) => block.type === "line" || block.type === "paragraph")
+                    .map((block, blockIndex) => (
+                      <div key={`${slide.id}-foot-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${200 + blockIndex * 80}ms` }}>
+                        <Block block={block} display={displayClass} footer />
+                      </div>
+                    ))}
                 </div>
-              ))}
+              ) : null}
             </div>
           </section>
         );

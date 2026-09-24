@@ -406,8 +406,8 @@ export const slides: PitchSlide[] = [
   },
   {
     id: "invitation",
-    image: "/sobeca-song-garden/sobeca-hero-choir.jpg",
-    imageAlt: "People gathered outdoors to sing",
+    image: "/sobeca-song-garden/sobeca-hero-blooms.jpg",
+    imageAlt: "Blooms along a creative district street",
     blocks: [
       { type: "heading", text: "An Invitation to Create Together" },
       {
