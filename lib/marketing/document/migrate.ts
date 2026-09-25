@@ -14,10 +14,11 @@ function sectionBase(id: string, type: SectionType, props: Record<string, unknow
   };
 }
 
-function imageRef(url: string, alt = ""): ImageRef | null {
+function imageRef(url: string, alt = "", assetId = ""): ImageRef | null {
   const trimmed = url.trim();
   if (!trimmed) return null;
-  return { assetId: null, url: trimmed, alt, ratio: "landscape" };
+  const id = assetId.trim();
+  return { assetId: id || null, url: trimmed, alt, ratio: "landscape" };
 }
 
 function textOf(props: Record<string, unknown>): string {
@@ -42,7 +43,7 @@ export function legacyBlocksToDocument(
           eyebrow: "",
           title: str(props, "title"),
           subtitle: str(props, "subtitle"),
-          image: imageRef(str(props, "imageUrl")),
+          image: imageRef(str(props, "imageUrl"), str(props, "alt"), str(props, "assetId")),
           ctaLabel: "",
           ctaHref: "",
         });
@@ -53,7 +54,7 @@ export function legacyBlocksToDocument(
         });
       case "image":
         return sectionBase(block.id, "full_bleed_image", {
-          image: imageRef(str(props, "imageUrl"), str(props, "alt")),
+          image: imageRef(str(props, "imageUrl"), str(props, "alt"), str(props, "assetId")),
           href: str(props, "href") || null,
         });
       case "cta":
@@ -79,7 +80,7 @@ export function legacyBlocksToDocument(
           date: str(props, "date"),
           href: str(props, "url") || str(props, "href"),
           ctaLabel: str(props, "ctaText") || str(props, "ctaLabel") || "Open event",
-          image: imageRef(str(props, "heroImage")),
+          image: imageRef(str(props, "heroImage"), str(props, "alt"), str(props, "assetId")),
         });
       default:
         throw new Error(`Cannot store block type ${block.type}`);
@@ -123,6 +124,14 @@ function imageAlt(props: Record<string, unknown>): string {
   return "";
 }
 
+function imageAssetId(props: Record<string, unknown>): string {
+  const image = props.image;
+  if (image && typeof image === "object" && typeof (image as { assetId?: unknown }).assetId === "string") {
+    return (image as { assetId: string }).assetId;
+  }
+  return "";
+}
+
 export function documentToLegacyBlocks(document: EmailDocument): EmailBlock[] {
   return document.sections.map((section) => {
     const props = section.props;
@@ -135,6 +144,7 @@ export function documentToLegacyBlocks(document: EmailDocument): EmailBlock[] {
             title: str(props, "title"),
             subtitle: str(props, "subtitle"),
             imageUrl: imageUrl(props),
+            assetId: imageAssetId(props),
           },
         };
       case "editorial_text":
@@ -144,7 +154,7 @@ export function documentToLegacyBlocks(document: EmailDocument): EmailBlock[] {
         return {
           id: section.id,
           type: "image",
-          props: { imageUrl: imageUrl(props), alt: imageAlt(props), href: str(props, "href") },
+          props: { imageUrl: imageUrl(props), alt: imageAlt(props), href: str(props, "href"), assetId: imageAssetId(props) },
         };
       case "cta":
         return { id: section.id, type: "cta", props: { label: str(props, "label"), href: str(props, "href") } };
@@ -172,6 +182,7 @@ export function documentToLegacyBlocks(document: EmailDocument): EmailBlock[] {
             url: str(props, "href"),
             ctaText: str(props, "ctaLabel"),
             heroImage: imageUrl(props),
+            assetId: imageAssetId(props),
           },
         };
       default:
