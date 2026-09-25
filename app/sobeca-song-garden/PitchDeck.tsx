@@ -28,10 +28,10 @@ function closingProse(blocks: CopyBlock[]): { index: number; before: string; las
   return null;
 }
 
-function ClosingLine({ text, poster }: { text: string; poster: string }) {
+function ClosingLine({ text, display }: { text: string; display: string }) {
   return (
     <p
-      className={`${poster} mt-10 max-w-6xl text-3xl uppercase leading-[1.05] sm:text-5xl`}
+      className={`${display} mt-8 max-w-5xl text-3xl leading-tight tracking-wide sm:text-5xl`}
       style={{ color: CLOSING_COLOR }}
     >
       {text}
@@ -130,12 +130,10 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
 export default function PitchDeck({
   slides,
   displayClass,
-  posterClass,
   monoClass,
 }: {
   slides: PitchSlide[];
   displayClass: string;
-  posterClass: string;
   monoClass: string;
 }) {
   const rootRef = useRef<HTMLElement>(null);
@@ -229,7 +227,7 @@ export default function PitchDeck({
                           {closing.before ? (
                             <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{closing.before}</p>
                           ) : null}
-                          <ClosingLine text={closing.last} poster={posterClass} />
+                          <ClosingLine text={closing.last} display={displayClass} />
                         </>
                       ) : (
                         <Block block={block} display={displayClass} />
