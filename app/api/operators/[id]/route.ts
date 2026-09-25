@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
-import { grantsLookValid, isOwner } from "@/lib/operators/access";
+import { grantAssignmentError, isOwner, normalizeGrantInput } from "@/lib/operators/access";
 import { readActorFromRequest } from "@/lib/operators/current";
 import { sendInviteMail } from "@/lib/operators/mail";
 import { OperatorsUnavailableError, getOperator, issueToken, updateOperator } from "@/lib/operators/store";
-import type { OperatorGrant, OperatorStatus } from "@/lib/operators/types";
+import type { OperatorStatus } from "@/lib/operators/types";
 
 type Ctx = { params: { id: string } };
-
-function normalizeGrants(raw: unknown): OperatorGrant[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const grant = item as Partial<OperatorGrant>;
-    if (grant.capability !== "compose" && grant.capability !== "steward" && grant.capability !== "sales") return [];
-    const scopeType = grant.capability === "sales" ? "sales" : grant.scopeType === "garden" ? "garden" : "bloom";
-    return [{ capability: grant.capability, scopeType, scopeId: grant.scopeId?.trim() || null }];
-  });
-}
 
 export async function PATCH(request: Request, context: Ctx) {
   const actor = await readActorFromRequest(request);
@@ -27,9 +16,9 @@ export async function PATCH(request: Request, context: Ctx) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const grants = normalizeGrants(body.grants);
+  const grants = body.grants === undefined ? undefined : normalizeGrantInput(body.grants);
   if (grants) {
-    const grantError = grantsLookValid(grants);
+    const grantError = grantAssignmentError(grants);
     if (grantError) return NextResponse.json({ error: grantError }, { status: 400 });
   }
   if (body.status && body.status !== "active" && body.status !== "disabled" && body.status !== "invited") {

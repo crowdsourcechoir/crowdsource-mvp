@@ -117,6 +117,29 @@ export function SettingsButton({
   );
 }
 
+export function SettingsSelect({
+  value,
+  onChange,
+  children,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  ariaLabel?: string;
+}) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+    >
+      {children}
+    </select>
+  );
+}
+
 export function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) {
   return (
     <div className="mb-1.5">

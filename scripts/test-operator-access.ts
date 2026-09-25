@@ -1,4 +1,4 @@
-import { decideAccess, homePath } from "../lib/operators/access";
+import { decideAccess, grantAssignmentError, homePath, normalizeGrantInput } from "../lib/operators/access";
 import { hashPassword, verifyPassword } from "../lib/operators/password";
 import type { Actor } from "../lib/operators/types";
 
@@ -54,6 +54,18 @@ const checks: Array<[string, boolean]> = [
 
 async function main() {
   for (const [name, ok] of checks) assert(ok, name);
+  const normalized = normalizeGrantInput([
+    { capability: "compose", scopeType: "bloom", scopeId: " bloom-1 " },
+    { capability: "compose", scopeType: "bloom", scopeId: "bloom-1" },
+    { capability: "sales", scopeType: "bloom", scopeId: "nope" },
+    { capability: "nope" },
+  ]);
+  assert(normalized.length === 2, "grant normalize dedupes");
+  assert(normalized[0].scopeId === "bloom-1", "grant normalize trims bloom id");
+  assert(normalized[1].capability === "sales" && normalized[1].scopeId === null && normalized[1].scopeType === "sales", "sales grant drops scope");
+  assert(grantAssignmentError([]) === "Add at least one permission.", "empty grants rejected");
+  assert(grantAssignmentError([{ capability: "compose", scopeType: "bloom", scopeId: "" }]) === "Pick a Bloom or Song Garden for each grant.", "missing bloom rejected");
+  assert(grantAssignmentError(normalized) === null, "valid grants accepted");
   const stored = await hashPassword("correct horse");
   assert(await verifyPassword("correct horse", stored), "password matches");
   assert(!(await verifyPassword("nope", stored)), "password rejects");

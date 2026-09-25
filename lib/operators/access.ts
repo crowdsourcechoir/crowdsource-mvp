@@ -94,6 +94,30 @@ export function grantsLookValid(grants: OperatorGrant[]): string | null {
   return null;
 }
 
+/** Normalize a request body into unique grants. Sales has no scope id. */
+export function normalizeGrantInput(raw: unknown): OperatorGrant[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const grants: OperatorGrant[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const grant = item as Partial<OperatorGrant>;
+    if (grant.capability !== "compose" && grant.capability !== "steward" && grant.capability !== "sales") continue;
+    const scopeType = grant.capability === "sales" ? "sales" : grant.scopeType === "garden" ? "garden" : "bloom";
+    const scopeId = grant.capability === "sales" ? null : grant.scopeId?.trim() || null;
+    const key = `${grant.capability}:${scopeType}:${scopeId ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    grants.push({ capability: grant.capability, scopeType, scopeId });
+  }
+  return grants;
+}
+
+export function grantAssignmentError(grants: OperatorGrant[]): string | null {
+  if (grants.length === 0) return "Add at least one permission.";
+  return grantsLookValid(grants);
+}
+
 const OWNER_PREFIXES = [
   "/admin/settings",
   "/admin/marketing",

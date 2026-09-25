@@ -203,6 +203,9 @@ export async function updateOperator(
   if (current.role === "owner" && patch.status === "disabled") {
     throw new Error("The owner account stays active.");
   }
+  if (current.role === "owner" && patch.grants) {
+    throw new Error("The owner already has full access.");
+  }
   const db = assertDb();
   const next: Record<string, unknown> = { updated_at: new Date().toISOString(), session_version: current.sessionVersion + 1 };
   if (patch.name?.trim()) next.name = patch.name.trim();

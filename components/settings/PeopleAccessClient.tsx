@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FieldLabel, InlineNote, SettingsButton, SettingsPanel, StatusPill, TextField } from "@/components/settings/ui";
+import { FieldLabel, InlineNote, SettingsButton, SettingsPanel, SettingsSelect, StatusPill, TextField } from "@/components/settings/ui";
 
 type Grant = { capability: "compose" | "steward" | "sales"; scopeType: "bloom" | "garden" | "sales"; scopeId: string | null };
 type Person = {
@@ -16,12 +16,95 @@ type Option = { id: string; title: string };
 
 const EMPTY_GRANT: Grant = { capability: "compose", scopeType: "bloom", scopeId: "" };
 
+function grantKind(grant: Grant): string {
+  if (grant.capability === "sales") return "sales";
+  return `${grant.capability}:${grant.scopeType}`;
+}
+
+function grantFromKind(kind: string, current: Grant): Grant {
+  if (kind === "sales") return { capability: "sales", scopeType: "sales", scopeId: null };
+  if (kind === "steward:garden") {
+    return { capability: "steward", scopeType: "garden", scopeId: current.scopeType === "garden" ? current.scopeId : "" };
+  }
+  if (kind === "steward:bloom") {
+    return { capability: "steward", scopeType: "bloom", scopeId: current.scopeType === "bloom" ? current.scopeId : "" };
+  }
+  return { capability: "compose", scopeType: "bloom", scopeId: current.scopeType === "bloom" ? current.scopeId : "" };
+}
+
+function cloneGrants(grants: Grant[]): Grant[] {
+  if (grants.length === 0) return [{ ...EMPTY_GRANT }];
+  return grants.map((grant) => ({
+    ...grant,
+    scopeId: grant.capability === "sales" ? null : grant.scopeId || "",
+  }));
+}
+
 function grantLabel(grant: Grant, blooms: Option[], gardens: Option[]): string {
   if (grant.capability === "sales") return "Sales";
   const list = grant.scopeType === "garden" ? gardens : blooms;
   const name = list.find((item) => item.id === grant.scopeId)?.title || "Untitled";
   if (grant.capability === "compose") return `Composer · ${name}`;
   return grant.scopeType === "garden" ? `Garden steward · ${name}` : `Bloom steward · ${name}`;
+}
+
+function GrantFields({
+  grants,
+  blooms,
+  gardens,
+  onChange,
+}: {
+  grants: Grant[];
+  blooms: Option[];
+  gardens: Option[];
+  onChange: (grants: Grant[]) => void;
+}) {
+  function updateGrant(index: number, next: Grant) {
+    onChange(grants.map((grant, i) => (i === index ? next : grant)));
+  }
+
+  return (
+    <div className="space-y-3">
+      {grants.map((grant, index) => {
+        const options = grant.scopeType === "garden" ? gardens : blooms;
+        const missing = Boolean(grant.scopeId && !options.some((item) => item.id === grant.scopeId));
+        return (
+          <div key={`${grant.capability}-${grant.scopeType}-${index}`} className="grid gap-2 sm:grid-cols-[220px_1fr_auto]">
+            <SettingsSelect
+              ariaLabel="Permission"
+              value={grantKind(grant)}
+              onChange={(value) => updateGrant(index, grantFromKind(value, grant))}
+            >
+              <option value="compose:bloom">Composer on a Bloom</option>
+              <option value="steward:bloom">Steward of a Bloom</option>
+              <option value="steward:garden">Steward of a Song Garden</option>
+              <option value="sales">Sales</option>
+            </SettingsSelect>
+            {grant.capability === "sales" ? (
+              <p className="self-center text-sm text-gray-400">Pipeline and drafts. Sending stays with you.</p>
+            ) : (
+              <SettingsSelect
+                ariaLabel={grant.scopeType === "garden" ? "Song Garden" : "Bloom"}
+                value={grant.scopeId || ""}
+                onChange={(value) => updateGrant(index, { ...grant, scopeId: value })}
+              >
+                <option value="">Choose…</option>
+                {missing ? <option value={grant.scopeId || ""}>Untitled</option> : null}
+                {options.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </SettingsSelect>
+            )}
+            <SettingsButton variant="ghost" disabled={grants.length === 1} onClick={() => onChange(grants.filter((_, i) => i !== index))}>
+              Remove
+            </SettingsButton>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function PeopleAccessClient() {
@@ -36,6 +119,9 @@ export default function PeopleAccessClient() {
   const [email, setEmail] = useState("");
   const [grants, setGrants] = useState<Grant[]>([{ ...EMPTY_GRANT }]);
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftGrants, setDraftGrants] = useState<Grant[]>([{ ...EMPTY_GRANT }]);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [peopleRes, eventsRes, gardensRes] = await Promise.all([
@@ -70,10 +156,6 @@ export default function PeopleAccessClient() {
   useEffect(() => {
     void load().catch(() => setError("Could not load people."));
   }, [load]);
-
-  function updateGrant(index: number, next: Grant) {
-    setGrants((current) => current.map((grant, i) => (i === index ? next : grant)));
-  }
 
   async function addPerson(e: React.FormEvent) {
     e.preventDefault();
@@ -111,10 +193,29 @@ export default function PeopleAccessClient() {
     const payload = await res.json();
     if (!res.ok) {
       setError(payload.error || "Could not update.");
-      return;
+      return false;
     }
     setMessage(okMessage);
     await load();
+    return true;
+  }
+
+  async function saveGrants(person: Person) {
+    setSavingId(person.id);
+    const saved = await patchPerson(
+      person.id,
+      { grants: draftGrants },
+      "Permissions saved. Their session ends, and the next sign-in opens only these rooms."
+    );
+    setSavingId(null);
+    if (saved) setEditingId(null);
+  }
+
+  function startEdit(person: Person) {
+    setError(null);
+    setMessage(null);
+    setEditingId(person.id);
+    setDraftGrants(cloneGrants(person.grants));
   }
 
   async function resend(id: string) {
@@ -152,51 +253,7 @@ export default function PeopleAccessClient() {
               <TextField value={email} onChange={setEmail} type="email" placeholder="name@studio.com" />
             </div>
           </div>
-          <div className="space-y-3">
-            {grants.map((grant, index) => (
-              <div key={index} className="grid gap-2 sm:grid-cols-[220px_1fr_auto]">
-                <select
-                  value={grant.capability === "sales" ? "sales" : `${grant.capability}:${grant.scopeType}`}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === "sales") updateGrant(index, { capability: "sales", scopeType: "sales", scopeId: null });
-                    else if (value === "steward:garden") updateGrant(index, { capability: "steward", scopeType: "garden", scopeId: "" });
-                    else if (value === "steward:bloom") updateGrant(index, { capability: "steward", scopeType: "bloom", scopeId: "" });
-                    else updateGrant(index, { capability: "compose", scopeType: "bloom", scopeId: "" });
-                  }}
-                  className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white"
-                >
-                  <option value="compose:bloom">Composer on a Bloom</option>
-                  <option value="steward:bloom">Steward of a Bloom</option>
-                  <option value="steward:garden">Steward of a Song Garden</option>
-                  <option value="sales">Sales</option>
-                </select>
-                {grant.capability === "sales" ? (
-                  <p className="self-center text-sm text-gray-400">Pipeline and drafts. Sending stays with you.</p>
-                ) : (
-                  <select
-                    value={grant.scopeId || ""}
-                    onChange={(e) => updateGrant(index, { ...grant, scopeId: e.target.value })}
-                    className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white"
-                  >
-                    <option value="">Choose…</option>
-                    {(grant.scopeType === "garden" ? gardens : blooms).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <SettingsButton
-                  variant="ghost"
-                  disabled={grants.length === 1}
-                  onClick={() => setGrants((current) => current.filter((_, i) => i !== index))}
-                >
-                  Remove
-                </SettingsButton>
-              </div>
-            ))}
-          </div>
+          <GrantFields grants={grants} blooms={blooms} gardens={gardens} onChange={setGrants} />
           <div className="flex flex-wrap gap-2">
             <SettingsButton variant="ghost" onClick={() => setGrants((current) => [...current, { ...EMPTY_GRANT }])}>
               Add permission
@@ -210,43 +267,71 @@ export default function PeopleAccessClient() {
 
       <SettingsPanel eyebrow="People" title="Who has access">
         <div className="csc-list">
-          {people.map((person) => (
-            <div key={person.id} className="csc-list-row flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-white">
-                  {person.name}{" "}
-                  <StatusPill tone={person.status === "active" ? "ok" : person.status === "disabled" ? "off" : "warn"}>
-                    {person.role === "owner" ? "Owner" : person.status}
-                  </StatusPill>
-                </p>
-                <p className="mt-1 text-xs text-gray-400">{person.email}</p>
-                <p className="mt-1 text-xs text-gray-300">
-                  {person.role === "owner"
-                    ? "Full access"
-                    : person.grants.map((grant) => grantLabel(grant, blooms, gardens)).join(" · ") || "No permissions"}
-                </p>
-              </div>
-              {person.role === "owner" ? null : (
-                <div className="flex flex-wrap gap-2">
-                  <SettingsButton onClick={() => void resend(person.id)}>
-                    {person.status === "active" ? "Send reset" : "Resend invite"}
-                  </SettingsButton>
-                  <SettingsButton
-                    variant={person.status === "disabled" ? "primary" : "danger"}
-                    onClick={() =>
-                      void patchPerson(
-                        person.id,
-                        { status: person.status === "disabled" ? "active" : "disabled" },
-                        person.status === "disabled" ? "Enabled." : "Disabled. Their session ends."
-                      )
-                    }
-                  >
-                    {person.status === "disabled" ? "Enable" : "Disable"}
-                  </SettingsButton>
+          {people.map((person) => {
+            const editing = editingId === person.id;
+            return (
+              <div key={person.id} className="csc-list-row flex-col items-stretch gap-3">
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white">
+                      {person.name}{" "}
+                      <StatusPill tone={person.status === "active" ? "ok" : person.status === "disabled" ? "off" : "warn"}>
+                        {person.role === "owner" ? "Owner" : person.status}
+                      </StatusPill>
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">{person.email}</p>
+                    {editing ? null : (
+                      <p className="mt-1 text-xs text-gray-300">
+                        {person.role === "owner"
+                          ? "Full access"
+                          : person.grants.map((grant) => grantLabel(grant, blooms, gardens)).join(" · ") || "No permissions"}
+                      </p>
+                    )}
+                  </div>
+                  {person.role === "owner" || editing ? null : (
+                    <div className="flex flex-wrap gap-2">
+                      <SettingsButton onClick={() => startEdit(person)}>Edit permissions</SettingsButton>
+                      <SettingsButton onClick={() => void resend(person.id)}>
+                        {person.status === "active" ? "Send reset" : "Resend invite"}
+                      </SettingsButton>
+                      <SettingsButton
+                        variant={person.status === "disabled" ? "primary" : "danger"}
+                        onClick={() =>
+                          void patchPerson(
+                            person.id,
+                            { status: person.status === "disabled" ? "active" : "disabled" },
+                            person.status === "disabled" ? "Enabled." : "Disabled. Their session ends."
+                          )
+                        }
+                      >
+                        {person.status === "disabled" ? "Enable" : "Disable"}
+                      </SettingsButton>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+                {editing ? (
+                  <div className="space-y-3">
+                    <GrantFields grants={draftGrants} blooms={blooms} gardens={gardens} onChange={setDraftGrants} />
+                    <div className="flex flex-wrap gap-2">
+                      <SettingsButton variant="ghost" onClick={() => setDraftGrants((current) => [...current, { ...EMPTY_GRANT }])}>
+                        Add permission
+                      </SettingsButton>
+                      <SettingsButton variant="primary" disabled={savingId === person.id} onClick={() => void saveGrants(person)}>
+                        {savingId === person.id ? "Saving…" : "Save permissions"}
+                      </SettingsButton>
+                      <SettingsButton
+                        onClick={() => {
+                          setEditingId(null);
+                        }}
+                      >
+                        Cancel
+                      </SettingsButton>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </SettingsPanel>
     </div>

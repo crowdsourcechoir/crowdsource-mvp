@@ -1,21 +1,8 @@
 import { NextResponse } from "next/server";
-import { isOwner } from "@/lib/operators/access";
+import { grantAssignmentError, isOwner, normalizeGrantInput } from "@/lib/operators/access";
 import { readActorFromRequest } from "@/lib/operators/current";
 import { authMailReady, sendInviteMail } from "@/lib/operators/mail";
-import { grantsLookValid } from "@/lib/operators/access";
 import { OperatorsUnavailableError, createOperator, issueToken, listOperators } from "@/lib/operators/store";
-import type { OperatorGrant } from "@/lib/operators/types";
-
-function normalizeGrants(raw: unknown): OperatorGrant[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const grant = item as Partial<OperatorGrant>;
-    if (grant.capability !== "compose" && grant.capability !== "steward" && grant.capability !== "sales") return [];
-    const scopeType = grant.capability === "sales" ? "sales" : grant.scopeType === "garden" ? "garden" : "bloom";
-    return [{ capability: grant.capability, scopeType, scopeId: grant.scopeId?.trim() || null }];
-  });
-}
 
 export async function GET(request: Request) {
   const actor = await readActorFromRequest(request);
@@ -46,11 +33,10 @@ export async function POST(request: Request) {
   }
   const name = body.name?.trim() || "";
   const email = body.email?.trim().toLowerCase() || "";
-  const grants = normalizeGrants(body.grants);
+  const grants = normalizeGrantInput(body.grants);
   if (!name || !email.includes("@")) return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
-  const grantError = grantsLookValid(grants);
+  const grantError = grantAssignmentError(grants);
   if (grantError) return NextResponse.json({ error: grantError }, { status: 400 });
-  if (grants.length === 0) return NextResponse.json({ error: "Add at least one permission." }, { status: 400 });
 
   try {
     const person = await createOperator({ name, email, grants });

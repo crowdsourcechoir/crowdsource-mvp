@@ -69,6 +69,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         controls: [
           "Invite a person by email",
           "Grants: Composer on a Bloom, Bloom steward, Garden steward, Sales",
+          "Change grants on an existing person (their session ends)",
           "Resend invite or password reset",
           "Disable a person",
         ],

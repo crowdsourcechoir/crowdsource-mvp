@@ -8,7 +8,7 @@ export default function AccessSettingsPage() {
     <SettingsSubpage
       eyebrow="Account"
       title="People & access"
-      description="Invite collaborators, attach them to a Bloom, Song Garden, or Sales, and let them set their own password."
+      description="Invite collaborators, change what they can open, and let them set their own password. Saving new grants ends their current session."
     >
       <PeopleAccessClient />
     </SettingsSubpage>
