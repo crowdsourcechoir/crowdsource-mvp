@@ -1,4 +1,5 @@
 import { decideAccess, grantAssignmentError, homePath, normalizeGrantInput } from "../lib/operators/access";
+import { authMailHint } from "../lib/operators/mail";
 import { hashPassword, verifyPassword } from "../lib/operators/password";
 import type { Actor } from "../lib/operators/types";
 
@@ -66,6 +67,20 @@ async function main() {
   assert(grantAssignmentError([]) === "Add at least one permission.", "empty grants rejected");
   assert(grantAssignmentError([{ capability: "compose", scopeType: "bloom", scopeId: "" }]) === "Pick a Bloom or Song Garden for each grant.", "missing bloom rejected");
   assert(grantAssignmentError(normalized) === null, "valid grants accepted");
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFrom = process.env.AUTH_FROM_EMAIL;
+  process.env.RESEND_API_KEY = "re_test";
+  delete process.env.AUTH_FROM_EMAIL;
+  assert(
+    authMailHint() === "Set AUTH_FROM_EMAIL to a verified Resend from-address so invites and password resets can send.",
+    "resend key present still needs from-address"
+  );
+  process.env.AUTH_FROM_EMAIL = "sing@crowdsourcechoir.com";
+  assert(authMailHint() === null, "mail ready when key and from are set");
+  if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+  else process.env.RESEND_API_KEY = previousKey;
+  if (previousFrom === undefined) delete process.env.AUTH_FROM_EMAIL;
+  else process.env.AUTH_FROM_EMAIL = previousFrom;
   const stored = await hashPassword("correct horse");
   assert(await verifyPassword("correct horse", stored), "password matches");
   assert(!(await verifyPassword("nope", stored)), "password rejects");

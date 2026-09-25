@@ -11,11 +11,21 @@ export function authMailReady(): boolean {
   return Boolean(process.env.RESEND_API_KEY?.trim() && authMailFrom());
 }
 
+/** What is still missing for invite and reset mail. Null when both are set. */
+export function authMailHint(): string | null {
+  const key = Boolean(process.env.RESEND_API_KEY?.trim());
+  const from = Boolean(authMailFrom());
+  if (key && from) return null;
+  if (key) return "Set AUTH_FROM_EMAIL to a verified Resend from-address so invites and password resets can send.";
+  if (from) return "Set RESEND_API_KEY so invites and password resets can send.";
+  return "Set RESEND_API_KEY and AUTH_FROM_EMAIL so invites and password resets can send.";
+}
+
 async function sendAuthMail(to: string, subject: string, text: string, html: string): Promise<void> {
   const from = authMailFrom();
   const key = process.env.RESEND_API_KEY?.trim();
   if (!key || !from) {
-    throw new Error("Invite mail needs RESEND_API_KEY and AUTH_FROM_EMAIL (a verified Resend from-address).");
+    throw new Error(authMailHint() || "Invite mail is not configured.");
   }
   const resend = new Resend(key);
   const result = await resend.emails.send({ from, to, subject, text, html });

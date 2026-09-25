@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { grantAssignmentError, isOwner, normalizeGrantInput } from "@/lib/operators/access";
 import { readActorFromRequest } from "@/lib/operators/current";
-import { authMailReady, sendInviteMail } from "@/lib/operators/mail";
+import { authMailHint, authMailReady, sendInviteMail } from "@/lib/operators/mail";
 import { OperatorsUnavailableError, createOperator, issueToken, listOperators } from "@/lib/operators/store";
 
 export async function GET(request: Request) {
@@ -12,9 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       people,
       mailReady: authMailReady(),
-      mailHint: authMailReady()
-        ? null
-        : "Set RESEND_API_KEY and AUTH_FROM_EMAIL so invites and password resets can send.",
+      mailHint: authMailHint(),
     });
   } catch (err) {
     if (err instanceof OperatorsUnavailableError) return NextResponse.json({ error: err.message, setup: true }, { status: 503 });
