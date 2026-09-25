@@ -18,6 +18,14 @@ export function authMailHint(): string | null {
   return "Invites and password resets need the Resend key on the server.";
 }
 
+export function unverifiedDomainMessage(): string {
+  return "crowdsourcechoir.com is not verified in Resend, and Gmail is not connected. Verify the domain at https://resend.com/domains and add the DNS records it shows, or connect Gmail, then send the invite again.";
+}
+
+export function isUnverifiedDomainError(message: string): boolean {
+  return /domain is not verified/i.test(message);
+}
+
 async function sendAuthMail(to: string, subject: string, text: string, html: string): Promise<void> {
   const from = authMailFrom();
   const key = process.env.RESEND_API_KEY?.trim();
@@ -26,7 +34,12 @@ async function sendAuthMail(to: string, subject: string, text: string, html: str
   }
   const resend = new Resend(key);
   const result = await resend.emails.send({ from, to, subject, text, html });
-  if (result.error) throw new Error(result.error.message);
+  if (!result.error) return;
+  if (!isUnverifiedDomainError(result.error.message)) throw new Error(result.error.message);
+  const { trySendAccessMailViaGmail } = await import("@/lib/sales/gmail/send");
+  const sent = await trySendAccessMailViaGmail({ to, subject, text, html });
+  if (sent) return;
+  throw new Error(unverifiedDomainMessage());
 }
 
 export async function sendInviteMail(to: string, name: string, token: string): Promise<void> {

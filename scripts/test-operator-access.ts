@@ -1,5 +1,5 @@
 import { decideAccess, grantAssignmentError, homePath, normalizeGrantInput } from "../lib/operators/access";
-import { authMailFrom, authMailHint } from "../lib/operators/mail";
+import { authMailFrom, authMailHint, isUnverifiedDomainError, unverifiedDomainMessage } from "../lib/operators/mail";
 import { hashPassword, verifyPassword } from "../lib/operators/password";
 import type { Actor } from "../lib/operators/types";
 
@@ -79,6 +79,8 @@ async function main() {
   assert(authMailFrom() === "Crowdsource Choir <hello@crowdsourcechoir.com>", "from address can be overridden");
   delete process.env.RESEND_API_KEY;
   assert(authMailHint() === "Invites and password resets need the Resend key on the server.", "missing resend key warns");
+  assert(isUnverifiedDomainError("The crowdsourcechoir.com domain is not verified. Please, add and verify your domain on https://resend.com/domains"), "detects unverified domain");
+  assert(unverifiedDomainMessage().includes("resend.com/domains"), "domain message points at Resend");
   if (previousKey === undefined) delete process.env.RESEND_API_KEY;
   else process.env.RESEND_API_KEY = previousKey;
   if (previousFrom === undefined) delete process.env.AUTH_FROM_EMAIL;

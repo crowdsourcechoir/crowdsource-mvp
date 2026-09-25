@@ -175,6 +175,22 @@ async function replaceGrants(operatorId: string, grants: OperatorGrant[]) {
   if (error) throw new Error(error.message);
 }
 
+export async function findOperatorByEmail(email: string): Promise<OperatorRecord | null> {
+  const row = await findRowByEmail(email.trim().toLowerCase());
+  if (!row) return null;
+  const grants = await grantsFor([row.id]);
+  return toRecord(row, grants.get(row.id) ?? []);
+}
+
+export async function deleteOperator(id: string): Promise<void> {
+  const current = await getOperator(id);
+  if (!current) return;
+  if (current.role === "owner") throw new Error("The owner account stays.");
+  const db = assertDb();
+  const { error } = await db.from("operators").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function createOperator(input: { name: string; email: string; grants: OperatorGrant[] }): Promise<OperatorRecord> {
   const db = assertDb();
   const email = input.email.trim().toLowerCase();

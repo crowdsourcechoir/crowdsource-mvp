@@ -118,6 +118,35 @@ export async function sendSelfEmailViaGmail(input: {
   return { messageId, threadId, to: bundle.email };
 }
 
+/**
+ * Access mail (invites, password resets) from the connected Gmail account.
+ * The Sales pause does not apply. Returns false when Gmail is not connected.
+ * SALES_GMAIL_SENDS_ENABLED=false still blocks the send.
+ */
+export async function trySendAccessMailViaGmail(input: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}): Promise<boolean> {
+  if (process.env.SALES_GMAIL_SENDS_ENABLED?.trim() === "false") return false;
+  const bundle = await getGmailClient();
+  if (!bundle) return false;
+  assertOutboundEmailAllowed(input.to);
+  const raw = encodeRawMessage(
+    buildGmailMime({
+      from: bundle.email,
+      to: input.to,
+      subject: input.subject,
+      body: input.text,
+      htmlBody: input.html,
+    })
+  );
+  const res = await bundle.gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+  if (!res.data.id) throw new Error("Gmail send succeeded but returned no message id.");
+  return true;
+}
+
 /** Best-effort RFC Message-ID header from a sent message — used for In-Reply-To on nudges. */
 export async function getGmailRfcMessageId(gmailMessageId: string): Promise<string | null> {
   const bundle = await getGmailClient();
