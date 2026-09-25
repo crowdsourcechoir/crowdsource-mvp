@@ -1218,7 +1218,7 @@ Assumptions stated so they are not silent:
 
 ## N. Recommended First Build Phase
 
-Phase 1 only, after the decisions in M.1 and M.2 are accepted.
+Phase 1 only. M.1 and M.2 are accepted. The SQL in this phase has to be applied in the Supabase SQL Editor before the branch is merged: the app reads Postgres, and this environment cannot apply the schema.
 
 **Outcome:** Octo has a real audience database with consent and suppression, campaigns and documents stored as rows, segment queries that run in SQL, and the current Marketing screens reading that data. Nothing is mailed.
 

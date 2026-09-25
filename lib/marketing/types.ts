@@ -37,6 +37,8 @@ export type SegmentRuleField =
   | "status"
   | "marketingConsent"
   | "city"
+  | "region"
+  | "country"
   | "tag"
   | "acquisitionSource";
 

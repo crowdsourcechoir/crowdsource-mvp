@@ -4,7 +4,7 @@ Persistent product and architecture brief for the Octo email marketing system.
 
 Implementation plan (inspection of this repository, 2026-09-25): [`architecture-plan.md`](./architecture-plan.md).
 
-Entries in the decision log are **proposed** by that plan. They are not approved until Joel accepts them. Do not treat this file as permission to start implementation.
+Joel accepted M.1 and M.2 by asking to build Phase 1 (2026-09-25). That build also accepts Postgres as the system of record. Later-phase entries in the decision log stay proposed. Phase 1 code stores the audience in Postgres and does not send mail. Apply `supabase/email-marketing-tables.sql` and `supabase/email-marketing-rls.sql` in the Supabase SQL Editor before this branch reaches production.
 
 ---
 
@@ -716,11 +716,11 @@ When making a significant architectural decision, update this document.
 
 Significant decisions only. Routine implementation details do not belong here.
 
-Each entry is **proposed** until Joel approves the plan in `architecture-plan.md`.
+M.1, M.2, and the Postgres cutover below are **accepted**. The remaining entries stay **proposed** until their phase is built.
 
 ## 2026-09-25 — Canonical person is a new `people` table
 
-**Decision (proposed).** Marketing identity lives in `public.people`, keyed by normalized email. Sales `public.contacts` stay organization-scoped prospects. Bloom `agent_participants` and Song Garden device marks link to a person when an email exists. They are not the audience table.
+**Decision (accepted, M.1).** Marketing identity lives in `public.people`, keyed by normalized email. Sales `public.contacts` stay organization-scoped prospects. Bloom `agent_participants` and Song Garden device marks link to a person when an email exists. They are not the audience table.
 
 **Reason.** `contacts.organization_id` is required. Those rows are B2B prospects for Gmail outreach. Choir subscribers are a different consent basis. Putting both in one table would mix the sales queue with the marketing list.
 
@@ -730,7 +730,7 @@ Each entry is **proposed** until Joel approves the plan in `architecture-plan.md
 
 ## 2026-09-25 — Postgres replaces `marketing/v1.json`
 
-**Decision (proposed).** Supabase Postgres is the system of record. The Storage JSON blob at `marketing/v1.json` is migrated once, then left as a read-only archive.
+**Decision (accepted with Phase 1).** Supabase Postgres is the system of record. The Storage JSON blob at `marketing/v1.json` is migrated once, then left as a read-only archive. The app does not write that blob.
 
 **Reason.** The blob is a single read-modify-write document with caps (recipients sliced to 20,000, events to 5,000), an 8-second cache, and no row-level history. `supabase/marketing-tables-deferred.sql` already calls SQL “optional future” and ships `select 1`. That deferral cannot support per-recipient events, immutability, or send-time eligibility.
 
@@ -740,7 +740,7 @@ Each entry is **proposed** until Joel approves the plan in `architecture-plan.md
 
 ## 2026-09-25 — Octo section document, MJML 4.18 compiler, custom editor
 
-**Decision (proposed).** The canonical document is versioned Octo JSON (`schemaVersion: 1`) of editorial sections. The server compiles it with pinned `mjml@4.18.0`. The editor is a React section stack plus inspector that reads and writes that JSON. Stable Maily (`@maily-to/core` 0.3.7) is a UX reference, not a dependency. Maily v2 beta is out. GrapesJS + `grapesjs-mjml` is the fallback only if the section editor cannot express a required layout.
+**Decision (accepted, M.2).** The canonical document is versioned Octo JSON (`schemaVersion: 1`) of editorial sections. The server compiles it with pinned `mjml@4.18.0`. The editor is a React section stack plus inspector that reads and writes that JSON. Stable Maily (`@maily-to/core` 0.3.7) is a UX reference, not a dependency. Maily v2 beta is out. GrapesJS + `grapesjs-mjml` is the fallback only if the section editor cannot express a required layout. Phase 1 stores the document and does not install Maily or MJML.
 
 **Reason.** Stable Maily stores TipTap JSON and renders through React Email (`@maily-to/render` → `@react-email/render` + `juice`), not MJML. Maily v2 (`2.0.0-beta.6`) requires React 19 and TipTap 3; this app is Next.js 14.2.35, React 18.3, TipTap 2.27. GrapesJS edits MJML directly and behaves like a page builder. Either choice would make a third-party document the system of record.
 
@@ -792,10 +792,8 @@ Each entry is **proposed** until Joel approves the plan in `architecture-plan.md
 
 # Open Architectural Decisions
 
-Resolved as proposals in the decision log and in `architecture-plan.md`. Still need Joel’s approval before implementation:
+M.1 and M.2 are accepted. Still open:
 
-- Accept `people` as the community identity, separate from sales `contacts`.
-- Accept a custom section editor and pinned MJML 4.18 instead of embedding Maily.
 - Confirm whether production `marketing/v1.json` holds audience data that must be migrated before cutover.
 - Confirm the verified Resend from-domain and physical mailing address.
 - Confirm Mailchimp export format (CSV versus API) and whether historical Mailchimp campaign stats are worth importing.
