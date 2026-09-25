@@ -139,6 +139,7 @@ export async function listCampaignsWithEmails(): Promise<{ campaigns: MarketingC
 export async function getCampaignBundle(id: string): Promise<{
   campaign: MarketingCampaign;
   emails: MarketingEmail[];
+  documentId: string;
 } | null> {
   const db = marketingDb();
   const { data, error } = await db.from("campaigns").select("*").eq("id", id).maybeSingle();
@@ -154,6 +155,7 @@ export async function getCampaignBundle(id: string): Promise<{
   const document = (doc as DocumentRow | null) ?? undefined;
   return {
     campaign: toCampaign(campaign),
+    documentId: campaign.document_id,
     emails: ((sends ?? []) as SendRow[]).map((send) => toEmail(send, document)),
   };
 }

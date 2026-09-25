@@ -52,6 +52,7 @@ function newBlock(type: EmailBlockType): EmailBlock {
 
 export default function MarketingCampaignEditorClient({ campaignId }: { campaignId: string }) {
   const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [email, setEmail] = useState<MarketingEmail | null>(null);
   const [segments, setSegments] = useState<MarketingSegment[]>([]);
   const [settings, setSettings] = useState<MarketingSettings | null>(null);
@@ -69,6 +70,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load campaign");
     setCampaign(data.campaign);
+    setDocumentId(typeof data.documentId === "string" ? data.documentId : null);
     setEmail(data.emails?.[0] ?? null);
     setSegments(data.segments ?? []);
     setSettings(data.settings ?? null);
@@ -92,8 +94,8 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     });
   }
 
-  async function save() {
-    if (!email || !campaign) return;
+  async function save(): Promise<string | null> {
+    if (!email || !campaign) return null;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -114,11 +116,15 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
+      const nextDocumentId = typeof data.documentId === "string" ? data.documentId : documentId;
       setCampaign(data.campaign);
+      setDocumentId(nextDocumentId);
       setEmail(data.emails?.[0] ?? email);
       setMessage("Saved");
+      return nextDocumentId;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -130,7 +136,16 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     setError(null);
     setMessage(null);
     try {
-      await save();
+      const savedDocumentId = await save();
+      if (!savedDocumentId) return;
+      if (action === "preview") {
+        const res = await fetch(`/api/marketing/documents/${savedDocumentId}/preview`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok && !data.html) throw new Error(data.errors?.[0] ?? data.error ?? "Preview failed");
+        setPreviewHtml(data.html ?? "");
+        setMessage(data.errors?.length ? data.errors.join(" ") : "Preview ready");
+        return;
+      }
       const res = await fetch(`/api/marketing/emails/${email.id}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,10 +157,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Action failed");
-      if (action === "preview") {
-        setPreviewHtml(data.html ?? "");
-        setMessage("Preview ready");
-      } else if (action === "test") {
+      if (action === "test") {
         setMessage(`Test sent (${data.providerMessageId})`);
       } else {
         setMessage(`Sent ${data.sent}/${data.queued} (skipped ${data.skipped})`);
@@ -426,7 +438,8 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
               title="Email preview"
               srcDoc={previewHtml}
               className="min-h-[480px] w-full bg-black"
-              style={{ maxWidth: mobilePreview ? 390 : "100%", margin: "0 auto", display: "block" }}
+              sandbox=""
+              style={{ maxWidth: mobilePreview ? 375 : 600, margin: "0 auto", display: "block" }}
             />
           </div>
         ) : null}
