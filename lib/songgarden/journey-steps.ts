@@ -304,6 +304,22 @@ export function resolveCategoryLabel(step: JourneyStep): string {
   return defaultCategoryLabelForStep("name");
 }
 
+/**
+ * Prompts that become a conversation turn, in journey order.
+ * Sound-only steps stay on the garden clip path and are omitted.
+ */
+export function contributionQuestionPrompts(steps: JourneyStep[]): string[] {
+  const prompts: string[] = [];
+  for (const step of steps) {
+    if (!isAgentContributionStep(step)) continue;
+    const prompt =
+      step.prompt?.trim() ||
+      (step.kind === "name" ? DEFAULT_NAME_QUESTION_PROMPT : "");
+    if (prompt) prompts.push(prompt);
+  }
+  return prompts;
+}
+
 /** True when the step needs the agent interview / text-media conversation path. */
 export function isAgentContributionStep(
   step: JourneyStep

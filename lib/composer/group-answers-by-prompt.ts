@@ -64,6 +64,8 @@ export function groupAnswersByPrompt(rows: ComposerAnswerRow[]): PromptAnswerGro
   return Array.from(map.values()).sort((a, b) => {
     if (a.key === "__untitled__") return 1;
     if (b.key === "__untitled__") return -1;
-    return a.prompt.localeCompare(b.prompt, undefined, { sensitivity: "base" });
+    const aTime = a.answers[0]?.createdAt ?? "";
+    const bTime = b.answers[0]?.createdAt ?? "";
+    return aTime.localeCompare(bTime);
   });
 }

@@ -79,6 +79,23 @@ export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedIntervie
   return answers;
 }
 
+/**
+ * Managed journeys store only user turns. When none of the answers already
+ * carry a question, zip them to the journey prompts in order.
+ */
+export function fillMissingJourneyQuestions<T extends { questionText: string | null }>(
+  answers: T[],
+  prompts: string[]
+): T[] {
+  if (prompts.length === 0) return answers;
+  if (answers.some((a) => a.questionText?.trim())) return answers;
+  return answers.map((answer, index) => {
+    const prompt = prompts[index]?.trim();
+    if (!prompt) return answer;
+    return { ...answer, questionText: prompt };
+  });
+}
+
 export function normalizePersonKey(name: string | null | undefined): string {
   return (name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }

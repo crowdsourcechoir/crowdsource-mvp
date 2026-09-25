@@ -246,6 +246,8 @@ export async function POST(
       const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
       const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
       const journeyManagedRequested = body.journeyManaged === true;
+      const questionPrompt =
+        typeof body.questionPrompt === "string" ? body.questionPrompt.trim() : "";
       const deviceId =
         typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
           ? body.deviceId.trim()
@@ -409,9 +411,24 @@ export async function POST(
         });
       }
 
+      let userTurnIndex = existingTurns.length;
+      if (
+        journeyManagedRequested &&
+        questionPrompt &&
+        questionPrompt !== lastAgentContent.trim()
+      ) {
+        await localInsertTurn({
+          conversationId,
+          turnIndex: userTurnIndex,
+          role: "agent",
+          content: questionPrompt,
+        });
+        userTurnIndex += 1;
+      }
+
       const userTurnInserted = await localInsertTurn({
         conversationId,
-        turnIndex: existingTurns.length,
+        turnIndex: userTurnIndex,
         role: "user",
         content,
         audioUrl: audioDataUrl,
@@ -553,6 +570,8 @@ export async function POST(
     const videoPublicUrl = typeof body.videoPublicUrl === "string" ? body.videoPublicUrl : null;
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
     const journeyManagedRequested = body.journeyManaged === true;
+    const questionPrompt =
+      typeof body.questionPrompt === "string" ? body.questionPrompt.trim() : "";
     const deviceId =
       typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
         ? body.deviceId.trim()
@@ -794,7 +813,25 @@ export async function POST(
           .update(participantNameUpdatePayload(content))
           .eq("id", conv.participant_id);
       }
-      const nextIndex = existingTurns.length;
+      let nextIndex = existingTurns.length;
+      if (
+        journeyManagedRequested &&
+        questionPrompt &&
+        questionPrompt !== lastAgentContent.trim()
+      ) {
+        const { error: questionError } = await supabaseAdmin
+          .from("agent_conversation_turns")
+          .insert({
+            conversation_id: conversationId,
+            turn_index: nextIndex,
+            role: "agent",
+            content: questionPrompt,
+          });
+        if (questionError) {
+          return NextResponse.json({ error: questionError.message }, { status: 400 });
+        }
+        nextIndex += 1;
+      }
       const { data: inserted, error: eInsert } = await supabaseAdmin
         .from("agent_conversation_turns")
         .insert({
