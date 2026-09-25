@@ -1,10 +1,14 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getRootAuthExpectedToken, hasRootAuthPasswordConfigured, ROOT_AUTH_COOKIE_NAME } from "@/lib/root-page-auth";
+import { readActorFromCookies } from "@/lib/operators/current";
 import { decideRootAuth } from "./auth-decision";
 import { MarketingDbError } from "./db/errors";
 
 export async function requireRootPageAuth(): Promise<NextResponse | null> {
+  const actor = await readActorFromCookies();
+  if (actor?.role === "owner") return null;
+
   const passwordConfigured = await hasRootAuthPasswordConfigured();
   const token = (await cookies()).get(ROOT_AUTH_COOKIE_NAME)?.value;
   const expected = passwordConfigured ? await getRootAuthExpectedToken() : null;
