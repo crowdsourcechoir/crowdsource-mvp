@@ -4,6 +4,40 @@ import { useEffect, useRef } from "react";
 import type { CopyBlock, PitchSlide } from "./content";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
+const CLOSING_COLOR = "#CFFF81";
+
+function splitLastSentence(text: string): { before: string; last: string } {
+  const trimmed = text.trim();
+  const parts = trimmed.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ?? [];
+  if (parts.length <= 1) return { before: "", last: trimmed };
+  const last = parts[parts.length - 1];
+  const before = trimmed.slice(0, trimmed.length - last.length).trim();
+  return { before, last };
+}
+
+/** Last prose sentence on a slide. Trailing images are skipped. Tables and lists stay intact. */
+function closingProse(blocks: CopyBlock[]): { index: number; before: string; last: string } | null {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (block.type === "image") continue;
+    if (block.type !== "paragraph" && block.type !== "line") return null;
+    const { before, last } = splitLastSentence(block.text);
+    if (!last) return null;
+    return { index, before, last };
+  }
+  return null;
+}
+
+function ClosingLine({ text, poster }: { text: string; poster: string }) {
+  return (
+    <p
+      className={`${poster} mt-10 max-w-6xl text-3xl uppercase leading-[1.05] sm:text-5xl`}
+      style={{ color: CLOSING_COLOR }}
+    >
+      {text}
+    </p>
+  );
+}
 
 function Block({ block, display, footer = false }: { block: CopyBlock; display: string; footer?: boolean }) {
   if (block.type === "title") {
@@ -96,10 +130,12 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
 export default function PitchDeck({
   slides,
   displayClass,
+  posterClass,
   monoClass,
 }: {
   slides: PitchSlide[];
   displayClass: string;
+  posterClass: string;
   monoClass: string;
 }) {
   const rootRef = useRef<HTMLElement>(null);
@@ -153,6 +189,7 @@ export default function PitchDeck({
       `}</style>
       {slides.map((slide, index) => {
         const tint = OVERLAYS[index % OVERLAYS.length];
+        const closing = slide.id === "title" ? null : closingProse(slide.blocks);
         return (
           <section key={slide.id} className="relative min-h-[100dvh] w-full overflow-hidden">
             <img
@@ -187,7 +224,16 @@ export default function PitchDeck({
                 {(slide.id === "title" ? slide.blocks.filter((block) => block.type === "title" || block.type === "kicker") : slide.blocks).map(
                   (block, blockIndex) => (
                     <div key={`${slide.id}-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${blockIndex * 70}ms` }}>
-                      <Block block={block} display={displayClass} />
+                      {closing && blockIndex === closing.index ? (
+                        <>
+                          {closing.before ? (
+                            <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{closing.before}</p>
+                          ) : null}
+                          <ClosingLine text={closing.last} poster={posterClass} />
+                        </>
+                      ) : (
+                        <Block block={block} display={displayClass} />
+                      )}
                     </div>
                   ),
                 )}

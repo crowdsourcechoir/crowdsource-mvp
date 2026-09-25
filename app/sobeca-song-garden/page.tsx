@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { Bebas_Neue, Space_Mono } from "next/font/google";
+import { Archivo_Black, Bebas_Neue, Space_Mono } from "next/font/google";
 import PitchDeck from "./PitchDeck";
 import PitchPasswordGate from "./PitchPasswordGate";
 import { PITCH_AUTH_COOKIE, pitchAuthToken, readPitchPasswordHash } from "@/lib/sobeca-pitch/access";
@@ -9,6 +9,7 @@ import { resolveSongGardenPitch } from "@/lib/sobeca-pitch/copy";
 export const dynamic = "force-dynamic";
 
 const display = Bebas_Neue({ weight: "400", subsets: ["latin"] });
+const poster = Archivo_Black({ weight: "400", subsets: ["latin"] });
 const mono = Space_Mono({ weight: ["400", "700"], subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -26,5 +27,12 @@ export default async function SobecaSongGardenPage() {
     }
   }
   const pitch = await resolveSongGardenPitch();
-  return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
+  return (
+    <PitchDeck
+      slides={pitch.slides}
+      displayClass={display.className}
+      posterClass={poster.className}
+      monoClass={mono.className}
+    />
+  );
 }
