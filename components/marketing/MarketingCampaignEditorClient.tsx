@@ -17,6 +17,7 @@ import type {
   MarketingSegment,
   MarketingSettings,
 } from "@/lib/marketing/types";
+import EmailImageField from "@/components/marketing/EmailImageField";
 
 type EventOption = { id: string; title: string; slug: string; date: string; venue: string };
 
@@ -296,10 +297,9 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <FieldLabel>Image URL</FieldLabel>
-                    <TextField
-                      value={String(block.props.imageUrl ?? "")}
-                      onChange={(v) => updateBlock(block.id, { imageUrl: v })}
+                    <EmailImageField
+                      imageUrl={String(block.props.imageUrl ?? "")}
+                      onChange={(next) => updateBlock(block.id, { imageUrl: next.imageUrl, assetId: next.assetId ?? "" })}
                     />
                   </div>
                 </div>
@@ -327,10 +327,15 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
               {block.type === "image" ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <FieldLabel>Image URL</FieldLabel>
-                    <TextField
-                      value={String(block.props.imageUrl ?? "")}
-                      onChange={(v) => updateBlock(block.id, { imageUrl: v })}
+                    <EmailImageField
+                      imageUrl={String(block.props.imageUrl ?? "")}
+                      onChange={(next) =>
+                        updateBlock(block.id, {
+                          imageUrl: next.imageUrl,
+                          assetId: next.assetId ?? "",
+                          alt: String(block.props.alt ?? "") || next.alt || "",
+                        })
+                      }
                     />
                   </div>
                   <div>
