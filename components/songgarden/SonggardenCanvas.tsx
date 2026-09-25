@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import JSZip from "jszip";
 import DraggableAudioClip, { dragClipsToDesktop } from "./DraggableAudioClip";
 import ClipDetailPanel from "./ClipDetailPanel";
 import { useSonggardenPoll } from "./useSonggardenPoll";
@@ -8,7 +9,14 @@ import { SONGGARDEN_CATEGORIES } from "@/lib/songgarden/categories";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 import ComposerActionsMenu from "@/components/songgarden/ComposerActionsMenu";
-import { deleteSonggardenClip } from "@/data/songgardenClient";
+import { deleteSonggardenClip, fetchClipFile } from "@/data/songgardenClient";
+import { wavFilename } from "@/lib/songgarden/sound-pack";
+import { mediaDragMeta } from "@/lib/composer/media-drag";
+import {
+  mediaSelectionId,
+  uniqueZipEntry,
+} from "@/lib/composer/selection-export";
+import SelectionActionsMenu from "@/components/songgarden/SelectionActionsMenu";
 import { deleteInterviewContribution } from "@/data/interviewSubmissionsClient";
 import ContributionActionsMenu from "@/components/songgarden/ContributionActionsMenu";
 import {
@@ -107,6 +115,7 @@ export default function SonggardenCanvas({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailClip, setDetailClip] = useState<SonggardenClip | null>(null);
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [exportingSelected, setExportingSelected] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [garden, setGarden] = useState<GardenLink | null>(null);
@@ -465,6 +474,10 @@ export default function SonggardenCanvas({
   }, [filteredClips]);
 
   const selectedClips = filteredClips.filter((clip) => selectedIds.has(clip.id));
+  const selectedMedia = filteredVideo.filter((item) =>
+    selectedIds.has(mediaSelectionId(item.id))
+  );
+  const selectionBusy = deletingSelected || exportingSelected;
   const pageTitle =
     scope === "garden" && garden
       ? garden.title
@@ -568,28 +581,65 @@ export default function SonggardenCanvas({
     filteredClips.length > 0 && filteredClips.every((clip) => selectedIds.has(clip.id));
 
   async function handleDeleteSelected() {
-    if (selectedClips.length === 0) return;
-    const label =
-      selectedClips.length === 1
-        ? `“${selectedClips[0].label || selectedClips[0].filename}”`
-        : `${selectedClips.length} sounds`;
-    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+    if (selectedClips.length === 0 && selectedMedia.length === 0) return;
     setDeletingSelected(true);
     setDeleteError(null);
     try {
       for (const clip of selectedClips) {
         await deleteSonggardenClip(clip.eventId || eventId, clip.id);
       }
+      for (const item of selectedMedia) {
+        if (!item.conversationId || !item.turnId) {
+          throw new Error("One selected video cannot be deleted yet.");
+        }
+        await deleteInterviewContribution(item.conversationId, item.turnId);
+      }
       setSelectedIds(new Set());
       if (detailClip && selectedClips.some((c) => c.id === detailClip.id)) {
         setDetailClip(null);
       }
-      await refreshAll();
+      if (selectedMedia.length > 0) setResponsesNonce((n) => n + 1);
+      if (selectedClips.length > 0) await refreshAll();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete sounds.");
-      await refreshAll();
+      setDeleteError(err instanceof Error ? err.message : "Could not delete the selection.");
+      if (selectedMedia.length > 0) setResponsesNonce((n) => n + 1);
+      if (selectedClips.length > 0) await refreshAll();
     } finally {
       setDeletingSelected(false);
+    }
+  }
+
+  async function handleExportSelected() {
+    if (selectedClips.length === 0 && selectedMedia.length === 0) return;
+    setExportingSelected(true);
+    setDeleteError(null);
+    try {
+      const zip = new JSZip();
+      const used = new Set<string>();
+      for (const clip of selectedClips) {
+        const file = await fetchClipFile(clip.eventId || eventId, clip);
+        zip.file(uniqueZipEntry("sounds", wavFilename(clip), used), file);
+      }
+      for (const item of selectedMedia) {
+        if (!item.videoUrl) continue;
+        const res = await fetch(item.videoUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error("Could not download a selected video.");
+        const blob = await res.blob();
+        const meta = mediaDragMeta(item.videoUrl, item.participantName || "Anonymous");
+        zip.file(uniqueZipEntry("video", meta.filename, used), blob);
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `composer-selection-${stamp}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not export the selection.");
+    } finally {
+      setExportingSelected(false);
     }
   }
 
@@ -926,9 +976,34 @@ export default function SonggardenCanvas({
 
       {showVideo ? (
         <section className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Video & photo by prompt ({filteredVideo.length})
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Video & photo by prompt ({filteredVideo.length})
+            </h2>
+            {filteredVideo.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const ids = filteredVideo.map((item) => mediaSelectionId(item.id));
+                  const allOn = ids.every((id) => selectedIds.has(id));
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (allOn) {
+                      for (const id of ids) next.delete(id);
+                    } else {
+                      for (const id of ids) next.add(id);
+                    }
+                    return next;
+                  });
+                }}
+                className="text-xs text-[#CFFF81] hover:underline"
+              >
+                {filteredVideo.every((item) => selectedIds.has(mediaSelectionId(item.id)))
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+            ) : null}
+          </div>
           {filteredVideo.length === 0 ? (
             <p className="text-sm text-gray-500">No video or photo responses in this scope.</p>
           ) : (
@@ -943,6 +1018,10 @@ export default function SonggardenCanvas({
                         url={item.videoUrl || ""}
                         participantName={item.participantName || "Anonymous"}
                         caption={item.content}
+                        selected={selectedIds.has(mediaSelectionId(item.id))}
+                        onSelectToggle={(multi) =>
+                          toggleSelect(mediaSelectionId(item.id), multi)
+                        }
                         onDelete={
                           item.turnId
                             ? () => deleteAnswer(item.conversationId, item.turnId)
@@ -958,21 +1037,19 @@ export default function SonggardenCanvas({
         </section>
       ) : null}
 
-      {selectedIds.size > 0 && showSounds ? (
-        <div className="flex flex-wrap items-center gap-3">
+      {selectedClips.length > 0 || selectedMedia.length > 0 ? (
+        <div className="sticky bottom-3 z-20 flex flex-wrap items-center gap-3 rounded-lg border border-white/15 bg-black px-3 py-2">
           <p className="text-xs text-gray-500">
-            {selectedIds.size} selected · Shift-click to multi-select · drag any clip or use the batch
-            drag handle
+            Shift-click to add. Sounds can still be dragged as a batch.
           </p>
-          <button
-            type="button"
-            disabled={deletingSelected}
-            onClick={() => void handleDeleteSelected()}
-            className="rounded-lg border border-red-500/50 px-3 py-1.5 text-xs font-medium text-red-200 transition-colors hover:border-red-400 hover:text-red-100 disabled:opacity-50"
-          >
-            {deletingSelected ? "Deleting…" : `Delete selected (${selectedIds.size})`}
-          </button>
-          {deleteError ? <p className="text-xs text-red-300">{deleteError}</p> : null}
+          <SelectionActionsMenu
+            soundCount={selectedClips.length}
+            mediaCount={selectedMedia.length}
+            busy={selectionBusy}
+            error={deleteError}
+            onExport={handleExportSelected}
+            onDelete={handleDeleteSelected}
+          />
         </div>
       ) : null}
 

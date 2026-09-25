@@ -8,6 +8,8 @@ type Props = {
   url: string;
   participantName: string;
   caption?: string | null;
+  selected?: boolean;
+  onSelectToggle?: (multi: boolean) => void;
   onDelete?: () => Promise<void>;
 };
 
@@ -16,6 +18,8 @@ export default function ComposerMediaCard({
   url,
   participantName,
   caption,
+  selected = false,
+  onSelectToggle,
   onDelete,
 }: Props) {
   const [failed, setFailed] = useState(false);
@@ -55,8 +59,10 @@ export default function ComposerMediaCard({
   return (
     <figure
       className={`relative mx-auto w-full max-w-[280px] overflow-hidden rounded-[1.25rem] border bg-black/30 shadow-[0_12px_40px_-20px_rgba(0,0,0,0.8)] ring-1 ring-white/10 ${
-        dragging ? "border-[var(--csc-accent)]/50 opacity-60" : "border-white/10"
-      }`}
+        selected || dragging
+          ? "border-[var(--csc-accent)]/70 opacity-100"
+          : "border-white/10"
+      } ${dragging ? "opacity-60" : ""}`}
     >
       {!url.trim() || failed ? (
         <p className="flex aspect-[9/16] items-center justify-center border border-red-800/40 bg-red-950/30 px-3 text-center text-xs text-red-300">
@@ -83,10 +89,29 @@ export default function ComposerMediaCard({
       )}
       <figcaption className="flex items-start justify-between gap-2 px-3 py-2">
         <div className="min-w-0 space-y-1">
-          <p className="truncate text-xs text-gray-500">{participantName || "Anonymous"}</p>
+          <button
+            type="button"
+            className="block max-w-full truncate text-left text-xs text-gray-500"
+            onClick={(e) => onSelectToggle?.(e.shiftKey || e.metaKey || e.ctrlKey)}
+          >
+            {participantName || "Anonymous"}
+          </button>
           {caption ? <p className="line-clamp-3 text-xs text-gray-300">{caption}</p> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {onSelectToggle ? (
+            <input
+              type="checkbox"
+              checked={selected}
+              readOnly
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectToggle(true);
+              }}
+              className="h-4 w-4 accent-[var(--csc-accent)]"
+              aria-label={`Select ${meta.kind} from ${participantName || "Anonymous"}`}
+            />
+          ) : null}
           {url.trim() && !failed ? (
             <button
               type="button"
