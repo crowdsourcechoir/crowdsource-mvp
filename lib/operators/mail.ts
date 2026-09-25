@@ -1,24 +1,21 @@
 import { Resend } from "resend";
+import { ownerEmail } from "@/lib/operators/session";
 import { siteUrl } from "@/lib/site-url";
 
-export function authMailFrom(): string | null {
-  const raw = process.env.AUTH_FROM_EMAIL?.trim();
-  if (!raw) return null;
+/** From-address for invite and reset mail. AUTH_FROM_EMAIL overrides the owner address. */
+export function authMailFrom(): string {
+  const raw = process.env.AUTH_FROM_EMAIL?.trim() || ownerEmail();
   return raw.includes("<") ? raw : `Crowdsource Choir <${raw}>`;
 }
 
 export function authMailReady(): boolean {
-  return Boolean(process.env.RESEND_API_KEY?.trim() && authMailFrom());
+  return Boolean(process.env.RESEND_API_KEY?.trim());
 }
 
-/** What is still missing for invite and reset mail. Null when both are set. */
+/** Null when the Resend key is set. The from-address has a default. */
 export function authMailHint(): string | null {
-  const key = Boolean(process.env.RESEND_API_KEY?.trim());
-  const from = Boolean(authMailFrom());
-  if (key && from) return null;
-  if (key) return "Set AUTH_FROM_EMAIL to a verified Resend from-address so invites and password resets can send.";
-  if (from) return "Set RESEND_API_KEY so invites and password resets can send.";
-  return "Set RESEND_API_KEY and AUTH_FROM_EMAIL so invites and password resets can send.";
+  if (authMailReady()) return null;
+  return "Invites and password resets need the Resend key on the server.";
 }
 
 async function sendAuthMail(to: string, subject: string, text: string, html: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { decideAccess, grantAssignmentError, homePath, normalizeGrantInput } from "../lib/operators/access";
-import { authMailHint } from "../lib/operators/mail";
+import { authMailFrom, authMailHint } from "../lib/operators/mail";
 import { hashPassword, verifyPassword } from "../lib/operators/password";
 import type { Actor } from "../lib/operators/types";
 
@@ -69,18 +69,22 @@ async function main() {
   assert(grantAssignmentError(normalized) === null, "valid grants accepted");
   const previousKey = process.env.RESEND_API_KEY;
   const previousFrom = process.env.AUTH_FROM_EMAIL;
+  const previousOwner = process.env.OPERATOR_OWNER_EMAIL;
   process.env.RESEND_API_KEY = "re_test";
   delete process.env.AUTH_FROM_EMAIL;
-  assert(
-    authMailHint() === "Set AUTH_FROM_EMAIL to a verified Resend from-address so invites and password resets can send.",
-    "resend key present still needs from-address"
-  );
-  process.env.AUTH_FROM_EMAIL = "sing@crowdsourcechoir.com";
-  assert(authMailHint() === null, "mail ready when key and from are set");
+  delete process.env.OPERATOR_OWNER_EMAIL;
+  assert(authMailHint() === null, "resend key clears the mail warning");
+  assert(authMailFrom() === "Crowdsource Choir <sing@crowdsourcechoir.com>", "from defaults to the owner address");
+  process.env.AUTH_FROM_EMAIL = "hello@crowdsourcechoir.com";
+  assert(authMailFrom() === "Crowdsource Choir <hello@crowdsourcechoir.com>", "from address can be overridden");
+  delete process.env.RESEND_API_KEY;
+  assert(authMailHint() === "Invites and password resets need the Resend key on the server.", "missing resend key warns");
   if (previousKey === undefined) delete process.env.RESEND_API_KEY;
   else process.env.RESEND_API_KEY = previousKey;
   if (previousFrom === undefined) delete process.env.AUTH_FROM_EMAIL;
   else process.env.AUTH_FROM_EMAIL = previousFrom;
+  if (previousOwner === undefined) delete process.env.OPERATOR_OWNER_EMAIL;
+  else process.env.OPERATOR_OWNER_EMAIL = previousOwner;
   const stored = await hashPassword("correct horse");
   assert(await verifyPassword("correct horse", stored), "password matches");
   assert(!(await verifyPassword("nope", stored)), "password rejects");
