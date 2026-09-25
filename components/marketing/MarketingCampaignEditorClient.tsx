@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   FieldLabel,
   SettingsButton,
@@ -18,6 +18,7 @@ import type {
   MarketingSettings,
 } from "@/lib/marketing/types";
 import EmailImageField from "@/components/marketing/EmailImageField";
+import { insertBlock, moveBlock } from "@/lib/marketing/editor/block-order";
 
 type EventOption = { id: string; title: string; slug: string; date: string; venue: string };
 
@@ -30,6 +31,12 @@ const BLOCK_TYPES: { type: EmailBlockType; label: string }[] = [
   { type: "divider", label: "Divider" },
   { type: "footer", label: "Footer" },
 ];
+
+function blockLabel(type: string) {
+  return BLOCK_TYPES.find((item) => item.type === type)?.label ?? type;
+}
+
+type DragPayload = { kind: "new"; type: EmailBlockType } | { kind: "move"; id: string };
 
 function newBlock(type: EmailBlockType): EmailBlock {
   const id = `blk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -65,6 +72,11 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const dragPayload = useRef<DragPayload | null>(null);
+  const dropIndexRef = useRef<number | null>(null);
+  const dragActive = useRef(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/marketing/campaigns/${campaignId}`, { cache: "no-store" });
@@ -86,6 +98,85 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
   }, [load]);
 
   const blocks = email?.blocks ?? [];
+
+  function beginDrag(event: DragEvent, payload: DragPayload) {
+    dragActive.current = true;
+    dragPayload.current = payload;
+    event.dataTransfer.effectAllowed = payload.kind === "new" ? "copy" : "move";
+    event.dataTransfer.setData("text/plain", payload.kind === "new" ? payload.type : payload.id);
+    window.requestAnimationFrame(() => {
+      if (dragActive.current) setDragging(true);
+    });
+  }
+
+  function clearDrag() {
+    dragActive.current = false;
+    dragPayload.current = null;
+    dropIndexRef.current = null;
+    setDragging(false);
+    setDropIndex(null);
+  }
+
+  function markDrop(index: number) {
+    dropIndexRef.current = index;
+    setDropIndex((current) => (current === index ? current : index));
+  }
+
+  function endDrag() {
+    window.setTimeout(() => {
+      if (!dragPayload.current) return;
+      const index = dropIndexRef.current;
+      if (index == null) clearDrag();
+      else dropAt(index);
+    }, 0);
+  }
+
+  function slotFromPointer(event: DragEvent<HTMLDivElement>, index: number) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return event.clientY >= rect.top + rect.height / 2 ? index + 1 : index;
+  }
+
+  function dropAt(index: number) {
+    const payload = dragPayload.current;
+    clearDrag();
+    if (!payload || !email) return;
+    const next =
+      payload.kind === "new"
+        ? insertBlock(email.blocks, newBlock(payload.type), index)
+        : moveBlock(email.blocks, payload.id, index);
+    setEmail({ ...email, blocks: next });
+  }
+
+  function dropSlot(index: number) {
+    const active = dropIndex === index;
+    const empty = blocks.length === 0;
+    return (
+      <div
+        data-drop-index={index}
+        onDragOver={(event) => {
+          event.preventDefault();
+          markDrop(index);
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = dragPayload.current?.kind === "new" ? "copy" : "move";
+          }
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropAt(index);
+        }}
+        className={`relative ${active ? "bg-[var(--csc-accent)]/20" : dragging ? "bg-white/[0.04]" : ""}`}
+        style={{ height: empty ? 72 : dragging ? 44 : 12 }}
+      >
+        {active ? (
+          <div className="pointer-events-none absolute inset-x-3 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[var(--csc-accent)]" />
+        ) : null}
+        {empty ? (
+          <p className="pt-6 text-center text-xs uppercase tracking-[0.14em] text-gray-400">Drop a section here</p>
+        ) : null}
+      </div>
+    );
+  }
 
   function updateBlock(id: string, props: Record<string, unknown>) {
     if (!email) return;
@@ -228,57 +319,78 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
         </div>
       </SettingsPanel>
 
-      <SettingsPanel title="Blocks" description="Add, edit, reorder-simple (top to bottom).">
+      <SettingsPanel title="Email" description="Drag a section type onto the email. Drag a section by its name to move it.">
         <div className="mb-4 flex flex-wrap gap-2">
-          {BLOCK_TYPES.map((b) => (
-            <SettingsButton
-              key={b.type}
+          {BLOCK_TYPES.map((item) => (
+            <button
+              key={item.type}
+              type="button"
+              draggable={!busy}
               disabled={busy}
-              onClick={() => setEmail({ ...email, blocks: [...email.blocks, newBlock(b.type)] })}
+              data-section-type={item.type}
+              onDragStart={(event) => beginDrag(event, { kind: "new", type: item.type })}
+              onDragEnd={endDrag}
+              className="inline-flex cursor-grab items-center justify-center rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-300 transition-colors hover:border-white/40 hover:text-white active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
             >
-              + {b.label}
-            </SettingsButton>
+              {item.label}
+            </button>
           ))}
         </div>
 
-        <div className="space-y-4">
+        <div
+          onDragEnd={endDrag}
+          onDragOver={(event) => {
+            const first = event.currentTarget.querySelector("[data-section-id]");
+            if (!first) return;
+            if (event.clientY < first.getBoundingClientRect().top) {
+              event.preventDefault();
+              markDrop(0);
+            }
+          }}
+          onDrop={(event) => {
+            const first = event.currentTarget.querySelector("[data-section-id]");
+            if (!first || event.clientY >= first.getBoundingClientRect().top) return;
+            event.preventDefault();
+            dropAt(0);
+          }}
+        >
           {blocks.map((block, index) => (
-            <div key={block.id} className="rounded-xl border border-[var(--csc-row-divider)] p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="csc-eyebrow">{block.type}</p>
-                <div className="flex gap-2">
-                  <SettingsButton
-                    disabled={index === 0}
-                    onClick={() => {
-                      const next = [...blocks];
-                      const tmp = next[index - 1]!;
-                      next[index - 1] = next[index]!;
-                      next[index] = tmp;
-                      setEmail({ ...email, blocks: next });
-                    }}
+            <div key={block.id}>
+              {dropSlot(index)}
+              <div
+                data-section-id={block.id}
+                className="rounded-xl border border-[var(--csc-row-divider)] p-4"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  markDrop(slotFromPointer(event, index));
+                  if (event.dataTransfer) {
+                    event.dataTransfer.dropEffect = dragPayload.current?.kind === "new" ? "copy" : "move";
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  dropAt(slotFromPointer(event, index));
+                }}
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    draggable={!busy}
+                    onDragStart={(event) => beginDrag(event, { kind: "move", id: block.id })}
+                    onDragEnd={endDrag}
+                    title="Drag to move"
+                    className="csc-eyebrow min-h-8 flex-1 cursor-grab text-left active:cursor-grabbing"
                   >
-                    Up
-                  </SettingsButton>
-                  <SettingsButton
-                    disabled={index === blocks.length - 1}
-                    onClick={() => {
-                      const next = [...blocks];
-                      const tmp = next[index + 1]!;
-                      next[index + 1] = next[index]!;
-                      next[index] = tmp;
-                      setEmail({ ...email, blocks: next });
-                    }}
-                  >
-                    Down
-                  </SettingsButton>
+                    {blockLabel(block.type)}
+                  </button>
                   <SettingsButton
                     variant="danger"
-                    onClick={() => setEmail({ ...email, blocks: blocks.filter((b) => b.id !== block.id) })}
+                    onClick={() => setEmail({ ...email, blocks: email.blocks.filter((item) => item.id !== block.id) })}
                   >
                     Remove
                   </SettingsButton>
                 </div>
-              </div>
 
               {block.type === "hero" ? (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -417,8 +529,10 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
                   </div>
                 </div>
               ) : null}
+              </div>
             </div>
           ))}
+          {dropSlot(blocks.length)}
         </div>
       </SettingsPanel>
 
