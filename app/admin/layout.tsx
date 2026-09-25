@@ -1,11 +1,7 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import AdminLayoutClient from "@/components/AdminLayoutClient";
-import {
-  ROOT_AUTH_COOKIE_NAME,
-  getRootAuthExpectedToken,
-  hasRootAuthPasswordConfigured,
-} from "@/lib/root-page-auth";
+import { hasRootAuthPasswordConfigured } from "@/lib/root-page-auth";
+import { readActorFromCookies } from "@/lib/operators/current";
+import { redirect } from "next/navigation";
 
 type AdminLayoutProps = {
   children: React.ReactNode;
@@ -13,12 +9,8 @@ type AdminLayoutProps = {
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {
   if (await hasRootAuthPasswordConfigured()) {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(ROOT_AUTH_COOKIE_NAME)?.value;
-    const expected = await getRootAuthExpectedToken();
-    if (!token || !expected || token !== expected) {
-      redirect("/");
-    }
+    const actor = await readActorFromCookies();
+    if (!actor) redirect("/");
   }
   return <AdminLayoutClient>{children}</AdminLayoutClient>;
 }

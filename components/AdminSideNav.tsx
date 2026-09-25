@@ -132,9 +132,30 @@ function IconSettings({ className }: { className?: string }) {
   );
 }
 
-const navItems: AdminNavItem[] = [
+type NavFlags = {
+  gardens: boolean;
+  blooms: boolean;
+  live: boolean;
+  composer: boolean;
+  sales: boolean;
+  marketing: boolean;
+  settings: boolean;
+};
+
+const OPEN_NAV: NavFlags = {
+  gardens: true,
+  blooms: true,
+  live: true,
+  composer: true,
+  sales: true,
+  marketing: true,
+  settings: true,
+};
+
+const navItems: Array<AdminNavItem & { key: keyof NavFlags }> = [
   {
     label: "Gardens",
+    key: "gardens",
     eyebrow: "Persistent Worlds",
     href: "/admin/gardens",
     isActive: (pathname) => pathname.startsWith("/admin/gardens"),
@@ -142,6 +163,7 @@ const navItems: AdminNavItem[] = [
   },
   {
     label: "Blooms",
+    key: "blooms",
     eyebrow: "Live Events",
     href: "/admin/events",
     isActive: (pathname) => pathname.startsWith("/admin/events"),
@@ -149,6 +171,7 @@ const navItems: AdminNavItem[] = [
   },
   {
     label: "Live",
+    key: "live",
     eyebrow: "Runtime Tools",
     href: "/admin/live",
     isActive: (pathname) =>
@@ -157,6 +180,7 @@ const navItems: AdminNavItem[] = [
   },
   {
     label: "Composer",
+    key: "composer",
     eyebrow: "Musical Formation",
     href: "/admin/composer",
     isActive: (pathname) =>
@@ -168,6 +192,7 @@ const navItems: AdminNavItem[] = [
   },
   {
     label: "Sales",
+    key: "sales",
     eyebrow: "Prospecting Intelligence",
     href: "/admin/sales",
     isActive: (pathname) => pathname.startsWith("/admin/sales"),
@@ -175,6 +200,7 @@ const navItems: AdminNavItem[] = [
   },
   {
     label: "Marketing",
+    key: "marketing",
     eyebrow: "Audience & Campaigns",
     href: "/admin/marketing",
     isActive: (pathname) => pathname.startsWith("/admin/marketing"),
@@ -186,6 +212,8 @@ export default function AdminSideNav() {
   const pathname = usePathname() ?? "";
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [nav, setNav] = useState<NavFlags>(OPEN_NAV);
+  const [home, setHome] = useState("/admin/gardens");
 
   useEffect(() => {
     try {
@@ -198,7 +226,14 @@ export default function AdminSideNav() {
     } catch {
       /* ignore */
     }
-    setReady(true);
+    fetch("/api/auth/session")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.nav) setNav(data.nav);
+        if (typeof data?.home === "string") setHome(data.home);
+      })
+      .catch(() => undefined)
+      .finally(() => setReady(true));
   }, []);
 
   function toggleCollapsed() {
@@ -226,14 +261,14 @@ export default function AdminSideNav() {
       aria-label="Admin navigation"
     >
       <div className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "px-4"}`}>
-        <Link href="/admin/gardens" className="flex shrink-0 items-center" title="Crowdsource Choir">
+        <Link href={home} className="flex shrink-0 items-center" title="Crowdsource Choir">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Crowdsource Choir" className="h-8 w-auto shrink-0" />
         </Link>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-2 pb-3">
-        {navItems.map((item) => {
+        {navItems.filter((item) => nav[item.key]).map((item) => {
           const active = item.isActive(pathname);
           return (
             <Link
@@ -259,6 +294,7 @@ export default function AdminSideNav() {
       </nav>
 
       <div className="mt-auto border-t border-white/10 px-2 py-3">
+        {nav.settings ? (
         <Link
           href="/admin/settings"
           title={collapsed ? "Settings" : undefined}
@@ -271,11 +307,23 @@ export default function AdminSideNav() {
               : "text-gray-400 hover:bg-white/5 hover:text-white"
           }`}
         >
-          <span className={`shrink-0 ${settingsActive ? "text-[#CFFF81]" : "text-gray-400 group-hover:text-white"}`}>
+          <span className={`shrink-0 ${settingsActive ? "text-[var(--csc-accent)]" : "text-gray-400 group-hover:text-white"}`}>
             <IconSettings className="h-5 w-5" />
           </span>
           {!collapsed && <span>Settings</span>}
         </Link>
+      ) : null}
+      <button
+        type="button"
+        className={`mt-1 w-full rounded-lg px-2.5 py-2 text-left text-xs text-gray-500 hover:text-white ${collapsed ? "text-center" : ""}`}
+        onClick={() => {
+          void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+            window.location.href = "/";
+          });
+        }}
+      >
+        {collapsed ? "Out" : "Sign out"}
+      </button>
       </div>
 
       {/* Full-height border hit target — no static arrow */}
