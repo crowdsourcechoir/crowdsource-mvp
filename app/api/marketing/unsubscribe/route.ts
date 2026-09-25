@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
-import { unsubscribePersonByEmail } from "@/lib/marketing/people";
+import { unsubscribeByEmail } from "@/lib/marketing/db/people";
 
 export const dynamic = "force-dynamic";
+
+function page(message: string): NextResponse {
+  return new NextResponse(
+    `<!doctype html><html><body style="background:#000;color:#fff;font-family:sans-serif;padding:40px"><h1 style="color:#CFFF81">Unsubscribed</h1><p>${message}</p></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
+}
 
 async function handleUnsubscribe(email: string | null) {
   if (!email) {
     return new NextResponse("Missing email.", { status: 400, headers: { "Content-Type": "text/plain" } });
   }
-  const person = await unsubscribePersonByEmail(email);
-  const msg = person
-    ? `You have been unsubscribed (${person.email}).`
-    : "If that address was on our list, it has been unsubscribed.";
-  return new NextResponse(
-    `<!doctype html><html><body style="background:#000;color:#fff;font-family:sans-serif;padding:40px"><h1 style="color:#CFFF81">Unsubscribed</h1><p>${msg}</p></body></html>`,
-    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
-  );
+  try {
+    const person = await unsubscribeByEmail(email);
+    return page(
+      person
+        ? "You have been unsubscribed."
+        : "If that address was on our list, it has been unsubscribed."
+    );
+  } catch {
+    return page("If that address was on our list, it has been unsubscribed.");
+  }
 }
 
 export async function GET(request: Request) {

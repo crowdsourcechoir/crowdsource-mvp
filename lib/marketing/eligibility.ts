@@ -1,0 +1,1 @@
+export { isMarketingEligible } from "./consent";
