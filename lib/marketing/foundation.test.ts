@@ -11,7 +11,7 @@ import type { EmailBlock } from "./types";
 const blocks: EmailBlock[] = [
   { id: "blk_hero", type: "hero", props: { title: "Hello", subtitle: "There", imageUrl: "https://cdn.example/a.jpg" } },
   { id: "blk_body", type: "rich_text", props: { text: "Line one\n\nLine <two>", html: "<p>ignored</p>" } },
-  { id: "blk_img", type: "image", props: { imageUrl: "https://cdn.example/b.jpg", alt: "Cover", href: "https://example.com" } },
+  { id: "blk_img", type: "image", props: { imageUrl: "https://cdn.example/b.jpg", alt: "Cover", href: "https://example.com", assetId: "asset-1" } },
   { id: "blk_cta", type: "cta", props: { label: "Go", href: "https://example.com/go" } },
   { id: "blk_div", type: "divider", props: {} },
   { id: "blk_event", type: "event", props: { eventId: "evt_1", title: "Bloom", url: "https://example.com/e/bloom", ctaText: "Open" } },
@@ -25,6 +25,7 @@ assert.equal(roundTrip[0]?.props.title, "Hello");
 assert.equal(roundTrip[1]?.props.text, "Line one\n\nLine <two>");
 assert.match(String(roundTrip[1]?.props.html), /&lt;two&gt;/);
 assert.equal(roundTrip[2]?.props.alt, "Cover");
+assert.equal(roundTrip[2]?.props.assetId, "asset-1");
 assert.equal(roundTrip[5]?.props.eventId, "evt_1");
 assert.equal(roundTrip[6]?.props.physicalAddress, "Seattle");
 assert.throws(() => migrateEmailDocument({ schemaVersion: 2, sections: [] }), /schemaVersion/);
