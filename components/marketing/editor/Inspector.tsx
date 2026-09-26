@@ -124,6 +124,8 @@ export default function Inspector({
       {image || section.type === "hero" || section.type === "full_bleed_image" || section.type === "image_story" || section.type === "song_garden_invitation" || section.type === "artist_feature" || section.type === "event" ? (
         <div>
           <EmailImageField
+            key={section.id}
+            sizeNote={section.type === "hero" || section.type === "full_bleed_image" ? "1120 × 400" : undefined}
             imageUrl={image?.url ?? ""}
             onChange={(next) =>
               onChange({

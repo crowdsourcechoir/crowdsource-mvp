@@ -29,14 +29,17 @@ async function readImageSize(file: File): Promise<{ width: number; height: numbe
 export default function EmailImageField({
   imageUrl,
   onChange,
+  sizeNote,
 }: {
   imageUrl: string;
   onChange: (next: { imageUrl: string; assetId: string | null; alt?: string }) => void;
+  sizeNote?: string;
 }) {
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSize, setShowSize] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +108,7 @@ export default function EmailImageField({
         placeholder="https:// or choose from the library"
       />
       <div className="flex flex-wrap gap-2">
-        <label className="inline-flex cursor-pointer items-center">
+        <label className="inline-flex cursor-pointer items-center" onClick={() => setShowSize(true)}>
           <input
             type="file"
             accept={ACCEPT}
@@ -123,6 +126,7 @@ export default function EmailImageField({
         </label>
         <SettingsButton onClick={() => setOpen((value) => !value)}>{open ? "Hide library" : "Library"}</SettingsButton>
       </div>
+      {showSize && sizeNote ? <p className="text-xs text-[var(--csc-accent)]">{sizeNote}</p> : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
       {imageUrl ? (
         <img src={imageUrl} alt="" className="mt-2 max-h-40 w-full object-contain" />
