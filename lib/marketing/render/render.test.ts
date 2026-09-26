@@ -178,6 +178,63 @@ const fixtures: Array<{ name: string; sections: EmailSection[]; assert: (html: s
     },
   },
   {
+    name: "large-statement",
+    sections: [section("large_statement", { eyebrow: "Note", text: "Sing it <loud>" })],
+    assert: (html) => {
+      assert.match(html, /Sing it &lt;loud&gt;/);
+      assert.equal(html.includes("<script"), false);
+    },
+  },
+  {
+    name: "pull-quote",
+    sections: [section("pull_quote", { quote: "A line", attribution: "Ada" })],
+    assert: (html) => {
+      assert.match(html, /A line/);
+      assert.match(html, /Ada/);
+    },
+  },
+  {
+    name: "two-column",
+    sections: [section("two_column", { leftHeading: "Left", leftText: "One", rightHeading: "Right", rightText: "Two" })],
+    assert: (html) => {
+      assert.match(html, /Left/);
+      assert.match(html, /Right/);
+    },
+  },
+  {
+    name: "gallery",
+    sections: [
+      section("gallery", {
+        images: [{ assetId: null, url: "https://cdn.example/a.jpg", alt: "One", ratio: "square" }],
+      }),
+    ],
+    assert: (html) => {
+      assert.match(html, /alt="One"/);
+    },
+  },
+  {
+    name: "song-garden-invitation",
+    sections: [
+      section("song_garden_invitation", {
+        heading: "Garden",
+        text: "Come sing",
+        ctaLabel: "Open",
+        ctaHref: "https://example.com/garden",
+      }),
+    ],
+    assert: (html) => {
+      assert.match(html, /https:\/\/example.com\/garden/);
+    },
+  },
+  {
+    name: "artist-feature",
+    sections: [section("artist_feature", { name: "Ada", role: "Voice", bio: "Sings", href: "https://example.com/ada" })],
+    assert: (html) => {
+      assert.match(html, /Ada/);
+      assert.match(html, /https:\/\/example.com\/ada/);
+    },
+  },
+  {
     name: "footer",
     sections: [],
     assert: (html) => {
@@ -210,9 +267,9 @@ const hiddenUnsubscribe = compile([section("footer", { companyName: "CSC", physi
 assert.equal(hiddenUnsubscribe.ok, false);
 assert.match(hiddenUnsubscribe.errors.join(" "), /unsubscribe/);
 
-const unavailable = compile([section("large_statement", { text: "No" })]);
-assert.equal(unavailable.ok, false);
-assert.match(unavailable.errors.join(" "), /no renderer for section type large_statement/);
+const statement = compile([section("large_statement", { text: "No" }), footer]);
+assert.equal(statement.ok, true, statement.errors.join("; "));
+assert.match(statement.html, /No/);
 
 const seeded = compileEmailDocument({
   document: document([
