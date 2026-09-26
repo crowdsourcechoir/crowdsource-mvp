@@ -3,6 +3,7 @@
  */
 
 export type InterviewTurnLike = {
+  id?: string;
   role: string;
   content?: string | null;
   createdAt?: string;
@@ -20,6 +21,8 @@ export type InterviewTurnLike = {
 };
 
 export type PairedInterviewAnswer = {
+  /** User turn id — required to delete one contribution. */
+  turnId: string | null;
   createdAt: string;
   content: string;
   questionText: string | null;
@@ -62,6 +65,7 @@ export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedIntervie
     if (role !== "user") continue;
 
     answers.push({
+      turnId: typeof turn.id === "string" && turn.id.trim() ? turn.id.trim() : null,
       createdAt: createdAtOf(turn) || new Date().toISOString(),
       content: contentOf(turn),
       questionText: lastQuestion,
@@ -73,6 +77,23 @@ export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedIntervie
   }
 
   return answers;
+}
+
+/**
+ * Managed journeys store only user turns. When none of the answers already
+ * carry a question, zip them to the journey prompts in order.
+ */
+export function fillMissingJourneyQuestions<T extends { questionText: string | null }>(
+  answers: T[],
+  prompts: string[]
+): T[] {
+  if (prompts.length === 0) return answers;
+  if (answers.some((a) => a.questionText?.trim())) return answers;
+  return answers.map((answer, index) => {
+    const prompt = prompts[index]?.trim();
+    if (!prompt) return answer;
+    return { ...answer, questionText: prompt };
+  });
 }
 
 export function normalizePersonKey(name: string | null | undefined): string {
