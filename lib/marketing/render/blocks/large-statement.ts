@@ -1,6 +1,6 @@
 import type { EmailSection } from "../../document/types";
 import { escapePreservingTokens } from "../html";
-import { propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 
 export function renderLargeStatement(section: EmailSection, ctx: SectionContext): RenderedSection {
   const colors = sectionColors(ctx.tokens, section);
@@ -16,7 +16,7 @@ export function renderLargeStatement(section: EmailSection, ctx: SectionContext)
   }
   if (text) {
     parts.push(
-      `<mj-text align="${align}" font-family="${ctx.tokens.fonts.heading}" font-size="${type.statement.size}px" font-weight="${type.statement.weight}" line-height="${type.statement.lineHeight}" color="${colors.color}" padding="0">${escapePreservingTokens(text)}</mj-text>`
+      `<mj-text align="${align}" font-family="${ctx.tokens.fonts.heading}" font-size="${type.statement.size}px" font-weight="${type.statement.weight}" line-height="${type.statement.lineHeight}"${trackingAttr(type.statement)} color="${colors.color}" padding="0">${escapePreservingTokens(text)}</mj-text>`
     );
   }
   return {

@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
 import { escapePreservingTokens } from "../html";
 import { inlineDocumentToHtml, inlineToPlainText, plainTextToHtml } from "../inline";
-import { propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 
 export function renderEditorialText(section: EmailSection, ctx: SectionContext): RenderedSection {
   const colors = sectionColors(ctx.tokens, section);
@@ -16,7 +16,7 @@ export function renderEditorialText(section: EmailSection, ctx: SectionContext):
   const parts: string[] = [];
   if (heading) {
     parts.push(
-      `<mj-text align="${align}" font-family="${ctx.tokens.fonts.heading}" font-size="${type.heading.size}px" font-weight="${type.heading.weight}" line-height="${type.heading.lineHeight}" color="${colors.color}" padding="0 0 8px 0">${escapePreservingTokens(heading)}</mj-text>`
+      `<mj-text align="${align}" font-family="${ctx.tokens.fonts.heading}" font-size="${type.heading.size}px" font-weight="${type.heading.weight}" line-height="${type.heading.lineHeight}"${trackingAttr(type.heading)} color="${colors.color}" padding="0 0 8px 0">${escapePreservingTokens(heading)}</mj-text>`
     );
   }
   if (bodyHtml) {

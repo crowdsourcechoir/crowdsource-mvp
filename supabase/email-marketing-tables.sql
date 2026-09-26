@@ -512,9 +512,9 @@ select
     "emailWidth": 600,
     "contentWidth": 560,
     "fonts": {
-      "heading": "Georgia, 'Times New Roman', Times, serif",
-      "body": "Georgia, 'Times New Roman', Times, serif",
-      "ui": "Arial, Helvetica, sans-serif"
+      "heading": "'Bebas Neue', Impact, 'Arial Narrow', sans-serif",
+      "body": "'Space Mono', 'Courier New', Courier, monospace",
+      "ui": "'Space Mono', 'Courier New', Courier, monospace"
     },
     "colors": {
       "canvas": "#000000",

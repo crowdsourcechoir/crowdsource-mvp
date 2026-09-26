@@ -73,6 +73,7 @@ const fixtures: Array<{ name: string; sections: EmailSection[]; assert: (html: s
     assert: (html) => {
       assert.match(html, /alt="Cover &amp; &lt;art&gt;"/);
       assert.match(html, /Hello &lt;there&gt;/);
+      assert.match(html, /Bebas Neue/);
       assert.equal(html.includes("<script"), false);
     },
   },
@@ -250,6 +251,9 @@ for (const fixture of fixtures) {
   const result = compile([...fixture.sections, footer]);
   assert.equal(result.ok, true, `${fixture.name}: ${result.errors.join("; ")}`);
   fixture.assert(result.html);
+  assert.match(result.html, /src="https:\/\/app\.crowdsourcechoir\.com\/logo\.png"/);
+  assert.match(result.html, /alt="Crowdsource Choir"/);
+  assert.match(result.html, /Space Mono/);
   assert.equal(result.links.some((link) => link.url === "{{unsubscribe_url}}"), true);
   expectSnapshot(fixture.name, result.html);
 }
@@ -305,5 +309,28 @@ const blank = personalizeEmail(
 );
 assert.equal(blank.html, "");
 assert.equal(blank.text, "");
+
+const upgraded = resolveEmailTokens({
+  fonts: {
+    heading: "Georgia, 'Times New Roman', Times, serif",
+    body: "Georgia, 'Times New Roman', Times, serif",
+    ui: "Arial, Helvetica, sans-serif",
+  },
+  colors: { canvas: "#111111" },
+  type: { title: { size: 12, lineHeight: 1, weight: 700 } },
+  button: { paddingX: 4, paddingY: 4, fontSize: 20 },
+});
+assert.match(upgraded.fonts.heading, /Bebas Neue/);
+assert.match(upgraded.fonts.body, /Space Mono/);
+assert.equal(upgraded.colors.canvas, "#111111");
+assert.equal(upgraded.type.title.size, DEFAULT_EMAIL_TOKENS.type.title.size);
+assert.equal(upgraded.button.fontSize, DEFAULT_EMAIL_TOKENS.button.fontSize);
+
+const customFonts = resolveEmailTokens({
+  fonts: { heading: "Inter, sans-serif", body: "Inter, sans-serif", ui: "Inter, sans-serif" },
+  type: { title: { size: 18, lineHeight: 1.1, weight: 600 } },
+});
+assert.equal(customFonts.fonts.heading, "Inter, sans-serif");
+assert.equal(customFonts.type.title.size, 18);
 
 console.log("marketing render tests ok");

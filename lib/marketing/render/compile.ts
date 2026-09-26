@@ -1,5 +1,6 @@
 import mjml2html from "mjml";
 import type { EmailDocument } from "../document/types";
+import { choirLogoMjml } from "./brand";
 import { escapeHtml } from "./html";
 import { renderSection } from "./blocks/render-section";
 import type { EventBlockData } from "./event-data";
@@ -57,19 +58,25 @@ export function compileEmailDocument(input: {
   }
 
   const preview = escapeHtml(input.previewText ?? "");
+  const logo = choirLogoMjml(input.tokens.colors.canvas);
+  textParts.unshift("Crowdsource Choir");
   const mjml = `<mjml>
   <mj-head>
     <mj-preview>${preview}</mj-preview>
+    <mj-font name="Bebas Neue" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;display=swap" />
+    <mj-font name="Space Mono" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&amp;display=swap" />
     <mj-attributes>
       <mj-all font-family="${escapeHtml(input.tokens.fonts.body)}" />
     </mj-attributes>
     <mj-style>
+      .csc-btn a { text-transform: uppercase !important; letter-spacing: 0.14em !important; }
       @media only screen and (max-width: 480px) {
         .hide-on-mobile { display: none !important; max-height: 0 !important; overflow: hidden !important; }
       }
     </mj-style>
   </mj-head>
   <mj-body background-color="${escapeHtml(input.tokens.colors.canvas)}" width="${input.tokens.emailWidth}px">
+    ${logo}
     ${sections.join("\n")}
   </mj-body>
 </mjml>`;

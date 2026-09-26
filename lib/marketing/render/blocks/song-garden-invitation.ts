@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
 import { plainTextToHtml } from "../inline";
-import { imageRef, propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageRef, mjButton, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderSongGardenInvitation(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -22,7 +22,7 @@ export function renderSongGardenInvitation(section: EmailSection, ctx: SectionCo
   }
   if (heading) {
     parts.push(
-      `<mj-text align="${align}" font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.title.size}px" font-weight="${ctx.tokens.type.title.weight}" line-height="${ctx.tokens.type.title.lineHeight}" color="${colors.color}" padding="0">${escapePreservingTokens(heading)}</mj-text>`
+      `<mj-text align="${align}" font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.title.size}px" font-weight="${ctx.tokens.type.title.weight}" line-height="${ctx.tokens.type.title.lineHeight}"${trackingAttr(ctx.tokens.type.title)} color="${colors.color}" padding="0">${escapePreservingTokens(heading)}</mj-text>`
     );
   }
   const body = plainTextToHtml(text);
@@ -32,10 +32,7 @@ export function renderSongGardenInvitation(section: EmailSection, ctx: SectionCo
     );
   }
   if (label && href) {
-    const button = ctx.tokens.button;
-    parts.push(
-      `<mj-button align="${align}" href="${escapeHtml(href)}" background-color="${ctx.tokens.colors.brand}" color="${ctx.tokens.colors.brandInk}" font-family="${ctx.tokens.fonts.ui}" font-size="${button.fontSize}px" font-weight="700" border-radius="${ctx.tokens.radii.button}px" inner-padding="${button.paddingY}px ${button.paddingX}px" padding="16px 0 0 0">${escapePreservingTokens(label)}</mj-button>`
-    );
+    parts.push(mjButton({ align, href, label, tokens: ctx.tokens, padding: "16px 0 0 0" }));
   } else if (label) {
     warnings.push("song garden button href must be http(s) or mailto");
   }

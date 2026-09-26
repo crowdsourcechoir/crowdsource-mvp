@@ -285,7 +285,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         id: "email-design",
         domain: "Marketing",
         title: "Email design",
-        description: "Type, color, and spacing for mail",
+        description: "App and Song Garden styling for mail",
         href: "/admin/settings/email-design",
         statusLabel: "Manage",
         status: "live",
