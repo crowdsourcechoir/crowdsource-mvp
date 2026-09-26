@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
 import { inlineDocumentToHtml, inlineToPlainText, plainTextToHtml } from "../inline";
-import { imageRef, propString, sectionColors, type RenderedSection, type SectionContext } from "../section";
+import { imageRef, mjButton, propString, sectionColors, trackingAttr, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderImageStory(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -25,7 +25,7 @@ export function renderImageStory(section: EmailSection, ctx: SectionContext): Re
   const textParts: string[] = [];
   if (heading) {
     textParts.push(
-      `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" color="${colors.color}" padding="0 0 8px 0">${escapePreservingTokens(heading)}</mj-text>`
+      `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" line-height="${ctx.tokens.type.heading.lineHeight}"${trackingAttr(ctx.tokens.type.heading)} color="${colors.color}" padding="0 0 8px 0">${escapePreservingTokens(heading)}</mj-text>`
     );
   }
   if (bodyHtml) {
@@ -35,7 +35,7 @@ export function renderImageStory(section: EmailSection, ctx: SectionContext): Re
   }
   if (label && href) {
     textParts.push(
-      `<mj-button align="left" href="${escapeHtml(href)}" background-color="${ctx.tokens.colors.brand}" color="${ctx.tokens.colors.brandInk}" font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.button.fontSize}px" font-weight="700" border-radius="${ctx.tokens.radii.button}px" inner-padding="${ctx.tokens.button.paddingY}px ${ctx.tokens.button.paddingX}px" padding="12px 0 0 0">${escapePreservingTokens(label)}</mj-button>`
+      mjButton({ align: "left", href, label, tokens: ctx.tokens, padding: "12px 0 0 0" })
     );
   } else if (label) {
     warnings.push("image story button href must be http(s) or mailto");

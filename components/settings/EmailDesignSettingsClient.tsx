@@ -47,7 +47,7 @@ export default function EmailDesignSettingsClient() {
     <div className="space-y-6">
       <SettingsPanel
         title="Email design"
-        description="These tokens style marketing mail. The admin shell keeps its own design system."
+        description="Starts from the app and the SoBECA Song Garden: black canvas, lime, Bebas Neue headlines, and Space Mono text. The Crowdsource Choir logo stays at the top of every email. The admin shell keeps its own design system."
         actions={
           <SettingsButton variant="primary" disabled={busy} onClick={() => save()}>
             Save

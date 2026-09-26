@@ -1,13 +1,13 @@
 import type { EmailSection } from "../../document/types";
 import { escapePreservingTokens } from "../html";
 import { plainTextToHtml } from "../inline";
-import { propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 
 function column(heading: string, text: string, width: number, ctx: SectionContext, color: string): string {
   const parts: string[] = [];
   if (heading) {
     parts.push(
-      `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" color="${color}" padding="0 0 8px 0">${escapePreservingTokens(heading)}</mj-text>`
+      `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" line-height="${ctx.tokens.type.heading.lineHeight}"${trackingAttr(ctx.tokens.type.heading)} color="${color}" padding="0 0 8px 0">${escapePreservingTokens(heading)}</mj-text>`
     );
   }
   const html = plainTextToHtml(text);

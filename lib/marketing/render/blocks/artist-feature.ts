@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
 import { plainTextToHtml } from "../inline";
-import { imageRef, propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageRef, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderArtistFeature(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -23,12 +23,12 @@ export function renderArtistFeature(section: EmailSection, ctx: SectionContext):
       ? `<a href="${escapeHtml(href)}" style="color:${colors.color};text-decoration:none;">${escapePreservingTokens(name)}</a>`
       : escapePreservingTokens(name);
     parts.push(
-      `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" color="${colors.color}" padding="0">${nameHtml}</mj-text>`
+      `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" line-height="${ctx.tokens.type.heading.lineHeight}"${trackingAttr(ctx.tokens.type.heading)} color="${colors.color}" padding="0">${nameHtml}</mj-text>`
     );
   }
   if (role) {
     parts.push(
-      `<mj-text font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.type.small.size}px" color="${ctx.tokens.colors.muted}" padding="4px 0 8px 0">${escapePreservingTokens(role)}</mj-text>`
+      `<mj-text font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.type.eyebrow.size}px" font-weight="${ctx.tokens.type.eyebrow.weight}" letter-spacing="${ctx.tokens.type.eyebrow.tracking ?? 3.4}px" text-transform="uppercase" color="${ctx.tokens.colors.muted}" padding="4px 0 8px 0">${escapePreservingTokens(role)}</mj-text>`
     );
   }
   if (bio) {

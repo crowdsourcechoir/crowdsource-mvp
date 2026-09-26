@@ -1,6 +1,6 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
-import { imageRef, propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageRef, mjButton, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 function pick(override: string, fallback: string | null | undefined): string {
@@ -26,10 +26,10 @@ export function renderEvent(section: EmailSection, ctx: SectionContext): Rendere
     );
   }
   parts.push(
-    `<mj-text font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.type.eyebrow.size}px" font-weight="700" letter-spacing="1.4px" text-transform="uppercase" color="${ctx.tokens.colors.brand}" padding="0 0 8px 0">Bloom</mj-text>`
+    `<mj-text font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.type.eyebrow.size}px" font-weight="${ctx.tokens.type.eyebrow.weight}" letter-spacing="${ctx.tokens.type.eyebrow.tracking ?? 3.4}px" text-transform="uppercase" color="${ctx.tokens.colors.brand}" padding="0 0 8px 0">Bloom</mj-text>`
   );
   parts.push(
-    `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="700" color="${colors.color}" padding="0">${escapePreservingTokens(title)}</mj-text>`
+    `<mj-text font-family="${ctx.tokens.fonts.heading}" font-size="${ctx.tokens.type.heading.size}px" font-weight="${ctx.tokens.type.heading.weight}" line-height="${ctx.tokens.type.heading.lineHeight}"${trackingAttr(ctx.tokens.type.heading)} color="${colors.color}" padding="0">${escapePreservingTokens(title)}</mj-text>`
   );
   const meta = [date, venue].filter(Boolean).join(" · ");
   if (meta) {
@@ -44,7 +44,7 @@ export function renderEvent(section: EmailSection, ctx: SectionContext): Rendere
   }
   if (href) {
     parts.push(
-      `<mj-button align="left" href="${escapeHtml(href)}" background-color="${ctx.tokens.colors.brand}" color="${ctx.tokens.colors.brandInk}" font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.button.fontSize}px" font-weight="700" border-radius="${ctx.tokens.radii.button}px" inner-padding="${ctx.tokens.button.paddingY}px ${ctx.tokens.button.paddingX}px" padding="16px 0 0 0">${escapePreservingTokens(label)}</mj-button>`
+      mjButton({ align: "left", href, label, tokens: ctx.tokens, padding: "16px 0 0 0" })
     );
   } else {
     warnings.push("event href must be http(s) or mailto");

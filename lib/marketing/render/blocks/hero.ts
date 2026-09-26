@@ -1,6 +1,6 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
-import { imageRef, propString, sectionColors, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageRef, mjButton, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderHero(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -29,7 +29,7 @@ export function renderHero(section: EmailSection, ctx: SectionContext): Rendered
   }
   if (title) {
     parts.push(
-      `<mj-text align="${align}" font-family="${escapeHtml(ctx.tokens.fonts.heading)}" font-size="${type.title.size}px" font-weight="${type.title.weight}" line-height="${type.title.lineHeight}" color="${escapeHtml(colors.color)}" padding="0">${escapePreservingTokens(title)}</mj-text>`
+      `<mj-text align="${align}" font-family="${escapeHtml(ctx.tokens.fonts.heading)}" font-size="${type.title.size}px" font-weight="${type.title.weight}" line-height="${type.title.lineHeight}"${trackingAttr(type.title)} color="${escapeHtml(colors.color)}" padding="0">${escapePreservingTokens(title)}</mj-text>`
     );
   }
   if (subtitle) {
@@ -38,10 +38,7 @@ export function renderHero(section: EmailSection, ctx: SectionContext): Rendered
     );
   }
   if (label && href) {
-    const button = ctx.tokens.button;
-    parts.push(
-      `<mj-button align="${align}" href="${escapeHtml(href)}" background-color="${escapeHtml(ctx.tokens.colors.brand)}" color="${escapeHtml(ctx.tokens.colors.brandInk)}" font-family="${escapeHtml(ctx.tokens.fonts.ui)}" font-size="${button.fontSize}px" font-weight="700" border-radius="${ctx.tokens.radii.button}px" inner-padding="${button.paddingY}px ${button.paddingX}px" padding="16px 0 0 0">${escapePreservingTokens(label)}</mj-button>`
-    );
+    parts.push(mjButton({ align, href, label, tokens: ctx.tokens, padding: "16px 0 0 0" }));
   } else if (label) {
     warnings.push("hero button href must be http(s) or mailto");
   }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { insertBlock, moveBlock } from "@/lib/marketing/editor/block-order";
 import { newSection, sectionLabel, SECTION_LABELS } from "@/lib/marketing/editor/sections";
 import type { EmailSection, SectionType } from "@/lib/marketing/document/types";
-import type { EmailDesignTokens } from "@/lib/marketing/render/tokens";
+import type { EmailDesignTokens, EmailTypeStyle } from "@/lib/marketing/render/tokens";
 import InlineTextEditor from "@/components/marketing/editor/InlineTextEditor";
 import Inspector from "@/components/marketing/editor/Inspector";
 
@@ -30,10 +30,42 @@ function fieldStyle(color: string, font: string, size: number, weight = 400): CS
     fontFamily: font,
     fontSize: size,
     fontWeight: weight,
-    lineHeight: 1.3,
+    lineHeight: 1.35,
     outline: "none",
     padding: 0,
     resize: "vertical",
+  };
+}
+
+function displayStyle(color: string, font: string, style: EmailTypeStyle): CSSProperties {
+  return {
+    ...fieldStyle(color, font, style.size, style.weight),
+    lineHeight: style.lineHeight,
+    letterSpacing: style.tracking ? `${style.tracking}px` : undefined,
+  };
+}
+
+function eyebrowStyle(tokens: EmailDesignTokens): CSSProperties {
+  return {
+    ...fieldStyle(tokens.colors.brand, tokens.fonts.ui, tokens.type.eyebrow.size, tokens.type.eyebrow.weight),
+    letterSpacing: `${tokens.type.eyebrow.tracking ?? 3.4}px`,
+    textTransform: "uppercase",
+    lineHeight: tokens.type.eyebrow.lineHeight,
+  };
+}
+
+function buttonStyle(tokens: EmailDesignTokens, outline: boolean): CSSProperties {
+  return {
+    ...fieldStyle(outline ? tokens.colors.brand : tokens.colors.brandInk, tokens.fonts.ui, tokens.button.fontSize, 700),
+    background: outline ? "transparent" : tokens.colors.brand,
+    color: outline ? tokens.colors.brand : tokens.colors.brandInk,
+    border: outline ? `1px solid ${tokens.colors.brand}` : "none",
+    borderRadius: tokens.radii.button,
+    padding: `${tokens.button.paddingY}px ${tokens.button.paddingX}px`,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+    width: "auto",
+    textAlign: "center",
   };
 }
 
@@ -58,6 +90,16 @@ export default function EmailEditor({
   const dragActive = useRef(false);
   const selected = sections.find((section) => section.id === selectedId) ?? null;
   const footerCount = sections.filter((section) => section.type === "footer").length;
+
+  useEffect(() => {
+    const id = "csc-email-house-fonts";
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
 
   function update(next: EmailSection) {
     onChange(sections.map((section) => (section.id === next.id ? next : section)));
@@ -127,7 +169,7 @@ export default function EmailEditor({
               data-section-type={item.type}
               onDragStart={(event) => beginDrag(event, { kind: "new", type: item.type })}
               onDragEnd={endDrag}
-              className="inline-flex cursor-grab items-center justify-center rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-300 transition-colors hover:border-white/40 hover:text-white active:cursor-grabbing disabled:opacity-50"
+              className="inline-flex cursor-grab items-center justify-center rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-[var(--csc-accent)] active:cursor-grabbing disabled:opacity-50"
             >
               {item.label}
             </button>
@@ -138,6 +180,9 @@ export default function EmailEditor({
           style={{ maxWidth: tokens.emailWidth, background: tokens.colors.canvas }}
           onDragEnd={endDrag}
         >
+          <div style={{ background: tokens.colors.canvas, padding: "28px 24px 8px", textAlign: "center" }}>
+            <img src="/logo.png" alt="Crowdsource Choir" style={{ width: 220, height: "auto", margin: "0 auto" }} />
+          </div>
           {sections.map((section, index) => (
             <div key={section.id}>
               <DropSlot
@@ -285,10 +330,10 @@ function SectionFields({
     return (
       <div className="space-y-2">
         {imageUrl ? <img src={imageUrl} alt="" className="mb-3 max-h-48 w-full object-cover" /> : null}
-        <input value={text("eyebrow")} onChange={(event) => onPatch({ eyebrow: event.target.value })} placeholder="Eyebrow" style={fieldStyle(tokens.colors.brand, tokens.fonts.ui, tokens.type.eyebrow.size, 700)} />
-        <input value={text("title")} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Title" style={fieldStyle(color, tokens.fonts.heading, tokens.type.title.size, tokens.type.title.weight)} />
+        <input value={text("eyebrow")} onChange={(event) => onPatch({ eyebrow: event.target.value })} placeholder="Eyebrow" style={eyebrowStyle(tokens)} />
+        <input value={text("title")} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Title" style={displayStyle(color, tokens.fonts.heading, tokens.type.title)} />
         <textarea value={text("subtitle")} onChange={(event) => onPatch({ subtitle: event.target.value })} placeholder="Subtitle" rows={2} style={fieldStyle(tokens.colors.muted, tokens.fonts.body, tokens.type.body.size)} />
-        <input value={text("ctaLabel")} onChange={(event) => onPatch({ ctaLabel: event.target.value })} placeholder="Button label" style={fieldStyle(tokens.colors.brandInk, tokens.fonts.ui, tokens.button.fontSize, 700)} />
+        <input value={text("ctaLabel")} onChange={(event) => onPatch({ ctaLabel: event.target.value })} placeholder="Button label" style={buttonStyle(tokens, false)} />
         <input value={text("ctaHref")} onChange={(event) => onPatch({ ctaHref: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
       </div>
     );
@@ -296,7 +341,7 @@ function SectionFields({
   if (section.type === "editorial_text") {
     return (
       <div className="space-y-2 text-left">
-        <input value={text("heading")} onChange={(event) => onPatch({ heading: event.target.value })} placeholder="Heading" style={fieldStyle(color, tokens.fonts.heading, tokens.type.heading.size, tokens.type.heading.weight)} />
+        <input value={text("heading")} onChange={(event) => onPatch({ heading: event.target.value })} placeholder="Heading" style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)} />
         <InlineTextEditor
           key={section.id}
           value={section.props.body}
@@ -310,14 +355,14 @@ function SectionFields({
   }
   if (section.type === "large_statement") {
     return (
-      <textarea value={text("text")} onChange={(event) => onPatch({ text: event.target.value })} placeholder="Statement" rows={3} style={fieldStyle(color, tokens.fonts.heading, tokens.type.statement.size, tokens.type.statement.weight)} />
+      <textarea value={text("text")} onChange={(event) => onPatch({ text: event.target.value })} placeholder="Statement" rows={3} style={displayStyle(color, tokens.fonts.heading, tokens.type.statement)} />
     );
   }
   if (section.type === "pull_quote") {
     return (
       <div className="space-y-2">
-        <textarea value={text("quote")} onChange={(event) => onPatch({ quote: event.target.value })} placeholder="Quote" rows={3} style={{ ...fieldStyle(color, tokens.fonts.heading, tokens.type.heading.size, 700), fontStyle: "italic" }} />
-        <input value={text("attribution")} onChange={(event) => onPatch({ attribution: event.target.value })} placeholder="Attribution" style={fieldStyle(tokens.colors.muted, tokens.fonts.ui, tokens.type.small.size)} />
+        <textarea value={text("quote")} onChange={(event) => onPatch({ quote: event.target.value })} placeholder="Quote" rows={3} style={displayStyle(tokens.colors.brand, tokens.fonts.heading, tokens.type.statement)} />
+        <input value={text("attribution")} onChange={(event) => onPatch({ attribution: event.target.value })} placeholder="Attribution" style={eyebrowStyle(tokens)} />
       </div>
     );
   }
@@ -350,7 +395,7 @@ function SectionFields({
           value={text(section.type === "artist_feature" ? "name" : "heading")}
           onChange={(event) => onPatch(section.type === "artist_feature" ? { name: event.target.value } : { heading: event.target.value })}
           placeholder={section.type === "artist_feature" ? "Name" : "Heading"}
-          style={fieldStyle(color, tokens.fonts.heading, tokens.type.heading.size, 700)}
+          style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)}
         />
         {section.type === "artist_feature" ? (
           <input value={text("role")} onChange={(event) => onPatch({ role: event.target.value })} placeholder="Role" style={fieldStyle(tokens.colors.muted, tokens.fonts.ui, tokens.type.small.size)} />
@@ -363,7 +408,7 @@ function SectionFields({
           style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)}
         />
         {section.type !== "artist_feature" ? (
-          <input value={text("ctaLabel")} onChange={(event) => onPatch({ ctaLabel: event.target.value })} placeholder="Button label" style={fieldStyle(tokens.colors.brand, tokens.fonts.ui, tokens.button.fontSize, 700)} />
+          <input value={text("ctaLabel")} onChange={(event) => onPatch({ ctaLabel: event.target.value })} placeholder="Button label" style={buttonStyle(tokens, false)} />
         ) : (
           <input value={text("href")} onChange={(event) => onPatch({ href: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
         )}
@@ -376,7 +421,7 @@ function SectionFields({
   if (section.type === "cta") {
     return (
       <div className="space-y-2">
-        <input value={text("label")} onChange={(event) => onPatch({ label: event.target.value })} placeholder="Button label" style={fieldStyle(color, tokens.fonts.ui, tokens.button.fontSize, 700)} />
+        <input value={text("label")} onChange={(event) => onPatch({ label: event.target.value })} placeholder="Button label" style={buttonStyle(tokens, section.props.style === "outline")} />
         <input value={text("href")} onChange={(event) => onPatch({ href: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
       </div>
     );
@@ -384,7 +429,7 @@ function SectionFields({
   if (section.type === "event") {
     return (
       <div className="space-y-2">
-        <input value={text("title")} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Event title" style={fieldStyle(color, tokens.fonts.heading, tokens.type.heading.size, 700)} />
+        <input value={text("title")} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Event title" style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)} />
         <input value={text("date")} onChange={(event) => onPatch({ date: event.target.value })} placeholder="Date" style={fieldStyle(tokens.colors.muted, tokens.fonts.body, tokens.type.small.size)} />
         <input value={text("venue")} onChange={(event) => onPatch({ venue: event.target.value })} placeholder="Venue" style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)} />
         <textarea value={text("description")} onChange={(event) => onPatch({ description: event.target.value })} placeholder="Description" rows={2} style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)} />
@@ -420,7 +465,7 @@ function ColumnFields({
 }) {
   return (
     <div className="space-y-2">
-      <input value={heading} onChange={(event) => onHeading(event.target.value)} placeholder="Heading" style={fieldStyle(color, tokens.fonts.heading, tokens.type.heading.size, 700)} />
+      <input value={heading} onChange={(event) => onHeading(event.target.value)} placeholder="Heading" style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)} />
       <textarea value={body} onChange={(event) => onBody(event.target.value)} placeholder="Body" rows={4} style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)} />
     </div>
   );
