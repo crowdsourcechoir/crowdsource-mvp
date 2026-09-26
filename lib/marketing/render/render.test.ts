@@ -73,6 +73,7 @@ const fixtures: Array<{ name: string; sections: EmailSection[]; assert: (html: s
     assert: (html) => {
       assert.match(html, /alt="Cover &amp; &lt;art&gt;"/);
       assert.match(html, /Hello &lt;there&gt;/);
+      assert.match(html, /Bebas Neue/);
       assert.equal(html.includes("<script"), false);
     },
   },
@@ -178,6 +179,63 @@ const fixtures: Array<{ name: string; sections: EmailSection[]; assert: (html: s
     },
   },
   {
+    name: "large-statement",
+    sections: [section("large_statement", { eyebrow: "Note", text: "Sing it <loud>" })],
+    assert: (html) => {
+      assert.match(html, /Sing it &lt;loud&gt;/);
+      assert.equal(html.includes("<script"), false);
+    },
+  },
+  {
+    name: "pull-quote",
+    sections: [section("pull_quote", { quote: "A line", attribution: "Ada" })],
+    assert: (html) => {
+      assert.match(html, /A line/);
+      assert.match(html, /Ada/);
+    },
+  },
+  {
+    name: "two-column",
+    sections: [section("two_column", { leftHeading: "Left", leftText: "One", rightHeading: "Right", rightText: "Two" })],
+    assert: (html) => {
+      assert.match(html, /Left/);
+      assert.match(html, /Right/);
+    },
+  },
+  {
+    name: "gallery",
+    sections: [
+      section("gallery", {
+        images: [{ assetId: null, url: "https://cdn.example/a.jpg", alt: "One", ratio: "square" }],
+      }),
+    ],
+    assert: (html) => {
+      assert.match(html, /alt="One"/);
+    },
+  },
+  {
+    name: "song-garden-invitation",
+    sections: [
+      section("song_garden_invitation", {
+        heading: "Garden",
+        text: "Come sing",
+        ctaLabel: "Open",
+        ctaHref: "https://example.com/garden",
+      }),
+    ],
+    assert: (html) => {
+      assert.match(html, /https:\/\/example.com\/garden/);
+    },
+  },
+  {
+    name: "artist-feature",
+    sections: [section("artist_feature", { name: "Ada", role: "Voice", bio: "Sings", href: "https://example.com/ada" })],
+    assert: (html) => {
+      assert.match(html, /Ada/);
+      assert.match(html, /https:\/\/example.com\/ada/);
+    },
+  },
+  {
     name: "footer",
     sections: [],
     assert: (html) => {
@@ -193,6 +251,9 @@ for (const fixture of fixtures) {
   const result = compile([...fixture.sections, footer]);
   assert.equal(result.ok, true, `${fixture.name}: ${result.errors.join("; ")}`);
   fixture.assert(result.html);
+  assert.match(result.html, /src="https:\/\/app\.crowdsourcechoir\.com\/logo\.png"/);
+  assert.match(result.html, /alt="Crowdsource Choir"/);
+  assert.match(result.html, /Space Mono/);
   assert.equal(result.links.some((link) => link.url === "{{unsubscribe_url}}"), true);
   expectSnapshot(fixture.name, result.html);
 }
@@ -210,9 +271,9 @@ const hiddenUnsubscribe = compile([section("footer", { companyName: "CSC", physi
 assert.equal(hiddenUnsubscribe.ok, false);
 assert.match(hiddenUnsubscribe.errors.join(" "), /unsubscribe/);
 
-const unavailable = compile([section("large_statement", { text: "No" })]);
-assert.equal(unavailable.ok, false);
-assert.match(unavailable.errors.join(" "), /no renderer for section type large_statement/);
+const statement = compile([section("large_statement", { text: "No" }), footer]);
+assert.equal(statement.ok, true, statement.errors.join("; "));
+assert.match(statement.html, /No/);
 
 const seeded = compileEmailDocument({
   document: document([
@@ -248,5 +309,28 @@ const blank = personalizeEmail(
 );
 assert.equal(blank.html, "");
 assert.equal(blank.text, "");
+
+const upgraded = resolveEmailTokens({
+  fonts: {
+    heading: "Georgia, 'Times New Roman', Times, serif",
+    body: "Georgia, 'Times New Roman', Times, serif",
+    ui: "Arial, Helvetica, sans-serif",
+  },
+  colors: { canvas: "#111111" },
+  type: { title: { size: 12, lineHeight: 1, weight: 700 } },
+  button: { paddingX: 4, paddingY: 4, fontSize: 20 },
+});
+assert.match(upgraded.fonts.heading, /Bebas Neue/);
+assert.match(upgraded.fonts.body, /Space Mono/);
+assert.equal(upgraded.colors.canvas, "#111111");
+assert.equal(upgraded.type.title.size, DEFAULT_EMAIL_TOKENS.type.title.size);
+assert.equal(upgraded.button.fontSize, DEFAULT_EMAIL_TOKENS.button.fontSize);
+
+const customFonts = resolveEmailTokens({
+  fonts: { heading: "Inter, sans-serif", body: "Inter, sans-serif", ui: "Inter, sans-serif" },
+  type: { title: { size: 18, lineHeight: 1.1, weight: 600 } },
+});
+assert.equal(customFonts.fonts.heading, "Inter, sans-serif");
+assert.equal(customFonts.type.title.size, 18);
 
 console.log("marketing render tests ok");

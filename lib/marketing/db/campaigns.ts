@@ -1,5 +1,7 @@
 import { defaultEmailBlocks } from "../email/render";
 import { documentToLegacyBlocks, legacyBlocksToDocument, migrateEmailDocument } from "../document/migrate";
+import { parseEmailDocument } from "../document/schema";
+import type { EmailDocument, EmailSection } from "../document/types";
 import { EMPTY_EMAIL_STATS, type CampaignStatus, type EmailBlock, type MarketingCampaign, type MarketingEmail, type MarketingEmailStatus } from "../types";
 import { marketingDb } from "./client";
 import { raiseDb } from "./errors";
@@ -140,6 +142,7 @@ export async function getCampaignBundle(id: string): Promise<{
   campaign: MarketingCampaign;
   emails: MarketingEmail[];
   documentId: string;
+  document: EmailDocument | null;
 } | null> {
   const db = marketingDb();
   const { data, error } = await db.from("campaigns").select("*").eq("id", id).maybeSingle();
@@ -156,6 +159,7 @@ export async function getCampaignBundle(id: string): Promise<{
   return {
     campaign: toCampaign(campaign),
     documentId: campaign.document_id,
+    document: document ? migrateEmailDocument(document.working_document) : null,
     emails: ((sends ?? []) as SendRow[]).map((send) => toEmail(send, document)),
   };
 }
@@ -249,7 +253,8 @@ export async function updateCampaign(input: {
   replyTo?: string | null;
   segmentId?: string | null;
   blocks?: EmailBlock[];
-}): Promise<{ campaign: MarketingCampaign; emails: MarketingEmail[] } | null> {
+  sections?: EmailSection[];
+}): Promise<{ campaign: MarketingCampaign; emails: MarketingEmail[]; document: EmailDocument | null; documentId: string } | null> {
   const db = marketingDb();
   const { data, error } = await db.from("campaigns").select("*").eq("id", input.id).maybeSingle();
   raiseDb(error);
@@ -265,16 +270,22 @@ export async function updateCampaign(input: {
   const { error: updateError } = await db.from("campaigns").update(campaignPatch).eq("id", campaign.id);
   raiseDb(updateError);
 
-  if (input.blocks) {
+  if (input.sections || input.blocks) {
     const { data: doc, error: docError } = await db
       .from("email_documents")
-      .select("id, design_system_id")
+      .select("id, design_system_id, working_document")
       .eq("id", campaign.document_id)
       .single();
     raiseDb(docError);
-    const designSystemId = String((doc as { design_system_id: string }).design_system_id);
+    const row = doc as { design_system_id: string; working_document: unknown };
     const title = typeof input.name === "string" ? input.name.trim() : campaign.name;
-    const working = legacyBlocksToDocument(input.blocks, designSystemId, title);
+    const working = input.sections
+      ? parseEmailDocument({
+          ...migrateEmailDocument(row.working_document),
+          meta: { internalTitle: title },
+          sections: input.sections,
+        })
+      : legacyBlocksToDocument(input.blocks ?? [], String(row.design_system_id), title);
     const { error: writeError } = await db
       .from("email_documents")
       .update({ working_document: working, schema_version: working.schemaVersion, updated_at: now })

@@ -6,7 +6,7 @@ export function renderDivider(section: EmailSection, ctx: SectionContext): Rende
   const mjml = wrapSection(
     section,
     ctx.tokens,
-    `<mj-column width="${ctx.tokens.contentWidth}px"><mj-divider border-color="${ctx.tokens.colors.muted}" border-width="1px" padding="0" /></mj-column>`,
+    `<mj-column width="${ctx.tokens.contentWidth}px"><mj-divider border-color="${ctx.tokens.colors.brand}" border-width="1px" padding="0" /></mj-column>`,
     colors
   );
   return { mjml, text: "", links: [], warnings: colors.warning ? [colors.warning] : [] };
