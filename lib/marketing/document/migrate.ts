@@ -133,9 +133,15 @@ function imageAssetId(props: Record<string, unknown>): string {
 }
 
 export function documentToLegacyBlocks(document: EmailDocument): EmailBlock[] {
-  return document.sections.map((section) => {
-    const props = section.props;
-    switch (section.type) {
+  return document.sections.flatMap((section) => {
+    const block = legacyBlock(section);
+    return block ? [block] : [];
+  });
+}
+
+function legacyBlock(section: EmailSection): EmailBlock | null {
+  const props = section.props;
+  switch (section.type) {
       case "hero":
         return {
           id: section.id,
@@ -186,9 +192,8 @@ export function documentToLegacyBlocks(document: EmailDocument): EmailBlock[] {
           },
         };
       default:
-        throw new Error(`Unknown email document schemaVersion section ${section.type}`);
+        return null;
     }
-  });
 }
 
 export function migrateEmailDocument(raw: unknown): EmailDocument {

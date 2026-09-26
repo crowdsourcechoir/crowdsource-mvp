@@ -4,6 +4,7 @@ import { getCampaignBundle, updateCampaign } from "@/lib/marketing/db/campaigns"
 import { listSegments } from "@/lib/marketing/db/segments";
 import { getMarketingSettings } from "@/lib/marketing/db/settings";
 import type { EmailBlock } from "@/lib/marketing/types";
+import type { EmailSection } from "@/lib/marketing/document/types";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       replyTo: typeof body.replyTo === "string" || body.replyTo === null ? (body.replyTo as string | null) : undefined,
       segmentId: typeof body.segmentId === "string" || body.segmentId === null ? (body.segmentId as string | null) : undefined,
       blocks: Array.isArray(body.blocks) ? (body.blocks as EmailBlock[]) : undefined,
+      sections: Array.isArray(body.sections) ? (body.sections as EmailSection[]) : undefined,
     });
     if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(updated);

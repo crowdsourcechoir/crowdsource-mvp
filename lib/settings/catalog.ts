@@ -282,6 +282,23 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         ],
       },
       {
+        id: "email-design",
+        domain: "Marketing",
+        title: "Email design",
+        description: "Type, color, and spacing for mail",
+        href: "/admin/settings/email-design",
+        statusLabel: "Manage",
+        status: "live",
+        controls: [
+          "Email and content width",
+          "Heading, body, and UI fonts",
+          "Canvas, surface, ink, muted, brand, and link colors",
+          "Spacing scale",
+          "Button padding, size, and radius",
+          "Image widths for portrait, square, and landscape",
+        ],
+      },
+      {
         id: "admin-chrome",
         domain: "Appearance",
         title: "Admin chrome",
