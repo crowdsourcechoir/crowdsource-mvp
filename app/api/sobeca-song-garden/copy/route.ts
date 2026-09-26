@@ -1,26 +1,14 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { slides } from "@/app/sobeca-song-garden/content";
+import { signedInOwner } from "@/lib/operators/current";
 import { applyStoredCopy, resolveSongGardenPitch } from "@/lib/sobeca-pitch/copy";
-import {
-  ROOT_AUTH_COOKIE_NAME,
-  getRootAuthExpectedToken,
-  hasRootAuthPasswordConfigured,
-} from "@/lib/root-page-auth";
 import { passwordHashFrom } from "@/lib/sobeca-pitch/access";
 import { readWorkspaceSettings, writeWorkspaceSettings } from "@/lib/settings/store";
 
 export const dynamic = "force-dynamic";
 
-async function allowed(): Promise<boolean> {
-  if (!(await hasRootAuthPasswordConfigured())) return true;
-  const token = (await cookies()).get(ROOT_AUTH_COOKIE_NAME)?.value;
-  const expected = await getRootAuthExpectedToken();
-  return Boolean(token && expected && token === expected);
-}
-
 export async function GET() {
-  if (!(await allowed())) {
+  if (!(await signedInOwner())) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
   const current = await resolveSongGardenPitch();
@@ -31,7 +19,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (!(await allowed())) {
+  if (!(await signedInOwner())) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
   const body = (await request.json().catch(() => ({}))) as {

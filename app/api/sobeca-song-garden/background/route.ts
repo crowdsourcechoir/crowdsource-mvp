@@ -1,23 +1,11 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { signedInOwner } from "@/lib/operators/current";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import {
-  ROOT_AUTH_COOKIE_NAME,
-  getRootAuthExpectedToken,
-  hasRootAuthPasswordConfigured,
-} from "@/lib/root-page-auth";
 
 export const dynamic = "force-dynamic";
 
 const BUCKET = process.env.SONG_GARDEN_MEDIA_BUCKET || "song-garden-world-media";
 const MAX_BYTES = 20 * 1024 * 1024;
-
-async function allowed(): Promise<boolean> {
-  if (!(await hasRootAuthPasswordConfigured())) return true;
-  const token = (await cookies()).get(ROOT_AUTH_COOKIE_NAME)?.value;
-  const expected = await getRootAuthExpectedToken();
-  return Boolean(token && expected && token === expected);
-}
 
 function extFor(name: string, contentType: string): string {
   const fromName = /\.(jpe?g|png|webp|gif)$/i.exec(name)?.[1]?.toLowerCase();
@@ -30,7 +18,7 @@ function extFor(name: string, contentType: string): string {
 }
 
 export async function POST(request: Request) {
-  if (!(await allowed())) {
+  if (!(await signedInOwner())) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
   if (!supabaseAdmin) {

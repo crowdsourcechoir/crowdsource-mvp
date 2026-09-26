@@ -1,23 +1,12 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { signedInOwner } from "@/lib/operators/current";
 import { pitchAuthToken, readPitchPasswordHash, verifyPitchPassword, writePitchPassword, PITCH_AUTH_COOKIE } from "@/lib/sobeca-pitch/access";
-import {
-  ROOT_AUTH_COOKIE_NAME,
-  getRootAuthExpectedToken,
-  hasRootAuthPasswordConfigured,
-} from "@/lib/root-page-auth";
 
 export const dynamic = "force-dynamic";
 
-async function adminAllowed(): Promise<boolean> {
-  if (!(await hasRootAuthPasswordConfigured())) return true;
-  const token = (await cookies()).get(ROOT_AUTH_COOKIE_NAME)?.value;
-  const expected = await getRootAuthExpectedToken();
-  return Boolean(token && expected && token === expected);
-}
-
 export async function GET() {
-  if (!(await adminAllowed())) {
+  if (!(await signedInOwner())) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
   const hash = await readPitchPasswordHash();
@@ -25,7 +14,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (!(await adminAllowed())) {
+  if (!(await signedInOwner())) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
   const body = (await request.json().catch(() => ({}))) as { password?: unknown; clear?: boolean };
