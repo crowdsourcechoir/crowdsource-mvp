@@ -49,6 +49,8 @@ const checks: Array<[string, boolean]> = [
   ["sales send", decide("/api/sales/gmail/sends", "POST", sales).kind === "deny"],
   ["owner send", decide("/api/sales/gmail/sends", "POST", owner).kind === "allow"],
   ["anon admin", decide("/admin/gardens", "GET", null).kind === "redirect"],
+  ["anon pitch unlock", decide("/api/sobeca-song-garden/access", "POST", null).kind === "public"],
+  ["anon pitch password save", decide("/api/sobeca-song-garden/access", "PATCH", null).kind === "deny"],
   ["artist home", homePath(artist) === "/admin/composer?bloom=bloom-1"],
   ["sales home", homePath(sales) === "/admin/sales"],
 ];
