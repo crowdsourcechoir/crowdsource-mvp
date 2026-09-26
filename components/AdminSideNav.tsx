@@ -255,7 +255,7 @@ export default function AdminSideNav() {
 
   return (
     <aside
-      className={`relative sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r border-transparent bg-black ${
+      className={`relative flex h-full shrink-0 flex-col overflow-hidden border-r border-transparent bg-black ${
         collapsed ? "w-[72px]" : "w-[232px]"
       } ${ready ? "opacity-100" : "opacity-0"}`}
       aria-label="Admin navigation"
@@ -267,7 +267,7 @@ export default function AdminSideNav() {
         </Link>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-2 pb-3">
+      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3">
         {navItems.filter((item) => nav[item.key]).map((item) => {
           const active = item.isActive(pathname);
           return (

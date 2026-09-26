@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
-import { SettingsButton, SettingsSelect } from "@/components/settings/ui";
+import { SettingsButton } from "@/components/settings/ui";
 
 function slideLabel(slide: PitchSlide): string {
   const titled = slide.blocks.find((block) => block.type === "title" || block.type === "heading");
@@ -137,8 +137,14 @@ export default function SongGardenPitchEditor() {
     return <p className="text-sm text-white/70">{status ?? "Loading copy…"}</p>;
   }
 
-  const activeIndex = Math.max(0, slides.findIndex((slide) => slide.id === activeId));
-  const slide = slides[activeIndex];
+  function jump(id: string) {
+    setActiveId(id);
+    document.getElementById(`pitch-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function patchSlide(id: string, recipe: (slide: PitchSlide) => PitchSlide) {
+    setSlides((current) => current?.map((item) => (item.id === id ? recipe(item) : item)) ?? current);
+  }
 
   return (
     <div>
@@ -226,137 +232,171 @@ export default function SongGardenPitchEditor() {
         </form>
       ) : null}
 
-      <div className="mt-4 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
-        <div className="lg:hidden">
-          <SettingsSelect value={slide.id} onChange={setActiveId} ariaLabel="Section">
-            {slides.map((item) => (
-              <option key={item.id} value={item.id}>
-                {slideLabel(item)}
-              </option>
-            ))}
-          </SettingsSelect>
-        </div>
-
-        <nav className="csc-list sticky top-4 hidden max-h-[calc(100dvh-8rem)] overflow-y-auto lg:block">
-          {slides.map((item) => {
-            const selected = item.id === slide.id;
+      <div className="sticky top-0 z-10 -mx-4 mt-3 border-b border-[var(--csc-row-divider)] bg-black px-4 py-2 lg:hidden">
+        <p className="csc-eyebrow">Sections</p>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          {slides.map((item, index) => {
+            const selected = item.id === activeId;
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveId(item.id)}
+                onClick={() => jump(item.id)}
+                className={`shrink-0 border px-3 py-1.5 text-xs ${
+                  selected
+                    ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
+                    : "border-white/15 text-white"
+                }`}
+              >
+                {index + 1}. {slideLabel(item)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
+        <nav className="csc-list sticky top-4 hidden max-h-[calc(100dvh-8rem)] overflow-y-auto lg:block">
+          {slides.map((item, index) => {
+            const selected = item.id === activeId;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => jump(item.id)}
                 className="csc-list-row w-full text-left"
                 style={selected ? { outlineColor: "var(--csc-accent)" } : undefined}
               >
-                <img src={item.image} alt="" className="h-8 w-12 shrink-0 object-cover" />
+                <span className="w-5 shrink-0 text-xs text-white/50">{index + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-sm text-white">{slideLabel(item)}</span>
               </button>
             );
           })}
         </nav>
 
-        <section>
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="truncate text-base font-semibold text-white">{slideLabel(slide)}</h2>
-            <label className="flex shrink-0 items-center gap-2 text-xs text-white/70">
-              <input
-                type="color"
-                value={slide.copyColor || DEFAULT_COPY_COLOR}
-                aria-label={`Copy color for ${slideLabel(slide)}`}
-                className="h-6 w-8 cursor-pointer bg-transparent"
-                onChange={(event) => {
-                  const next = slides.slice();
-                  next[activeIndex] = { ...slide, copyColor: event.target.value.toUpperCase() };
-                  setSlides(next);
-                }}
-              />
-              <span className="font-mono">{slide.copyColor || DEFAULT_COPY_COLOR}</span>
-            </label>
-          </div>
+        <div>
+          {slides.map((slide, index) => (
+            <section key={slide.id} id={`pitch-${slide.id}`} className="scroll-mt-24 border-b border-[var(--csc-row-divider)] py-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="truncate text-base font-semibold text-white">
+                  <span className="mr-2 text-white/40">{index + 1}</span>
+                  {slideLabel(slide)}
+                </h2>
+                <label className="flex shrink-0 items-center gap-2 text-xs text-white/70">
+                  <input
+                    type="color"
+                    value={slide.copyColor || DEFAULT_COPY_COLOR}
+                    aria-label={`Copy color for ${slideLabel(slide)}`}
+                    className="h-6 w-8 cursor-pointer bg-transparent"
+                    onChange={(event) =>
+                      patchSlide(slide.id, (current) => ({ ...current, copyColor: event.target.value.toUpperCase() }))
+                    }
+                  />
+                  <span className="font-mono">{slide.copyColor || DEFAULT_COPY_COLOR}</span>
+                </label>
+              </div>
 
-          <div className="relative mt-3">
-            <img src={slide.image} alt="" className="h-28 w-full object-cover" />
-            <label className="csc-link absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs">
-              {uploadingId === slide.id ? "Uploading…" : "Replace photo"}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="sr-only"
-                disabled={uploadingId !== null || saving}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void replacePhoto(slide, file);
-                }}
-              />
-            </label>
-          </div>
+              <div className="relative mt-3">
+                <img src={slide.image} alt="" className="h-28 w-full object-cover" />
+                <label className="csc-link absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs">
+                  {uploadingId === slide.id ? "Uploading…" : "Replace photo"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="sr-only"
+                    disabled={uploadingId !== null || saving}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void replacePhoto(slide, file);
+                    }}
+                  />
+                </label>
+              </div>
 
-          <div className="mt-2">
-            {slide.blocks.map((block, blockIndex) => {
-              if (block.type === "image") return null;
-              if (block.type === "list") {
-                return (
-                  <div key={blockIndex}>
-                    {block.items.map((item, itemIndex) => (
-                      <FitText
-                        key={itemIndex}
-                        label={`Item ${itemIndex + 1}`}
-                        value={item}
-                        onChange={(value) => {
-                          const items = block.items.slice();
-                          items[itemIndex] = value;
-                          const next = slides.slice();
-                          next[activeIndex] = updateBlock(slide, blockIndex, { ...block, items });
-                          setSlides(next);
-                        }}
-                      />
-                    ))}
-                  </div>
-                );
-              }
-              if (block.type === "table") {
-                return (
-                  <div key={blockIndex} className="mt-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
-                      {block.headers.join(" · ")}
-                    </p>
-                    {block.rows.map((row, rowIndex) => (
-                      <div key={rowIndex} className="grid gap-x-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
-                        {row.map((cell, cellIndex) => (
+              <div className="mt-2">
+                {slide.blocks.map((block, blockIndex) => {
+                  if (block.type === "image") return null;
+                  if (block.type === "list") {
+                    return (
+                      <div key={blockIndex}>
+                        {block.items.map((item, itemIndex) => (
                           <FitText
-                            key={cellIndex}
-                            label={block.headers[cellIndex] ?? "Cell"}
-                            value={cell}
-                            onChange={(value) => {
-                              const rows = block.rows.map((current) => current.slice());
-                              rows[rowIndex][cellIndex] = value;
-                              const next = slides.slice();
-                              next[activeIndex] = updateBlock(slide, blockIndex, { ...block, rows });
-                              setSlides(next);
-                            }}
+                            key={itemIndex}
+                            label={`Item ${itemIndex + 1}`}
+                            value={item}
+                            onChange={(value) =>
+                              patchSlide(slide.id, (current) => {
+                                const existing = current.blocks[blockIndex];
+                                if (existing?.type !== "list") return current;
+                                const items = existing.items.slice();
+                                items[itemIndex] = value;
+                                return updateBlock(current, blockIndex, { ...existing, items });
+                              })
+                            }
                           />
                         ))}
                       </div>
-                    ))}
-                  </div>
-                );
-              }
-              return (
-                <FitText
-                  key={blockIndex}
-                  label={BLOCK_LABEL[block.type] ?? block.type}
-                  value={block.text}
-                  onChange={(value) => {
-                    const next = slides.slice();
-                    next[activeIndex] = updateBlock(slide, blockIndex, { ...block, text: value });
-                    setSlides(next);
-                  }}
-                />
-              );
-            })}
-          </div>
-        </section>
+                    );
+                  }
+                  if (block.type === "table") {
+                    return (
+                      <div key={blockIndex} className="mt-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
+                          {block.headers.join(" · ")}
+                        </p>
+                        {block.rows.map((row, rowIndex) => (
+                          <div key={rowIndex} className="grid gap-x-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
+                            {row.map((cell, cellIndex) => (
+                              <FitText
+                                key={cellIndex}
+                                label={block.headers[cellIndex] ?? "Cell"}
+                                value={cell}
+                                onChange={(value) =>
+                                  patchSlide(slide.id, (current) => {
+                                    const existing = current.blocks[blockIndex];
+                                    if (existing?.type !== "table") return current;
+                                    const rows = existing.rows.map((currentRow) => currentRow.slice());
+                                    rows[rowIndex][cellIndex] = value;
+                                    return updateBlock(current, blockIndex, { ...existing, rows });
+                                  })
+                                }
+                              />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return (
+                    <FitText
+                      key={blockIndex}
+                      label={BLOCK_LABEL[block.type] ?? block.type}
+                      value={block.text}
+                      onChange={(value) =>
+                        patchSlide(slide.id, (current) => {
+                          const existing = current.blocks[blockIndex];
+                          if (!existing || !("text" in existing)) return current;
+                          return updateBlock(current, blockIndex, { ...existing, text: value });
+                        })
+                      }
+                    />
+                  );
+                })}
+              </div>
+
+              {index < slides.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => jump(slides[index + 1].id)}
+                  className="csc-link mt-3 text-sm"
+                >
+                  Next: {slideLabel(slides[index + 1])}
+                </button>
+              ) : null}
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );
