@@ -1,82 +1,57 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import {
-  FieldLabel,
-  SettingsButton,
-  SettingsPanel,
-  StatusPill,
-  TextField,
-  ToggleRow,
-} from "@/components/settings/ui";
-import type {
-  EmailBlock,
-  EmailBlockType,
-  MarketingCampaign,
-  MarketingEmail,
-  MarketingSegment,
-  MarketingSettings,
-} from "@/lib/marketing/types";
-import EmailImageField from "@/components/marketing/EmailImageField";
-import { insertBlock, moveBlock } from "@/lib/marketing/editor/block-order";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FieldLabel, SettingsButton, SettingsPanel, StatusPill, TextField, ToggleRow } from "@/components/settings/ui";
+import EmailEditor from "@/components/marketing/editor/EmailEditor";
+import type { EmailSection } from "@/lib/marketing/document/types";
+import { DEFAULT_EMAIL_TOKENS, type EmailDesignTokens } from "@/lib/marketing/render/tokens";
+import type { MarketingCampaign, MarketingEmail, MarketingSegment, MarketingSettings } from "@/lib/marketing/types";
 
 type EventOption = { id: string; title: string; slug: string; date: string; venue: string };
+type TemplateOption = { id: string; name: string };
 
-const BLOCK_TYPES: { type: EmailBlockType; label: string }[] = [
-  { type: "hero", label: "Hero" },
-  { type: "rich_text", label: "Text" },
-  { type: "image", label: "Image" },
-  { type: "cta", label: "CTA" },
-  { type: "event", label: "Event" },
-  { type: "divider", label: "Divider" },
-  { type: "footer", label: "Footer" },
-];
-
-function blockLabel(type: string) {
-  return BLOCK_TYPES.find((item) => item.type === type)?.label ?? type;
-}
-
-type DragPayload = { kind: "new"; type: EmailBlockType } | { kind: "move"; id: string };
-
-function newBlock(type: EmailBlockType): EmailBlock {
-  const id = `blk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  switch (type) {
-    case "hero":
-      return { id, type, props: { title: "Crowdsource Choir", subtitle: "", imageUrl: "" } };
-    case "rich_text":
-      return { id, type, props: { text: "", html: "<p></p>" } };
-    case "image":
-      return { id, type, props: { imageUrl: "", alt: "", href: "" } };
-    case "cta":
-      return { id, type, props: { label: "Learn more", href: "https://app.crowdsourcechoir.com" } };
-    case "event":
-      return { id, type, props: { eventId: "", title: "", ctaText: "Open event" } };
-    case "footer":
-      return { id, type, props: { companyName: "Crowdsource Choir", physicalAddress: "" } };
-    default:
-      return { id, type: "divider", props: {} };
-  }
+function withEditableBody(sections: EmailSection[]): EmailSection[] {
+  return sections.map((section) => {
+    if (section.type !== "editorial_text" || section.props.body) return section;
+    const text = typeof section.props.text === "string" ? section.props.text : "";
+    const paragraphs = text.split(/\n\n+/).filter(Boolean);
+    return {
+      ...section,
+      props: {
+        ...section.props,
+        text: "",
+        body: {
+          type: "doc",
+          content: (paragraphs.length ? paragraphs : [""]).map((paragraph) => ({
+            type: "paragraph",
+            content: paragraph ? [{ type: "text", text: paragraph }] : [],
+          })),
+        },
+      },
+    };
+  });
 }
 
 export default function MarketingCampaignEditorClient({ campaignId }: { campaignId: string }) {
   const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
+  const [designSystemId, setDesignSystemId] = useState<string>("");
   const [email, setEmail] = useState<MarketingEmail | null>(null);
+  const [sections, setSections] = useState<EmailSection[]>([]);
+  const [tokens, setTokens] = useState<EmailDesignTokens>(DEFAULT_EMAIL_TOKENS);
   const [segments, setSegments] = useState<MarketingSegment[]>([]);
   const [settings, setSettings] = useState<MarketingSettings | null>(null);
   const [events, setEvents] = useState<EventOption[]>([]);
-  const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [previewHtml, setPreviewHtml] = useState("");
   const [testTo, setTestTo] = useState("");
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [mobilePreview, setMobilePreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const dragPayload = useRef<DragPayload | null>(null);
-  const dropIndexRef = useRef<number | null>(null);
-  const dragActive = useRef(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/marketing/campaigns/${campaignId}`, { cache: "no-store" });
@@ -84,7 +59,9 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     if (!res.ok) throw new Error(data.error ?? "Failed to load campaign");
     setCampaign(data.campaign);
     setDocumentId(typeof data.documentId === "string" ? data.documentId : null);
+    setDesignSystemId(typeof data.document?.designSystemId === "string" ? data.document.designSystemId : "");
     setEmail(data.emails?.[0] ?? null);
+    setSections(withEditableBody(Array.isArray(data.document?.sections) ? data.document.sections : []));
     setSegments(data.segments ?? []);
     setSettings(data.settings ?? null);
   }, [campaignId]);
@@ -92,99 +69,37 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
     fetch("/api/marketing/events", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setEvents(d.events ?? []))
+      .then((res) => res.json())
+      .then((data) => setEvents(data.events ?? []))
       .catch(() => setEvents([]));
+    fetch("/api/marketing/design", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.tokens) setTokens(data.tokens);
+      })
+      .catch(() => setTokens(DEFAULT_EMAIL_TOKENS));
+    fetch("/api/marketing/templates", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setTemplates(data.templates ?? []))
+      .catch(() => setTemplates([]));
   }, [load]);
 
-  const blocks = email?.blocks ?? [];
-
-  function beginDrag(event: DragEvent, payload: DragPayload) {
-    dragActive.current = true;
-    dragPayload.current = payload;
-    event.dataTransfer.effectAllowed = payload.kind === "new" ? "copy" : "move";
-    event.dataTransfer.setData("text/plain", payload.kind === "new" ? payload.type : payload.id);
-    window.requestAnimationFrame(() => {
-      if (dragActive.current) setDragging(true);
-    });
-  }
-
-  function clearDrag() {
-    dragActive.current = false;
-    dragPayload.current = null;
-    dropIndexRef.current = null;
-    setDragging(false);
-    setDropIndex(null);
-  }
-
-  function markDrop(index: number) {
-    dropIndexRef.current = index;
-    setDropIndex((current) => (current === index ? current : index));
-  }
-
-  function endDrag() {
-    window.setTimeout(() => {
-      if (!dragPayload.current) return;
-      const index = dropIndexRef.current;
-      if (index == null) clearDrag();
-      else dropAt(index);
-    }, 0);
-  }
-
-  function slotFromPointer(event: DragEvent<HTMLDivElement>, index: number) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return event.clientY >= rect.top + rect.height / 2 ? index + 1 : index;
-  }
-
-  function dropAt(index: number) {
-    const payload = dragPayload.current;
-    clearDrag();
-    if (!payload || !email) return;
-    const next =
-      payload.kind === "new"
-        ? insertBlock(email.blocks, newBlock(payload.type), index)
-        : moveBlock(email.blocks, payload.id, index);
-    setEmail({ ...email, blocks: next });
-  }
-
-  function dropSlot(index: number) {
-    const active = dropIndex === index;
-    const empty = blocks.length === 0;
-    return (
-      <div
-        data-drop-index={index}
-        onDragOver={(event) => {
-          event.preventDefault();
-          markDrop(index);
-          if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = dragPayload.current?.kind === "new" ? "copy" : "move";
-          }
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropAt(index);
-        }}
-        className={`relative ${active ? "bg-[var(--csc-accent)]/20" : dragging ? "bg-white/[0.04]" : ""}`}
-        style={{ height: empty ? 72 : dragging ? 44 : 12 }}
-      >
-        {active ? (
-          <div className="pointer-events-none absolute inset-x-3 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[var(--csc-accent)]" />
-        ) : null}
-        {empty ? (
-          <p className="pt-6 text-center text-xs uppercase tracking-[0.14em] text-gray-400">Drop a section here</p>
-        ) : null}
-      </div>
-    );
-  }
-
-  function updateBlock(id: string, props: Record<string, unknown>) {
-    if (!email) return;
-    setEmail({
-      ...email,
-      blocks: email.blocks.map((b) => (b.id === id ? { ...b, props: { ...b.props, ...props } } : b)),
-    });
-  }
+  useEffect(() => {
+    if (!documentId) return;
+    const timer = window.setTimeout(() => {
+      fetch(`/api/marketing/documents/${documentId}/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sections, previewText: email?.previewText ?? "" }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (typeof data.html === "string") setPreviewHtml(data.html);
+        })
+        .catch(() => undefined);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [documentId, sections, email?.previewText]);
 
   async function save(): Promise<string | null> {
     if (!email || !campaign) return null;
@@ -203,7 +118,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
           fromName: email.fromName,
           fromEmail: email.fromEmail,
           segmentId: email.segmentId,
-          blocks: email.blocks,
+          sections,
         }),
       });
       const data = await res.json();
@@ -212,6 +127,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       setCampaign(data.campaign);
       setDocumentId(nextDocumentId);
       setEmail(data.emails?.[0] ?? email);
+      if (Array.isArray(data.document?.sections)) setSections(withEditableBody(data.document.sections));
       setMessage("Saved");
       return nextDocumentId;
     } catch (err) {
@@ -222,7 +138,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     }
   }
 
-  async function runAction(action: "preview" | "test" | "send") {
+  async function runAction(action: "test" | "send") {
     if (!email) return;
     setBusy(true);
     setError(null);
@@ -230,28 +146,15 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     try {
       const savedDocumentId = await save();
       if (!savedDocumentId) return;
-      if (action === "preview") {
-        const res = await fetch(`/api/marketing/documents/${savedDocumentId}/preview`, { method: "POST" });
-        const data = await res.json();
-        if (!res.ok && !data.html) throw new Error(data.errors?.[0] ?? data.error ?? "Preview failed");
-        setPreviewHtml(data.html ?? "");
-        setMessage(data.errors?.length ? data.errors.join(" ") : "Preview ready");
-        return;
-      }
       const res = await fetch(`/api/marketing/emails/${email.id}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          to: testTo,
-          confirmPhrase,
-        }),
+        body: JSON.stringify({ action, to: testTo, confirmPhrase }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Action failed");
-      if (action === "test") {
-        setMessage(`Test sent (${data.providerMessageId})`);
-      } else {
+      if (action === "test") setMessage(`Test sent (${data.providerMessageId})`);
+      else {
         setMessage(`Sent ${data.sent}/${data.queued} (skipped ${data.skipped})`);
         await load();
       }
@@ -262,9 +165,52 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     }
   }
 
+  async function saveTemplate() {
+    if (!templateName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/marketing/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: templateName.trim(), sections, designSystemId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not save template");
+      setTemplates((current) => [data.template, ...current]);
+      setTemplateName("");
+      setMessage("Template saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save template");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyTemplate() {
+    if (!templateId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/marketing/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "apply", templateId, campaignId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not apply template");
+      setSections(withEditableBody(data.document.sections ?? []));
+      setMessage("Template applied");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply template");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const segmentLabel = useMemo(() => {
     if (!email?.segmentId) return "No segment";
-    return segments.find((s) => s.id === email.segmentId)?.name ?? "Segment";
+    return segments.find((segment) => segment.id === email.segmentId)?.name ?? "Segment";
   }, [email?.segmentId, segments]);
 
   if (!campaign || !email) {
@@ -276,13 +222,11 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       <SettingsPanel
         eyebrow="Campaign"
         title={campaign.name}
-        description="Constrained CSC email blocks. Event blocks read Blooms only — they never edit live events."
+        description="The column is the email. The iframe underneath is the message that will send."
         actions={
           <>
             <StatusPill tone={email.status === "sent" ? "ok" : "neutral"}>{email.status}</StatusPill>
-            <StatusPill tone={settings?.sendsEnabled ? "ok" : "off"}>
-              {settings?.sendsEnabled ? "Sends on" : "Sends paused"}
-            </StatusPill>
+            <StatusPill tone={settings?.sendsEnabled ? "ok" : "off"}>{settings?.sendsEnabled ? "Sends on" : "Sends paused"}</StatusPill>
             <SettingsButton href="/admin/marketing/campaigns">Back</SettingsButton>
           </>
         }
@@ -290,27 +234,27 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <FieldLabel>Campaign name</FieldLabel>
-            <TextField value={campaign.name} onChange={(v) => setCampaign({ ...campaign, name: v })} />
+            <TextField value={campaign.name} onChange={(value) => setCampaign({ ...campaign, name: value })} />
           </div>
           <div>
             <FieldLabel>Subject</FieldLabel>
-            <TextField value={email.subject} onChange={(v) => setEmail({ ...email, subject: v })} />
+            <TextField value={email.subject} onChange={(value) => setEmail({ ...email, subject: value })} />
           </div>
           <div>
             <FieldLabel>Preview text</FieldLabel>
-            <TextField value={email.previewText} onChange={(v) => setEmail({ ...email, previewText: v })} />
+            <TextField value={email.previewText} onChange={(value) => setEmail({ ...email, previewText: value })} />
           </div>
           <div>
             <FieldLabel>Segment</FieldLabel>
             <select
               value={email.segmentId ?? ""}
-              onChange={(e) => setEmail({ ...email, segmentId: e.target.value || null })}
+              onChange={(event) => setEmail({ ...email, segmentId: event.target.value || null })}
               className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white"
             >
               <option value="">Select segment…</option>
-              {segments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+              {segments.map((segment) => (
+                <option key={segment.id} value={segment.id}>
+                  {segment.name}
                 </option>
               ))}
             </select>
@@ -319,238 +263,44 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
         </div>
       </SettingsPanel>
 
-      <SettingsPanel title="Email" description="Drag a section type onto the email. Drag a section by its name to move it.">
-        <div className="mb-4 flex flex-wrap gap-2">
-          {BLOCK_TYPES.map((item) => (
-            <button
-              key={item.type}
-              type="button"
-              draggable={!busy}
-              disabled={busy}
-              data-section-type={item.type}
-              onDragStart={(event) => beginDrag(event, { kind: "new", type: item.type })}
-              onDragEnd={endDrag}
-              className="inline-flex cursor-grab items-center justify-center rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-300 transition-colors hover:border-white/40 hover:text-white active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+      <SettingsPanel title="Email" description="Drag a section type onto the email. Drag a section by its name to move it. Click a section to edit it.">
+        <div className="mb-4 flex flex-wrap items-end gap-2">
+          <div className="min-w-[12rem] flex-1">
+            <FieldLabel>Template</FieldLabel>
+            <select
+              value={templateId}
+              onChange={(event) => setTemplateId(event.target.value)}
+              className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white"
             >
-              {item.label}
-            </button>
-          ))}
+              <option value="">Choose a template…</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <SettingsButton disabled={busy || !templateId} onClick={() => applyTemplate()}>
+            Apply
+          </SettingsButton>
+          <div className="min-w-[12rem] flex-1">
+            <FieldLabel>Save this email as a template</FieldLabel>
+            <TextField value={templateName} onChange={setTemplateName} placeholder="Template name" />
+          </div>
+          <SettingsButton disabled={busy || !templateName.trim()} onClick={() => saveTemplate()}>
+            Save template
+          </SettingsButton>
         </div>
-
-        <div
-          onDragEnd={endDrag}
-          onDragOver={(event) => {
-            const first = event.currentTarget.querySelector("[data-section-id]");
-            if (!first) return;
-            if (event.clientY < first.getBoundingClientRect().top) {
-              event.preventDefault();
-              markDrop(0);
-            }
-          }}
-          onDrop={(event) => {
-            const first = event.currentTarget.querySelector("[data-section-id]");
-            if (!first || event.clientY >= first.getBoundingClientRect().top) return;
-            event.preventDefault();
-            dropAt(0);
-          }}
-        >
-          {blocks.map((block, index) => (
-            <div key={block.id}>
-              {dropSlot(index)}
-              <div
-                data-section-id={block.id}
-                className="rounded-xl border border-[var(--csc-row-divider)] p-4"
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  markDrop(slotFromPointer(event, index));
-                  if (event.dataTransfer) {
-                    event.dataTransfer.dropEffect = dragPayload.current?.kind === "new" ? "copy" : "move";
-                  }
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  dropAt(slotFromPointer(event, index));
-                }}
-              >
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    draggable={!busy}
-                    onDragStart={(event) => beginDrag(event, { kind: "move", id: block.id })}
-                    onDragEnd={endDrag}
-                    title="Drag to move"
-                    className="csc-eyebrow min-h-8 flex-1 cursor-grab text-left active:cursor-grabbing"
-                  >
-                    {blockLabel(block.type)}
-                  </button>
-                  <SettingsButton
-                    variant="danger"
-                    onClick={() => setEmail({ ...email, blocks: email.blocks.filter((item) => item.id !== block.id) })}
-                  >
-                    Remove
-                  </SettingsButton>
-                </div>
-
-              {block.type === "hero" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel>Title</FieldLabel>
-                    <TextField
-                      value={String(block.props.title ?? "")}
-                      onChange={(v) => updateBlock(block.id, { title: v })}
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel>Subtitle</FieldLabel>
-                    <TextField
-                      value={String(block.props.subtitle ?? "")}
-                      onChange={(v) => updateBlock(block.id, { subtitle: v })}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <EmailImageField
-                      imageUrl={String(block.props.imageUrl ?? "")}
-                      onChange={(next) => updateBlock(block.id, { imageUrl: next.imageUrl, assetId: next.assetId ?? "" })}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {block.type === "rich_text" ? (
-                <div>
-                  <FieldLabel>Body</FieldLabel>
-                  <textarea
-                    value={String(block.props.text ?? "")}
-                    onChange={(e) => {
-                      const text = e.target.value;
-                      const html = text
-                        .split(/\n\n+/)
-                        .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
-                        .join("");
-                      updateBlock(block.id, { text, html });
-                    }}
-                    rows={5}
-                    className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white"
-                  />
-                </div>
-              ) : null}
-
-              {block.type === "image" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <EmailImageField
-                      imageUrl={String(block.props.imageUrl ?? "")}
-                      onChange={(next) =>
-                        updateBlock(block.id, {
-                          imageUrl: next.imageUrl,
-                          assetId: next.assetId ?? "",
-                          alt: String(block.props.alt ?? "") || next.alt || "",
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel>Alt</FieldLabel>
-                    <TextField value={String(block.props.alt ?? "")} onChange={(v) => updateBlock(block.id, { alt: v })} />
-                  </div>
-                  <div>
-                    <FieldLabel>Link</FieldLabel>
-                    <TextField
-                      value={String(block.props.href ?? "")}
-                      onChange={(v) => updateBlock(block.id, { href: v })}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {block.type === "cta" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel>Label</FieldLabel>
-                    <TextField
-                      value={String(block.props.label ?? "")}
-                      onChange={(v) => updateBlock(block.id, { label: v })}
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel>URL</FieldLabel>
-                    <TextField
-                      value={String(block.props.href ?? "")}
-                      onChange={(v) => updateBlock(block.id, { href: v })}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {block.type === "event" ? (
-                <div>
-                  <FieldLabel hint="Read-only Bloom picker — does not modify the event">Event</FieldLabel>
-                  <select
-                    value={String(block.props.eventId ?? "")}
-                    onChange={(e) => {
-                      const eventId = e.target.value;
-                      const ev = events.find((x) => x.id === eventId);
-                      updateBlock(block.id, {
-                        eventId,
-                        title: ev?.title ?? "",
-                        date: ev?.date ?? "",
-                        venue: ev?.venue ?? "",
-                        url: ev ? `https://app.crowdsourcechoir.com/e/${ev.slug}` : "",
-                      });
-                    }}
-                    className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white"
-                  >
-                    <option value="">Select bloom/event…</option>
-                    {events.map((ev) => (
-                      <option key={ev.id} value={ev.id}>
-                        {ev.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-
-              {block.type === "footer" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel>Company</FieldLabel>
-                    <TextField
-                      value={String(block.props.companyName ?? "")}
-                      onChange={(v) => updateBlock(block.id, { companyName: v })}
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel>Address</FieldLabel>
-                    <TextField
-                      value={String(block.props.physicalAddress ?? "")}
-                      onChange={(v) => updateBlock(block.id, { physicalAddress: v })}
-                    />
-                  </div>
-                </div>
-              ) : null}
-              </div>
-            </div>
-          ))}
-          {dropSlot(blocks.length)}
-        </div>
+        <EmailEditor sections={sections} tokens={tokens} events={events} busy={busy} onChange={setSections} />
       </SettingsPanel>
 
-      <SettingsPanel title="Preview & send">
+      <SettingsPanel title="Sendable preview">
         <div className="flex flex-wrap gap-2">
           <SettingsButton variant="primary" disabled={busy} onClick={() => save()}>
             Save draft
           </SettingsButton>
-          <SettingsButton disabled={busy} onClick={() => runAction("preview")}>
-            Preview
-          </SettingsButton>
-          <ToggleRow
-            label={mobilePreview ? "Mobile preview" : "Desktop preview"}
-            checked={mobilePreview}
-            onChange={setMobilePreview}
-          />
+          <ToggleRow label={mobilePreview ? "Mobile preview" : "Desktop preview"} checked={mobilePreview} onChange={setMobilePreview} />
         </div>
-
         {previewHtml ? (
           <div className="mt-4 overflow-hidden rounded-xl border border-[var(--csc-row-divider)] bg-black">
             <iframe
@@ -561,8 +311,9 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
               style={{ maxWidth: mobilePreview ? 375 : 600, margin: "0 auto", display: "block" }}
             />
           </div>
-        ) : null}
-
+        ) : (
+          <p className="mt-4 text-sm text-gray-400">The compiled email appears here as you edit.</p>
+        )}
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <div>
             <FieldLabel>Test send to</FieldLabel>
@@ -574,29 +325,15 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
             </div>
           </div>
           <div>
-            <FieldLabel hint='Type SEND to confirm bulk delivery'>Send to segment</FieldLabel>
+            <FieldLabel hint="Type SEND to confirm bulk delivery">Send to segment</FieldLabel>
             <TextField value={confirmPhrase} onChange={setConfirmPhrase} placeholder="SEND" />
             <div className="mt-2">
-              <SettingsButton
-                variant="danger"
-                disabled={busy || confirmPhrase.trim().toUpperCase() !== "SEND"}
-                onClick={() => runAction("send")}
-              >
+              <SettingsButton variant="danger" disabled={busy || confirmPhrase.trim().toUpperCase() !== "SEND"} onClick={() => runAction("send")}>
                 Send now
               </SettingsButton>
             </div>
           </div>
         </div>
-
-        {email.stats.sent > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <StatusPill tone="ok">Sent {email.stats.sent}</StatusPill>
-            <StatusPill tone="neutral">Delivered {email.stats.delivered}</StatusPill>
-            <StatusPill tone="off">Bounced {email.stats.bounced}</StatusPill>
-            <StatusPill tone="neutral">Opened {email.stats.opened}</StatusPill>
-            <StatusPill tone="neutral">Clicked {email.stats.clicked}</StatusPill>
-          </div>
-        ) : null}
       </SettingsPanel>
 
       {message ? <p className="text-sm text-[var(--csc-accent)]">{message}</p> : null}

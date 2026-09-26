@@ -3,6 +3,7 @@ import { withMarketingAuth } from "@/lib/marketing/auth";
 import { getWorkingDocument } from "@/lib/marketing/db/documents";
 import { getMarketingSettings } from "@/lib/marketing/db/settings";
 import { getEventForMarketingBlock } from "@/lib/marketing/events-readonly";
+import { parseEmailDocument } from "@/lib/marketing/document/schema";
 import type { EmailDocument } from "@/lib/marketing/document/types";
 import { compileEmailDocument } from "@/lib/marketing/render/compile";
 import type { EventBlockData } from "@/lib/marketing/render/event-data";
@@ -34,21 +35,27 @@ async function resolveEvents(document: EmailDocument, origin: string): Promise<R
   return events;
 }
 
-export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   return withMarketingAuth(async () => {
     const { id } = await ctx.params;
     const loaded = await getWorkingDocument(id);
     if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const body = (await request.json().catch(() => null)) as { sections?: unknown; previewText?: unknown } | null;
+    const document =
+      body && Array.isArray(body.sections)
+        ? parseEmailDocument({ ...loaded.document, sections: body.sections })
+        : loaded.document;
+    const previewText = typeof body?.previewText === "string" ? body.previewText : loaded.previewText;
     const settings = await getMarketingSettings();
     const origin = baseUrl();
     const tokens = resolveEmailTokens(loaded.tokens);
     const compiled = compileEmailDocument({
-      document: loaded.document,
+      document,
       tokens,
-      previewText: loaded.previewText,
+      previewText,
       companyName: settings.companyName,
       physicalAddress: settings.physicalAddress,
-      eventsBySectionId: await resolveEvents(loaded.document, origin),
+      eventsBySectionId: await resolveEvents(document, origin),
     });
     if (!compiled.ok) {
       return NextResponse.json({ html: "", text: compiled.text, errors: compiled.errors }, { status: 422 });
