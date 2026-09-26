@@ -76,6 +76,7 @@ export function SettingsButton({
   type = "button",
   title,
   href,
+  target,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -86,6 +87,7 @@ export function SettingsButton({
   title?: string;
   /** When set, renders as a same-styled link (e.g. Connect Gmail). */
   href?: string;
+  target?: string;
 }) {
   // Match StatusPill: full pill, caps, tracked — selected stays lime, idle stays gray.
   const base =
@@ -102,6 +104,8 @@ export function SettingsButton({
       <a
         href={disabled ? undefined : href}
         title={title}
+        target={target}
+        rel={target === "_blank" ? "noreferrer" : undefined}
         aria-disabled={disabled || undefined}
         className={`${base} ${styles} ${disabled ? "pointer-events-none opacity-50" : ""}`}
       >

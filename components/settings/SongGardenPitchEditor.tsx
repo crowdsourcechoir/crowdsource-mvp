@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
+import { SettingsButton, SettingsSelect } from "@/components/settings/ui";
 
 function slideLabel(slide: PitchSlide): string {
   const titled = slide.blocks.find((block) => block.type === "title" || block.type === "heading");
@@ -15,13 +16,56 @@ function updateBlock(slide: PitchSlide, index: number, block: CopyBlock): PitchS
   return { ...slide, blocks };
 }
 
+const BLOCK_LABEL: Record<string, string> = {
+  title: "Title",
+  kicker: "Kicker",
+  heading: "Heading",
+  line: "Line",
+  paragraph: "Paragraph",
+};
+
+function FitText({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <label className="block border-b border-[var(--csc-row-divider)] py-2">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">{label}</span>
+      <textarea
+        ref={ref}
+        rows={1}
+        value={value}
+        aria-label={label}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full resize-none bg-transparent text-sm leading-snug text-white focus:outline-none"
+      />
+    </label>
+  );
+}
+
 export default function SongGardenPitchEditor() {
   const [slides, setSlides] = useState<PitchSlide[] | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [pagePassword, setPagePassword] = useState("");
   const [passwordOn, setPasswordOn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     fetch("/api/sobeca-song-garden/access", { cache: "no-store" })
@@ -35,6 +79,7 @@ export default function SongGardenPitchEditor() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Could not load copy");
         setSlides(data.slides);
+        setActiveId((current) => current ?? data.slides?.[0]?.id ?? null);
       })
       .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load copy"));
   }, []);
@@ -51,7 +96,7 @@ export default function SongGardenPitchEditor() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       setSlides(data.slides);
-      setStatus(next ? "Saved. The public page is using this copy." : "Reset to the copy in the site file.");
+      setStatus(next ? "Saved." : "Reset to the file.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -92,73 +137,67 @@ export default function SongGardenPitchEditor() {
     return <p className="text-sm text-white/70">{status ?? "Loading copy…"}</p>;
   }
 
+  const activeIndex = Math.max(0, slides.findIndex((slide) => slide.id === activeId));
+  const slide = slides[activeIndex];
+
   return (
-    <div className="space-y-10">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          className="rounded-full border border-[var(--csc-accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--csc-accent)] hover:bg-[var(--csc-accent)] hover:text-black disabled:opacity-50"
-          disabled={saving}
-          onClick={() => save(slides)}
-        >
+    <div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--csc-row-divider)] pb-3">
+        <SettingsButton variant="primary" disabled={saving} onClick={() => save(slides)}>
           Save
-        </button>
-        <button type="button" className="csc-link text-sm" disabled={saving} onClick={() => save(null)}>
-          Reset to file
-        </button>
-        <a className="csc-link text-sm" href="/sobeca-song-garden" target="_blank" rel="noreferrer">
-          View page
-        </a>
+        </SettingsButton>
+        <SettingsButton disabled={saving} onClick={() => save(null)}>
+          Reset
+        </SettingsButton>
+        <SettingsButton href="/sobeca-song-garden" target="_blank">
+          View
+        </SettingsButton>
+        <SettingsButton onClick={() => setShowPassword((open) => !open)}>
+          {passwordOn ? "Password on" : "Password"}
+        </SettingsButton>
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
-      <form
-        className="max-w-md space-y-3 border border-white/15 p-4"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setSaving(true);
-          setStatus(null);
-          try {
-            const res = await fetch("/api/sobeca-song-garden/access", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password: pagePassword }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error ?? "Could not save the password");
-            setPasswordOn(true);
-            setPagePassword("");
-            setStatus("Password saved. The public page now asks for it.");
-          } catch (err) {
-            setStatus(err instanceof Error ? err.message : "Could not save the password");
-          } finally {
-            setSaving(false);
-          }
-        }}
-      >
-        <p className="text-sm text-white">{passwordOn ? "This page asks for a password." : "This page is public."}</p>
-        <label className="block text-sm text-white/70">
-          Page password
+
+      {showPassword ? (
+        <form
+          className="flex flex-wrap items-center gap-2 border-b border-[var(--csc-row-divider)] py-3"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setSaving(true);
+            setStatus(null);
+            try {
+              const res = await fetch("/api/sobeca-song-garden/access", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password: pagePassword }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error ?? "Could not save the password");
+              setPasswordOn(true);
+              setPagePassword("");
+              setStatus("Password saved.");
+            } catch (err) {
+              setStatus(err instanceof Error ? err.message : "Could not save the password");
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          <p className="text-sm text-white/70">{passwordOn ? "This page asks for a password." : "This page is public."}</p>
           <input
             type="password"
             value={pagePassword}
             autoComplete="new-password"
-            placeholder={passwordOn ? "Enter a new password to replace it" : "Leave blank to keep the page public"}
+            aria-label="Page password"
+            placeholder={passwordOn ? "New password" : "Set a password"}
             onChange={(event) => setPagePassword(event.target.value)}
-            className="mt-2 w-full border border-white/15 bg-black px-3 py-2 text-white"
+            className="w-48 border border-white/15 bg-black px-3 py-1.5 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
           />
-        </label>
-        <div className="flex flex-wrap gap-4">
-          <button
-            type="submit"
-            disabled={saving || !pagePassword.trim()}
-            className="rounded-full border border-[var(--csc-accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--csc-accent)] hover:bg-[var(--csc-accent)] hover:text-black disabled:opacity-50"
-          >
+          <SettingsButton type="submit" variant="primary" disabled={saving || !pagePassword.trim()}>
             Save password
-          </button>
+          </SettingsButton>
           {passwordOn ? (
-            <button
-              type="button"
-              className="csc-link text-sm"
+            <SettingsButton
               disabled={saving}
               onClick={async () => {
                 setSaving(true);
@@ -173,7 +212,7 @@ export default function SongGardenPitchEditor() {
                   if (!res.ok) throw new Error(data.error ?? "Could not remove the password");
                   setPasswordOn(false);
                   setPagePassword("");
-                  setStatus("Password removed. The page is public.");
+                  setStatus("Password removed.");
                 } catch (err) {
                   setStatus(err instanceof Error ? err.message : "Could not remove the password");
                 } finally {
@@ -181,32 +220,63 @@ export default function SongGardenPitchEditor() {
                 }
               }}
             >
-              Remove password
-            </button>
+              Remove
+            </SettingsButton>
           ) : null}
+        </form>
+      ) : null}
+
+      <div className="mt-4 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
+        <div className="lg:hidden">
+          <SettingsSelect value={slide.id} onChange={setActiveId} ariaLabel="Section">
+            {slides.map((item) => (
+              <option key={item.id} value={item.id}>
+                {slideLabel(item)}
+              </option>
+            ))}
+          </SettingsSelect>
         </div>
-      </form>
-      {slides.map((slide, slideIndex) => (
-        <section key={slide.id} className="space-y-4">
-          <h2 className="csc-eyebrow">{slideLabel(slide)}</h2>
-          <label className="flex flex-wrap items-center gap-3 text-sm text-white">
-            Copy color
-            <input
-              type="color"
-              value={slide.copyColor || DEFAULT_COPY_COLOR}
-              aria-label={`Copy color for ${slideLabel(slide)}`}
-              className="h-8 w-12 cursor-pointer bg-transparent"
-              onChange={(event) => {
-                const next = slides.slice();
-                next[slideIndex] = { ...slide, copyColor: event.target.value.toUpperCase() };
-                setSlides(next);
-              }}
-            />
-            <span className="font-mono text-xs text-white/70">{slide.copyColor || DEFAULT_COPY_COLOR}</span>
-          </label>
-          <div className="max-w-xl">
-            <img src={slide.image} alt="" className="h-40 w-full object-cover" />
-            <label className="csc-link mt-2 inline-block text-sm">
+
+        <nav className="csc-list sticky top-4 hidden max-h-[calc(100dvh-8rem)] overflow-y-auto lg:block">
+          {slides.map((item) => {
+            const selected = item.id === slide.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveId(item.id)}
+                className="csc-list-row w-full text-left"
+                style={selected ? { outlineColor: "var(--csc-accent)" } : undefined}
+              >
+                <img src={item.image} alt="" className="h-8 w-12 shrink-0 object-cover" />
+                <span className="min-w-0 flex-1 truncate text-sm text-white">{slideLabel(item)}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <section>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="truncate text-base font-semibold text-white">{slideLabel(slide)}</h2>
+            <label className="flex shrink-0 items-center gap-2 text-xs text-white/70">
+              <input
+                type="color"
+                value={slide.copyColor || DEFAULT_COPY_COLOR}
+                aria-label={`Copy color for ${slideLabel(slide)}`}
+                className="h-6 w-8 cursor-pointer bg-transparent"
+                onChange={(event) => {
+                  const next = slides.slice();
+                  next[activeIndex] = { ...slide, copyColor: event.target.value.toUpperCase() };
+                  setSlides(next);
+                }}
+              />
+              <span className="font-mono">{slide.copyColor || DEFAULT_COPY_COLOR}</span>
+            </label>
+          </div>
+
+          <div className="relative mt-3">
+            <img src={slide.image} alt="" className="h-28 w-full object-cover" />
+            <label className="csc-link absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs">
               {uploadingId === slide.id ? "Uploading…" : "Replace photo"}
               <input
                 type="file"
@@ -221,74 +291,73 @@ export default function SongGardenPitchEditor() {
               />
             </label>
           </div>
-          {slide.blocks.map((block, blockIndex) => {
-            if (block.type === "image") return null;
-            if (block.type === "list") {
+
+          <div className="mt-2">
+            {slide.blocks.map((block, blockIndex) => {
+              if (block.type === "image") return null;
+              if (block.type === "list") {
+                return (
+                  <div key={blockIndex}>
+                    {block.items.map((item, itemIndex) => (
+                      <FitText
+                        key={itemIndex}
+                        label={`Item ${itemIndex + 1}`}
+                        value={item}
+                        onChange={(value) => {
+                          const items = block.items.slice();
+                          items[itemIndex] = value;
+                          const next = slides.slice();
+                          next[activeIndex] = updateBlock(slide, blockIndex, { ...block, items });
+                          setSlides(next);
+                        }}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+              if (block.type === "table") {
+                return (
+                  <div key={blockIndex} className="mt-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
+                      {block.headers.join(" · ")}
+                    </p>
+                    {block.rows.map((row, rowIndex) => (
+                      <div key={rowIndex} className="grid gap-x-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
+                        {row.map((cell, cellIndex) => (
+                          <FitText
+                            key={cellIndex}
+                            label={block.headers[cellIndex] ?? "Cell"}
+                            value={cell}
+                            onChange={(value) => {
+                              const rows = block.rows.map((current) => current.slice());
+                              rows[rowIndex][cellIndex] = value;
+                              const next = slides.slice();
+                              next[activeIndex] = updateBlock(slide, blockIndex, { ...block, rows });
+                              setSlides(next);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
               return (
-                <label key={blockIndex} className="block text-sm">
-                  List
-                  {block.items.map((item, itemIndex) => (
-                    <textarea
-                      key={itemIndex}
-                      className="mt-2 w-full border border-white/15 bg-black px-3 py-2 text-white"
-                      rows={2}
-                      value={item}
-                      onChange={(event) => {
-                        const items = block.items.slice();
-                        items[itemIndex] = event.target.value;
-                        const next = slides.slice();
-                        next[slideIndex] = updateBlock(slide, blockIndex, { ...block, items });
-                        setSlides(next);
-                      }}
-                    />
-                  ))}
-                </label>
-              );
-            }
-            if (block.type === "table") {
-              return (
-                <div key={blockIndex} className="space-y-2">
-                  {block.rows.map((row, rowIndex) => (
-                    <div key={rowIndex} className="grid gap-2 sm:grid-cols-2">
-                      {row.map((cell, cellIndex) => (
-                        <textarea
-                          key={cellIndex}
-                          className="w-full border border-white/15 bg-black px-3 py-2 text-sm text-white"
-                          rows={3}
-                          value={cell}
-                          aria-label={block.headers[cellIndex] ?? "Cell"}
-                          onChange={(event) => {
-                            const rows = block.rows.map((current) => current.slice());
-                            rows[rowIndex][cellIndex] = event.target.value;
-                            const next = slides.slice();
-                            next[slideIndex] = updateBlock(slide, blockIndex, { ...block, rows });
-                            setSlides(next);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              );
-            }
-            return (
-              <label key={blockIndex} className="block text-sm text-white/70">
-                {block.type}
-                <textarea
-                  className="mt-2 w-full border border-white/15 bg-black px-3 py-2 text-white"
-                  rows={block.type === "paragraph" ? 5 : 2}
+                <FitText
+                  key={blockIndex}
+                  label={BLOCK_LABEL[block.type] ?? block.type}
                   value={block.text}
-                  onChange={(event) => {
+                  onChange={(value) => {
                     const next = slides.slice();
-                    next[slideIndex] = updateBlock(slide, blockIndex, { ...block, text: event.target.value });
+                    next[activeIndex] = updateBlock(slide, blockIndex, { ...block, text: value });
                     setSlides(next);
                   }}
                 />
-              </label>
-            );
-          })}
+              );
+            })}
+          </div>
         </section>
-      ))}
+      </div>
     </div>
   );
 }
