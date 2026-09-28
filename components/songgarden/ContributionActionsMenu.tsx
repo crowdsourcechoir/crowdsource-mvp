@@ -4,13 +4,20 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFixedMenuPosition } from "@/hooks/useFixedMenuPosition";
 
+type ExtraItem = {
+  label: string;
+  onSelect: () => void | Promise<void>;
+};
+
 type Props = {
   /** What is being removed — shown in the confirm step. */
   kindLabel: string;
   disabled?: boolean;
   /** Extra classes on the circular trigger (for overlays on media). */
   buttonClassName?: string;
-  onDelete: () => Promise<void>;
+  /** Shown above Delete. Used for Picture in Picture on videos. */
+  extraItems?: ExtraItem[];
+  onDelete?: () => Promise<void>;
 };
 
 /**
@@ -21,6 +28,7 @@ export default function ContributionActionsMenu({
   kindLabel,
   disabled,
   buttonClassName,
+  extraItems = [],
   onDelete,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -35,7 +43,7 @@ export default function ContributionActionsMenu({
   const placement = useFixedMenuPosition({
     open,
     triggerRef,
-    preferredWidth: confirming ? 240 : 160,
+    preferredWidth: confirming ? 240 : extraItems.length > 0 ? 200 : 160,
     align: "right",
   });
 
@@ -66,6 +74,7 @@ export default function ContributionActionsMenu({
   }, [open]);
 
   async function confirmDelete() {
+    if (!onDelete) return;
     setBusy(true);
     setError(null);
     try {
@@ -124,14 +133,32 @@ export default function ContributionActionsMenu({
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full px-3 py-1.5 text-left text-xs text-red-200 transition-colors hover:bg-red-500/10 hover:text-red-100"
-                onClick={() => setConfirming(true)}
-              >
-                Delete
-              </button>
+              <>
+                {extraItems.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full px-3 py-1.5 text-left text-xs text-gray-200 transition-colors hover:bg-[var(--csc-accent)]/10 hover:text-white"
+                    onClick={() => {
+                      setOpen(false);
+                      void item.onSelect();
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                {onDelete ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full px-3 py-1.5 text-left text-xs text-red-200 transition-colors hover:bg-red-500/10 hover:text-red-100"
+                    onClick={() => setConfirming(true)}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </>
             )}
           </div>,
           document.body
@@ -154,7 +181,7 @@ export default function ContributionActionsMenu({
           setOpen((v) => !v);
         }}
       >
-        <span aria-hidden>⋯</span>
+        <span aria-hidden>⋮</span>
       </button>
       {menu}
     </div>
