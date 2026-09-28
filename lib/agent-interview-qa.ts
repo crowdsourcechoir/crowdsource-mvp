@@ -29,6 +29,11 @@ export type PairedInterviewAnswer = {
   videoTranscript: string | null;
   /** Journey position when the prompt was recovered from the bloom. */
   promptIndex?: number | null;
+  /**
+   * True when an agent turn asked this question immediately before the answer.
+   * False when the text was copied forward from an earlier question, or there was no question.
+   */
+  questionExplicit?: boolean;
 };
 
 function createdAtOf(t: InterviewTurnLike): string {
@@ -41,7 +46,8 @@ function contentOf(t: InterviewTurnLike): string {
 
 /**
  * Walk turns in order. Each user turn inherits the most recent prior agent
- * turn’s content as `questionText` (null if none).
+ * turn’s content as `questionText` (null if none). `questionExplicit` is true
+ * only for the first answer after that agent turn.
  */
 export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedInterviewAnswer[] {
   const sorted = [...turns].sort((a, b) => {
@@ -52,13 +58,17 @@ export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedIntervie
   });
 
   let lastQuestion: string | null = null;
+  let awaitingAnswer = false;
   const answers: PairedInterviewAnswer[] = [];
 
   for (const turn of sorted) {
     const role = (turn.role || "").toLowerCase();
     if (role === "agent") {
       const q = contentOf(turn);
-      if (q) lastQuestion = q;
+      if (q) {
+        lastQuestion = q;
+        awaitingAnswer = true;
+      }
       continue;
     }
     if (role !== "user") continue;
@@ -67,11 +77,13 @@ export function pairInterviewAnswers(turns: InterviewTurnLike[]): PairedIntervie
       createdAt: createdAtOf(turn) || new Date().toISOString(),
       content: contentOf(turn),
       questionText: lastQuestion,
+      questionExplicit: awaitingAnswer && Boolean(lastQuestion),
       audioUrl: turn.audioUrl ?? turn.audio_url ?? null,
       videoUrl: turn.videoUrl ?? turn.video_url ?? null,
       audioTranscript: turn.audioTranscript ?? turn.audio_transcript ?? null,
       videoTranscript: turn.videoTranscript ?? turn.video_transcript ?? null,
     });
+    awaitingAnswer = false;
   }
 
   return answers;

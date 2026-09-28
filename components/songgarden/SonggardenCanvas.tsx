@@ -16,8 +16,7 @@ import {
 import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
 import ComposerMediaCard from "@/components/songgarden/ComposerMediaCard";
 import {
-  ComposerAnswerRows,
-  ComposerPromptHeading,
+  ComposerAnswerTable,
   ComposerPromptSection,
   personLabel,
 } from "@/components/songgarden/ComposerPromptGroup";
@@ -871,20 +870,17 @@ export default function SonggardenCanvas({
           title={`Text by prompt · ${filteredText.length}`}
           empty={filteredText.length === 0 ? "No text responses in this scope." : undefined}
         >
-          {textByPrompt.map((group) => (
-            <div key={group.key}>
-              <ComposerPromptHeading prompt={group.prompt} count={group.answers.length} />
-              <div className="mt-3">
-                <ComposerAnswerRows
-                  rows={group.answers.map((item) => ({
-                    id: item.id,
-                    name: item.participantName,
-                    content: item.content,
-                  }))}
-                />
-              </div>
-            </div>
-          ))}
+          <ComposerAnswerTable
+            groups={textByPrompt.map((group) => ({
+              key: group.key,
+              prompt: group.prompt,
+              answers: group.answers.map((item) => ({
+                id: item.id,
+                name: item.participantName,
+                content: item.content,
+              })),
+            }))}
+          />
         </ComposerPromptSection>
       ) : null}
 
@@ -894,13 +890,11 @@ export default function SonggardenCanvas({
           empty={filteredVideo.length === 0 ? "No video or photo responses in this scope." : undefined}
         >
           {videoByPrompt.map((group) => (
-            <div key={group.key}>
-              <ComposerPromptHeading
-                prompt={group.prompt}
-                count={group.answers.length}
-                noun="response"
-              />
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <div key={group.key} className="mt-3 first:mt-0">
+              <p className="text-sm font-medium" style={{ color: "var(--csc-accent)" }}>
+                {group.prompt}
+              </p>
+              <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {group.answers.map((item) => (
                   <ComposerMediaCard
                     key={item.id}

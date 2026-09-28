@@ -9,6 +9,7 @@ import { pairInterviewAnswers, type PairedInterviewAnswer } from "@/lib/agent-in
 import { proxiedAgentMediaUrl } from "@/lib/agent-media/storage-upload";
 import {
   attributeMissingAnswerPrompts,
+  catalogPromptsForAnswers,
   contributionPromptsForComposer,
 } from "@/lib/composer/attribute-journey-prompts";
 import { localEventsGetById } from "@/lib/local-events-store";
@@ -66,14 +67,13 @@ export async function GET(request: Request) {
 
   if (USE_LOCAL_EVENTS) {
     const transcripts = await localGetEventTranscripts(eventId);
-    const prompts = await promptsForEvent(eventId);
-    const items: InterviewSubmissionItem[] = transcripts.map((t) => ({
+    const paired = transcripts.map((t) => pairInterviewAnswers(t.turns));
+    const prompts = catalogPromptsForAnswers(await promptsForEvent(eventId), paired);
+    const items: InterviewSubmissionItem[] = transcripts.map((t, index) => ({
       participantName: t.participantName,
       email: t.email ?? null,
       conversationId: t.conversationId,
-      answers: withProxiedMediaUrls(
-        attributeMissingAnswerPrompts(pairInterviewAnswers(t.turns), prompts)
-      ),
+      answers: withProxiedMediaUrls(attributeMissingAnswerPrompts(paired[index], prompts)),
     }));
 
     return NextResponse.json({ items });
@@ -129,16 +129,16 @@ export async function GET(request: Request) {
       turnsByConv.set(t.conversation_id, list);
     }
 
-    const prompts = await promptsForEvent(eventId);
-    const items: InterviewSubmissionItem[] = convs.map((conv: { id: string; participant_id: string }) => {
-      const convTurns = turnsByConv.get(conv.id) ?? [];
+    const paired = convs.map((conv: { id: string }) =>
+      pairInterviewAnswers(turnsByConv.get(conv.id) ?? [])
+    );
+    const prompts = catalogPromptsForAnswers(await promptsForEvent(eventId), paired);
+    const items: InterviewSubmissionItem[] = convs.map((conv: { id: string; participant_id: string }, index: number) => {
       return {
         participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
         conversationId: conv.id,
         email: identityById.get(conv.participant_id)?.email ?? null,
-        answers: withProxiedMediaUrls(
-          attributeMissingAnswerPrompts(pairInterviewAnswers(convTurns), prompts)
-        ),
+        answers: withProxiedMediaUrls(attributeMissingAnswerPrompts(paired[index], prompts)),
       };
     });
 

@@ -15,6 +15,7 @@ async function main() {
   const { readJourneyPrompt } = await load("lib/agent-journey-managed.ts");
   const {
     attributeMissingAnswerPrompts,
+    catalogPromptsForAnswers,
     contributionPromptsForComposer,
   } = await load("lib/composer/attribute-journey-prompts.ts");
   const { groupAnswersByPrompt, promptLabel } = await load("lib/composer/group-answers-by-prompt.ts");
@@ -68,6 +69,50 @@ async function main() {
   assert.equal(stored[0].questionText, "What should we call you?");
   assert.equal(stored[1].questionText, "A feeling");
   assert.equal(stored[1].promptIndex, 2);
+
+  const nameQ = "What name would you like us to use for your contributions?";
+  const natureQ = "Where in nature do you feel most renewed?";
+  const feelQ = "What word sits with you now?";
+  const circlePrompts = [nameQ, natureQ, feelQ];
+
+  const chester = pairInterviewAnswers([
+    { role: "user", content: "Chester", turn_index: 0, created_at: "2026-06-02T00:00:00Z" },
+    { role: "user", content: "On the trails", turn_index: 1, created_at: "2026-06-02T00:00:01Z" },
+    { role: "user", content: "calm", turn_index: 2, created_at: "2026-06-02T00:00:02Z" },
+  ]);
+  const brittany = pairInterviewAnswers([
+    { role: "agent", content: nameQ, turn_index: 0, created_at: "2026-06-02T00:01:00Z" },
+    { role: "user", content: "Brittany", turn_index: 1, created_at: "2026-06-02T00:01:01Z" },
+    { role: "agent", content: natureQ, turn_index: 2, created_at: "2026-06-02T00:01:02Z" },
+    { role: "user", content: "Near the ocean", turn_index: 3, created_at: "2026-06-02T00:01:03Z" },
+    { role: "user", content: "joy", turn_index: 4, created_at: "2026-06-02T00:01:04Z" },
+  ]);
+  assert.equal(brittany[2].questionExplicit, false);
+  assert.equal(brittany[2].questionText, natureQ);
+
+  const circleCatalog = catalogPromptsForAnswers(circlePrompts, [chester, brittany]);
+  const chesterPlaced = attributeMissingAnswerPrompts(chester, circleCatalog);
+  const brittanyPlaced = attributeMissingAnswerPrompts(brittany, circleCatalog);
+  assert.deepEqual(
+    chesterPlaced.map((answer) => answer.questionText),
+    circlePrompts
+  );
+  assert.deepEqual(
+    brittanyPlaced.map((answer) => answer.questionText),
+    [nameQ, natureQ, feelQ]
+  );
+  assert.equal(brittanyPlaced[2].content, "joy");
+
+  const discovered = catalogPromptsForAnswers(
+    [nameQ],
+    [
+      pairInterviewAnswers([
+        { role: "agent", content: natureQ, turn_index: 0, created_at: "2026-06-03T00:00:00Z" },
+        { role: "user", content: "The beach", turn_index: 1, created_at: "2026-06-03T00:00:01Z" },
+      ]),
+    ]
+  );
+  assert.deepEqual(discovered, [nameQ, natureQ]);
 
   assert.equal(promptLabel(null), "Prompt not recorded");
   assert.equal(readJourneyPrompt({ journeyPrompt: "  A feeling  " }), "A feeling");

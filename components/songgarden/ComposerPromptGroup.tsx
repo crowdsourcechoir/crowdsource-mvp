@@ -5,44 +5,33 @@ export function personLabel(name: string | null | undefined): string {
   return trimmed || "Anonymous";
 }
 
-/** Prompt headline so a group of answers is readable without opening each row. */
-export function ComposerPromptHeading({
-  prompt,
-  count,
-  noun = "answer",
-}: {
+export type ComposerTableGroup = {
+  key: string;
   prompt: string;
-  count: number;
-  noun?: string;
-}) {
-  const label = count === 1 ? noun : `${noun}s`;
-  return (
-    <header>
-      <p className="csc-eyebrow">Prompt</p>
-      <h3 className="mt-2 text-xl font-medium leading-snug text-white">{prompt}</h3>
-      <p className="mt-1 text-sm text-white/70">
-        {count} {label}
-      </p>
-    </header>
-  );
-}
+  answers: Array<{ id: string; name: string; content: string }>;
+};
 
-/** Name on its own line, then the answer, using the design-system list. */
-export function ComposerAnswerRows({
-  rows,
-}: {
-  rows: Array<{ id: string; name: string; content: string }>;
-}) {
+/**
+ * Condensed table, no rules: lime prompt, white response, name.
+ * The prompt is shown once per group; later rows keep the columns aligned.
+ */
+export function ComposerAnswerTable({ groups }: { groups: ComposerTableGroup[] }) {
   return (
-    <div className="csc-list">
-      {rows.map((row) => (
-        <div key={row.id} className="csc-list-row !cursor-default">
-          <div className="min-w-0 w-full">
-            <p className="text-sm font-semibold" style={{ color: "var(--csc-accent)" }}>
-              {personLabel(row.name)}
-            </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-white">{row.content}</p>
-          </div>
+    <div className="text-sm leading-snug">
+      {groups.map((group) => (
+        <div key={group.key} className="mt-3 first:mt-0">
+          {group.answers.map((row, index) => (
+            <div
+              key={row.id}
+              className="grid grid-cols-1 gap-x-4 py-px sm:grid-cols-[minmax(12rem,1.15fr)_minmax(0,1.7fr)_8.5rem] sm:items-baseline"
+            >
+              <div className="font-medium" style={{ color: "var(--csc-accent)" }}>
+                {index === 0 ? group.prompt : null}
+              </div>
+              <div className="whitespace-pre-wrap text-white">{row.content}</div>
+              <div className="text-white/80">{personLabel(row.name)}</div>
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -61,7 +50,7 @@ export function ComposerPromptSection({
   return (
     <section>
       <h2 className="csc-eyebrow">{title}</h2>
-      {empty ? <p className="mt-4 text-sm text-white/60">{empty}</p> : <div className="mt-6 flex flex-col gap-10">{children}</div>}
+      {empty ? <p className="mt-2 text-sm text-white/60">{empty}</p> : <div className="mt-2">{children}</div>}
     </section>
   );
 }

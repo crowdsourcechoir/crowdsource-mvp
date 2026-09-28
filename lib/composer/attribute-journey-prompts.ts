@@ -64,7 +64,49 @@ export function contributionPromptsForComposer(
   return prompts;
 }
 
-export function attributeMissingAnswerPrompts<T extends { questionText: string | null }>(
+type AnswerPromptLike = {
+  questionText: string | null;
+  questionExplicit?: boolean;
+  createdAt?: string;
+};
+
+/** A stored question counts only when an agent turn asked it for this answer. */
+export function isExplicitQuestion(answer: AnswerPromptLike): boolean {
+  const existing = (answer.questionText ?? "").trim();
+  if (!existing) return false;
+  if (answer.questionExplicit === false) return false;
+  return true;
+}
+
+/**
+ * Journey prompts first, then any question someone in this bloom was actually asked
+ * that is not already in the journey. That lets older replies line up even when
+ * their own turns never stored the prompt.
+ */
+export function catalogPromptsForAnswers(
+  journeyPrompts: string[],
+  groups: AnswerPromptLike[][]
+): string[] {
+  const ordered = journeyPrompts.map((prompt) => prompt.trim()).filter(Boolean);
+  const keys = new Set(ordered.map((prompt) => normalizePromptKey(prompt)));
+  const extras: { text: string; at: string }[] = [];
+
+  for (const answers of groups) {
+    for (const answer of answers) {
+      if (!isExplicitQuestion(answer)) continue;
+      const text = (answer.questionText ?? "").trim();
+      const key = normalizePromptKey(text);
+      if (keys.has(key)) continue;
+      keys.add(key);
+      extras.push({ text, at: answer.createdAt ?? "" });
+    }
+  }
+
+  extras.sort((a, b) => a.at.localeCompare(b.at));
+  return [...ordered, ...extras.map((extra) => extra.text)];
+}
+
+export function attributeMissingAnswerPrompts<T extends AnswerPromptLike>(
   answers: T[],
   prompts: string[]
 ): Array<T & { promptIndex: number | null }> {
@@ -73,7 +115,7 @@ export function attributeMissingAnswerPrompts<T extends { questionText: string |
 
   return answers.map((answer) => {
     const existing = (answer.questionText ?? "").trim();
-    if (existing) {
+    if (isExplicitQuestion(answer)) {
       const fromCursor = ordered.findIndex(
         (prompt, index) => index >= cursor && normalizePromptKey(prompt) === normalizePromptKey(existing)
       );
@@ -90,7 +132,11 @@ export function attributeMissingAnswerPrompts<T extends { questionText: string |
     }
 
     if (cursor >= ordered.length) {
-      return { ...answer, questionText: null, promptIndex: null };
+      return {
+        ...answer,
+        questionText: existing || null,
+        promptIndex: null,
+      };
     }
 
     const prompt = ordered[cursor];
