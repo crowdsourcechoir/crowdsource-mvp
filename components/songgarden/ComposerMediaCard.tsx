@@ -64,6 +64,15 @@ export default function ComposerMediaCard({
           : "border-white/10"
       } ${dragging ? "opacity-60" : ""}`}
     >
+      {onDelete ? (
+        <div className="absolute right-2 top-2 z-10">
+          <ContributionActionsMenu
+            kindLabel={meta.kind}
+            buttonClassName="shadow-[0_8px_24px_-12px_rgba(0,0,0,0.9)]"
+            onDelete={onDelete}
+          />
+        </div>
+      ) : null}
       {!url.trim() || failed ? (
         <p className="flex aspect-[9/16] items-center justify-center border border-red-800/40 bg-red-950/30 px-3 text-center text-xs text-red-300">
           Could not load {photo ? "photo" : "video"} for this response.
@@ -81,6 +90,8 @@ export default function ComposerMediaCard({
         <video
           src={url}
           controls
+          controlsList="nodownload nofullscreen noremoteplayback"
+          disablePictureInPicture
           playsInline
           preload="metadata"
           className="aspect-[9/16] w-full bg-black object-cover"
@@ -123,9 +134,6 @@ export default function ComposerMediaCard({
             >
               Drag
             </button>
-          ) : null}
-          {onDelete ? (
-            <ContributionActionsMenu kindLabel={meta.kind} onDelete={onDelete} />
           ) : null}
         </div>
       </figcaption>

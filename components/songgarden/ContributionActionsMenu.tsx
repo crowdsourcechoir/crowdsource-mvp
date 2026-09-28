@@ -8,6 +8,8 @@ type Props = {
   /** What is being removed — shown in the confirm step. */
   kindLabel: string;
   disabled?: boolean;
+  /** Extra classes on the circular trigger (for overlays on media). */
+  buttonClassName?: string;
   onDelete: () => Promise<void>;
 };
 
@@ -15,7 +17,12 @@ type Props = {
  * Three-dot menu on one Composer contribution.
  * Delete is a second step so a mis-tap does not remove the asset.
  */
-export default function ContributionActionsMenu({ kindLabel, disabled, onDelete }: Props) {
+export default function ContributionActionsMenu({
+  kindLabel,
+  disabled,
+  buttonClassName,
+  onDelete,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -136,7 +143,7 @@ export default function ContributionActionsMenu({ kindLabel, disabled, onDelete 
       <button
         ref={triggerRef}
         type="button"
-        className="csc-btn-circle text-base leading-none text-gray-300"
+        className={`csc-btn-circle bg-black text-base leading-none text-gray-200 ${buttonClassName ?? ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
