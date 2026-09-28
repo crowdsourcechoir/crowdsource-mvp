@@ -27,6 +27,8 @@ export type PairedInterviewAnswer = {
   videoUrl: string | null;
   audioTranscript: string | null;
   videoTranscript: string | null;
+  /** Journey position when the prompt was recovered from the bloom. */
+  promptIndex?: number | null;
 };
 
 function createdAtOf(t: InterviewTurnLike): string {
