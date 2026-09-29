@@ -10,7 +10,7 @@
   "crons": [
     {
       "path": "/api/marketing/cron/send",
-      "schedule": "*/10 * * * *"
+      "schedule": "20 12 * * *"
     },
     {
       "path": "/api/sales/cron/pipeline",

@@ -258,13 +258,18 @@ async function finishSend(sendId: string): Promise<WorkerResult> {
   return { claimed: 0, sent: snapshot.sent, failed: snapshot.failed, remaining: snapshot.remaining };
 }
 
-function scheduleContinuation(sendId: string): void {
+const MAX_CHAIN_HOPS = 40;
+
+function scheduleContinuation(sendId: string, hops: number): void {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return;
-  const job = fetch(`${siteUrl()}/api/marketing/cron/send?sendId=${encodeURIComponent(sendId)}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${secret}` },
-  }).then(() => undefined);
+  if (!secret || hops > MAX_CHAIN_HOPS) return;
+  const job = fetch(
+    `${siteUrl()}/api/marketing/cron/send?sendId=${encodeURIComponent(sendId)}&hops=${hops}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+    }
+  ).then(() => undefined);
   try {
     waitUntil(job);
   } catch {
@@ -272,14 +277,34 @@ function scheduleContinuation(sendId: string): void {
   }
 }
 
+async function reclaimSend(sendId: string): Promise<void> {
+  const db = marketingDb();
+  const now = new Date().toISOString();
+  const { error } = await db
+    .from("email_deliveries")
+    .update({ status: "queued", claim_token: null, claimed_at: null, updated_at: now })
+    .eq("campaign_send_id", sendId)
+    .eq("status", "sending")
+    .is("provider_message_id", null);
+  raiseDb(error);
+  const { error: sentError } = await db
+    .from("email_deliveries")
+    .update({ status: "sent", updated_at: now })
+    .eq("campaign_send_id", sendId)
+    .eq("status", "sending")
+    .not("provider_message_id", "is", null);
+  raiseDb(sentError);
+}
+
 export async function runSendWorker(
   sendId: string,
-  options?: { budgetMs?: number; sender?: MailSender; chain?: boolean }
+  options?: { budgetMs?: number; sender?: MailSender; chain?: boolean; hops?: number }
 ): Promise<WorkerResult> {
   const budgetMs = options?.budgetMs ?? 240_000;
   const sender = options?.sender ?? resendSender();
   const started = Date.now();
   let claimed = 0;
+  await reclaimSend(sendId);
 
   while (Date.now() - started < budgetMs) {
     const send = await loadSend(sendId);
@@ -382,6 +407,6 @@ export async function runSendWorker(
   }
 
   const snapshot = await finishSend(sendId);
-  if (options?.chain && snapshot.remaining > 0) scheduleContinuation(sendId);
+  if (options?.chain && snapshot.remaining > 0) scheduleContinuation(sendId, (options.hops ?? 0) + 1);
   return { ...snapshot, claimed };
 }
