@@ -6,6 +6,9 @@ import { listSendingIds, resetStaleClaims, runSendWorker } from "@/lib/marketing
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const MAX_CHAIN_HOPS = 40;
+
+/** Once-a-day safety net. A live send also POSTs here to continue a queue that did not finish in one invocation. */
 async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -18,11 +21,20 @@ async function handle(request: Request) {
   try {
     const reset = await resetStaleClaims();
     const promoted = await promoteDueSends();
-    const requested = new URL(request.url).searchParams.get("sendId");
+    const url = new URL(request.url);
+    const requested = url.searchParams.get("sendId");
+    const hops = Number(url.searchParams.get("hops") || "0");
     const ids = requested ? [requested] : await listSendingIds();
     const sends = [];
     for (const id of ids) {
-      sends.push({ id, ...(await runSendWorker(id, { budgetMs: 200_000, chain: false })) });
+      sends.push({
+        id,
+        ...(await runSendWorker(id, {
+          budgetMs: 200_000,
+          chain: Number.isFinite(hops) && hops < MAX_CHAIN_HOPS,
+          hops: Number.isFinite(hops) ? hops : 0,
+        })),
+      });
     }
     return NextResponse.json({ reset, promoted, sends });
   } catch (err) {
