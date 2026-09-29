@@ -4,16 +4,12 @@ import { getEmailForPreview } from "@/lib/marketing/db/campaigns";
 import { getMarketingSettings } from "@/lib/marketing/db/settings";
 import { renderMarketingEmail } from "@/lib/marketing/email/render";
 import { resolveEventBlocks } from "@/lib/marketing/email/send";
+import { siteUrl } from "@/lib/site-url";
+import { startListSend } from "@/lib/marketing/send/queue";
+import { sendTestEmail } from "@/lib/marketing/send/test-send";
 
 export const dynamic = "force-dynamic";
-
-const SEND_PAUSED = "Sending moves to the queue in a later phase. Nothing was mailed.";
-
-function baseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
-  return "https://app.crowdsourcechoir.com";
-}
+export const maxDuration = 300;
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   return withMarketingAuth(async () => {
@@ -21,8 +17,24 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const action = typeof body?.action === "string" ? body.action : "preview";
 
-    if (action === "test" || action === "send") {
-      return NextResponse.json({ error: SEND_PAUSED }, { status: 409 });
+    if (action === "test") {
+      const to = typeof body?.to === "string" ? body.to : "";
+      const result = await sendTestEmail({ sendId: id, to });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({ providerMessageId: result.providerMessageId });
+    }
+
+    if (action === "send") {
+      const confirmPhrase = typeof body?.confirmPhrase === "string" ? body.confirmPhrase : "";
+      const result = await startListSend({ sendId: id, confirmPhrase });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json({
+        queued: result.queued,
+        sent: result.sent,
+        failed: result.failed,
+        skipped: result.skipped,
+        remaining: result.remaining,
+      });
     }
 
     if (action !== "preview") {
@@ -32,11 +44,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const email = await getEmailForPreview(id);
     if (!email) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const settings = await getMarketingSettings();
-    const origin = baseUrl();
+    const origin = siteUrl();
     const eventsByBlockId = await resolveEventBlocks(email, origin);
     const rendered = renderMarketingEmail(email, {
       settings,
-      unsubscribeUrl: `${origin}/api/marketing/unsubscribe?email=preview@example.com`,
+      unsubscribeUrl: `${origin}/api/marketing/unsubscribe?preview=test`,
       baseUrl: origin,
       eventsByBlockId,
     });
