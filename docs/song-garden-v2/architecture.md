@@ -430,4 +430,5 @@ for UI + commerce (edition / living merch), and backward-compatible event
 chapters.
 
 **Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)  
-**Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)
+**Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)  
+**Next experience cut (planting, sealed beds, voice, return):** [`felt-garden-plan.md`](./felt-garden-plan.md)
