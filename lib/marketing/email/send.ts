@@ -1,8 +1,8 @@
 import type { MarketingEmail } from "../types";
 import { getEventForMarketingBlock } from "../events-readonly";
+import { startListSend } from "../send/queue";
+import { sendTestEmail } from "../send/test-send";
 import type { EventBlockData } from "./render";
-
-const SEND_PAUSED = "Sending moves to the queue in a later phase. Nothing was mailed.";
 
 export function marketingSendsAllowed(settingsEnabled: boolean): { ok: true } | { ok: false; error: string } {
   if (process.env.MARKETING_SENDS_ENABLED === "false") {
@@ -40,16 +40,23 @@ export async function resolveEventBlocks(
   return out;
 }
 
-export async function sendMarketingTestEmail(_input: {
+export async function sendMarketingTestEmail(input: {
   emailId: string;
   to: string;
-}): Promise<{ ok: false; error: string }> {
-  return { ok: false, error: SEND_PAUSED };
+}): Promise<{ ok: true; providerMessageId: string } | { ok: false; error: string }> {
+  const result = await sendTestEmail({ sendId: input.emailId, to: input.to });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, providerMessageId: result.providerMessageId };
 }
 
-export async function sendMarketingEmailNow(_input: {
+export async function sendMarketingEmailNow(input: {
   emailId: string;
   confirmPhrase: string;
-}): Promise<{ ok: false; error: string }> {
-  return { ok: false, error: SEND_PAUSED };
+}): Promise<
+  | { ok: true; queued: number; sent: number; failed: number; skipped: number; remaining: number }
+  | { ok: false; error: string }
+> {
+  const result = await startListSend({ sendId: input.emailId, confirmPhrase: input.confirmPhrase });
+  if (!result.ok) return { ok: false, error: result.error };
+  return result;
 }

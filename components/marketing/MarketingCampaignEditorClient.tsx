@@ -154,7 +154,10 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Action failed");
       if (action === "test") setMessage(`Test sent (${data.providerMessageId})`);
-      else {
+      else if (typeof data.remaining === "number" && data.remaining > 0) {
+        setMessage(`Mailing ${data.sent} of ${data.queued}. ${data.remaining} still in the queue.`);
+        await load();
+      } else {
         setMessage(`Sent ${data.sent}/${data.queued} (skipped ${data.skipped})`);
         await load();
       }

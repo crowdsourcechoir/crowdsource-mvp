@@ -146,6 +146,7 @@ export function isPublicPath(pathname: string, method: string, searchParams: URL
   if (
     pathname.startsWith("/api/turnstile") ||
     pathname.startsWith("/api/sales/cron") ||
+    pathname.startsWith("/api/marketing/cron") ||
     pathname === "/api/sales/gmail/callback" ||
     pathname.startsWith("/api/marketing/webhooks") ||
     pathname.startsWith("/api/marketing/unsubscribe") ||

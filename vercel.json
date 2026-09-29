@@ -9,6 +9,10 @@
   ],
   "crons": [
     {
+      "path": "/api/marketing/cron/send",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/sales/cron/pipeline",
       "schedule": "5 9 * * *"
     },
