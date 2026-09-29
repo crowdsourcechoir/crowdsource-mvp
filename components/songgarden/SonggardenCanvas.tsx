@@ -18,13 +18,13 @@ import {
 } from "@/lib/composer/selection-export";
 import SelectionActionsMenu from "@/components/songgarden/SelectionActionsMenu";
 import { deleteInterviewContribution } from "@/data/interviewSubmissionsClient";
-import ContributionActionsMenu from "@/components/songgarden/ContributionActionsMenu";
 import {
   isAnonymousPersonName,
   normalizePersonKey,
 } from "@/lib/agent-interview-qa";
 import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
 import ComposerMediaCard from "@/components/songgarden/ComposerMediaCard";
+import ComposerTextTable from "@/components/songgarden/ComposerTextTable";
 
 type ComposerScope = "bloom" | "garden" | "master";
 export type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
@@ -943,34 +943,10 @@ export default function SonggardenCanvas({
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             Text by prompt ({filteredText.length})
           </h2>
-          {filteredText.length === 0 ? (
-            <p className="text-sm text-gray-500">No text responses in this scope.</p>
-          ) : (
-            <div className="space-y-5">
-              {textByPrompt.map((group) => (
-                <div key={group.key} className="space-y-2">
-                  <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
-                  <ul className="space-y-1 border-l border-white/10 pl-3">
-                    {group.answers.map((item) => (
-                      <li key={item.id} className="flex items-start justify-between gap-2 text-sm leading-snug text-gray-200">
-                        <p className="min-w-0">
-                          <span className="text-gray-500">
-                            {item.participantName || "Anonymous"} ·{" "}
-                          </span>
-                          <span className="whitespace-pre-wrap">{item.content}</span>
-                        </p>
-                        <ContributionActionsMenu
-                          kindLabel="text"
-                          disabled={!item.turnId}
-                          onDelete={() => deleteAnswer(item.conversationId, item.turnId)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
+          <ComposerTextTable
+            rows={textByPrompt.flatMap((group) => group.answers)}
+            onDelete={deleteAnswer}
+          />
         </section>
       ) : null}
 

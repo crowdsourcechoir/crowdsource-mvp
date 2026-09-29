@@ -1,3 +1,8 @@
+import {
+  isAnonymousPersonName,
+  normalizePersonKey,
+} from "@/lib/agent-interview-qa";
+
 /**
  * Group Composer interview answers under their prompt for question-first layouts.
  */
@@ -43,6 +48,72 @@ export function isMediaOnlyAnswer(
   row: Pick<ComposerAnswerRow, "content" | "audioUrl" | "videoUrl">
 ): boolean {
   return !row.content?.trim() && Boolean(row.audioUrl || row.videoUrl);
+}
+
+const MEDIA_PLACEHOLDER = /^\((photo|recording)\)$/i;
+
+export function isTypedTextAnswer(content: string | null | undefined): boolean {
+  const text = (content ?? "").trim();
+  return Boolean(text) && !MEDIA_PLACEHOLDER.test(text);
+}
+
+export type PersonTableColumn = {
+  key: string;
+  prompt: string;
+};
+
+export type PersonTableRow = {
+  key: string;
+  name: string;
+  /** Prompt key → answers in that cell. Missing key means the person skipped it. */
+  cells: Record<string, ComposerAnswerRow[]>;
+};
+
+/**
+ * One row per person, one column per question. Column order follows the
+ * first time each question was answered.
+ */
+export function answersToPersonTable(rows: ComposerAnswerRow[]): {
+  columns: PersonTableColumn[];
+  rows: PersonTableRow[];
+} {
+  const typed = rows.filter((row) => isTypedTextAnswer(row.content));
+  const grouped = groupAnswersByPrompt(typed);
+  const columns: PersonTableColumn[] = grouped.map((group) => ({
+    key: group.key,
+    prompt: group.prompt,
+  }));
+
+  const byPerson = new Map<string, PersonTableRow & { firstAt: string }>();
+  for (const row of typed) {
+    const anonymous = isAnonymousPersonName(row.participantName);
+    const personKey = anonymous
+      ? `anon:${row.conversationId || row.id}`
+      : `name:${normalizePersonKey(row.participantName)}`;
+    let person = byPerson.get(personKey);
+    if (!person) {
+      person = {
+        key: personKey,
+        name: anonymous ? "Anonymous" : row.participantName.trim() || "Anonymous",
+        cells: {},
+        firstAt: row.createdAt,
+      };
+      byPerson.set(personKey, person);
+    }
+    if (row.createdAt < person.firstAt) person.firstAt = row.createdAt;
+    const promptKey = normalizePromptKey(row.questionText);
+    const list = person.cells[promptKey] ?? [];
+    list.push(row);
+    person.cells[promptKey] = list;
+  }
+
+  const people = Array.from(byPerson.values()).sort((a, b) =>
+    a.firstAt.localeCompare(b.firstAt)
+  );
+  return {
+    columns,
+    rows: people.map(({ firstAt: _firstAt, ...person }) => person),
+  };
 }
 
 export function groupAnswersByPrompt(rows: ComposerAnswerRow[]): PromptAnswerGroup[] {

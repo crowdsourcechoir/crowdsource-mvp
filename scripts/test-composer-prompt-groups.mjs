@@ -15,7 +15,9 @@ async function main() {
     "lib/agent-interview-qa.ts"
   );
   const { contributionQuestionPrompts } = await load("lib/songgarden/journey-steps.ts");
-  const { groupAnswersByPrompt } = await load("lib/composer/group-answers-by-prompt.ts");
+  const { groupAnswersByPrompt, answersToPersonTable } = await load(
+    "lib/composer/group-answers-by-prompt.ts"
+  );
 
   const prompts = contributionQuestionPrompts([
     { id: "n", kind: "name", prompt: "What should we call you?" },
@@ -81,6 +83,51 @@ async function main() {
     groups[0].answers.map((a) => a.content),
     ["Earlier", "Also early"]
   );
+
+  const table = answersToPersonTable([
+    {
+      id: "1",
+      participantName: "Brittany",
+      questionText: "Place in nature you feel most renewed",
+      content: "Near the ocean",
+      createdAt: "2026-03-01T00:00:00Z",
+      conversationId: "c1",
+    },
+    {
+      id: "2",
+      participantName: "Brittany",
+      questionText: "What do you feel in a circle of friends?",
+      content: "Joy",
+      createdAt: "2026-03-01T00:00:01Z",
+      conversationId: "c1",
+    },
+    {
+      id: "3",
+      participantName: "Jess",
+      questionText: "Place in nature you feel most renewed",
+      content: "On a mountaintop!",
+      createdAt: "2026-03-01T00:00:02Z",
+      conversationId: "c2",
+    },
+    {
+      id: "4",
+      participantName: "Mary",
+      questionText: "Place in nature you feel most renewed",
+      content: "(photo)",
+      createdAt: "2026-03-01T00:00:03Z",
+      conversationId: "c3",
+    },
+  ]);
+  assert.deepEqual(
+    table.columns.map((column) => column.prompt),
+    ["Place in nature you feel most renewed", "What do you feel in a circle of friends?"]
+  );
+  assert.deepEqual(
+    table.rows.map((row) => row.name),
+    ["Brittany", "Jess"]
+  );
+  assert.equal(table.rows[0].cells[table.columns[1].key][0].content, "Joy");
+  assert.equal(table.rows[1].cells[table.columns[1].key], undefined);
 
   console.log("ok — composer prompt groups");
 }
