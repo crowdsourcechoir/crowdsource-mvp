@@ -431,4 +431,4 @@ chapters.
 
 **Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)  
 **Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)  
-**Next experience cut (one question: “What’s your chant?”):** [`felt-garden-plan.md`](./felt-garden-plan.md)
+**Generative living world (strategy, not a build):** [`generative-living-world.md`](./generative-living-world.md)

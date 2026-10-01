@@ -1,6 +1,6 @@
 # One chant — a plan for a felt garden
 
-Status: **proposal** (no build in this pass)
+Status: **set aside.** The generative-world strategy in [`generative-living-world.md`](./generative-living-world.md) replaces this as the next question. This note stays as a record of the one-chant visit, not as the roadmap.
 Fits under: Song Garden V2 (`WorldJourney`), persistent garden (`/g/[slug]`), Roots loop
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md), `docs/octo-living-system-workspace.md`
 
