@@ -1,340 +1,520 @@
 # Song Garden — generative living world
 
-Status: **strategy** (no build)
-Replaces, as the next question: [`felt-garden-plan.md`](./felt-garden-plan.md)
+Status: **strategy, sharpened** (no build)
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
+Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
-The question is not how to add generative plants to Song Garden.
+The question is unchanged. What rules let a community grow a world whose history is visible, whose individual contributions stay meaningful, and whose form none of us, including its designers, completely knows in advance?
 
-The question is what rules let a community grow a digital world that none of us, including its designers, completely knows in advance.
+We design the grammar and the laws. We do not design the finished garden.
+
+The engine is unchanged:
+
+**ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
+
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. It does not start a build.
+
+---
+
+## What changed in this pass
+
+The previous strategy called the shared state a climate. That word pulls the picture toward weather. The state is **garden conditions**: a short vector of what previous participation has done to the world. Some of it may look like weather. Some of it is spacing, bend, or pulse. The smallest vector proposed here has three variables, not a meteorological set, and not the ten qualities in the brief.
+
+Structural identity stays frozen at germination. Living behavior is a separate function of current conditions, computed when drawing, and left neutral in the first experiments. The architecture has a place for it so we do not paint ourselves into a statue.
+
+“A stranger can match sounds to bodies” is demoted to a diagnostic. The success criterion is felt causality: the maker senses that the organism came from the gesture, and cannot reduce the rule to one slider.
+
+The two-order test becomes a first-class lab view, World A beside World B, with the same genome highlighted in both. Experiments A–C are specified tightly enough to implement. Audio output, AI, compost, and the public visit stay out of that build. The log is shaped so they can arrive as new event types without a second architecture.
+
+One challenge to the previous sequence: **the memory test does not need a microphone.** As soon as the grammar can draw, World A / World B can run on synthetic genomes. Voice is a separate risk. Blocking C on B would confuse a failed mapping with a failed memory.
 
 ---
 
 ## What the product is today
 
-Song Garden V2 is a short guided visit on top of a designed picture.
+Song Garden V2 is a short visit over a designed picture. `WorldJourney` on `/e/[slug]` sits on `WorldStage`, which crossfades authored storyboard plates as one energy number rises. Contributions are dots. Other people are a caption. `applyMutation` adds a fixed increment. The same contributions in a different order produce the same energy, the same layers, and the same landmarks.
 
-The public visit is `WorldJourney` on `/e/[slug]`. A persistent `WorldStage` sits behind a card. The stage crossfades authored storyboard plates (still or Runway video) from dormant toward full bloom as energy rises. On top of that, Framer Motion draws a few dozen particles, a glow, and one DOM dot per contribution, placed on a sunflower spiral. A one-second sparkle marks a successful submit. Other people appear as a line of text.
+The microphone analyser records loudness and discards everything else. There is no canvas ecology and no synthesis engine. The stack is Next.js 14, React 18, and Framer Motion. `openai` and Runway already exist in the repo. Runway makes pictures of gardens. It is not a tool for this work.
 
-Shared persistence, where a garden is linked, is `WorldState`: one energy number, a layer intensity per contribution kind, a capped list of nodes, and landmarks that unlock when a threshold is crossed. `applyMutation` adds a fixed increment. The same hundred contributions in a different order produce the same energy, the same layers, and the same landmarks. Order is not a force. The picture at the end is chosen in advance.
-
-Audio capture exists (`quick-record.ts`). The analyser is used for a loudness meter. Nothing about pitch, brightness, rhythm, or silence is kept. There is no WebGL, no botanical grammar, no synthesis engine. The stack is Next.js 14, React 18, and Framer Motion. `openai` and a Runway client are already in the repo for other jobs. Runway is how the current world gets its bloom plates. That pipeline makes pictures of gardens. It is the opposite of this brief.
-
-The production visit should stay where it is while this is learned. Do not rebuild `WorldJourney` in order to run the experiments below.
+`/e/[slug]` and `/g/[slug]` stay as they are. The lab is a separate route when it exists. This document does not create it.
 
 ---
 
-## Recommendation, in one page
+## 1. Garden conditions
 
-Build a **climate with germination**, and keep it in a lab until it earns a way into the product.
+A condition is a slow number that previous events have pushed, that later germination can read, and that a person can eventually feel. If a number does none of those, it is not in the vector.
 
-Each contribution is a force appended to an ordered log.
+The brief listed energy, density, openness, resonance, harmonic tension, rhythmic activity, growth pressure, interconnection, luminosity, and movement. Several of those are the same work under two names.
 
-- The force carries a **genome**: a small set of numbers measured from the gesture.
-- At the moment it arrives, it **germinates**. The organism’s body is fixed by the genome and by the climate at that instant, then frozen. A tree remembers the wind it grew in. Later weather does not redraw it.
-- The force also **deposits** a residue into the climate: a slight change in wind, moisture, pulse, harmonic dust, density. The deposit saturates and decays, so the first voice matters and does not own the sky forever.
-- The next person germinates inside whatever climate the log has become.
+| Candidate | Verdict |
+| --- | --- |
+| Energy | Loudness already lives on the genome. A shared “energy” copies it into the sky. |
+| Openness | The inverse of crowding, unless silence does something crowding does not. It does not, yet. |
+| Luminosity | Brightness already lives on the genome as stroke fineness. A shared light meter is easy to see and hard to justify as history. |
+| Movement and rhythmic activity | One job: how activated the garden is. Keep one. |
+| Resonance and interconnection | Readouts of who is near whom. Storing them as globals makes every relationship the same. Compute them later from positions. Do not store them now. |
+| Growth pressure | A derived push on the next body. It can be computed from density if we need it. |
+| Density | Real. How occupied the ground has become. |
+| Harmonic tension | Real, if it means instability left by previous gestures, not a mood. |
+| Rhythmic activity | Real, if it means how much articulation has accumulated. |
 
-We author the grammar and the laws of the climate. We do not author the garden. Two communities, or the same community in a different order, grow different worlds. The same gesture, replayed against the same climate and the same rules version, grows the same organism.
+**Initial condition vector**
 
-The organism is drawn with a **2D parametric grammar** on one canvas. Stems, curvature, branching, bloom. One palette, one stroke family, the existing dark ground and lime light. Not a library of flowers. Not a shader soup with nowhere to point. Not a Three.js forest.
+```
+conditions = {
+  density,  // 0..1  how occupied the ground is
+  pulse,    // 0..1  how much articulation has accumulated
+  tension   // 0..1  how much instability has accumulated
+}
+```
 
-Before someone contributes, they see climate and silhouettes. Movement, pulse, light, new growth occurring. They do not receive the phrase, the melody, or the raw recording. After they contribute, perception deepens: their organism is sharp, nearby traces gain detail. That depth is a way of seeing the same log. Raw media still stays on the server until this device has a contribution, so the network tab cannot skip the seal.
+Three is the smallest set that can make two histories differ in *kind*, not only in amount. Density changes spacing and size. Pulse changes the motion signature. Tension changes bend. One variable would still make order matter, and the worlds would feel like the same garden turned up. The lab should be able to mute any of the three to zero. If a session cannot feel one of them, it leaves the vector. Four was considered, with luminosity as the fourth. It was cut because the genome already carries brightness onto the stroke. Collective brightness, later, can be the mean of living genomes. That is a readout, not a state.
 
-The 10–20 second visit is: arrive in a moving climate, give one short sound, watch it germinate. Leaving then is a complete participation. Staying, listening, and returning are how the same log gets deeper. A finished song, later, is not a new scene. It is another event in the log: a season.
+Origin is **zero**, not a designed mild weather. The first organism meets an unwritten garden and expresses its genome alone. That requirement binds the grammar: a body born at zero must already look like it belongs to Song Garden.
 
-AI does not draw, and it does not sit on the path of that first visit. Acoustics are enough to germinate a voice. A model becomes useful only when the contribution is language and the sound alone would miss the meaning. Even then it returns a few numbers. The grammar still decides the form.
-
-The first thing to prove is not the microphone. It is the grammar. If eight numbers cannot draw thirty related, distinct organisms, no audio pipeline will save it. The thing that proves the actual idea is the next test: the same gestures, two orders, two climates, and a person who can still find the organism that is theirs.
+Deposits, saturation, leak, and effects are specified in §8. Local conditions are not in A–C. The fold function takes a condition vector, so a later blend of global and local can be passed in without changing germination.
 
 ---
 
-## 1. Conceptual model
+## 2. Structural identity and living behavior
 
-The computational metaphor is a **dynamical climate plus a birth-locked organism**.
+An organism has two layers.
 
-A procedural garden is the right *picture*. It is the wrong *engine* if “procedural garden” means an L-system that tries to look like botany, or a bar that fills from empty to bloom. Botany is a drawing grammar. The world is a short list of slow variables with memory.
+**Structure** is fixed at germination. It is a pure function of genome, birth conditions, and the rules version in force for that event.
 
-Why this and not the other famous systems:
+- Branching topology. In the first grammar this is: one rooted body, and either no secondary arm or one. The choice is genomic. Conditions do not add or remove it.
+- Proportions and the characteristic curve.
+- Stroke weight and fineness.
+- The intrinsic motion signature: period, phase, and the shape of the sway. These are parameters, not a frame of animation.
 
-| System | What it is good for here | Why it is not the whole world |
+**Behavior** is evaluated at draw time. It is not written back into the log as the body.
+
+- How far the current sway swings.
+- A bias in orientation.
+- Luminosity breathing.
+- A tip opening or closing.
+- Whether it is sonically active.
+- Secondary growth laid on top of the frozen topology, never instead of it.
+- A lean toward or away from a neighbor.
+
+A–C draws structure plus the intrinsic sway at a fixed amplitude, so the field is not a still life. Every other behavior returns a neutral value. The function exists:
+
+```
+behavior = live(structure, currentConditions, neighbors, time)
+```
+
+`neighbors` may be empty. `currentConditions` may be ignored. Later work fills the function in. Secondary growth, when it exists, is stored as marks with the log index that grew them, so the birth topology can still be seen underneath.
+
+The failure this split prevents: a later condition redraws history, and contribution #4 in World B is no longer the gesture from World A. The failure it must not create: a garden of corpses. Sway from the intrinsic signature is the minimum sign of life. Relationship and secondary growth stay available and unbuilt.
+
+There is an experimental law, default off, that allows birth tension to change branch count. It exists so the identity boundary can be found. It is not the default law. If it is the only way World A and World B look different, the grammar’s geometric range is too small, and the grammar should change before the topology is given to the collective.
+
+---
+
+## 3. Felt causality
+
+A decoded mapping teaches the trick. High pitch becomes height, and the garden becomes a meter. Felt causality is the maker’s sense that the body came from the gesture they just made, without a one-line rule.
+
+The interaction that supports that:
+
+- No structural channel is a single acoustic axis. Size comes from force and sustain together. Bend comes from motion, pushed by birth tension. A secondary arm appears only when articulation and motion are both high. Fineness comes from brightness, and a very forceful gesture thickens the stroke enough to partially hide that fineness.
+- Extremes compress. A shout is not a whisper scaled up. Past a knee, more force changes weight and resistance more than it changes length.
+- Unpitched gestures still have motion, through spectral flux, so a clap is not assigned a random pitch that moves the body for no reason the ear can share.
+- Register is captured and stored. It does not receive its own structural axis. The tall plant for the high note is the mapping this pass refuses. Register is kept because a later sound interpreter needs it, and because the lab should show it. If makers consistently feel pitch is missing, the lab can add a bounded, nonlinear influence. That is an experiment, not a starting rule.
+
+**How to test**
+
+1. **Maker recognition.** Each person records three gestures that feel different to them. They are shown three bodies, unlabeled, and asked which is which. Chance is one in three. Afterward they are asked what gave it away. Matching well *and* answering with a single axis (“the high one is the tall one”) is a failed mapping. Matching well and answering with character (“the hesitant one curls,” “the steady one is the simple line”) is success.
+2. **Decodability audit.** A stranger who did not record is asked to rank the same bodies by loudness, by pitch, and by length. High accuracy on any one ranking means that axis is too literal. We want maker recognition above the decodability scores.
+3. **Pair holds.** Two takes with similar force and different motion should differ. Two takes with similar motion and different force should differ and still feel related. If either pair collapses, the genome is smaller than it looks.
+4. **Linear control.** The lab can switch to a one-to-one preset (force to scale, centroid to fineness, onsets to marks, pitch to height). That preset is a foil. If makers prefer it, the nonlinear model is decoration and should be cut. The foil exists so we can lose.
+
+The stranger-match test remains available as instrumentation. It is not the gate.
+
+---
+
+## 4. The laboratory
+
+The lab is how the laws get discovered. It is a single local surface. No accounts, no production route, no model, no sync. The log lives in memory. A reload may restore it from local storage so a session can continue. Replay does not depend on storage.
+
+**Layout**
+
+- A viewport. One world, or World A and World B.
+- A genome inspector.
+- A conditions inspector.
+- A grammar and laws inspector.
+- A history strip.
+
+**Genome panel**
+
+- The six structural values and the latent measurements, as raw, normalized, and quantized.
+- Sliders that write a synthetic genome without a microphone.
+- The derived values: resistance, whether a secondary arm is present, which source supplied motion (pitch span or spectral flux).
+- The normalization constants. They are absolute. They are never fit to the current session.
+
+**Conditions panel**
+
+- The vector at the selected log index, and the birth vector of the selected organism.
+- The deposit of the selected event, broken out by variable.
+- Sliders for saturation gain, per-variable leak, coupling, per-channel modulation limits, resistance strength, and the branch-count toggle.
+- A mute per condition.
+- The trajectory of the three variables across the log, for the world in view.
+
+**Grammar panel**
+
+- Growth parameters the renderer actually reads: length, width, taper, curvature scale, arm length, mark size.
+- Visual constraints: ground color, stroke color, alpha range, maximum stroke width. Palette edits are deliberate. They are not a second theme system.
+- Motion: sway amplitude, and whether idle sway is on.
+- A determinism control. It runs `express` twice on the selected organism and compares a hash of the control points. A mismatch is a bug, not a variety.
+
+**History panel**
+
+- The ordered log. Select, drag to reorder, delete, duplicate, insert a synthetic event at an index.
+- Replay from the start. Reset to empty.
+- Scrub the index and watch germination freeze at that prefix of the log.
+- Compare mode, below.
+
+Changing a law slider recomputes a **draft**. The draft is labeled as hypothetical. It does not rewrite stored events. Committing a new rules version is a season boundary, specified in §11, and is not required to use the lab. During A–C every run is a draft under one version, and the functions still take the version so a later season is not a rewrite of the call.
+
+---
+
+## 5. World A / World B
+
+Compare mode is the instrument for the central tension.
+
+Input: twelve genomes, identical across worlds. World A plays them in order `1..12`. World B plays a fixed interleaved permutation:
+
+`8, 2, 11, 1, 5, 12, 3, 7, 9, 4, 6, 10`
+
+Reverse order is available and is too weak to be the proof. It often looks like one gradient, flipped. The interleaved order is the published test. The lab can also accept a custom permutation. The published one is what we compare across sessions.
+
+The viewport shows both worlds, or switches with the keyboard, and highlights one genome id in both. Contribution #4 is selected by default in screenshots and notes so the identity question has a stable subject.
+
+Coupling, limits, and mutes rebuild both worlds from the same genomes immediately.
+
+**The two questions, scored separately**
+
+History is visible if a person who did not watch the replay can tell the worlds apart, and can say something about the difference that matches a real divergence (who is crowded, who is bent, which ground feels more activated). A difference that only a chart shows is a failed proof.
+
+Identity survives if that person, shown genome #4 alone in each world, recognizes them as the same gesture under different pressures. A harder form: highlighted in the field, they can find its partner.
+
+**The useful region**
+
+Too little coupling: the worlds are a gallery of matching stickers. Too much: #4 cannot be found, because the birth conditions replaced the gesture.
+
+Instrumentation, not the verdict: for each genome, distance between its two expressions, against distance to other genomes in the same world. The region worth keeping is where same-genome cross-world distance stays below typical different-genome distance in one world, and people still tell the worlds apart. If the distances say identity survived and people cannot find #4, the channels that moved are not visible. That is a grammar failure, not a reason to raise coupling.
+
+A short form, four genomes, exists for debugging the fold. The proof uses twelve.
+
+---
+
+## 6. Experiments A–C
+
+Global exclusions for all three: no public route, no AI, no Runway, no image generation, no audio output, no compost, no neighbor forces, no accounts, no sync, no edits to `WorldJourney` or `WorldState`.
+
+### A — Grammar bench
+
+**Hypothesis.** One drawing grammar, driven by the six-axis genome and the three conditions, can produce bodies that are one family, are not copies, and read as a shared ground rather than a set of logos. A body born at zero conditions already belongs to that family.
+
+**Minimum functionality.** The lab viewport, synthetic genomes, the laws panel, determinism hash, and a field of up to twelve. No microphone.
+
+**Inputs.** A fixed set of thirty genomes from a Halton sequence in the six axes, plus live sliders. Condition presets: all zero, and a few hand-set vectors. The twelve-genome published set used later by C, drawn at zero coupling so the grammar is seen alone.
+
+**Outputs.** A canvas of rooted ribbons. A hash of control points per organism. Frame time on a phone-class laptop profile.
+
+**Adjustable parameters.** Every grammar and law slider. Coupling may be previewed. The official A reading is taken at coupling 0 and at one mid coupling, so we see the grammar before the collective is asked to save it.
+
+**Instrumentation.** The thirty-genome contact sheet. A field of twelve. The determinism hash. A frame-time readout.
+
+**Evaluation.** Three people who know the product, looking at the contact sheet and the field, answer: one family or many sketches; can you tell these apart; does the field feel like one place; does the zero-condition body already look like Song Garden. Plus the hash, plus frame time.
+
+**Success.** The sheet is one family and visibly varied. The field of twelve reads as one ground. Zero-condition bodies are acceptable, not a special-case illustration. Replay hash matches. Drawing stays smooth with twelve bodies.
+
+**Failure.** One shape. Unrelated sketches. Twelve logos on a black page. The zero-condition body only looks right after conditions are faked upward. The hash flips. The phone profile stutters on twelve.
+
+**What we learn.** Whether there is a visual language worth mapping sound onto. If the field reads as logos, the next change is the ground and the stroke, not an L-system.
+
+**Not built.** Microphone, analysis, World A/B as the official test (the toggle may exist), audio, behavior beyond idle sway.
+
+### B — Voice → genome
+
+**Hypothesis.** The six-axis genome, analyzed once at capture, gives makers felt causality without giving strangers a single-axis decoder.
+
+**Minimum functionality.** Record up to eight seconds. Resample to 16 kHz. Compute raw, normalized, and quantized values. Show them beside the resulting body in the lab. Store the quantized genome. Replay the body from the genome with no audio present.
+
+**Inputs.** Gestures prompted by character, not by our axes: hold a tone, whisper, clap a rhythm, slide the pitch, leave a long silence in the middle, shout, hum a short leap. At least three people, about six takes each. The same take imported twice.
+
+**Outputs.** A portable genome. A body at zero conditions, and a body at the current lab conditions. The raw measurements for inspection.
+
+**Adjustable parameters.** Normalization bounds. Quantization step (default 64). The knee on force. The threshold that chooses pitch-span versus spectral flux. The linear-control foil switch.
+
+**Instrumentation.** Genome bytes. Maker-recognition score. The words they use. Decodability rankings. The duplicate-import byte check. A plot of the six axes for the session, to see which axes never move. An axis that never moves is not expressive range. It is a dead wire.
+
+**Evaluation.** The protocol in §3. Run it at coupling 0 first, so the collective does not get credit for the gesture.
+
+**Success.** Maker match above chance. Their explanations are about character, not one acoustic slider. Strangers rank a single axis poorly relative to that. The same take yields the same bytes. At least five of the six axes actually vary across the prompted gestures. If `motion` never leaves zero, the pitch gate is wrong.
+
+**Failure.** Makers match by naming one axis. Makers cannot match and strangers cannot either (the body is unrelated). Duplicate imports differ. Most axes sit in a clump. The linear foil wins the preference and the nonlinear cross-terms should be removed rather than tuned forever.
+
+**What we learn.** Whether this genome is worth depositing into a shared history. Which latent pitch values are stable enough to keep for later sound.
+
+**Not built.** Condition deposits as the subject of the test, the drone, semantic interpretation, the public recorder.
+
+### C — The log remembers
+
+**Hypothesis.** Two orders of the same twelve genomes produce worlds a person can tell apart, while a highlighted genome remains recognizable across them, inside some middle range of coupling.
+
+**Minimum functionality.** Compare mode. The published permutation. A coupling sweep. Selection linked across worlds. Fold from an empty origin. Synthetic genomes are enough. Genomes from B are better when they exist, and they are not a gate.
+
+**Inputs.** The published twelve. Orders A and B. Coupling at 0, 0.25, 0.5, 0.75, and 1. Branch-count toggle off for the official sweep, and one extra pass at 0.5 with it on, recorded as a boundary probe.
+
+**Outputs.** Two worlds per coupling. Condition trajectories. Same-genome distances. Notes from the viewers.
+
+**Adjustable parameters.** Coupling, per-channel limits, resistance, leaks (official sweep uses leak 0), condition mutes, the branch toggle.
+
+**Instrumentation.** Trajectories overlaid for A and B. A distance table. A short viewer script: “Are these the same community?” and “Find this one in the other world.”
+
+**Evaluation.** At least five viewers who have not watched the fold. Identity and history are scored separately, at each coupling. The useful region is wherever both scores are acceptable. Zero coupling must fail the history question. Full coupling is allowed to fail identity. If no coupling passes both, the modulation limits or the grammar’s visible channels are wrong. Do not declare the idea dead until the extra branch-toggle pass has been seen and set aside, and until one mute-combination (density only, tension only) has been looked at. Sometimes one channel is doing all the visible work and the other two are mud.
+
+**Success.** A nonempty band of coupling where viewers tell the worlds apart and find #4. At coupling 0 they do not reliably tell the worlds apart. The final condition vectors are not identical (the diminishing deposit is path-dependent). The birth vector of #4 differs across worlds.
+
+**Failure.** No coupling is readable as both history and identity. The worlds differ only in the trajectory chart. Coupling 0 already looks like different worlds (the drawing is unstable). The same genome’s topology changes with the toggle off (a bug in `express`). Viewers find #4 only because a label is printed on it. Labels used in debugging must be hideable for the evaluation.
+
+**What we learn.** Whether a history can be visible at a coupling that leaves a person intact. Which condition is pulling its weight. Whether the proof can be felt.
+
+**Not built.** A second device, presence-without-content as a product, audio, leak across real time, compost, any production opt-in.
+
+---
+
+## 7. Initial genome
+
+The portable record is computed once, on the capturing device, after resampling to 16 kHz. Other devices replay the record. They do not re-analyze audio.
+
+Pipeline for every axis: **raw measurement → normalize with fixed bounds → quantize to 64 steps.** Session min/max normalization is forbidden. It would make the same gesture a different genome in a different room.
+
+Quantized value = `round(clamp(normalized, 0, 1) * 63) / 63`.
+
+Analysis constants, part of the rules version: 16 kHz, frame 1024, hop 256, capture window T = 8 s. Pitch search from 80 Hz to 800 Hz. Confidence comes from the periodicity of the estimator. The exact estimator can be autocorrelation. It is part of the version. Changing it is a new version, not a quiet fix.
+
+**Structural axes**
+
+| Axis | Raw | Normalization | Why it earns a place |
+| --- | --- | --- | --- |
+| `force` | RMS of the take | −50 dBFS .. −8 dBFS, through a log curve | A whisper and a shout are different gestures. Without weight, the body has no mass. |
+| `sustain` | Longest contiguous span above −40 dBFS, divided by T | Already 0..1 | A blip and a held phrase differ. This is length of the gesture, not average loudness. |
+| `stillness` | Fraction of frames below −45 dBFS | Already 0..1 | Space inside the take. It is not `1 - sustain`. Eight short claps and one short tone can share a sustain and differ here. |
+| `brightness` | Mean spectral centroid while sounding | 200 Hz .. 4000 Hz, log | Tone color. A bright whisper and a dark hum can share a force. |
+| `articulation` | Onsets per second while the window is open | 0 .. 8 /s, soft-clipped | Rhythm against smoothness. This is what later deposits into pulse. |
+| `motion` | If pitch confidence ≥ 0.45, pitch range in semitones. Otherwise mean spectral flux of sounding frames. | 0 .. 24 semitones, or a fixed flux bound set in the version | Monotone versus leap, and a clap still has motion. One axis, two sources, so unpitched sound is not given a fake melody. |
+
+**Latent measurements, stored, not structural**
+
+| Field | Role |
+| --- | --- |
+| `pitchConfidence` | Makes the motion source deterministic on replay. |
+| `register` | Median pitch, log-normalized from C2 to C6. `0.5` when confidence is below the gate. Kept for a future sound interpreter. No structural channel. |
+| `motionSource` | `pitch` or `flux`, so the lab can see which path fired. |
+
+Force and sustain also derive **resistance** at expression time: `0.15 + 0.85 * force * sustain`. A loud held gesture is harder for the garden to push around. A quiet fragment is more shaped by where it landed. Resistance is not a seventh axis. It is the genome’s stubbornness, and it is how a tendency survives an environment.
+
+If the axis plot in B shows `stillness` and `sustain` moving as twins on real takes, drop stillness before adding anything new. The smallest genome is the one this table becomes after dead wires are removed, not the one that lists every measurable.
+
+---
+
+## 8. Initial condition vector
+
+Deposits use the quantized structural genome. Gain `g` defaults to `0.08` and is a law.
+
+Because the update is `c ← c + deposit * (1 - c)`, a large deposit applied early occupies more of the remaining headroom than the same deposit applied late. The final vector depends on order. Birth snapshots depend on order even more.
+
+Leak is `c ← c * (1 - leak)` after each event. Official C runs use `leak = 0`. The parameter exists so regeneration and long time can fade a condition later without a new architecture.
+
+| Variable | What deposits | Saturation | Leak in A–C | Effect on the next organism | Visible as | Later sound, not built |
+| --- | --- | --- | --- | --- | --- | --- |
+| `density` | `g * (0.35 + 0.65 * sustain * (1 - stillness)) * (0.5 + 0.5 * force)` | Diminishing, as above | 0 | Pushes scale down and spacing tighter, within the channel limit | Bodies sit closer and slightly smaller. The ground itself does not fog over. | How thick the air is allowed to get |
+| `pulse` | `g * articulation` | Diminishing | 0 | Pushes the frozen motion period shorter, within limit | Germination and idle sway carry the period baked at birth | The tempo of a drone |
+| `tension` | `g * motion * (1 + 0.5 * pulse)` | Diminishing. The `pulse` factor makes this deposit path-dependent in a second way | 0 | Pushes curvature up, within limit. Does not change branch count unless the experimental toggle is on | Bend and asymmetry of a topology the genome already chose | How far a residue sits from the center of the scale |
+
+Nothing deposits into a variable that does not change a later body. Pulse is allowed to change a frozen motion parameter rather than live animation so that a body keeps the activation of the garden that received it. Live amplitude, later, can still answer the current pulse without rewriting that signature.
+
+Spacing is placement at birth: a hashed base position, then a minimum separation that shrinks as birth density rises. The resolved position is written on the event so a replay does not need to rediscover it by simulation.
+
+---
+
+## 9. How genome and conditions interact
+
+The organism is not the sum of a genome and a condition vector.
+
+Development has four steps.
+
+**1. Tendencies, from the genome alone.** These are the body’s proposals: scale, curvature, asymmetry, stroke fineness, motion period, and the boolean secondary arm. The arm is a threshold on `articulation * motion`, genomic only.
+
+**2. Resistance, from the genome.** `effectiveCoupling = coupling * (1 - resistance)`. Quiet fragments listen to the garden. Held force resists it.
+
+**3. Bounded push, from birth conditions.** Conditions start at zero, and zero push means zero change. The first body is the pure tendency.
+
+```
+delta = tanh(2.2 * condition)
+expressed = clamp(tendency + effectiveCoupling * limit * delta, floor, ceiling)
+```
+
+Each condition is allowed to push only the channels assigned to it.
+
+| Condition | May push | May not push |
 | --- | --- | --- |
-| Parametric / L-system grammar | A family of organisms from a handful of numbers. Artistic control lives in the rules. | A classic plant L-system looks like a textbook, and it has no memory of other people. |
-| Particles | Wind, mist, pulse, the feeling that the air is occupied. | A particle is hard to claim as “mine.” |
-| Agents | Neighbors, clustering, a body that keeps a pitch. | Hundreds of simulated bodies will melt a phone and still look like a toy if the grammar is weak. |
-| Reaction-diffusion, cellular automata | Real emergence, strong path dependence. | Personal authorship disappears into a texture. |
-| Shaders | Atmosphere, light, cheap beauty on a phone. | A fullscreen shader has no individual to witness. |
-| Physics (wind on a tree) | The metaphor in the brief, taken literally. | A real structural simulation is expensive, brittle, and easy to make ugly. The metaphor does not require the physics. |
-| Graph | Relationships among organisms, later. | A graph with nothing to see is a database. |
+| density | scale, spacing | topology, fineness, period |
+| pulse | motion period | curvature, topology |
+| tension | curvature, asymmetry | scale, topology, branch count |
 
-The hybrid is small on purpose.
+Limits are laws. Starting points, at coupling 1 and zero resistance: scale ±12 percent, period ±20 percent, curvature up to about ±35 percent of the remaining headroom. These are wide enough to see and narrow enough that a body is not replaced. The lab can open them. Opening them until identity dies is part of C, not a bug.
 
-- **Climate.** About eight slow numbers, plus a few spatial regions only after a single global climate has been shown to matter. Wind, moisture, pulse, harmonic residue, brightness tendency, density, tension, season. Each has a ceiling and a leak, so the system can approach a character without arriving at a designed final frame.
-- **Organism.** A genome of about eight numbers. A pure function draws it: `phenotype = grammar(genome, climateAtBirth, rulesVersion)`. The drawing is curves. Branching can be L-system-like. The species is the grammar, and there is one species.
-- **Deposit.** Germination also writes a small delta into the climate. The next germination reads the new climate.
-- **Picture.** One canvas. Climate in the ground and the air. Organisms on top. A bounded number stay fully drawn. Older ones compact into climate, the way the current node list already compacts, except the compacted mass has to change the air, not vanish into a counter.
+The push is one-directional: density crowds, it does not enlarge; tension bends further, it does not straighten a curly genome back to a stick. A genome that is already bent stays bent in a calm garden. That is the tendency surviving. A centered pull, where low conditions drag bodies back toward a neutral ideal, is a lab toggle defaulting off. It was rejected as the starting law because it makes the empty garden a designed average.
 
-That is enough for a contribution to create a body and to change the conditions of every body that follows. It is not enough to run an ecosystem simulation, and it should not try.
+**4. Realize.** The grammar turns expressed numbers into control points. Topology is decided before this step. Realize does not get to grow an extra arm because the garden is tense.
+
+There is no local field in A–C. `express(genome, birthConditions, laws)` does not know why the vector has the values it has. A later local sample can be blended into the vector before the call. Germination does not change.
+
+Thresholds are not in the default laws. They are easy to add and hard to feel. The branch toggle is the one threshold under test, and it is off.
 
 ---
 
-## 2. Emergence, control, determinism, persistence
+## 10. Grammar candidates
 
-Genuine emergence here means: the designers can state the laws, and still cannot draw tomorrow’s garden without replaying the log.
+All three are 2D, deterministic, and drawable as a growing stroke on one canvas. None of them is a species library.
 
-Control lives in four places, and only there.
+### Rooted ribbon
 
-1. **The grammar.** Stroke, palette, the range of legal forms. This is how it stays Song Garden and stays beautiful. A lime curve on a black ground can be strange. A random palette cannot be saved by a good theory.
-2. **The laws of climate.** What a deposit is allowed to change, how fast it saturates, how fast it leaks.
-3. **Coupling.** How hard the birth climate is allowed to lean the organism. This is the knob that decides whether the world has memory or merely hosts stickers. Too little coupling and order does not matter. Too much and late arrivals all grow into the same weather-beaten shape, and the early voices found a world they still own.
-4. **Musical constraints,** when sound exists. A scale, a register, a ceiling on density. The chord nobody wrote is whatever the log occupies inside that scale.
+Every organism has a root, one variable-width stroke, a tip, and at most one secondary stroke. The spine is a short polyline whose curvature is integrated from the expressed curvature, so the bend is a continuous decision rather than a stack of random wiggles. Width comes from force, taper and fineness from brightness and sustain. The secondary arm, if the genome earned it, leaves the spine partway up and is shorter.
 
-Deterministic, always:
+Range is moderate. The family is tight. Controllability is high. Determinism is a hash of the points. A phone can draw far more than twelve. Germination is the stroke drawing up from the root, which is the witness. Genome and conditions map cleanly onto length, width, bend, and period. Later relationships can turn the whole ribbon’s rest angle without editing the intrinsic curve.
 
-- Quantized measurements to a genome. Same recording, same rules, same genome. Quantize on purpose so float noise and two browsers do not fork a life.
-- Germination. Same genome, same birth climate, same rules version, same body.
-- Climate update. Same log, same world.
-- Placement. Hashed from the contribution id onto the field, so two identical sounds do not stack, and a reload does not wander.
+The risk is that twelve ribbons look like twelve signatures, a logo sheet. The shared ground has to do real visual work: one soil line, a common darkness, the accent color only.
 
-Random, only as motion:
+### Stem and marks
 
-- Sway, shimmer, the breath of a thing that is already decided. The phase of that motion is hashed too, so a reload does not twitch.
+A single stem, the same integrated curve, with marks placed along it by a fixed angular step. Count of marks from articulation, size from force. A small tip figure from brightness. This is the ribbon plus a phyllotaxis of marks.
 
-Persist the causes, not the pixels.
+Range is a bit wider. It reads more quickly as a plant, which is both the attraction and the risk: a textbook sprout. Controllability stays high if mark shapes stay abstract, notches or seeds, not leaf drawings. Performance and determinism match the ribbon. Germination can grow the stem and then the marks. Neighbors can still reorient the stem later. Interlocking marks between two organisms is a trap and should not be a goal.
 
-- The ordered log: genome, rules version, time, a content pointer if the raw media is kept.
-- The climate snapshot at the head of the log, as a cache. It must be reproducible by replay.
-- The birth climate, or the log index, on each organism, so a body can be redrawn without simulating the universe forward every frame from scratch. Replay is for rebuilds and for new clients. Drawing is a function of stored phenotype inputs.
+### Deterministic bracket grammar
 
-Do not persist a mesh, a video, or an AI picture as the source of truth. An edition, later, is a rendering of a log index. The current merch idea of pinning a snapshot still fits. The snapshot becomes a climate and a set of births, not a bloom plate.
+A tiny rewrite system, depth capped at four, angles and lengths taken from the genome, no random productions. This buys real branching topologies.
 
-What a viewer stores is nothing that changes the world. Perception depth is local. The log is the world.
+Range is the widest and the least controllable. It is the most likely to look like a generative-art plant demo, which this project does not need. Determinism is fine if the rewrite is fixed. Performance is fine at a capped depth. Germination by generation is legible. Relationships between two rewrite systems, stems weaving, is a research project of its own. Conditions can scale lengths and angles. They should not change the production rules if identity matters. At that point the extra topology is mostly unused.
+
+**Recommendation.** Start with the rooted ribbon, on the existing world palette: near-black ground, accent `#CFFF81`, no second hue system. If a field of twelve reads as logos, add the stem-and-marks placement on the same spine before considering the bracket grammar. The bracket grammar is the candidate we already know how to overbuild.
+
+Germination, about two seconds, from the root upward, is part of A, not a polish pass. A body that pops in has already lost the witness.
 
 ---
 
-## 3. Contribution → world
+## 11. The log is the world
 
-Treat a contribution as several different kinds of fact. Mixing them is how the mapping turns into a toy.
-
-**Measurable.** Taken from the signal, on the device, in the moment. For a voice or a sound: duration, loudness, dynamic range, fraction of silence, spectral brightness, onset density, and pitch with a confidence. Pitch range and melodic slope only count when confidence is high. A clap has no melody, and the system has to be willing to say so. These are the first genome. They are also the honest version of “force”: energy, brightness, interruption, sustain.
-
-**Interpreted.** A reading of meaning, only when there is language. Not a color. A few dimensions such as intimacy, tension, scale, warmth, each with a confidence. Low confidence means the dimension is ignored. These never choose a species, a hue name, or a picture.
-
-**Organism.** What the grammar does with the genome and the birth climate. Stem, lean, branch, density of marks along the stem, openness of the bloom, how much the body answers the current pulse. The person should be able to feel that *this* gesture became *this* body, without a legend that says brightness equals thorns.
-
-**Environment.** The deposit. Small, diffuse, and lasting. A bright sound leaves a little more light in the air. A dense rhythm leaves a faster pulse. A long silence leaves space. The deposit is not a trophy and not a landmark unlock.
-
-**Collective.** Nothing is stored as “the collective.” Biodiversity is the spread of genomes. Harmony is how pitch residues occupy the scale. Thickness is how deposits have piled up. If a number is interesting, it is read out of the log, not authored as a stage.
-
-**Time.** Later. Aging, compost, and a Bloom are more events in the same log. Compost returns a body to climate. A Bloom is a composed event that shocks the climate into another season. It is not frame six of a storyboard.
-
-Mapping rules that keep it from becoming a visualizer:
-
-- Few forces. If every audio feature has its own obvious slider, people reverse-engineer the toy, and it feels like one.
-- Genome carries identity. Climate leans the body. A useful starting split is roughly: the gesture decides most of the form, the climate decides lean, spacing, and light. Then try to *see* whether order matters. Raise coupling only until it does.
-- Nonlinear and saturating. The tenth bright voice does less to the air than the first. That is the wind metaphor’s other half: a tree is shaped by weather, and weather does not scale without limit.
-- No emotional color code. Warmth may change glow and coupling to neighbors. It does not paint the flower yellow.
-- Causality is performed once, at germination. The person hears their sound and watches the body resolve. That two-second witness is the entire explanation the system gets to give.
-
----
-
-## 4. AI
-
-AI is a later interpreter of language. It is a bad gardener.
-
-Prefer ordinary signal processing for anything a microphone can answer. An `AnalyserNode` is already created during recording and then thrown away except for loudness. Pitch (autocorrelation or YIN), spectral centroid, and onset flux are enough to build a genome. They are immediate, private, deterministic, and free. They belong on the device. The genome is what gets stored. Do not re-analyze the file on every other phone. Device differences are how determinism quietly dies.
-
-Prefer the grammar for anything the eye sees. No image model, no image-to-video, no “picture of a garden that represents this clip.” The Runway storyboard path stays in production for gardens that still use plates. It is not a tool in this lab.
-
-Use a model only when the contribution is words, spoken or typed, and acoustics would get the meaning wrong. A whispered sentence and a cough can share a quiet genome. If the product cares about what was said, a single structured call can return a fixed handful of numbers and confidences. The repo already depends on `openai`. A small schema is enough. No prose, no species names, no colors.
-
-Keep that call off the 10–20 second path. Germination uses acoustics immediately. A semantic reading may arrive a moment later as a second, smaller change in the deposit, or it may wait until language is actually in the experiment. If the model is down, the organism still exists.
-
-Images, if they ever enter, start as measurements: palette, contrast, the amount of emptiness. A vision model that labels “joy” is the yellow-flower problem with extra steps.
-
-Do not use AI to invent the climate, narrate the garden, or decide when it has bloomed.
-
----
-
-## 5. Architecture
-
-A lab, beside the product, sharing capture and almost nothing else.
+The renderer is a view. The fold of the log is the world.
 
 ```
-device                         lab log                          every client
-mic → features → genome   →    append(genome, index)      →    replay to climate
-     → germinate locally        store rulesVersion              draw canvas
-     → witness                  raw audio stays put             silhouettes until allowed
+type Event = {
+  id: string
+  index: number
+  type: string
+  rulesVersion: string
+  at: string
+  payload: unknown
+}
 ```
 
-**Engine.** A pure module with no React in it: quantize, germinate, deposit, replay. Given a log and a rules version, it returns a climate and a list of organisms. This is the thing worth testing. Rendering is a skin.
+A–C writes one type, `contribution.planted`:
 
-**Drawing.** One 2D canvas. Organisms are polylines and a bloom mark. Climate is a ground gradient, a slow drift, a pulse. Framer Motion can keep the record control. It cannot be the field. The current growth layer is one DOM node per dot, and the particle field is a few dozen motion components by design. A living log will pass that budget as soon as it is interesting. Cap the number of fully drawn bodies. Compact the rest into climate. Phones are the place this has to run: one canvas, no video plate underneath, no continuous re-analysis.
+```
+payload = {
+  genome,            // structural + latent, quantized
+  birthConditions,   // the vector before this deposit
+  deposit,           // what this event added
+  position,          // resolved at birth
+}
+```
 
-**State.** A new log, not a new interpretation of `WorldState.energy`. Overloading the current scalars will only produce a more complicated progress bar. The log can live in a lab table or even a local file until two orders produce two worlds. When it grows up, it wants an append-only list: genome, rules version, birth index, optional media pointer, time. `garden_mutations` is the right *kind* of table and the wrong delta. Leave it alone until the lab has a delta worth writing.
+`birthConditions` is stored so a client can draw one organism without replaying the universe, and so the lab can show it. The fold must still be able to recompute it. If they disagree, the fold wins and the stored snapshot is stale. That check belongs in the lab.
 
-**Sync.** Clients poll, then replay. They do not simulate physics at each other. Replay is how two phones share one world without a realtime engine. The current snapshot poll is the right tempo to copy. Websockets are a later optimization for “I saw your bud break the soil,” not a requirement for emergence.
+**Reserved types, not implemented**
 
-**Determinism.** Genome quantized on the capturing device. Rules version frozen per garden. Placement hashed. Sway hashed. A reload is the same picture.
+| Type | Later meaning |
+| --- | --- |
+| `bloom` | A composed shock to conditions. A season changes inside the laws. |
+| `gathering` | Some organisms are marked as taken into a song. They remain in history. |
+| `compost` | A body returns material to conditions and leaves the living set. |
+| `song.created` | The song exists. Payload can point at it. |
+| `song.returned` | The song comes back into the garden as an event, not as a new picture format. |
+| `season.transition` | The rules version that applies to subsequent events. |
+| `intervention` | An artist’s explicit deposit or placement, stamped as such. |
 
-**Privacy and presence.** Before a contribution, the client receives climate and silhouette parameters, not raw audio and not a genome detailed enough to sing back. After a contribution, perception widens and, if the product allows, a nearby trace can carry a fragment. The seal is server-side. The beautiful version of the seal is also visual: the same world, seen through a shallower perception. Both are needed. A blur on top of a payload that already contains everyone’s chants is not a seal.
+The reducer is a fold over events, dispatching on `type`. Unknown types are skipped and listed in the lab. They are not crashes, and they are not silent. That is enough room for the later types. An append-only array of organisms that nothing can amend would block compost. The living set at index T is: planted at or before T, and not composted at or before T.
 
-**Access.** The witness has to be visible with motion reduced: germination can complete without endless sway. The pulse cannot strobe. The act of planting has a text equivalent in the control itself (“your sound is in the ground”) so the garden is not only an image.
+**Rules versions**
 
-**Production boundary.** `/e/[slug]` and `/g/[slug]` keep their current stage. The lab is a separate route. Reuse the microphone path, the device id, haptics, and the habit of an append-only mutation log. Do not reuse storyboard frames as the sky, dots as organisms, or energy as a climate.
+Each event is stamped with the version that governed its expression. Replay uses that stamp. Editing the grammar does not reinterpret history unless the lab is in draft compare, which is labeled hypothetical and is not written back.
 
----
+A `season.transition` is how a garden adopts a new version from one index forward. Organisms born before the boundary keep their stamp. The draft slider in the lab is the hypothetical. It is not a migration.
 
-## 6. Sequence of experiments
+During A–C there is a single version. The stamp is still written, so the first real change does not require a migration of old calls.
 
-The six phases are the right *inventory* and the wrong *order of learning*. Phase 1 can succeed completely and leave the central idea untested. A unique flower in an empty world is a visualizer. Phase 3, as a full instrument, is a second research project parked before the first one has a world. Phase 5 treats rhythm as a future feature when rhythm is just another measurement. Phase 4 is correctly late. Phase 6 is correctly last.
-
-Run thinner experiments. Each one can fail without dragging the next one into existence.
-
-### Experiment A — Grammar bench
-
-**Hypothesis.** A single drawing grammar, driven by about eight numbers, can produce organisms that are clearly one family and clearly not copies.
-
-**How.** No microphone, no server, no AI. Sliders or a handful of saved genomes. One canvas.
-
-**Success.** Thirty forms that a person can tell apart, that still look like they grew under one law, on a phone, at a steady frame rate.
-
-**Failure.** They collapse into one shape, or they look like unrelated generative sketches, or they only look good at settings a designer babysits. Stop. A better mapping cannot repair a grammar that has no range.
-
-This is the smallest experiment in the brief’s neighborhood, and it is smaller than recording. Recording too early spends the learning on capture, permissions, and file formats.
-
-### Experiment B — Voice becomes a genome
-
-**Hypothesis.** Measurable differences in human sounds land in that grammar as visible, causal differences.
-
-**How.** Record a few seconds. Quantize loudness, brightness, pitch confidence, contour, onset density, silence, duration. Germinate into a neutral climate. Keep the recording so a person can try to match sounds to bodies.
-
-**Success.** Someone who did not make the sounds matches them to organisms better than chance, and still believes they are one ecosystem. The same take germinates the same body after a reload.
-
-**Failure.** Matching is chance (the mapping is costume jewelry), or every voice becomes the same fern, or the only way to tell them apart is a gimmick you can name in one word. Do not add a climate on top of a mapping nobody can feel.
-
-### Experiment C — The log has memory
-
-**Hypothesis.** Order is a real force, and it does not erase the person.
-
-**How.** Twelve genomes. Two orders. Replay both. Coupling starts low and is raised only until the two worlds are distinguishable. A second phone, before it records, sees weather and new silhouettes and cannot recover the phrase.
-
-**Success.** The two worlds differ in lean, light, pulse, or spacing. Each organism is still recognizable as its gesture. A late arrival does not look like a punishment for being late. A second device feels presence and does not receive the idea.
-
-**Failure.** The worlds match (coupling is theater). Or they differ and the individual is gone (coupling ate the genome). Or they differ only in a scatter nobody can see without a diagram. That last failure is the important one: emergence that cannot be perceived is not an experience.
-
-### Experiment D — A residue you can hear
-
-**Hypothesis.** The climate can be musical without becoming a sequencer people play on purpose.
-
-**How.** Each genome leaves a quantized pitch residue in a fixed scale and register. The air is a quiet drone made of whoever has arrived. No lyrics. No playback of the recording into the shared field. One synth voice, few partials, built so thirty people become a chord and not a pile of noise.
-
-**Success.** Two different groups sound different. A person can connect a new entrance to a change in the air. It still sounds like a constraint, not like a broken keyboard.
-
-**Failure.** It sounds like a visualizer, or like mud, or the only way to keep it pleasant is to ignore the contributions and play a bed track. A bed track is the audio version of the bloom plate.
-
-Do this only after C, and keep it small. It is the choir’s native proof that the world changed. It is not phase “generative sound” in full.
-
-### Experiment E — Language, off to the side
-
-**Hypothesis.** A few interpreted dimensions change the deposit in a way acoustics alone cannot, without taking over the body.
-
-**How.** One structured model call, fixed schema, confidence gates. Words bias the deposit. The body remains the acoustic genome. If the call fails, nothing breaks.
-
-**Success.** A quiet sentence and a quiet non-word diverge in the climate they leave, and a viewer cannot point at a color legend.
-
-**Failure.** The outputs are mood stickers, the latency leaks into the planting moment, or turning the model off does not matter. If turning it off does not matter, leave it off.
-
-### Experiment F — Time
-
-**Hypothesis.** A world can keep changing after planting, including compost and a Bloom, without a designed sequence of scenes.
-
-**How.** Aging and decay are functions of log time. Compost writes the body back into climate. A Bloom is one authored event appended to the log, produced when a real song exists, and it shifts season. People who return see a climate that moved while they were gone.
-
-**Success.** A return visit is obviously the same garden and obviously not the same moment. The song changes the world as an event inside the laws.
-
-**Failure.** Time is a slow crossfade between two pictures, or decay feels like deletion, or a Bloom replaces the log with a new design.
-
-Rhythm can enter at B, as onsets, without a new phase. Text waits for E. Images wait until a palette measurement has a reason to exist. Video waits longer than images. None of these are reasons to delay A through C.
+Media bytes are not the log. A recording can sit beside an event id for the maker test. Replay of structure does not need it.
 
 ---
 
-## 7. The prototype that can actually fail
+## 12. Regeneration
 
-The proposed prototype — record, measure, grow — tests whether sounds can drive a grammar. That test is Experiment B. It cannot disprove the central idea, and it can seduce the project into shipping unique flowers.
+Compost is a future event, not a visual of something fading off.
 
-The smallest thing that can disprove the central idea is **Experiment C**: twelve contributions, two orders, two worlds, and a witness who can still point to their own organism. A and B exist so C is not a confused failure. If A fails, the drawing is the problem. If B fails, the ear-to-form link is the problem. If A and B succeed and C fails, the living world is the problem, and no amount of organism polish will fix it.
+```
+{ type: "compost", payload: { organismId, returns: { density, pulse, tension } } }
+```
 
-Practical shape of C, once A and B are real: a lab page, a log in memory or a file, a canvas, a second browser. No accounts, no production route, no model, no soundtrack beyond the optional drone if C is already legible to the eye. If the eye cannot see order, add the drone before declaring the idea dead. People in this practice hear collective change more readily than they see it.
+The fold, at that index, stops drawing the body as living and applies `returns` through the same diminishing update as a deposit. Returns are a fraction of what that organism originally deposited, not a full refund and not a new currency. Some of the gesture stays in the garden as conditions. Some is gone. The original `contribution.planted` event remains. History is not deleted.
 
----
+A remnant, if one is ever drawn, is behavior or a view of a composted id. It is not a second organism.
 
-## 8. Risks
+This works only because the world is a fold. A–C does not emit `compost`. It also does not store the living set as an append-only document that later code cannot amend.
 
-**Already named, and how they show up here**
-
-- *Everything looks the same.* Grammar range is too narrow, or coupling is so high that climate washes the genome out. A and C catch these separately.
-- *It feels random.* Germination does not show a path from the gesture to the body, or the measurements are too weak. B’s matching test catches this.
-- *Generic generative art.* The grammar has no material discipline. Limit palette and stroke before adding rules. A creative-coding demo is a failed Song Garden even if the math is alive.
-- *Phones.* DOM nodes, stacked video, and per-frame React will force the idea back into dots. One canvas, a draw cap, genomes instead of everybody’s audio.
-- *State gets expensive.* Simulating the field forward every frame, or storing meshes. Persist the log. Draw a function. Compact old bodies.
-- *Too abstract to feel personal.* Climate with no body. The organism is the personal object. The climate is the collective one. Losing either one fails a different goal.
-- *AI becomes reductive.* A model on the planting path, or a model that picks colors. Keep it late, numeric, and optional.
-- *Impressive and empty.* A world nobody can connect to their two-second act. Witness has to finish inside the visit. The long life is for return, not for the price of entry.
-
-**Further risks**
-
-- **Founder effect.** Early deposits lock the climate and everyone else grows in their shadow. Saturation, leak, and a cap on coupling are the laws that prevent a garden from closing.
-- **Imperceptible emergence.** The log is path-dependent on paper and identical in the room. If a person needs a chart, the experiment failed.
-- **The bloom plate wins by inertia.** The current visual identity is a designed video. The lab will look poorer on day one. Putting the video back behind the organisms turns the grammar into a sticker on the old world.
-- **Determinism leaks.** Re-analyzing audio on different sample rates, or letting sway use `Math.random()`, forks the world. Quantize once, at capture, and hash every motion.
-- **The seal leaks through the genome.** A precise pitch-to-height mapping lets a bystander read the melody off the silhouette. Before contribution, send coarsened forms. Keep raw audio out of that payload.
-- **Rules drift.** Changing the grammar rewrites history under people’s feet. A garden freezes its rules version. A new version is a new season, appended, not a silent edit.
-- **The 10-second visit grows a tutorial.** Extra questions, naming, accounts, and “choose a flower” will return because they are easy to explain. One gesture has to be enough.
-- **Musical failure mode.** An unconstrained pile of pitches sounds broken, and the fix will be a hidden backing track that ignores the log. Constrain the scale first.
-- **Photosensitive pulse.** The collective pulse is a law, not a strobe.
-- **Edition pressure.** Merch and show visuals want a final frame. An edition is a log index. Resist a “finished garden” export that becomes the real product.
-- **Identity over months.** Device ids are enough for the lab and weak for a season of return visits. Do not block A–C on accounts. Do not pretend a device id is a community member when Experiment F starts.
-- **Two simulations.** If each phone runs its own physics, they diverge. Replay one log.
+A slow leak on the three conditions is the other half of regeneration: what nobody renews eventually thins. Leak stays at 0 until a time experiment, and the update rule already has a place for it.
 
 ---
 
-## 9. Three other ways to build it
+## 13. Audio, later, from the same fold
 
-These are different bets about where emergence should live. The recommendation above is a hybrid of the first and the third, with coupling kept weak enough that the body survives. These three are what it looks like to choose only one.
+A–C produces no sound. The data model still has a place for it.
 
-### Botanical grammar
+A future `sound(state)` reads the same folded state `draw(state)` reads. Conditions supply thickness, tempo, and distance from the center of a scale. Latent `register` on each living genome supplies pitch material. Pixels supply nothing. There is no second simulation that can drift from the picture.
 
-Each contribution grows a plant from measured parameters. The world is a composition of those plants. Climate is a light tint, or it waits.
+That is why register is stored now and ignored by `express`. Dropping it would force a later re-analysis and break the rule that other devices replay the genome.
 
-This gets personal authorship and a recognizable garden soonest. It is the closest picture to the word “garden.” It sacrifices path dependence. Unless birth climate is allowed to bite, contribution 100 is just plant 100, and the world is a gallery. Prototype cost is moderate: a canvas and a grammar, which is Experiment A and B anyway. The trap is spending months on prettier botany and never running the two-order test. Difficulty of a *convincing* botanical simulation, with structure, wind, and growth over time, is high, and most of that difficulty is unrelated to the question.
-
-### Chemical field
-
-Contributions are drops into a reaction-diffusion or similar field. The world is the stain they leave. There is no organism, or the organism is only a highlight on the stain.
-
-This gets real emergence soonest. Order matters almost for free. It can be beautiful. It sacrifices the witness. A person cannot point at a body that is theirs, and a 10-second visit ends in a texture. Song, word, and return have nowhere to live. A shader prototype is the cheapest of the three and the most likely to be emotionally empty. Making the field feel authored by a particular voice is the hard part, and it slowly reinvents the organism.
-
-### Agent choir
-
-Each contribution is a simple agent with a pitch residue and a position. The world is their relationships: who clusters, what drone they make, how the air moves when one enters. Drawing stays minimal. Dots, arcs, a membrane.
-
-This is the closest to Crowdsource Choir. Collective emergence is audible. Constraints (scale, register, density) are the same kind of constraint as a show. It sacrifices the botanical picture, and it can fall into “visualizer” immediately if the drawing has no grammar. A rude prototype — a dozen oscillators and a dot that carries each one — is moderate and fast, and it tests memory in the ear. Harmonic mud is the creative failure, and it arrives early, which is a virtue. What it does not test is whether a personal *form* can carry a human gesture. If the choir only needs a living chord, this is the better whole architecture. If the garden needs someone to see a body that came from their sound, it is incomplete.
-
-A generative landscape (erosion, deposit, terrain) is a cousin of the chemical field. It makes the wind-and-tree metaphor literal and makes “my contribution” even harder to find. It is a poor first build on a phone. It is a possible way to render climate later, under the organisms, if a gradient is too thin.
+The scale, the register bounds, and the density ceiling are laws, parallel to the drawing laws. They are not a backing track. They are not in A–C except as unused fields the lab can display so we notice if capture is failing.
 
 ---
 
-## 10. What to do, and what not to do
+## 14. AI
 
-Do not start by recording. Start by drawing.
+A–C uses no LLM, no Runway, and no image generation. Signal processing and the grammar are the whole computation.
 
-Give the lab a single grammar and a neutral canvas. Make thirty bodies by hand. If they are one world, put real voices through the same eight numbers and see whether a stranger can match them. If they can, replay two orders and look. Only if the eye can tell the worlds apart, or the ear can once a single constrained drone exists, is there a living system. Until then there is a visualizer, and the production garden should not grow a new renderer in the hope that memory will show up later.
+A model is justified only later, and only where language carries something the signal does not. The output of that call would be a few numbers with confidences, deposited or held as latent, never a picture and never a species. Low confidence means the numbers are ignored. The planting moment still germinates from the acoustic genome if the model is slow or down.
 
-When that memory is real, the production connection is still narrow. A garden opts into the lab. The visit stays one gesture long. The log replaces the bloom ladder for that garden only. `WorldJourney` keeps serving everyone else.
+---
 
-The simplest system that can still surprise is:
+## Production boundary
 
-a frozen drawing grammar, a quantized genome, a birth climate, a deposit with a ceiling and a leak, and an ordered log that any phone can replay.
+The lab, when it is built, does not replace `WorldJourney`. The current storyboard, the dot field, and `WorldState` energy remain the public product until a coupling band has actually been felt by viewers in Experiment C. An opt-in garden comes after that, and is not designed here.
 
-That is the whole engine. Everything else — language models, images, compost, the song returning as a season — is another event in that log, or it is a distraction from finding out whether the log is alive.
+---
+
+## Unresolved on purpose
+
+These are not details left out of a finished design. They are the questions A–C exist to answer.
+
+- Whether three conditions are two too many, and which mute still leaves history visible.
+- Whether the rooted ribbon can be a place, or only a set of signatures.
+- Whether felt causality survives contact with real phone microphones and the fixed normalization bounds.
+- Whether any coupling band satisfies both viewers’ questions at once.
+- Whether one-directional push is too monotonous, and the centered-pull toggle produces a more visible history without a designed destination.
+- Whether keeping topology genomic makes order too subtle, and the grammar must show bend more clearly before topology is allowed to change.
+- Whether `stillness` is independent of `sustain` on real gestures.
+- How strong resistance should be before quiet gestures feel like they belong only to the crowd.
