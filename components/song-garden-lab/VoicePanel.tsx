@@ -34,11 +34,15 @@ type Take = {
 
 export default function VoicePanel({
   birth,
+  coupling,
   onBirth,
+  onCoupling,
   onReading,
 }: {
   birth: Conditions;
+  coupling: number;
   onBirth: (birth: Conditions) => void;
+  onCoupling: (coupling: number) => void;
   onReading: (reading: AnalysisReading | null) => void;
 }) {
   const [prompt, setPrompt] = useState(PROMPTS[0]);
@@ -94,13 +98,13 @@ export default function VoicePanel({
     }
   }
 
-  function adopt(reading: AnalysisReading, keepAudio: boolean) {
+  function adopt(reading: AnalysisReading, keepAudio: boolean, label = prompt) {
     const id = `t${String(idRef.current).padStart(2, "0")}`;
     idRef.current += 1;
     const prior = takesRef.current.find((take) => genomeKey(take.reading.genome) === genomeKey(reading.genome));
     const next = [
       ...takesRef.current.map((take) => ({ ...take, hasAudio: false })),
-      { id, prompt, reading, hasAudio: keepAudio },
+      { id, prompt: label, reading, hasAudio: keepAudio },
     ];
     remember(next);
     setActiveId(id);
@@ -109,13 +113,13 @@ export default function VoicePanel({
     setError("");
   }
 
-  function runSamples(samples: Float32Array, sampleRate: number) {
+  function runSamples(samples: Float32Array, sampleRate: number, label?: string) {
     pcmRef.current = { samples, sampleRate };
     setBusy(true);
     window.setTimeout(() => {
       try {
         const reading = analyzePcm(samples, sampleRate, config);
-        adopt(reading, true);
+        adopt(reading, true, label);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "The take could not be read.");
       } finally {
@@ -257,7 +261,7 @@ export default function VoicePanel({
           type="button"
           className="csc-link"
           disabled={busy || recording}
-          onClick={() => runSamples(testTone("leap"), 16000)}
+          onClick={() => runSamples(testTone("leap"), 16000, "Test · leap")}
         >
           Analyze test tone
         </button>
@@ -284,7 +288,7 @@ export default function VoicePanel({
             ["silence", "Silence"],
           ] as const
         ).map(([kind, label]) => (
-          <button key={kind} type="button" className="csc-link" disabled={busy || recording} onClick={() => runSamples(testTone(kind), 16000)}>
+          <button key={kind} type="button" className="csc-link" disabled={busy || recording} onClick={() => runSamples(testTone(kind), 16000, `Test · ${label.toLowerCase()}`)}>
             {label}
           </button>
         ))}
@@ -345,6 +349,20 @@ export default function VoicePanel({
       )}
 
       <h2 className="mb-2 mt-3 text-[10px] uppercase tracking-[0.2em] text-white/50">Birth for the right body</h2>
+      <p className="mb-2 text-white/45">Coupling 0 leaves the right body on the official reading.</p>
+      <div className="mb-2 flex gap-3">
+        {[0, 0.5, 1].map((value) => (
+          <button
+            key={value}
+            type="button"
+            className="csc-link"
+            onClick={() => onCoupling(value)}
+            style={{ color: Math.abs(coupling - value) < 0.001 ? "#cfff81" : undefined }}
+          >
+            coupling {value.toFixed(1)}
+          </button>
+        ))}
+      </div>
       <MiniSlider label="density" value={birth.density} onChange={(density) => onBirth({ ...birth, density })} />
       <MiniSlider label="pulse" value={birth.pulse} onChange={(pulse) => onBirth({ ...birth, pulse })} />
       <MiniSlider label="tension" value={birth.tension} onChange={(tension) => onBirth({ ...birth, tension })} />

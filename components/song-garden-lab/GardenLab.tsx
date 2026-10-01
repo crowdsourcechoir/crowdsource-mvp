@@ -253,7 +253,9 @@ export default function GardenLab() {
         {mode === "voice" && (
           <VoicePanel
             birth={birth}
+            coupling={laws.coupling}
             onBirth={setBirth}
+            onCoupling={(coupling) => patchLaws({ coupling })}
             onReading={(reading) => {
               setVoiceReading(reading);
               setSelectedId("at zero");
