@@ -2,8 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AnalysisReading } from "@/lib/song-garden-lab/analyze";
+import {
+  SHORT_B_ORDER,
+  SUBJECT_ID,
+  WORLD_B_ORDER,
+  compareFolds,
+  permuteField,
+} from "@/lib/song-garden-lab/compare";
 import { depositOf } from "@/lib/song-garden-lab/conditions";
-import { drawGarden, type DrawHit } from "@/lib/song-garden-lab/draw";
+import ComparePanel, { type CompareSpan, type CompareView } from "@/components/song-garden-lab/ComparePanel";
+import { drawCompare, drawGarden, type DrawHit } from "@/lib/song-garden-lab/draw";
 import { expressChannels } from "@/lib/song-garden-lab/express";
 import { foldLog, organismFrom } from "@/lib/song-garden-lab/fold";
 import { haltonGenomes, publishedField, type NamedGenome } from "@/lib/song-garden-lab/genomes";
@@ -15,7 +23,7 @@ import type { Conditions, Genome, Laws, Organism, StructuralAxis } from "@/lib/s
 import { STRUCTURAL_AXES } from "@/lib/song-garden-lab/types";
 import VoicePanel from "@/components/song-garden-lab/VoicePanel";
 
-type Mode = "one" | "sheet" | "field" | "voice";
+type Mode = "one" | "sheet" | "field" | "voice" | "compare";
 
 const SHEET = haltonGenomes(30);
 const FIELD_SEED = publishedField();
@@ -45,6 +53,8 @@ export default function GardenLab() {
   const [growEpoch, setGrowEpoch] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
   const [voiceReading, setVoiceReading] = useState<AnalysisReading | null>(null);
+  const [compareView, setCompareView] = useState<CompareView>("both");
+  const [compareSpan, setCompareSpan] = useState<CompareSpan>("twelve");
 
   const sheetLaws = useMemo(
     () => defaultLaws({ ...laws, coupling: 0, mute: { density: true, pulse: true, tension: true } }),
@@ -80,15 +90,67 @@ export default function GardenLab() {
     return [atZero, inLab];
   }, [voiceReading, birth, laws, officialLaws]);
 
+  const orderA = useMemo(
+    () => (compareSpan === "four" ? FIELD_SEED.slice(0, 4) : FIELD_SEED),
+    [compareSpan]
+  );
+  const orderB = useMemo(
+    () => permuteField(orderA, compareSpan === "four" ? SHORT_B_ORDER : WORLD_B_ORDER),
+    [orderA, compareSpan]
+  );
+  const foldA = useMemo(() => foldLog(orderA, laws), [orderA, laws]);
+  const foldB = useMemo(() => foldLog(orderB, laws), [orderB, laws]);
+  const focusId = foldA.organisms.some((organism) => organism.id === selectedId) ? selectedId : SUBJECT_ID;
+  const compareReport = useMemo(() => compareFolds(foldA, foldB, focusId), [foldA, foldB, focusId]);
+  const pairOrganisms = useMemo(() => {
+    const left = foldA.organisms.find((organism) => organism.id === focusId);
+    const right = foldB.organisms.find((organism) => organism.id === focusId);
+    if (!left || !right) return [];
+    return [
+      { ...left, position: { x: 0.32, y: 0.78 } },
+      { ...right, position: { x: 0.68, y: 0.78 } },
+    ];
+  }, [foldA, foldB, focusId]);
+
   const organisms: Organism[] =
-    mode === "sheet" ? sheetOrganisms : mode === "one" ? [soloOrganism] : mode === "voice" ? voiceOrganisms : fieldFold.organisms;
+    mode === "sheet"
+      ? sheetOrganisms
+      : mode === "one"
+        ? [soloOrganism]
+        : mode === "voice"
+          ? voiceOrganisms
+          : mode === "compare"
+            ? compareView === "pair"
+              ? pairOrganisms
+              : compareView === "b"
+                ? foldB.organisms
+                : foldA.organisms
+            : fieldFold.organisms;
 
   const selected = organisms.find((organism) => organism.id === selectedId) ?? organisms[0] ?? null;
   const structureStable = selected ? sameStructure(selected, mode === "sheet" ? sheetLaws : laws) : false;
   const behavior = selected ? live(selected, selected.birthConditions, [], laws) : null;
 
-  const drawRef = useRef({ organisms, laws, mode, selectedId: selected?.id ?? null });
-  drawRef.current = { organisms, laws, mode, selectedId: selected?.id ?? null };
+  const drawRef = useRef({
+    organisms,
+    laws,
+    mode,
+    selectedId: selected?.id ?? null as string | null,
+    compareView,
+    worldA: foldA.organisms,
+    worldB: foldB.organisms,
+    pair: pairOrganisms,
+  });
+  drawRef.current = {
+    organisms,
+    laws,
+    mode,
+    selectedId: mode === "compare" ? focusId : (selected?.id ?? null),
+    compareView,
+    worldA: foldA.organisms,
+    worldB: foldB.organisms,
+    pair: pairOrganisms,
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -117,15 +179,33 @@ export default function GardenLab() {
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const current = drawRef.current;
-      hitsRef.current = drawGarden(ctx, current.organisms, {
+      const frameOptions = {
         width,
         height,
         time: (now - started) / 1000,
         grow: Math.min(1, (now - started) / 2000),
         laws: current.laws,
         selectedId: current.selectedId,
-        layout: current.mode === "sheet" ? "sheet" : "field",
-      });
+      };
+      if (current.mode === "compare" && current.compareView === "both") {
+        hitsRef.current = drawCompare(
+          ctx,
+          [
+            { label: "A", organisms: current.worldA },
+            { label: "B", organisms: current.worldB },
+          ],
+          frameOptions
+        );
+      } else if (current.mode === "compare" && current.compareView === "pair") {
+        hitsRef.current = drawGarden(ctx, current.pair, { ...frameOptions, layout: "field" });
+      } else if (current.mode === "compare" && current.compareView === "b") {
+        hitsRef.current = drawGarden(ctx, current.worldB, { ...frameOptions, layout: "field" });
+      } else {
+        hitsRef.current = drawGarden(ctx, current.organisms, {
+          ...frameOptions,
+          layout: current.mode === "sheet" ? "sheet" : "field",
+        });
+      }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -139,6 +219,36 @@ export default function GardenLab() {
       window.clearInterval(meter);
     };
   }, [growEpoch, mode]);
+
+  useEffect(() => {
+    if (mode !== "compare") return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      const sweep: Record<string, number> = { "1": 0, "2": 0.25, "3": 0.5, "4": 0.75, "5": 1 };
+      if (event.key in sweep) {
+        patchLaws({
+          coupling: sweep[event.key],
+          branchFromTension: false,
+          leak: { density: 0, pulse: 0, tension: 0 },
+        });
+        setGrowEpoch((n) => n + 1);
+        return;
+      }
+      if (event.key === "a" || event.key === "A") setCompareView("a");
+      if (event.key === "b" || event.key === "B") setCompareView("b");
+      if (event.key === "0" || event.key === "Escape") setCompareView("both");
+      if (event.key === "p" || event.key === "P") {
+        setCompareView("pair");
+        setGrowEpoch((n) => n + 1);
+      }
+      if (event.key === "l" || event.key === "L") {
+        setLaws((current) => defaultLaws({ ...current, showLabels: !current.showLabels }));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode]);
 
   function patchLaws(patch: Partial<Laws>) {
     setLaws((current) => defaultLaws({ ...current, ...patch }));
@@ -184,6 +294,7 @@ export default function GardenLab() {
         <div className="mb-3 flex gap-2">
           {(
             [
+              ["compare", "A/B"],
               ["voice", "Voice"],
               ["one", "One"],
               ["sheet", "Sheet"],
@@ -196,7 +307,7 @@ export default function GardenLab() {
               onClick={() => {
                 setMode(id);
                 setGrowEpoch((n) => n + 1);
-                setSelectedId(id === "one" ? "solo" : id === "voice" ? "at zero" : "h04");
+                setSelectedId(id === "one" ? "solo" : id === "voice" ? "at zero" : SUBJECT_ID);
               }}
               className="rounded-full border px-3 py-1"
               style={{
@@ -211,6 +322,7 @@ export default function GardenLab() {
         </div>
 
         <p className="mb-3 leading-relaxed text-white/55">
+          {mode === "compare" && "Two orders of the same genomes. The dot is the contribution to find. Coupling 0 keeps each body on its own gesture."}
           {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
           {mode === "one" && "One genome against a birth you set. Zero birth is the pure gesture."}
           {mode === "sheet" && "Thirty genomes, each born at zero. This is the family, before the garden has a history."}
@@ -224,7 +336,7 @@ export default function GardenLab() {
           <span className="text-white/40">{frameMs ? `${frameMs.toFixed(1)} ms/frame` : ""}</span>
         </div>
 
-        {selected && (
+        {selected && mode !== "compare" && (
           <section className="mb-4 border-t border-white/10 pt-3">
             <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">{selected.id}</h2>
             <p className="text-[#cfff81]">
@@ -261,6 +373,50 @@ export default function GardenLab() {
               setSelectedId("at zero");
               setGrowEpoch((n) => n + 1);
             }}
+          />
+        )}
+
+        {mode === "compare" && (
+          <ComparePanel
+            report={compareReport}
+            view={compareView}
+            span={compareSpan}
+            laws={laws}
+            onView={(next) => {
+              setCompareView(next);
+              setGrowEpoch((n) => n + 1);
+            }}
+            onSpan={(next) => {
+              setCompareSpan(next);
+              setSelectedId(SUBJECT_ID);
+              setGrowEpoch((n) => n + 1);
+            }}
+            onSweep={(coupling) => {
+              patchLaws({
+                coupling,
+                branchFromTension: false,
+                leak: { density: 0, pulse: 0, tension: 0 },
+              });
+              setGrowEpoch((n) => n + 1);
+            }}
+            onBoundary={() => {
+              patchLaws({
+                coupling: 0.5,
+                branchFromTension: true,
+                leak: { density: 0, pulse: 0, tension: 0 },
+              });
+              setGrowEpoch((n) => n + 1);
+            }}
+            onHear={(which) =>
+              patchLaws({
+                mute: {
+                  density: which === "tension",
+                  pulse: which !== "all",
+                  tension: which === "density",
+                },
+              })
+            }
+            onLaws={patchLaws}
           />
         )}
 

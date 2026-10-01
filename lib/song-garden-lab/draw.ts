@@ -126,12 +126,64 @@ function drawOrganism(
     paintRibbon(ctx, arm.spine, arm.widths, rootX, rootY, scale, alpha * 0.9);
   }
 
+  if (selected) {
+    ctx.fillStyle = ACCENT;
+    ctx.beginPath();
+    ctx.arc(rootX, rootY, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   if (laws.showLabels && grow > 0.85) {
     ctx.fillStyle = selected ? ACCENT : "rgba(207, 255, 129, 0.55)";
     ctx.font = "11px ui-monospace, monospace";
     ctx.textAlign = "center";
     ctx.fillText(organism.id, rootX, rootY + 16);
   }
+}
+
+function paintField(
+  ctx: CanvasRenderingContext2D,
+  organisms: Organism[],
+  bounds: { x: number; y: number; width: number; height: number },
+  options: {
+    time: number;
+    grow: number;
+    laws: Laws;
+    selectedId: string | null;
+    label?: string;
+  }
+): DrawHit[] {
+  const { x, y, width, height } = bounds;
+  const groundY = y + height * 0.78;
+  const gradient = ctx.createLinearGradient(0, groundY - 40, 0, y + height);
+  gradient.addColorStop(0, "rgba(207, 255, 129, 0)");
+  gradient.addColorStop(1, "rgba(207, 255, 129, 0.06)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x, groundY, width, y + height - groundY);
+  ctx.strokeStyle = "rgba(207, 255, 129, 0.45)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, groundY);
+  ctx.lineTo(x + width, groundY);
+  ctx.stroke();
+
+  if (options.label) {
+    ctx.fillStyle = "rgba(207, 255, 129, 0.8)";
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(options.label, x + 16, y + 22);
+  }
+
+  const scale = Math.min(width, height) * 0.52;
+  const hits: DrawHit[] = [];
+  for (const organism of organisms) {
+    const rootX = x + organism.position.x * width;
+    const rootY = groundY;
+    const selected = organism.id === options.selectedId;
+    drawOrganism(ctx, organism, rootX, rootY, scale, options.time, options.grow, options.laws, selected);
+    hits.push({ id: organism.id, x: rootX, y: rootY });
+  }
+  return hits;
 }
 
 export function drawGarden(
@@ -175,26 +227,54 @@ export function drawGarden(
     return hits;
   }
 
-  const groundY = height * 0.78;
-  const gradient = ctx.createLinearGradient(0, groundY - 40, 0, height);
-  gradient.addColorStop(0, "rgba(207, 255, 129, 0)");
-  gradient.addColorStop(1, "rgba(207, 255, 129, 0.06)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, groundY, width, height - groundY);
-  ctx.strokeStyle = "rgba(207, 255, 129, 0.45)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, groundY);
-  ctx.lineTo(width, groundY);
-  ctx.stroke();
+  hits.push(
+    ...paintField(ctx, organisms, { x: 0, y: 0, width, height }, {
+      time: options.time,
+      grow: options.grow,
+      laws,
+      selectedId: options.selectedId,
+    })
+  );
+  return hits;
+}
 
-  const scale = Math.min(width, height) * 0.52;
-  for (const organism of organisms) {
-    const rootX = organism.position.x * width;
-    const rootY = groundY;
-    const selected = organism.id === options.selectedId;
-    drawOrganism(ctx, organism, rootX, rootY, scale, options.time, options.grow, laws, selected);
-    hits.push({ id: organism.id, x: rootX, y: rootY });
+/** World A above World B. The same genome id highlights in both. */
+export function drawCompare(
+  ctx: CanvasRenderingContext2D,
+  worlds: { label: string; organisms: Organism[] }[],
+  options: {
+    width: number;
+    height: number;
+    time: number;
+    grow: number;
+    laws: Laws;
+    selectedId: string | null;
   }
+): DrawHit[] {
+  const { width, height } = options;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = GROUND;
+  ctx.fillRect(0, 0, width, height);
+  const band = height / Math.max(1, worlds.length);
+  const hits: DrawHit[] = [];
+  worlds.forEach((world, index) => {
+    const y = index * band;
+    if (index > 0) {
+      ctx.strokeStyle = "rgba(207, 255, 129, 0.18)";
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+    hits.push(
+      ...paintField(ctx, world.organisms, { x: 0, y, width, height: band }, {
+        time: options.time,
+        grow: options.grow,
+        laws: options.laws,
+        selectedId: options.selectedId,
+        label: world.label,
+      })
+    );
+  });
   return hits;
 }

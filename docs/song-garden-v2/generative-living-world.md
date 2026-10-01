@@ -1,6 +1,6 @@
 # Song Garden — generative living world
 
-Status: **strategy, sharpened.** Experiments A and B are built at `/lab/garden`. World A/B as the official proof, audio output, and the public garden are not.
+Status: **strategy, sharpened.** Experiments A, B, and C are built at `/lab/garden`. Audio output and the public garden are not.
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
 Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
@@ -12,7 +12,7 @@ The engine is unchanged:
 
 **ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
 
-This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A and B are built. The two-order proof is not.
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A, B, and C are built. The public garden is not.
 
 ---
 
@@ -63,6 +63,20 @@ Voice is a mode on the same lab. It does not replace the grammar bench.
 - Character prompts label the take. They do not name the six axes.
 - A session plot marks each axis. An axis that barely moves across two or more takes is marked as a dead wire.
 - The session restores from local storage. The audio does not.
+
+### Experiment C, as built
+
+**A/B** on the same lab folds the published twelve twice. World A is order `1..12`. World B is `8, 2, 11, 1, 5, 12, 3, 7, 9, 4, 6, 10`. A four-genome order is there for debugging the fold. It is not the proof.
+
+- Both grounds are on screen. A, B, and the pair view isolate one world or the selected body. Keys `1`–`5` are the official coupling sweep `0, 0.25, 0.5, 0.75, 1`, with the arm law off and leak at 0. `L` hides labels. A dot at the root is the highlight, so the name is not required to see which body is selected.
+- Contribution `h04` is selected by default. It is plant 4 in A and plant 10 in B.
+- The panel shows birth tension for that body in each world, overlaid condition trajectories, and a channel-distance table against the typical distance between different genomes in A. Those numbers are marked as measurements.
+- Density only, tension only, and a boundary pass that allows tension to add an arm are one click.
+- Notes stay in local storage.
+
+Placement now hears density through coupling. At coupling 0 the ground is the empty-garden arrangement, plus a separation nudge where two preferred spots overlap. The shapes match. The condition log still diverges, and tension is the final that carries the path on this set.
+
+`npx tsx lib/song-garden-lab/compare.test.ts` checks the published permutation, matching shapes at coupling 0, path-dependent tension, and a different bend for `h04` at full coupling.
 
 ---
 

@@ -50,7 +50,10 @@ export function organismFrom(
 ): Organism {
   const expressed = expressChannels(genome, birth, laws);
   const ribbon = realizeRibbon(genome, expressed, laws);
-  const position = { x: placeX(id, heardConditions(birth, laws), takenX), y: 0.78 };
+  const heard = heardConditions(birth, laws);
+  // Coupling 0 keeps the empty-ground arrangement. Density still accumulates in the log.
+  const placement = { ...heard, density: heard.density * Math.max(0, Math.min(1, laws.coupling)) };
+  const position = { x: placeX(id, placement, takenX), y: 0.78 };
   return {
     id,
     genome,
