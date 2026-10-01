@@ -9,12 +9,13 @@ import {
   compareFolds,
   permuteField,
 } from "@/lib/song-garden-lab/compare";
+import { foldSteps, plantedSteps, scaleConditions, type LogStep } from "@/lib/song-garden-lab/compost";
 import { depositOf } from "@/lib/song-garden-lab/conditions";
 import ComparePanel, { type CompareSpan, type CompareView } from "@/components/song-garden-lab/ComparePanel";
 import { drawCompare, drawGarden, type DrawHit } from "@/lib/song-garden-lab/draw";
 import { expressChannels } from "@/lib/song-garden-lab/express";
 import { foldLog, organismFrom } from "@/lib/song-garden-lab/fold";
-import { haltonGenomes, publishedField, type NamedGenome } from "@/lib/song-garden-lab/genomes";
+import { haltonGenomes, publishedField } from "@/lib/song-garden-lab/genomes";
 import { realizeRibbon } from "@/lib/song-garden-lab/grammar";
 import { ribbonHash } from "@/lib/song-garden-lab/hash";
 import { defaultLaws, zeroConditions } from "@/lib/song-garden-lab/laws";
@@ -46,9 +47,8 @@ export default function GardenLab() {
   const [laws, setLaws] = useState<Laws>(() => defaultLaws());
   const [solo, setSolo] = useState<Genome>(() => cloneGenome(SHEET[3].genome));
   const [birth, setBirth] = useState<Conditions>(() => zeroConditions());
-  const [field, setField] = useState<NamedGenome[]>(() =>
-    FIELD_SEED.map((item) => ({ id: item.id, genome: cloneGenome(item.genome) }))
-  );
+  const [field, setField] = useState<LogStep[]>(() => plantedSteps(FIELD_SEED));
+  const [moment, setMoment] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState("h04");
   const [growEpoch, setGrowEpoch] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
@@ -68,7 +68,8 @@ export default function GardenLab() {
     return organismFrom("solo", solo, birth, deposit, [], laws);
   }, [solo, birth, laws]);
 
-  const fieldFold = useMemo(() => foldLog(field, laws), [field, laws]);
+  const shownField = useMemo(() => (moment == null ? field : field.slice(0, moment)), [field, moment]);
+  const fieldFold = useMemo(() => foldSteps(shownField, laws), [shownField, laws]);
 
   const officialLaws = useMemo(() => defaultLaws({ ...laws, coupling: 0 }), [laws]);
 
@@ -127,7 +128,11 @@ export default function GardenLab() {
                 : foldA.organisms
             : fieldFold.organisms;
 
-  const selected = organisms.find((organism) => organism.id === selectedId) ?? organisms[0] ?? null;
+  const selected =
+    organisms.find((organism) => organism.id === selectedId) ??
+    (mode === "field" ? fieldFold.remnants.find((organism) => organism.id === selectedId) : undefined) ??
+    organisms[0] ??
+    null;
   const structureStable = selected ? sameStructure(selected, mode === "sheet" ? sheetLaws : laws) : false;
   const behavior = selected ? live(selected, selected.birthConditions, [], laws) : null;
 
@@ -140,6 +145,7 @@ export default function GardenLab() {
     worldA: foldA.organisms,
     worldB: foldB.organisms,
     pair: pairOrganisms,
+    remnants: [] as Organism[],
   });
   drawRef.current = {
     organisms,
@@ -150,6 +156,7 @@ export default function GardenLab() {
     worldA: foldA.organisms,
     worldB: foldB.organisms,
     pair: pairOrganisms,
+    remnants: laws.showRemnants ? fieldFold.remnants : [],
   };
 
   useEffect(() => {
@@ -211,6 +218,7 @@ export default function GardenLab() {
         hitsRef.current = drawGarden(ctx, current.organisms, {
           ...frameOptions,
           layout: current.mode === "sheet" ? "sheet" : "field",
+          remnants: current.mode === "field" ? current.remnants : [],
         });
       }
       frame = requestAnimationFrame(tick);
@@ -270,6 +278,21 @@ export default function GardenLab() {
       next.splice(target, 0, item);
       return next;
     });
+    setGrowEpoch((n) => n + 1);
+  }
+
+  function returnSelected() {
+    const organism = fieldFold.organisms.find((item) => item.id === selectedId);
+    if (!organism) return;
+    if (field.some((step) => step.type === "compost" && step.organismId === organism.id)) return;
+    const step: LogStep = {
+      id: `return-${organism.id}`,
+      type: "compost",
+      organismId: organism.id,
+      returns: scaleConditions(organism.deposit, laws.compostFraction),
+    };
+    setField((current) => [...current, step]);
+    setMoment(null);
     setGrowEpoch((n) => n + 1);
   }
 
@@ -333,7 +356,7 @@ export default function GardenLab() {
           {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
           {mode === "one" && "One genome against a birth you set. Zero birth is the pure gesture."}
           {mode === "sheet" && "Thirty genomes, each born at zero. This is the family, before the garden has a history."}
-          {mode === "field" && "Twelve planted in order onto one ground. Coupling 0 leaves them as themselves. Raise it to let birth conditions lean the later ones."}
+          {mode === "field" && "Twelve planted in order. Return gives part of a deposit back to the ground and takes that body off the living set. The planting stays in the log."}
         </p>
 
         <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -365,6 +388,9 @@ export default function GardenLab() {
               <p className="text-white/40">
                 source {selected.genome.motionSource} · register {selected.genome.register.toFixed(2)}
               </p>
+            )}
+            {mode === "field" && fieldFold.remnants.some((organism) => organism.id === selected.id) && (
+              <p className="text-white/50">Returned. The planting is still in the log.</p>
             )}
           </section>
         )}
@@ -509,22 +535,82 @@ export default function GardenLab() {
             <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">History</h2>
             <p className="mb-2 text-white/50">
               garden density {fieldFold.conditions.density.toFixed(3)} · pulse {fieldFold.conditions.pulse.toFixed(3)} ·
-              tension {fieldFold.conditions.tension.toFixed(3)}
+              tension {fieldFold.conditions.tension.toFixed(3)} · living {fieldFold.organisms.length}
             </p>
+            <p className="mb-2 leading-relaxed text-white/45">
+              A return is a fraction of that body&apos;s own deposit, added through the same diminishing fill. The fraction applies when you return a body. It is not a refund.
+              The number beside each planting is the tension it was born into. Coupling, above, is what lets that tension bend the ribbon.
+              Leak thins the ground after every event, including a return.
+            </p>
+            <LawSlider
+              label="return fraction"
+              value={laws.compostFraction}
+              onChange={(compostFraction) => patchLaws({ compostFraction })}
+            />
+            <LawSlider
+              label="leak"
+              value={laws.leak.density}
+              max={0.2}
+              onChange={(leak) => patchLaws({ leak: { density: leak, pulse: leak, tension: leak } })}
+            />
+            <Toggle
+              label="remnants"
+              on={laws.showRemnants}
+              onChange={(showRemnants) => patchLaws({ showRemnants })}
+            />
+            <button
+              type="button"
+              className="csc-link mb-3 disabled:opacity-40"
+              disabled={
+                !fieldFold.organisms.some((organism) => organism.id === selectedId) ||
+                field.some((step) => step.type === "compost" && step.organismId === selectedId)
+              }
+              onClick={returnSelected}
+            >
+              Return {selectedId} to the ground
+            </button>
+            <label className="mb-3 block text-white/60">
+              <span className="flex justify-between">
+                <span>moment</span>
+                <span>
+                  {moment ?? field.length} / {field.length}
+                </span>
+              </span>
+              <input
+                className="w-full"
+                type="range"
+                min={0}
+                max={field.length}
+                step={1}
+                value={moment ?? field.length}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setMoment(value >= field.length ? null : value);
+                }}
+              />
+            </label>
             <ol className="space-y-1">
               {field.map((entry, index) => {
-                const organism = fieldFold.organisms.find((item) => item.id === entry.id);
-                const active = entry.id === selected?.id;
+                const ahead = moment != null && index >= moment;
+                const organismId = entry.type === "compost" ? entry.organismId : entry.id;
+                const organism =
+                  fieldFold.organisms.find((item) => item.id === organismId) ??
+                  fieldFold.remnants.find((item) => item.id === organismId);
+                const active = organismId === selected?.id;
                 return (
-                  <li key={entry.id} className="flex items-center gap-2">
+                  <li key={entry.id} className="flex items-center gap-2" style={{ opacity: ahead ? 0.35 : 1 }}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(entry.id)}
+                      onClick={() => setSelectedId(organismId)}
                       className="flex-1 text-left"
                       style={{ color: active ? "#cfff81" : "rgba(255,255,255,0.7)" }}
                     >
-                      {index + 1}. {entry.id}
-                      {organism ? ` · bend ${organism.expressed.curvature.toFixed(2)}` : ""}
+                      {index + 1}. {entry.type === "compost" ? `return ${entry.organismId}` : entry.id}
+                      {entry.type === "compost"
+                        ? ` · density ${entry.returns.density.toFixed(3)}`
+                        : organism
+                          ? ` · tension ${organism.birthConditions.tension.toFixed(3)}`
+                          : ""}
                     </button>
                     <button type="button" className="px-1 text-white/40" onClick={() => moveField(index, -1)} aria-label="Earlier">
                       ↑
@@ -540,11 +626,12 @@ export default function GardenLab() {
               type="button"
               className="csc-link mt-3"
               onClick={() => {
-                setField(FIELD_SEED.map((item) => ({ id: item.id, genome: cloneGenome(item.genome) })));
+                setField(plantedSteps(FIELD_SEED));
+                setMoment(null);
                 setGrowEpoch((n) => n + 1);
               }}
             >
-              Reset order
+              Reset log
             </button>
           </section>
         )}

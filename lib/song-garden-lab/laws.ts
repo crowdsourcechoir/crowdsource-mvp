@@ -22,6 +22,8 @@ export function defaultLaws(partial?: Partial<Laws>): Laws {
     swayAmplitude: 0.07,
     showLabels: true,
     forceKnee: 0.75,
+    compostFraction: 0.5,
+    showRemnants: true,
     ...partial,
     leak: { density: 0, pulse: 0, tension: 0, ...partial?.leak },
     mute: { density: false, pulse: false, tension: false, ...partial?.mute },

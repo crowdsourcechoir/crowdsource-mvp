@@ -1,6 +1,6 @@
 # Song Garden — generative living world
 
-Status: **strategy, sharpened.** Experiments A, B, and C are built at `/lab/garden`. Audio output and the public garden are not.
+Status: **strategy, sharpened.** Experiments A–C and regeneration are built at `/lab/garden`. Audio output and the public garden are not.
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
 Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
@@ -12,7 +12,7 @@ The engine is unchanged:
 
 **ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
 
-This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A, B, and C are built. The public garden is not.
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A–C and regeneration are built. The public garden is not.
 
 ---
 
@@ -77,6 +77,17 @@ Voice is a mode on the same lab. It does not replace the grammar bench.
 Placement now hears density through coupling. At coupling 0 the ground is the empty-garden arrangement, plus a separation nudge where two preferred spots overlap. The shapes match. The condition log still diverges, and tension is the final that carries the path on this set.
 
 `npx tsx lib/song-garden-lab/compare.test.ts` checks the published permutation, matching shapes at coupling 0, path-dependent tension, and a different bend for `h04` at full coupling.
+
+### Regeneration, as built
+
+Field history is an event log. **Return to the ground** appends a `compost` event for the selected living body.
+
+- The return is `compostFraction` (default one half) of that body's own deposit. The fold adds it with the same diminishing update as a planting. The body leaves the living set. The planting event stays.
+- A faint, still remnant can be drawn at the old root. It is a view of the returned id, not a second organism. The ground slot stays taken.
+- Scrubbing the moment replays a prefix of the log, so a return can sit before a later planting and change that birth. The field list shows that birth tension. Coupling is what lets the tension bend the ribbon; at 0 the gesture stays and only the ground number moves.
+- Leak, default 0, thins all three conditions after every event. Raising it is the time experiment the fold already knew how to do.
+
+`npx tsx lib/song-garden-lab/compost.test.ts` checks that a return is not a refund, that the planting remains, and that returning before the next body changes that body's birth.
 
 ---
 

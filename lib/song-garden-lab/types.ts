@@ -64,6 +64,10 @@ export type Laws = {
   showLabels: boolean;
   /** Force above this is compressed in the grammar. Default 0.75. */
   forceKnee: number;
+  /** Fraction of a body's own deposit that returns to the ground when it is composted. */
+  compostFraction: number;
+  /** Faint view of a returned body. Not a second organism. */
+  showRemnants: boolean;
 };
 
 export type Tendencies = {
@@ -142,6 +146,8 @@ export type LabEvent = {
 export type FoldResult = {
   conditions: Conditions;
   organisms: Organism[];
+  /** Bodies removed by compost, frozen as they were when they left. */
+  remnants: Organism[];
   trajectory: Conditions[];
   warnings: string[];
 };

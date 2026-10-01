@@ -109,19 +109,21 @@ function drawOrganism(
   time: number,
   grow: number,
   laws: Laws,
-  selected: boolean
+  selected: boolean,
+  remnant = false
 ) {
   const behavior = live(organism, organism.birthConditions, [], laws);
-  const angle = Math.sin((time / organism.motion.periodSec) * Math.PI * 2 + organism.motion.phase) * behavior.swayAmplitude;
+  const sway = remnant ? 0 : Math.sin((time / organism.motion.periodSec) * Math.PI * 2 + organism.motion.phase) * behavior.swayAmplitude;
+  const shownGrow = remnant ? 1 : grow;
   const reach = organism.ribbon.spine[organism.ribbon.spine.length - 1].y;
-  const spine = swayPoints(organism.ribbon.spine, organism.ribbon.spine[0], angle, reach);
-  const body = clipRibbon(spine, organism.ribbon.widths, grow);
-  const alpha = selected ? 0.95 : 0.72;
+  const spine = swayPoints(organism.ribbon.spine, organism.ribbon.spine[0], sway, reach);
+  const body = clipRibbon(spine, organism.ribbon.widths, shownGrow);
+  const alpha = remnant ? (selected ? 0.28 : 0.14) : selected ? 0.95 : 0.72;
   paintRibbon(ctx, body.spine, body.widths, rootX, rootY, scale, alpha);
 
-  if (organism.ribbon.arm && organism.ribbon.armWidths && grow >= organism.ribbon.armStart) {
-    const armGrow = (grow - organism.ribbon.armStart) / Math.max(0.001, 1 - organism.ribbon.armStart);
-    const swayedArm = swayPoints(organism.ribbon.arm, organism.ribbon.spine[0], angle, reach);
+  if (organism.ribbon.arm && organism.ribbon.armWidths && shownGrow >= organism.ribbon.armStart) {
+    const armGrow = (shownGrow - organism.ribbon.armStart) / Math.max(0.001, 1 - organism.ribbon.armStart);
+    const swayedArm = swayPoints(organism.ribbon.arm, organism.ribbon.spine[0], sway, reach);
     const arm = clipRibbon(swayedArm, organism.ribbon.armWidths, armGrow);
     paintRibbon(ctx, arm.spine, arm.widths, rootX, rootY, scale, alpha * 0.9);
   }
@@ -133,8 +135,8 @@ function drawOrganism(
     ctx.fill();
   }
 
-  if (laws.showLabels && grow > 0.85) {
-    ctx.fillStyle = selected ? ACCENT : "rgba(207, 255, 129, 0.55)";
+  if (laws.showLabels && shownGrow > 0.85) {
+    ctx.fillStyle = remnant ? "rgba(207, 255, 129, 0.35)" : selected ? ACCENT : "rgba(207, 255, 129, 0.55)";
     ctx.font = "11px ui-monospace, monospace";
     ctx.textAlign = "center";
     ctx.fillText(organism.id, rootX, rootY + 16);
@@ -151,6 +153,7 @@ function paintField(
     laws: Laws;
     selectedId: string | null;
     label?: string;
+    remnants?: Organism[];
   }
 ): DrawHit[] {
   const { x, y, width, height } = bounds;
@@ -176,6 +179,13 @@ function paintField(
 
   const scale = Math.min(width, height) * 0.52;
   const hits: DrawHit[] = [];
+  for (const organism of options.remnants ?? []) {
+    const rootX = x + organism.position.x * width;
+    const rootY = groundY;
+    const selected = organism.id === options.selectedId;
+    drawOrganism(ctx, organism, rootX, rootY, scale, options.time, options.grow, options.laws, selected, true);
+    hits.push({ id: organism.id, x: rootX, y: rootY });
+  }
   for (const organism of organisms) {
     const rootX = x + organism.position.x * width;
     const rootY = groundY;
@@ -198,6 +208,7 @@ export function drawGarden(
     selectedId: string | null;
     layout: "field" | "sheet";
     marks?: { x: number; text: string }[];
+    remnants?: Organism[];
   }
 ): DrawHit[] {
   const { width, height, layout, laws } = options;
@@ -234,6 +245,7 @@ export function drawGarden(
       grow: options.grow,
       laws,
       selectedId: options.selectedId,
+      remnants: options.remnants,
     })
   );
   if (options.marks?.length) {

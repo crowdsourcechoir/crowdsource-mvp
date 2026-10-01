@@ -78,6 +78,7 @@ export function foldEvents(events: LabEvent[], laws: Laws): FoldResult {
   const warnings: string[] = [];
   const trajectory: Conditions[] = [{ ...conditions }];
   const takenX: number[] = [];
+  const remnants: Organism[] = [];
 
   for (const event of events) {
     if (event.type === "contribution.planted" && isPlanted(event.payload)) {
@@ -99,6 +100,8 @@ export function foldEvents(events: LabEvent[], laws: Laws): FoldResult {
       if (!living.has(event.payload.organismId)) {
         warnings.push(`compost missing ${event.payload.organismId}`);
       } else {
+        const returning = living.get(event.payload.organismId)!;
+        remnants.push(returning);
         living.delete(event.payload.organismId);
         conditions = applyDeposit(conditions, event.payload.returns, laws.leak);
       }
@@ -111,6 +114,7 @@ export function foldEvents(events: LabEvent[], laws: Laws): FoldResult {
   return {
     conditions,
     organisms: plantedOrder.filter((id) => living.has(id)).map((id) => living.get(id)!),
+    remnants,
     trajectory,
     warnings,
   };
