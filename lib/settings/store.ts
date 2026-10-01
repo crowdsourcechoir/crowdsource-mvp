@@ -1,3 +1,4 @@
+import { measurementIdFrom } from "@/lib/analytics/model";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 /**
@@ -24,12 +25,15 @@ export type WorkspaceSettings = {
   digest: DigestSettingsOverrides;
   /** Public SoBECA Song Garden copy override. Null uses the copy in code. */
   songGarden: unknown;
+  /** GA4 measurement id. Null means first-party analytics only. */
+  gaMeasurementId: string | null;
   updatedAt: string | null;
 };
 
 export const EMPTY_WORKSPACE_SETTINGS: WorkspaceSettings = {
   digest: { enabled: null, minScore: null, targetCount: null, recipient: null },
   songGarden: null,
+  gaMeasurementId: null,
   updatedAt: null,
 };
 
@@ -105,6 +109,7 @@ export function normalizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
       recipient: coerceEmail(digest.recipient),
     },
     songGarden: source.songGarden === undefined ? null : source.songGarden,
+    gaMeasurementId: measurementIdFrom(source.gaMeasurementId),
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : null,
   };
 }
@@ -146,7 +151,7 @@ export async function readWorkspaceSettings(options?: { skipCache?: boolean }): 
 }
 
 export async function writeWorkspaceSettings(
-  patch: Partial<{ digest: Partial<DigestSettingsOverrides>; songGarden: unknown }>
+  patch: Partial<{ digest: Partial<DigestSettingsOverrides>; songGarden: unknown; gaMeasurementId: string | null }>
 ): Promise<WorkspaceSettingsRead> {
   if (!supabaseAdmin) {
     return {
@@ -163,6 +168,9 @@ export async function writeWorkspaceSettings(
     songGarden: Object.prototype.hasOwnProperty.call(patch, "songGarden")
       ? patch.songGarden
       : current.settings.songGarden,
+    gaMeasurementId: Object.prototype.hasOwnProperty.call(patch, "gaMeasurementId")
+      ? measurementIdFrom(patch.gaMeasurementId)
+      : current.settings.gaMeasurementId,
     updatedAt: new Date().toISOString(),
   });
 

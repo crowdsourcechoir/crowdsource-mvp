@@ -160,6 +160,8 @@ export function isPublicPath(pathname: string, method: string, searchParams: URL
   }
   // Visitors unlock the public SoBECA pitch here. Saving or clearing the password stays owner-only.
   if (method === "POST" && pathname === "/api/sobeca-song-garden/access") return true;
+  if (method === "POST" && pathname === "/api/analytics/collect") return true;
+  if (method === "GET" && pathname === "/api/analytics/config") return true;
   if (pathname === "/api/auth/invite" || pathname === "/api/auth/logout") return true;
   if (pathname === "/api/auth/session" && method === "GET") return true;
 

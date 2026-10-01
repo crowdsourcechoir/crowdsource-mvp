@@ -252,6 +252,22 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     blurb: "Operator-facing preferences for this Crowdsource workspace.",
     cards: [
       {
+        id: "analytics",
+        domain: "Audience",
+        title: "Analytics",
+        description: "Visitors, places, time on page",
+        href: "/admin/settings/analytics",
+        statusLabel: "View",
+        status: "live",
+        controls: [
+          "Visitors, sessions, page views, and time on page",
+          "Countries and cities",
+          "Segments for SoBECA, Song Garden, Bloom, Garden, and Live",
+          "Pages, referring sites, and devices",
+          "Optional Google Analytics measurement id",
+        ],
+      },
+      {
         id: "song-garden-pitch",
         domain: "Content",
         title: "Song Garden pitch",

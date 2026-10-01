@@ -51,6 +51,10 @@ const checks: Array<[string, boolean]> = [
   ["anon admin", decide("/admin/gardens", "GET", null).kind === "redirect"],
   ["anon pitch unlock", decide("/api/sobeca-song-garden/access", "POST", null).kind === "public"],
   ["anon pitch password save", decide("/api/sobeca-song-garden/access", "PATCH", null).kind === "deny"],
+  ["anon analytics collect", decide("/api/analytics/collect", "POST", null).kind === "public"],
+  ["anon analytics config", decide("/api/analytics/config", "GET", null).kind === "public"],
+  ["anon analytics report", decide("/api/analytics/report", "GET", null).kind === "deny"],
+  ["owner analytics report", decide("/api/analytics/report", "GET", owner).kind === "allow"],
   ["artist home", homePath(artist) === "/admin/composer?bloom=bloom-1"],
   ["sales home", homePath(sales) === "/admin/sales"],
 ];
