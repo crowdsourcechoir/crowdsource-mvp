@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import GardenLab from "@/components/song-garden-lab/GardenLab";
 
 export const metadata: Metadata = {
-  title: "Grammar bench",
+  title: "Garden lab",
   robots: { index: false, follow: false },
 };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { AnalysisReading } from "@/lib/song-garden-lab/analyze";
 import { depositOf } from "@/lib/song-garden-lab/conditions";
 import { drawGarden, type DrawHit } from "@/lib/song-garden-lab/draw";
 import { expressChannels } from "@/lib/song-garden-lab/express";
@@ -12,8 +13,9 @@ import { defaultLaws, zeroConditions } from "@/lib/song-garden-lab/laws";
 import { live } from "@/lib/song-garden-lab/live";
 import type { Conditions, Genome, Laws, Organism, StructuralAxis } from "@/lib/song-garden-lab/types";
 import { STRUCTURAL_AXES } from "@/lib/song-garden-lab/types";
+import VoicePanel from "@/components/song-garden-lab/VoicePanel";
 
-type Mode = "one" | "sheet" | "field";
+type Mode = "one" | "sheet" | "field" | "voice";
 
 const SHEET = haltonGenomes(30);
 const FIELD_SEED = publishedField();
@@ -42,6 +44,7 @@ export default function GardenLab() {
   const [selectedId, setSelectedId] = useState("h04");
   const [growEpoch, setGrowEpoch] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
+  const [voiceReading, setVoiceReading] = useState<AnalysisReading | null>(null);
 
   const sheetLaws = useMemo(
     () => defaultLaws({ ...laws, coupling: 0, mute: { density: true, pulse: true, tension: true } }),
@@ -57,8 +60,28 @@ export default function GardenLab() {
 
   const fieldFold = useMemo(() => foldLog(field, laws), [field, laws]);
 
+  const officialLaws = useMemo(() => defaultLaws({ ...laws, coupling: 0 }), [laws]);
+
+  const voiceOrganisms = useMemo(() => {
+    if (!voiceReading) return [];
+    const genome = voiceReading.genome;
+    const origin = zeroConditions();
+    const atZero = organismFrom(
+      "at zero",
+      genome,
+      origin,
+      depositOf(genome, origin, officialLaws),
+      [],
+      officialLaws
+    );
+    const inLab = organismFrom("in lab", genome, birth, depositOf(genome, birth, laws), [], laws);
+    atZero.position = { x: 0.32, y: 0.78 };
+    inLab.position = { x: 0.68, y: 0.78 };
+    return [atZero, inLab];
+  }, [voiceReading, birth, laws, officialLaws]);
+
   const organisms: Organism[] =
-    mode === "sheet" ? sheetOrganisms : mode === "one" ? [soloOrganism] : fieldFold.organisms;
+    mode === "sheet" ? sheetOrganisms : mode === "one" ? [soloOrganism] : mode === "voice" ? voiceOrganisms : fieldFold.organisms;
 
   const selected = organisms.find((organism) => organism.id === selectedId) ?? organisms[0] ?? null;
   const structureStable = selected ? sameStructure(selected, mode === "sheet" ? sheetLaws : laws) : false;
@@ -154,13 +177,14 @@ export default function GardenLab() {
       <div className="relative min-h-[52dvh] flex-1 md:min-h-0">
         <canvas ref={canvasRef} onClick={onCanvasClick} className="h-full w-full cursor-pointer" />
         <p className="pointer-events-none absolute left-4 top-3 font-mono text-[11px] tracking-wide text-[#cfff81]/80">
-          Grammar bench · draft {laws.rulesVersion}
+          Garden lab · draft {laws.rulesVersion}
         </p>
       </div>
       <aside className="h-[48dvh] overflow-y-auto border-t border-white/10 px-4 py-3 font-mono text-[11px] md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-t-0">
         <div className="mb-3 flex gap-2">
           {(
             [
+              ["voice", "Voice"],
               ["one", "One"],
               ["sheet", "Sheet"],
               ["field", "Field"],
@@ -172,7 +196,7 @@ export default function GardenLab() {
               onClick={() => {
                 setMode(id);
                 setGrowEpoch((n) => n + 1);
-                setSelectedId(id === "one" ? "solo" : "h04");
+                setSelectedId(id === "one" ? "solo" : id === "voice" ? "at zero" : "h04");
               }}
               className="rounded-full border px-3 py-1"
               style={{
@@ -187,6 +211,7 @@ export default function GardenLab() {
         </div>
 
         <p className="mb-3 leading-relaxed text-white/55">
+          {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
           {mode === "one" && "One genome against a birth you set. Zero birth is the pure gesture."}
           {mode === "sheet" && "Thirty genomes, each born at zero. This is the family, before the garden has a history."}
           {mode === "field" && "Twelve planted in order onto one ground. Coupling 0 leaves them as themselves. Raise it to let birth conditions lean the later ones."}
@@ -217,7 +242,24 @@ export default function GardenLab() {
               birth density {selected.birthConditions.density.toFixed(3)} · pulse {selected.birthConditions.pulse.toFixed(3)} ·
               tension {selected.birthConditions.tension.toFixed(3)}
             </p>
+            {mode === "voice" && (
+              <p className="text-white/40">
+                source {selected.genome.motionSource} · register {selected.genome.register.toFixed(2)}
+              </p>
+            )}
           </section>
+        )}
+
+        {mode === "voice" && (
+          <VoicePanel
+            birth={birth}
+            onBirth={setBirth}
+            onReading={(reading) => {
+              setVoiceReading(reading);
+              setSelectedId("at zero");
+              setGrowEpoch((n) => n + 1);
+            }}
+          />
         )}
 
         {mode === "one" && (
@@ -249,6 +291,7 @@ export default function GardenLab() {
         <section className="mb-4 border-t border-white/10 pt-3">
           <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">Laws</h2>
           <LawSlider label="coupling" value={laws.coupling} onChange={(coupling) => patchLaws({ coupling })} />
+          <LawSlider label="force knee" value={laws.forceKnee} onChange={(forceKnee) => patchLaws({ forceKnee })} />
           <div className="mb-2 flex gap-3">
             {[0, 0.5, 1].map((value) => (
               <button key={value} type="button" className="csc-link" onClick={() => patchLaws({ coupling: value })}>

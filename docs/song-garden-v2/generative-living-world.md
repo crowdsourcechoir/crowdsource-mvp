@@ -1,6 +1,6 @@
 # Song Garden — generative living world
 
-Status: **strategy, sharpened.** Experiment A (grammar bench) is built at `/lab/garden`. Voice, World A/B as the official proof, audio, and the public garden are not.
+Status: **strategy, sharpened.** Experiments A and B are built at `/lab/garden`. World A/B as the official proof, audio output, and the public garden are not.
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
 Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
@@ -12,7 +12,7 @@ The engine is unchanged:
 
 **ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
 
-This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiment A is the only part that has been built.
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A and B are built. The two-order proof is not.
 
 ---
 
@@ -40,7 +40,7 @@ The microphone analyser records loudness and discards everything else. There is 
 
 ### Experiment A, as built
 
-`/lab/garden` is a local lab. It draws the rooted ribbon from synthetic genomes. There is no microphone and no model.
+`/lab/garden` is a local lab. It draws the rooted ribbon, and it can quantize a short recording into the genome that draws that ribbon. There is no model.
 
 - **One** edits the six axes and a birth condition vector, and replays germination.
 - **Sheet** shows the thirty Halton genomes, each born at zero.
@@ -50,7 +50,19 @@ The microphone analyser records loudness and discards everything else. There is 
 - Laws include sway, the linear foil, the tension-arm toggle, centered pull, and mutes.
 - `foldEvents` already accepts a `compost` event and skips unknown types. The bench does not emit them.
 
-The engine is `lib/song-garden-lab/`. `npx tsx lib/song-garden-lab/lab.test.ts` checks quantization, replay, resistance, the arm law, path-dependent tension, and compost.
+The engine is `lib/song-garden-lab/`. `npx tsx lib/song-garden-lab/lab.test.ts` checks quantization, replay, resistance, the arm law, path-dependent tension, and compost. `npx tsx lib/song-garden-lab/analyze.test.ts` checks the voice measurement.
+
+### Experiment B, as built
+
+Voice is a mode on the same lab. It does not replace the grammar bench.
+
+- Record up to eight seconds, import a file, or analyze a built-in test tone. The tone exists so the mapping can be checked with no microphone.
+- The take is resampled to 16 kHz. Raw, normalized, and quantized values sit beside the body. Bounds are fixed, and a session never refits them.
+- The quantized genome is what is stored. Re-analyzing the same audio matches those bytes. Drop audio leaves the organism.
+- The left body is the official reading: zero birth, coupling 0. The right body is the same genome at the lab’s current birth and coupling.
+- Character prompts label the take. They do not name the six axes.
+- A session plot marks each axis. An axis that barely moves across two or more takes is marked as a dead wire.
+- The session restores from local storage. The audio does not.
 
 ---
 
@@ -248,7 +260,7 @@ Global exclusions for all three: no public route, no AI, no Runway, no image gen
 
 **What we learn.** Whether there is a visual language worth mapping sound onto. If the field reads as logos, the next change is the ground and the stroke, not an L-system.
 
-**Not built.** Microphone, analysis, World A/B as the official test (the toggle may exist), audio, behavior beyond idle sway.
+**Not built in A.** World A/B as the official test, sounded output, behavior beyond idle sway. Voice analysis is Experiment B.
 
 ### B — Voice → genome
 

@@ -12,7 +12,8 @@ export function realizeRibbon(genome: Genome, expressed: Expressed, laws: Laws):
   const lean = (genome.articulation - 0.5) * expressed.asymmetry;
   const length = (0.22 + 0.58 * expressed.scale) * laws.lengthScale;
   const kappa = expressed.curvature * laws.curvatureScale * 2.2 * side;
-  const forceMass = genome.force <= 0.75 ? genome.force : 0.75 + (genome.force - 0.75) * 0.35;
+  const kneeAt = laws.forceKnee;
+  const forceMass = genome.force <= kneeAt ? genome.force : kneeAt + (genome.force - kneeAt) * 0.35;
   const baseW = (0.014 + 0.048 * forceMass) * laws.widthScale * (1.2 - 0.5 * expressed.fineness);
   const tipW = baseW * (0.1 + 0.28 * (1 - expressed.fineness)) * (0.4 + 0.6 * genome.sustain);
 

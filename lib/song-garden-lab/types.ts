@@ -62,6 +62,8 @@ export type Laws = {
   /** Radians at the tip. */
   swayAmplitude: number;
   showLabels: boolean;
+  /** Force above this is compressed in the grammar. Default 0.75. */
+  forceKnee: number;
 };
 
 export type Tendencies = {

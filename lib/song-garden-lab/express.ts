@@ -2,9 +2,9 @@ import { heardConditions } from "./conditions";
 import { clamp } from "./quantize";
 import type { Conditions, Expressed, Genome, Laws, Tendencies } from "./types";
 
-function knee(x: number): number {
-  if (x <= 0.75) return x;
-  return 0.75 + (x - 0.75) * 0.35;
+function knee(x: number, at: number): number {
+  if (x <= at) return x;
+  return at + (x - at) * 0.35;
 }
 
 export function tendenciesOf(genome: Genome, laws: Laws): Tendencies {
@@ -19,7 +19,7 @@ export function tendenciesOf(genome: Genome, laws: Laws): Tendencies {
       secondaryArm: arm,
     };
   }
-  const force = knee(genome.force);
+  const force = knee(genome.force, laws.forceKnee);
   return {
     scale: clamp(0.32 + 0.68 * Math.sqrt(force * (0.25 + 0.75 * genome.sustain))),
     curvature: clamp(Math.pow(genome.motion, 1.35) * (0.55 + 0.45 * (1 - genome.stillness))),
