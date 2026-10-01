@@ -170,8 +170,8 @@ function paintField(
   if (options.label) {
     ctx.fillStyle = "rgba(207, 255, 129, 0.8)";
     ctx.font = "11px ui-monospace, monospace";
-    ctx.textAlign = "left";
-    ctx.fillText(options.label, x + 16, y + 22);
+    ctx.textAlign = "right";
+    ctx.fillText(options.label, x + width - 16, y + 28);
   }
 
   const scale = Math.min(width, height) * 0.52;
@@ -197,6 +197,7 @@ export function drawGarden(
     laws: Laws;
     selectedId: string | null;
     layout: "field" | "sheet";
+    marks?: { x: number; text: string }[];
   }
 ): DrawHit[] {
   const { width, height, layout, laws } = options;
@@ -235,6 +236,14 @@ export function drawGarden(
       selectedId: options.selectedId,
     })
   );
+  if (options.marks?.length) {
+    ctx.fillStyle = "rgba(207, 255, 129, 0.8)";
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    for (const mark of options.marks) {
+      ctx.fillText(mark.text, mark.x * width, 28);
+    }
+  }
   return hits;
 }
 

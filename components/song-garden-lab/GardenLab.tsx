@@ -197,7 +197,14 @@ export default function GardenLab() {
           frameOptions
         );
       } else if (current.mode === "compare" && current.compareView === "pair") {
-        hitsRef.current = drawGarden(ctx, current.pair, { ...frameOptions, layout: "field" });
+        hitsRef.current = drawGarden(ctx, current.pair, {
+          ...frameOptions,
+          layout: "field",
+          marks: [
+            { x: 0.32, text: "A" },
+            { x: 0.68, text: "B" },
+          ],
+        });
       } else if (current.mode === "compare" && current.compareView === "b") {
         hitsRef.current = drawGarden(ctx, current.worldB, { ...frameOptions, layout: "field" });
       } else {
