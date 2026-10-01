@@ -1,6 +1,6 @@
 # Song Garden — generative living world
 
-Status: **strategy, sharpened** (no build)
+Status: **strategy, sharpened.** Experiment A (grammar bench) is built at `/lab/garden`. Voice, World A/B as the official proof, audio, and the public garden are not.
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
 Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
@@ -12,7 +12,7 @@ The engine is unchanged:
 
 **ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
 
-This pass sharpens the laws, the lab that is supposed to discover them, and the proof. It does not start a build.
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiment A is the only part that has been built.
 
 ---
 
@@ -36,7 +36,21 @@ Song Garden V2 is a short visit over a designed picture. `WorldJourney` on `/e/[
 
 The microphone analyser records loudness and discards everything else. There is no canvas ecology and no synthesis engine. The stack is Next.js 14, React 18, and Framer Motion. `openai` and Runway already exist in the repo. Runway makes pictures of gardens. It is not a tool for this work.
 
-`/e/[slug]` and `/g/[slug]` stay as they are. The lab is a separate route when it exists. This document does not create it.
+`/e/[slug]` and `/g/[slug]` stay as they are. The grammar bench lives at `/lab/garden` and does not replace them.
+
+### Experiment A, as built
+
+`/lab/garden` is a local lab. It draws the rooted ribbon from synthetic genomes. There is no microphone and no model.
+
+- **One** edits the six axes and a birth condition vector, and replays germination.
+- **Sheet** shows the thirty Halton genomes, each born at zero.
+- **Field** plants the published twelve in order. Coupling `0`, `0.5`, and `1` are one click. Reordering the log refolds the draft.
+- The selected body shows its hash. The same genome, birth, and laws are expressed twice and compared to the drawn ribbon.
+- Frame time is shown from the canvas loop.
+- Laws include sway, the linear foil, the tension-arm toggle, centered pull, and mutes.
+- `foldEvents` already accepts a `compost` event and skips unknown types. The bench does not emit them.
+
+The engine is `lib/song-garden-lab/`. `npx tsx lib/song-garden-lab/lab.test.ts` checks quantization, replay, resistance, the arm law, path-dependent tension, and compost.
 
 ---
 
