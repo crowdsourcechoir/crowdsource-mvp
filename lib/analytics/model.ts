@@ -238,7 +238,7 @@ function averageSeconds(events: VisitEvent[]): number {
 function topCounts<T extends string>(items: T[], limit: number): { key: T; count: number }[] {
   const counts = new Map<T, number>();
   for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1);
-  return [...counts.entries()]
+  return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, limit)
     .map(([key, count]) => ({ key, count }));
@@ -265,7 +265,7 @@ export function aggregateVisits(
     sessions.set(event.sid, list);
   }
   let engaged = 0;
-  for (const list of sessions.values()) {
+  for (const list of Array.from(sessions.values())) {
     const time = list.reduce((sum, event) => sum + event.ms, 0);
     if (list.length >= 2 || time >= ENGAGED_MS) engaged += 1;
   }
@@ -283,7 +283,7 @@ export function aggregateVisits(
     list.push(event);
     countryGroups.set(event.country, list);
   }
-  const countries = [...countryGroups.entries()]
+  const countries = Array.from(countryGroups.entries())
     .map(([code, list]) => ({
       code,
       name: countryName(code),
@@ -301,7 +301,7 @@ export function aggregateVisits(
     list.push(event);
     cityGroups.set(label, list);
   }
-  const cities = [...cityGroups.entries()]
+  const cities = Array.from(cityGroups.entries())
     .map(([label, list]) => ({
       label,
       visitors: new Set(list.map((event) => event.vid)).size,
@@ -328,7 +328,7 @@ export function aggregateVisits(
     list.push(event);
     entityGroups.set(key, list);
   }
-  const entities = [...entityGroups.entries()]
+  const entities = Array.from(entityGroups.entries())
     .map(([key, list]) => {
       const [segmentId, entity] = key.split("\n") as [SegmentId, string];
       return {
@@ -349,7 +349,7 @@ export function aggregateVisits(
     list.push(event);
     pageGroups.set(event.path, list);
   }
-  const pages = [...pageGroups.entries()]
+  const pages = Array.from(pageGroups.entries())
     .map(([path, list]) => ({
       path,
       visitors: new Set(list.map((event) => event.vid)).size,
@@ -396,7 +396,7 @@ export function aggregateVisits(
         list.push(event);
         groups.set(event.host, list);
       }
-      return [...groups.entries()]
+      return Array.from(groups.entries())
         .map(([host, list]) => ({
           host,
           views: list.length,
