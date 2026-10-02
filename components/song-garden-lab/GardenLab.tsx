@@ -20,6 +20,8 @@ import { realizeRibbon } from "@/lib/song-garden-lab/grammar";
 import { ribbonHash } from "@/lib/song-garden-lab/hash";
 import { defaultLaws, zeroConditions } from "@/lib/song-garden-lab/laws";
 import { live } from "@/lib/song-garden-lab/live";
+import { noteName, sounding } from "@/lib/song-garden-lab/sound";
+import SoundBed from "@/components/song-garden-lab/SoundBed";
 import type { Conditions, Genome, Laws, Organism, StructuralAxis } from "@/lib/song-garden-lab/types";
 import { STRUCTURAL_AXES } from "@/lib/song-garden-lab/types";
 import VoicePanel from "@/components/song-garden-lab/VoicePanel";
@@ -55,6 +57,9 @@ export default function GardenLab() {
   const [voiceReading, setVoiceReading] = useState<AnalysisReading | null>(null);
   const [compareView, setCompareView] = useState<CompareView>("both");
   const [compareSpan, setCompareSpan] = useState<CompareSpan>("twelve");
+  const [soundOn, setSoundOn] = useState(false);
+  const [timePassing, setTimePassing] = useState(false);
+  const tickSerial = useRef(0);
 
   const sheetLaws = useMemo(
     () => defaultLaws({ ...laws, coupling: 0, mute: { density: true, pulse: true, tension: true } }),
@@ -113,6 +118,17 @@ export default function GardenLab() {
     ];
   }, [foldA, foldB, focusId]);
 
+  const soundConditions: Conditions =
+    mode === "field"
+      ? fieldFold.conditions
+      : mode === "compare"
+        ? compareView === "b"
+          ? foldB.conditions
+          : foldA.conditions
+        : mode === "sheet"
+          ? zeroConditions()
+          : birth;
+
   const organisms: Organism[] =
     mode === "sheet"
       ? sheetOrganisms
@@ -127,6 +143,11 @@ export default function GardenLab() {
                 ? foldB.organisms
                 : foldA.organisms
             : fieldFold.organisms;
+
+  const soundFrame = useMemo(
+    () => sounding(organisms, soundConditions, laws),
+    [organisms, soundConditions, laws]
+  );
 
   const selected =
     organisms.find((organism) => organism.id === selectedId) ??
@@ -265,6 +286,20 @@ export default function GardenLab() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode]);
 
+  useEffect(() => {
+    if (mode !== "field") setTimePassing(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!timePassing || mode !== "field" || moment !== null) return;
+    const id = window.setInterval(() => {
+      tickSerial.current += 1;
+      const stepId = `tick-${tickSerial.current}`;
+      setField((current) => [...current, { id: stepId, type: "tick" }]);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [timePassing, mode, moment]);
+
   function patchLaws(patch: Partial<Laws>) {
     setLaws((current) => defaultLaws({ ...current, ...patch }));
   }
@@ -363,8 +398,29 @@ export default function GardenLab() {
           <button type="button" className="csc-link" onClick={() => setGrowEpoch((n) => n + 1)}>
             Grow again
           </button>
+          <button type="button" className="csc-link" onClick={() => setSoundOn((on) => !on)}>
+            {soundOn ? "Sound off" : "Sound"}
+          </button>
           <span className="text-white/40">{frameMs ? `${frameMs.toFixed(1)} ms/frame` : ""}</span>
         </div>
+
+        <section className="mb-4 border-t border-white/10 pt-3">
+          <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">Sound</h2>
+          <p className="mb-2 leading-relaxed text-white/45">
+            Density caps the air. Pulse is the tempo. Tension is how far each stored register sits from{" "}
+            {noteName(soundFrame.centerMidi)}. The speakers play this reading.
+          </p>
+          <p className="text-white/60" data-sound-reading="">
+            {soundOn ? "sound on" : "sound off"} · thickness {soundFrame.thickness.toFixed(3)} · tempo{" "}
+            {soundFrame.tempoHz.toFixed(2)} Hz ·{" "}
+            {soundFrame.voices.length === 0
+              ? "no voices"
+              : soundFrame.voices.every((voice) => Math.abs(voice.midi - soundFrame.voices[0].midi) < 0.05)
+                ? `one pitch ${noteName(soundFrame.voices[0].midi)}`
+                : `${soundFrame.voices.length} pitches`}
+          </p>
+        </section>
+        <SoundBed enabled={soundOn} frame={soundFrame} />
 
         {selected && mode !== "compare" && (
           <section className="mb-4 border-t border-white/10 pt-3">
@@ -553,6 +609,19 @@ export default function GardenLab() {
               max={0.2}
               onChange={(leak) => patchLaws({ leak: { density: leak, pulse: leak, tension: leak } })}
             />
+            <button
+              type="button"
+              className="csc-link mb-3 disabled:opacity-40"
+              disabled={laws.leak.density === 0 && laws.leak.pulse === 0 && laws.leak.tension === 0}
+              onClick={() => setTimePassing((passing) => !passing)}
+            >
+              {timePassing ? "Hold time" : "Let time pass"}
+            </button>
+            <p className="mb-2 text-white/45">
+              {timePassing
+                ? "Each second is an event. The living bodies stay. The ground thins, and the next birth hears it."
+                : "Raise leak, then let time pass. Moving leak recomputes every event already in the log. At zero, a second changes nothing."}
+            </p>
             <Toggle
               label="remnants"
               on={laws.showRemnants}
@@ -592,25 +661,30 @@ export default function GardenLab() {
             <ol className="space-y-1">
               {field.map((entry, index) => {
                 const ahead = moment != null && index >= moment;
-                const organismId = entry.type === "compost" ? entry.organismId : entry.id;
+                const organismId = entry.type === "contribution.planted" ? entry.id : entry.type === "compost" ? entry.organismId : "";
                 const organism =
                   fieldFold.organisms.find((item) => item.id === organismId) ??
                   fieldFold.remnants.find((item) => item.id === organismId);
-                const active = organismId === selected?.id;
+                const active = organismId !== "" && organismId === selected?.id;
                 return (
                   <li key={entry.id} className="flex items-center gap-2" style={{ opacity: ahead ? 0.35 : 1 }}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(organismId)}
+                      onClick={() => {
+                        if (organismId) setSelectedId(organismId);
+                      }}
                       className="flex-1 text-left"
                       style={{ color: active ? "#cfff81" : "rgba(255,255,255,0.7)" }}
                     >
-                      {index + 1}. {entry.type === "compost" ? `return ${entry.organismId}` : entry.id}
+                      {index + 1}.{" "}
+                      {entry.type === "compost" ? `return ${entry.organismId}` : entry.type === "tick" ? "time" : entry.id}
                       {entry.type === "compost"
                         ? ` · density ${entry.returns.density.toFixed(3)}`
-                        : organism
-                          ? ` · tension ${organism.birthConditions.tension.toFixed(3)}`
-                          : ""}
+                        : entry.type === "tick"
+                          ? ""
+                          : organism
+                            ? ` · tension ${organism.birthConditions.tension.toFixed(3)}`
+                            : ""}
                     </button>
                     <button type="button" className="px-1 text-white/40" onClick={() => moveField(index, -1)} aria-label="Earlier">
                       ↑
@@ -626,6 +700,7 @@ export default function GardenLab() {
               type="button"
               className="csc-link mt-3"
               onClick={() => {
+                setTimePassing(false);
                 setField(plantedSteps(FIELD_SEED));
                 setMoment(null);
                 setGrowEpoch((n) => n + 1);

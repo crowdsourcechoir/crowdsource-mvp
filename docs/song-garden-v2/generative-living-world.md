@@ -1,6 +1,6 @@
 # Song Garden — generative living world
 
-Status: **strategy, sharpened.** Experiments A–C and regeneration are built at `/lab/garden`. Audio output and the public garden are not.
+Status: **strategy, sharpened.** Experiments A–C, regeneration, the leak clock, and sound are built at `/lab/garden`. Language and the public garden are not.
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
 Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
@@ -12,7 +12,7 @@ The engine is unchanged:
 
 **ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
 
-This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A–C and regeneration are built. The public garden is not.
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A–C, regeneration, the leak clock, and sound are built. Language and the public garden are not.
 
 ---
 
@@ -85,9 +85,15 @@ Field history is an event log. **Return to the ground** appends a `compost` even
 - The return is `compostFraction` (default one half) of that body's own deposit. The fold adds it with the same diminishing update as a planting. The body leaves the living set. The planting event stays.
 - A faint, still remnant can be drawn at the old root. It is a view of the returned id, not a second organism. The ground slot stays taken.
 - Scrubbing the moment replays a prefix of the log, so a return can sit before a later planting and change that birth. The field list shows that birth tension. Coupling is what lets the tension bend the ribbon; at 0 the gesture stays and only the ground number moves.
-- Leak, default 0, thins all three conditions after every event. Raising it is the time experiment the fold already knew how to do.
+- Leak, default 0, thins all three conditions after every event. **Let time pass** appends a `tick` each second, and that second is an event. The living bodies stay. The next birth hears the thinner ground. At leak 0 a second changes nothing.
 
 `npx tsx lib/song-garden-lab/compost.test.ts` checks that a return is not a refund, that the planting remains, and that returning before the next body changes that body's birth.
+
+### Sound, as built
+
+**Sound** plays the fold that is on screen. Density, after the ceiling, is how thick the air is. Pulse is the tempo of that air. Tension is how far each body's stored register sits from C4. Register 0.5, which is every published genome and every unpitched take, stays on C4, so those bodies share one pitch. A sung register spreads toward C2 and C6 only as tension rises. Turning tension off in the mutes pulls every voice back to the center.
+
+The canvas is not an input. `npx tsx lib/song-garden-lab/sound.test.ts` checks the pitch span, the ceiling, a muted tension, and that a tick thins the ground without removing a body.
 
 ---
 
@@ -380,7 +386,7 @@ Because the update is `c ← c + deposit * (1 - c)`, a large deposit applied ear
 
 Leak is `c ← c * (1 - leak)` after each event. Official C runs use `leak = 0`. The parameter exists so regeneration and long time can fade a condition later without a new architecture.
 
-| Variable | What deposits | Saturation | Leak in A–C | Effect on the next organism | Visible as | Later sound, not built |
+| Variable | What deposits | Saturation | Leak in A–C | Effect on the next organism | Visible as | Sound, as built |
 | --- | --- | --- | --- | --- | --- | --- |
 | `density` | `g * (0.35 + 0.65 * sustain * (1 - stillness)) * (0.5 + 0.5 * force)` | Diminishing, as above | 0 | Pushes scale down and spacing tighter, within the channel limit | Bodies sit closer and slightly smaller. The ground itself does not fog over. | How thick the air is allowed to get |
 | `pulse` | `g * articulation` | Diminishing | 0 | Pushes the frozen motion period shorter, within limit | Germination and idle sway carry the period baked at birth | The tempo of a drone |
@@ -527,19 +533,17 @@ A remnant, if one is ever drawn, is behavior or a view of a composted id. It is 
 
 This works only because the world is a fold. A–C does not emit `compost`. It also does not store the living set as an append-only document that later code cannot amend.
 
-A slow leak on the three conditions is the other half of regeneration: what nobody renews eventually thins. Leak stays at 0 until a time experiment, and the update rule already has a place for it.
+A slow leak on the three conditions is the other half of regeneration: what nobody renews eventually thins. Leak still defaults to 0. **Let time pass** appends one `tick` per second, and each tick applies the leak. The living set does not change.
 
 ---
 
-## 13. Audio, later, from the same fold
+## 13. Audio, from the same fold
 
-A–C produces no sound. The data model still has a place for it.
+`sounding(organisms, conditions, laws)` reads the folded state. Density supplies thickness, up to `densityCeiling`. Pulse supplies tempo. Tension supplies distance from `scaleCenterMidi`, across `scaleSpanSemitones`. Latent `register` on each living genome supplies the direction. The ribbon is not an input. There is no second simulation.
 
-A future `sound(state)` reads the same folded state `draw(state)` reads. Conditions supply thickness, tempo, and distance from the center of a scale. Latent `register` on each living genome supplies pitch material. Pixels supply nothing. There is no second simulation that can drift from the picture.
+Register stays off the structural axes. `express` still ignores it. Dropping it would force a later re-analysis and break the rule that other devices replay the genome.
 
-That is why register is stored now and ignored by `express`. Dropping it would force a later re-analysis and break the rule that other devices replay the genome.
-
-The scale, the register bounds, and the density ceiling are laws, parallel to the drawing laws. They are not a backing track. They are not in A–C except as unused fields the lab can display so we notice if capture is failing.
+The scale center, the span, and the density ceiling are laws, parallel to the drawing laws. They are not a backing track. The published twelve sit at register 0.5, so they share the center pitch. That is the set, not a missing oscillator.
 
 ---
 

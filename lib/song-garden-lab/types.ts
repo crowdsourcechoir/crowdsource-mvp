@@ -68,6 +68,12 @@ export type Laws = {
   compostFraction: number;
   /** Faint view of a returned body. Not a second organism. */
   showRemnants: boolean;
+  /** MIDI note at the center of the scale. Register 0.5 sounds here when tension is 0. */
+  scaleCenterMidi: number;
+  /** Semitone distance from the center to register 0 and register 1, at full tension. */
+  scaleSpanSemitones: number;
+  /** Loudness cap. Density above this does not thicken the air further. */
+  densityCeiling: number;
 };
 
 export type Tendencies = {
@@ -132,6 +138,11 @@ export type PlantedPayload = {
 export type CompostPayload = {
   organismId: string;
   returns: Conditions;
+};
+
+/** One second of the leak clock. The fold thins conditions and changes nothing else. */
+export type TickPayload = {
+  seconds: number;
 };
 
 export type LabEvent = {

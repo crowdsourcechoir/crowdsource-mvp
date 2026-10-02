@@ -105,6 +105,8 @@ export function foldEvents(events: LabEvent[], laws: Laws): FoldResult {
         living.delete(event.payload.organismId);
         conditions = applyDeposit(conditions, event.payload.returns, laws.leak);
       }
+    } else if (event.type === "tick") {
+      conditions = applyDeposit(conditions, zeroConditions(), laws.leak);
     } else {
       warnings.push(`skipped ${event.type}`);
     }

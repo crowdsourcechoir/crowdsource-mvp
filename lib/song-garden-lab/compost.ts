@@ -4,7 +4,8 @@ import type { Conditions, FoldResult, Genome, LabEvent, Laws } from "./types";
 
 export type LogStep =
   | { id: string; type: "contribution.planted"; genome: Genome }
-  | { id: string; type: "compost"; organismId: string; returns: Conditions };
+  | { id: string; type: "compost"; organismId: string; returns: Conditions }
+  | { id: string; type: "tick" };
 
 export function scaleConditions(conditions: Conditions, fraction: number): Conditions {
   const gain = clamp(fraction);
@@ -33,6 +34,16 @@ export function stepsToEvents(steps: LogStep[], laws: Laws): LabEvent[] {
         rulesVersion: laws.rulesVersion,
         at: "",
         payload: { organismId: step.organismId, returns: step.returns },
+      };
+    }
+    if (step.type === "tick") {
+      return {
+        id: step.id,
+        index,
+        type: "tick",
+        rulesVersion: laws.rulesVersion,
+        at: "",
+        payload: { seconds: 1 },
       };
     }
     return {
