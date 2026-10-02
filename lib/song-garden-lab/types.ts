@@ -3,7 +3,7 @@ export const RULES_VERSION = "lab-a-1";
 
 export const QUANTIZE_STEPS = 63;
 
-export type MotionSource = "pitch" | "flux" | "synthetic";
+export type MotionSource = "pitch" | "flux" | "synthetic" | "still" | "flow";
 
 /** Portable genome. Structural axes are 0..1 on a 64-step grid. */
 export type Genome = {

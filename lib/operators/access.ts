@@ -162,6 +162,7 @@ export function isPublicPath(pathname: string, method: string, searchParams: URL
   if (pathname === "/api/auth/invite" || pathname === "/api/auth/logout") return true;
   if (pathname === "/api/auth/session" && method === "GET") return true;
 
+  if (method === "POST" && pathname === "/api/lab/language") return true;
   if (method === "POST" && pathname === "/api/agent/participants") return true;
   if (method === "POST" && /^\/api\/agent\/conversations\/[^/]+\/send$/.test(pathname)) return true;
   if (method === "POST" && /^\/api\/agent\/conversations\/[^/]+\/media\/prepare$/.test(pathname)) return true;

@@ -24,9 +24,12 @@ import { noteName, sounding } from "@/lib/song-garden-lab/sound";
 import SoundBed from "@/components/song-garden-lab/SoundBed";
 import type { Conditions, Genome, Laws, Organism, StructuralAxis } from "@/lib/song-garden-lab/types";
 import { STRUCTURAL_AXES } from "@/lib/song-garden-lab/types";
+import SeenPanel from "@/components/song-garden-lab/SeenPanel";
 import VoicePanel from "@/components/song-garden-lab/VoicePanel";
+import WordsPanel from "@/components/song-garden-lab/WordsPanel";
+import type { VisionReading } from "@/lib/song-garden-lab/vision";
 
-type Mode = "one" | "sheet" | "field" | "voice" | "compare";
+type Mode = "one" | "sheet" | "field" | "voice" | "compare" | "seen";
 
 const SHEET = haltonGenomes(30);
 const FIELD_SEED = publishedField();
@@ -55,6 +58,7 @@ export default function GardenLab() {
   const [growEpoch, setGrowEpoch] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
   const [voiceReading, setVoiceReading] = useState<AnalysisReading | null>(null);
+  const [visionReading, setVisionReading] = useState<VisionReading | null>(null);
   const [compareView, setCompareView] = useState<CompareView>("both");
   const [compareSpan, setCompareSpan] = useState<CompareSpan>("twelve");
   const [soundOn, setSoundOn] = useState(false);
@@ -96,6 +100,24 @@ export default function GardenLab() {
     return [atZero, inLab];
   }, [voiceReading, birth, laws, officialLaws]);
 
+  const seenOrganisms = useMemo(() => {
+    if (!visionReading) return [];
+    const genome = visionReading.genome;
+    const origin = zeroConditions();
+    const atZero = organismFrom(
+      "at zero",
+      genome,
+      origin,
+      depositOf(genome, origin, officialLaws),
+      [],
+      officialLaws
+    );
+    const inLab = organismFrom("in lab", genome, birth, depositOf(genome, birth, laws), [], laws);
+    atZero.position = { x: 0.32, y: 0.78 };
+    inLab.position = { x: 0.68, y: 0.78 };
+    return [atZero, inLab];
+  }, [visionReading, birth, laws, officialLaws]);
+
   const orderA = useMemo(
     () => (compareSpan === "four" ? FIELD_SEED.slice(0, 4) : FIELD_SEED),
     [compareSpan]
@@ -136,7 +158,9 @@ export default function GardenLab() {
         ? [soloOrganism]
         : mode === "voice"
           ? voiceOrganisms
-          : mode === "compare"
+          : mode === "seen"
+            ? seenOrganisms
+            : mode === "compare"
             ? compareView === "pair"
               ? pairOrganisms
               : compareView === "b"
@@ -361,6 +385,7 @@ export default function GardenLab() {
             [
               ["compare", "A/B"],
               ["voice", "Voice"],
+              ["seen", "Seen"],
               ["one", "One"],
               ["sheet", "Sheet"],
               ["field", "Field"],
@@ -372,7 +397,7 @@ export default function GardenLab() {
               onClick={() => {
                 setMode(id);
                 setGrowEpoch((n) => n + 1);
-                setSelectedId(id === "one" ? "solo" : id === "voice" ? "at zero" : SUBJECT_ID);
+                setSelectedId(id === "one" ? "solo" : id === "voice" || id === "seen" ? "at zero" : SUBJECT_ID);
               }}
               className="rounded-full border px-3 py-1"
               style={{
@@ -389,6 +414,7 @@ export default function GardenLab() {
         <p className="mb-3 leading-relaxed text-white/55">
           {mode === "compare" && "Two orders of the same genomes. The dot is the contribution to find. Coupling 0 keeps each body on its own gesture."}
           {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
+          {mode === "seen" && "A picture becomes six numbers. A still does not move. Coupling 0 on the left is the official reading."}
           {mode === "one" && "One genome against a birth you set. Zero birth is the pure gesture."}
           {mode === "sheet" && "Thirty genomes, each born at zero. This is the family, before the garden has a history."}
           {mode === "field" && "Twelve planted in order. Return gives part of a deposit back to the ground and takes that body off the living set. The planting stays in the log."}
@@ -440,7 +466,7 @@ export default function GardenLab() {
               birth density {selected.birthConditions.density.toFixed(3)} · pulse {selected.birthConditions.pulse.toFixed(3)} ·
               tension {selected.birthConditions.tension.toFixed(3)}
             </p>
-            {mode === "voice" && (
+            {(mode === "voice" || mode === "seen") && (
               <p className="text-white/40">
                 source {selected.genome.motionSource} · register {selected.genome.register.toFixed(2)}
               </p>
@@ -459,6 +485,21 @@ export default function GardenLab() {
             onCoupling={(coupling) => patchLaws({ coupling })}
             onReading={(reading) => {
               setVoiceReading(reading);
+              setSelectedId("at zero");
+              setGrowEpoch((n) => n + 1);
+            }}
+          />
+        )}
+        {mode === "voice" && <WordsPanel />}
+
+        {mode === "seen" && (
+          <SeenPanel
+            birth={birth}
+            coupling={laws.coupling}
+            onBirth={setBirth}
+            onCoupling={(coupling) => patchLaws({ coupling })}
+            onReading={(reading) => {
+              setVisionReading(reading);
               setSelectedId("at zero");
               setGrowEpoch((n) => n + 1);
             }}

@@ -1,6 +1,6 @@
 # Song Garden — generative living world
 
-Status: **strategy, sharpened.** Experiments A–C, regeneration, the leak clock, and sound are built at `/lab/garden`. Language and the public garden are not.
+Status: **strategy, sharpened.** Experiments A–C, regeneration, the leak clock, sound, pictures, and a language holding-place are built at `/lab/garden`. The public garden is not.
 Related: [`architecture.md`](./architecture.md), [`persistent-world-spec.md`](./persistent-world-spec.md)
 Supersedes the one-chant visit note: [`felt-garden-plan.md`](./felt-garden-plan.md)
 
@@ -12,7 +12,7 @@ The engine is unchanged:
 
 **ordered event log → contribution genome → birth conditions → organism → condition deposit → changed conditions for whoever comes next**
 
-This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A–C, regeneration, the leak clock, and sound are built. Language and the public garden are not.
+This pass sharpens the laws, the lab that is supposed to discover them, and the proof. Experiments A–C, regeneration, the leak clock, sound, pictures, and a language holding-place are built. The public garden is not.
 
 ---
 
@@ -94,6 +94,14 @@ Field history is an event log. **Return to the ground** appends a `compost` even
 **Sound** plays the fold that is on screen. Density, after the ceiling, is how thick the air is. Pulse is the tempo of that air. Tension is how far each body's stored register sits from C4. Register 0.5, which is every published genome and every unpitched take, stays on C4, so those bodies share one pitch. A sung register spreads toward C2 and C6 only as tension rises. Turning tension off in the mutes pulls every voice back to the center.
 
 The canvas is not an input. `npx tsx lib/song-garden-lab/sound.test.ts` checks the pitch span, the ceiling, a muted tension, and that a tick thins the ground without removing a body.
+
+### Pictures and words, as built
+
+**Seen** measures a still or a clip into the same six axes. The picture is downsampled to a fixed grid. A still reports source `still`: motion and articulation stay empty, and a contrasted frame is a held gesture. A clip can report `flow` from frame-to-frame change. Register stays at the center. Dropping the picture leaves the body. The fixtures Flat, Checker, and Blink check the mapping with no camera.
+
+**Words** sends one short phrase to a model and asks for three numbers, each with a confidence: hold, outward, and weight. A confidence under 0.5 is ignored. The numbers are not a genome, not a picture, and not a deposit. The ribbon still comes from the measurement. With no model key, the phrase is kept and every confidence stays 0.
+
+`npx tsx lib/song-garden-lab/vision.test.ts` checks the still, the blink, a repeated picture, and that an out-of-range model reply is clamped and gated.
 
 ---
 
@@ -549,9 +557,9 @@ The scale center, the span, and the density ceiling are laws, parallel to the dr
 
 ## 14. AI
 
-A–C uses no LLM, no Runway, and no image generation. Signal processing and the grammar are the whole computation.
+Signal processing and the grammar are still the picture. There is no image generation and no Runway.
 
-A model is justified only later, and only where language carries something the signal does not. The output of that call would be a few numbers with confidences, deposited or held as latent, never a picture and never a species. Low confidence means the numbers are ignored. The planting moment still germinates from the acoustic genome if the model is slow or down.
+A model is used only for words, and only to return three latent numbers with confidences. They are held, not deposited. Low confidence means that number is ignored. No model, or a failed call, means every confidence is 0 and the planting germinates from the measured genome.
 
 ---
 
