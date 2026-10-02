@@ -542,6 +542,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         deviceId: getOrCreateSonggardenDeviceId(),
         journeyManaged,
         journeyNameStep: isNameStep,
+        questionPrompt: displayPrompt(promptText),
       });
       setEmailCaptchaToken(null);
       setSending(false);
@@ -614,6 +615,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           videoPublicUrl: publicUrl,
           deviceId: getOrCreateSonggardenDeviceId(),
           journeyManaged,
+          questionPrompt: displayPrompt(promptText),
         });
         setSending(false);
         growNode("video");
@@ -649,6 +651,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           videoPublicUrl: publicUrl,
           deviceId: getOrCreateSonggardenDeviceId(),
           journeyManaged,
+          questionPrompt: displayPrompt(promptText),
         });
         setSending(false);
         growNode("video");

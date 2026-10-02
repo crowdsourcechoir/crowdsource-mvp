@@ -5,8 +5,19 @@ import {
   AGENT_PARTICIPANT_IDENTITY_SELECT,
   participantDisplayName,
 } from "@/lib/agent-participant-db";
-import { pairInterviewAnswers, type PairedInterviewAnswer } from "@/lib/agent-interview-qa";
+import {
+  fillMissingJourneyQuestions,
+  pairInterviewAnswers,
+  type PairedInterviewAnswer,
+} from "@/lib/agent-interview-qa";
 import { proxiedAgentMediaUrl } from "@/lib/agent-media/storage-upload";
+import { localEventsGetById } from "@/lib/local-events-store";
+import type { Event } from "@/data/mockEvents";
+import type { SongGardenConfig } from "@/lib/songgarden/config";
+import {
+  contributionQuestionPrompts,
+  resolveJourneySteps,
+} from "@/lib/songgarden/journey-steps";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -18,6 +29,24 @@ type InterviewSubmissionItem = {
 };
 
 /** Point Composer at the same-origin media proxy (private Storage buckets otherwise 403). */
+function questionPromptsForEvent(config: {
+  agentBrief?: unknown;
+  songGardenConfig?: SongGardenConfig | null;
+}): string[] {
+  const eventLike = {
+    agentBrief: config.agentBrief ?? null,
+    songGardenConfig: config.songGardenConfig ?? null,
+  } as Event;
+  return contributionQuestionPrompts(resolveJourneySteps(eventLike));
+}
+
+function withJourneyQuestions(
+  answers: PairedInterviewAnswer[],
+  prompts: string[]
+): PairedInterviewAnswer[] {
+  return fillMissingJourneyQuestions(withProxiedMediaUrls(answers), prompts);
+}
+
 function withProxiedMediaUrls(answers: PairedInterviewAnswer[]): PairedInterviewAnswer[] {
   return answers.map((a) => ({
     ...a,
@@ -32,12 +61,19 @@ export async function GET(request: Request) {
   if (!eventId) return NextResponse.json({ error: "eventId is required." }, { status: 400 });
 
   if (USE_LOCAL_EVENTS) {
+    const localEvent = localEventsGetById(eventId);
+    const prompts = localEvent
+      ? questionPromptsForEvent({
+          agentBrief: localEvent.agent_brief,
+          songGardenConfig: (localEvent.song_garden_config as SongGardenConfig | null) ?? null,
+        })
+      : [];
     const transcripts = await localGetEventTranscripts(eventId);
     const items: InterviewSubmissionItem[] = transcripts.map((t) => ({
       participantName: t.participantName,
       email: t.email ?? null,
       conversationId: t.conversationId,
-      answers: withProxiedMediaUrls(pairInterviewAnswers(t.turns)),
+      answers: withJourneyQuestions(pairInterviewAnswers(t.turns), prompts),
     }));
 
     return NextResponse.json({ items });
@@ -57,6 +93,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ items: [] });
     }
     if (convs.length === 0) return NextResponse.json({ items: [] });
+
+    const { data: eventRow } = await supabaseAdmin
+      .from("events")
+      .select("agent_brief, song_garden_config")
+      .eq("id", eventId)
+      .maybeSingle();
+    const prompts = questionPromptsForEvent({
+      agentBrief: eventRow?.agent_brief,
+      songGardenConfig: (eventRow?.song_garden_config as SongGardenConfig | null) ?? null,
+    });
 
     const participantIds = convs.map((c: { participant_id: string }) => c.participant_id);
     const { data: participants } = await supabaseAdmin
@@ -78,7 +124,7 @@ export async function GET(request: Request) {
     const { data: turns, error: eTurns } = await supabaseAdmin
       .from("agent_conversation_turns")
       .select(
-        "conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
+        "id, conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
       )
       .in("conversation_id", conversationIds);
     if (eTurns || !Array.isArray(turns)) {
@@ -99,7 +145,7 @@ export async function GET(request: Request) {
         participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
         conversationId: conv.id,
         email: identityById.get(conv.participant_id)?.email ?? null,
-        answers: withProxiedMediaUrls(pairInterviewAnswers(convTurns)),
+        answers: withJourneyQuestions(pairInterviewAnswers(convTurns), prompts),
       };
     });
 
