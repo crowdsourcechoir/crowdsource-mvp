@@ -189,6 +189,8 @@ export async function sendMessage(
     journeyManaged?: boolean;
     /** WorldJourney name step — persist participant display name on first turn. */
     journeyNameStep?: boolean;
+    /** Authored journey prompt this answer belongs to. */
+    journeyPrompt?: string | null;
   }
 ): Promise<{
   turn: AgentConversationTurn | null;
@@ -209,6 +211,7 @@ export async function sendMessage(
     deviceId: options?.deviceId ?? null,
     journeyManaged: options?.journeyManaged === true,
     journeyNameStep: options?.journeyNameStep === true,
+    journeyPrompt: options?.journeyPrompt?.trim() || null,
   });
 }
 
