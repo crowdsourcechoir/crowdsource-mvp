@@ -496,6 +496,7 @@ export default function EventForm({
         welcomeEyebrow: values.songGardenConfig?.welcomeEyebrow,
         completionEyebrow: values.songGardenConfig?.completionEyebrow,
         completionButtonText: values.songGardenConfig?.completionButtonText,
+        completionButtonUrl: values.songGardenConfig?.completionButtonUrl,
         showCompletionButton: values.songGardenConfig?.showCompletionButton,
       }
     );
@@ -2661,6 +2662,34 @@ export default function EventForm({
               />
               <span className="text-sm text-gray-300">Show button on closing screen</span>
             </label>
+            {values.songGardenConfig?.showCompletionButton !== false && (
+              <div className="mt-3">
+                <label htmlFor="completionButtonUrl" className={labelClass}>
+                  Completion button URL
+                </label>
+                <input
+                  id="completionButtonUrl"
+                  type="url"
+                  inputMode="url"
+                  autoComplete="url"
+                  value={values.songGardenConfig?.completionButtonUrl ?? ""}
+                  onChange={(e) =>
+                    setValues((v) => ({
+                      ...v,
+                      songGardenConfig: {
+                        ...(v.songGardenConfig ?? defaultSongGardenConfig()),
+                        completionButtonUrl: e.target.value,
+                      },
+                    }))
+                  }
+                  className={inputClass}
+                  placeholder="https://…"
+                />
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Optional. When set, the button opens this link instead of restarting the journey.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>
