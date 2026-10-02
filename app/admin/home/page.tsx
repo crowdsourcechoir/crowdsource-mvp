@@ -34,7 +34,7 @@ export default function AdminHomePage() {
   return (
     <div className="space-y-6 text-white">
       <div>
-        <p className="csc-eyebrow">Your rooms</p>
+        <p className="csc-eyebrow">Your Access</p>
         <h1 className="mt-2 text-2xl font-bold">Welcome</h1>
       </div>
       <div className="csc-list">
