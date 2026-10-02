@@ -3,6 +3,31 @@
 This workspace uses regenerative language to keep product, live experience, and
 R&D work organized as one living system.
 
+**OCTO** is the entire living organism — not a feature inside Crowdsource Choir.
+Crowdsource Choir is the public face and wedge; OCTO is the operating system.
+The company builds a **participatory entertainment** category and the
+infrastructure that powers it (see `docs/crowdsource-platform-v2-plan.md`).
+
+Category distinction:
+
+- Experiential — I experience something
+- Interactive — I make choices inside something someone else created
+- Immersive — I enter a designed world
+- **Participatory — my contribution becomes part of what is created**
+
+Business layers (same organism, commercial view):
+
+`SOURCE → CREATE → ACTIVATE → CAPTURE → AMPLIFY → PERSIST → SOURCE`
+
+| Layer | OCTO home |
+| --- | --- |
+| SOURCE / PERSIST | Garden |
+| CREATE | Composer (+ Roots) |
+| ACTIVATE | Live + Bloom (+ Roots) |
+| AMPLIFY / CAPTURE | Sales + export/media seams |
+
+Song Garden is a **modality** on the Crowdsource Platform, not the platform itself.
+
 ## Core map
 
 | Area | Meaning | Current admin home |
@@ -145,3 +170,9 @@ Use one persistent thread or agent per major living-system domain:
 
 Implementation agents can be short-lived and task-specific, but this document
 should remain the source of truth for workspace language.
+
+Platform maturity and V2 community planning live in
+`docs/crowdsource-platform-v2-plan.md`.
+
+Gameday concurrency (QR stampede, media uploads at stadium scale) lives in
+`docs/gameday-scale-strategy.md`.
