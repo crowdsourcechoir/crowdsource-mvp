@@ -1476,6 +1476,10 @@ export default function EventForm({
               placeholder={values.title || "Defaults to event title"}
               className={inputClass}
             />
+            <span className="mt-1 block text-[11px] leading-snug text-gray-500">
+              Stays at the top of the public journey after permissions and through every
+              step. Event title is the admin name only. Leave blank to use the event title.
+            </span>
           </label>
 
           <div className="sm:col-span-2 space-y-2 rounded-lg border border-gray-800 bg-[#1a1a1a]/60 p-3">

@@ -6,6 +6,7 @@ import type { Event } from "@/data/mockEvents";
 import { formatDateLong } from "@/lib/formatDate";
 import ParticipantJourney from "@/components/participant-journey/ParticipantJourney";
 import JourneyHeader from "@/components/participant-journey/JourneyHeader";
+import { resolveWorldConfig } from "@/lib/song-garden-v2/world-config";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -28,6 +29,7 @@ export default function PublicEventContent({
   // Hard refresh restarts the journey — do not restore "active" from localStorage.
   const [journeyActive, setJourneyActive] = useState(startAtGarden);
   const compactHeader = journeyActive || startAtGarden;
+  const journeyTitle = resolveWorldConfig(event).title;
 
   return (
     <div
@@ -52,7 +54,7 @@ export default function PublicEventContent({
         }`}
       >
         {compactHeader ? (
-          <JourneyHeader title={event.title} />
+          <JourneyHeader title={journeyTitle} />
         ) : (
           <>
             <a
