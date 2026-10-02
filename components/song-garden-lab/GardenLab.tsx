@@ -45,7 +45,7 @@ function sameStructure(organism: Organism, laws: Laws): boolean {
   return once === twice && once === ribbonHash(organism.ribbon);
 }
 
-export default function GardenLab() {
+export default function GardenLab({ embedded = false }: { embedded?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hitsRef = useRef<DrawHit[]>([]);
   const [mode, setMode] = useState<Mode>("field");
@@ -372,7 +372,7 @@ export default function GardenLab() {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-black text-white md:flex-row">
+    <div className={`flex flex-col overflow-hidden bg-black text-white md:flex-row ${embedded ? "h-full" : "h-[100dvh]"}`}>
       <div className="relative min-h-[52dvh] flex-1 md:min-h-0">
         <canvas ref={canvasRef} onClick={onCanvasClick} className="h-full w-full cursor-pointer" />
         <p className="pointer-events-none absolute left-4 top-3 font-mono text-[11px] tracking-wide text-[#cfff81]/80">

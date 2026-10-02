@@ -252,6 +252,23 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     blurb: "Operator-facing preferences for this Crowdsource workspace.",
     cards: [
       {
+        id: "garden-lab",
+        domain: "Song Garden",
+        title: "Garden lab",
+        description: "Grammar, voice, pictures, words, and the field",
+        href: "/admin/settings/garden-lab",
+        statusLabel: "Open",
+        status: "live",
+        controls: [
+          "Seen: a still or a clip into the six-number genome",
+          "Voice: a take into the same genome",
+          "Words: three confidences, ignored under 0.5",
+          "Field: return a body, and the leak clock",
+          "Sound from the fold",
+          "World A beside World B",
+        ],
+      },
+      {
         id: "song-garden-pitch",
         domain: "Content",
         title: "Song Garden pitch",
