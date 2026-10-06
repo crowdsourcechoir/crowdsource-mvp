@@ -6,17 +6,19 @@ import {
   participantDisplayName,
 } from "@/lib/agent-participant-db";
 import {
-  fillMissingJourneyQuestions,
   pairInterviewAnswers,
+  presentInterviewConversation,
   type PairedInterviewAnswer,
+  type PresentedInterviewAnswer,
 } from "@/lib/agent-interview-qa";
 import { proxiedAgentMediaUrl } from "@/lib/agent-media/storage-upload";
 import { localEventsGetById } from "@/lib/local-events-store";
 import type { Event } from "@/data/mockEvents";
 import type { SongGardenConfig } from "@/lib/songgarden/config";
 import {
-  contributionQuestionPrompts,
+  contributionPrompts,
   resolveJourneySteps,
+  type ContributionPrompt,
 } from "@/lib/songgarden/journey-steps";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
@@ -25,26 +27,31 @@ type InterviewSubmissionItem = {
   participantName: string;
   email?: string | null;
   conversationId: string;
-  answers: PairedInterviewAnswer[];
+  answers: PresentedInterviewAnswer[];
 };
 
 /** Point Composer at the same-origin media proxy (private Storage buckets otherwise 403). */
 function questionPromptsForEvent(config: {
   agentBrief?: unknown;
   songGardenConfig?: SongGardenConfig | null;
-}): string[] {
+}): ContributionPrompt[] {
   const eventLike = {
     agentBrief: config.agentBrief ?? null,
     songGardenConfig: config.songGardenConfig ?? null,
   } as Event;
-  return contributionQuestionPrompts(resolveJourneySteps(eventLike));
+  return contributionPrompts(resolveJourneySteps(eventLike));
 }
 
-function withJourneyQuestions(
+function presentConversation(
+  participantName: string,
   answers: PairedInterviewAnswer[],
-  prompts: string[]
-): PairedInterviewAnswer[] {
-  return fillMissingJourneyQuestions(withProxiedMediaUrls(answers), prompts);
+  prompts: ContributionPrompt[]
+): { participantName: string; answers: PresentedInterviewAnswer[] } {
+  return presentInterviewConversation({
+    participantName,
+    answers: withProxiedMediaUrls(answers),
+    prompts,
+  });
 }
 
 function withProxiedMediaUrls(answers: PairedInterviewAnswer[]): PairedInterviewAnswer[] {
@@ -69,12 +76,15 @@ export async function GET(request: Request) {
         })
       : [];
     const transcripts = await localGetEventTranscripts(eventId);
-    const items: InterviewSubmissionItem[] = transcripts.map((t) => ({
-      participantName: t.participantName,
-      email: t.email ?? null,
-      conversationId: t.conversationId,
-      answers: withJourneyQuestions(pairInterviewAnswers(t.turns), prompts),
-    }));
+    const items: InterviewSubmissionItem[] = transcripts.map((t) => {
+      const presented = presentConversation(t.participantName, pairInterviewAnswers(t.turns), prompts);
+      return {
+        participantName: presented.participantName,
+        email: t.email ?? null,
+        conversationId: t.conversationId,
+        answers: presented.answers,
+      };
+    });
 
     return NextResponse.json({ items });
   }
@@ -141,11 +151,16 @@ export async function GET(request: Request) {
 
     const items: InterviewSubmissionItem[] = convs.map((conv: { id: string; participant_id: string }) => {
       const convTurns = turnsByConv.get(conv.id) ?? [];
+      const presented = presentConversation(
+        identityById.get(conv.participant_id)?.name ?? "Anonymous",
+        pairInterviewAnswers(convTurns),
+        prompts
+      );
       return {
-        participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
+        participantName: presented.participantName,
         conversationId: conv.id,
         email: identityById.get(conv.participant_id)?.email ?? null,
-        answers: withJourneyQuestions(pairInterviewAnswers(convTurns), prompts),
+        answers: presented.answers,
       };
     });
 

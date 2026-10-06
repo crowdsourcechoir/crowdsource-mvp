@@ -22,7 +22,10 @@ import {
   isAnonymousPersonName,
   normalizePersonKey,
 } from "@/lib/agent-interview-qa";
-import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
+import {
+  groupAnswersByPrompt,
+  isTypedTextAnswer,
+} from "@/lib/composer/group-answers-by-prompt";
 import ComposerMediaCard from "@/components/songgarden/ComposerMediaCard";
 import ComposerTextTable from "@/components/songgarden/ComposerTextTable";
 
@@ -291,6 +294,7 @@ export default function SonggardenCanvas({
                   audioUrl: string | null;
                   videoUrl: string | null;
                   videoTranscript: string | null;
+                  isNameAnswer?: boolean;
                 }>;
               }>;
             };
@@ -299,8 +303,8 @@ export default function SonggardenCanvas({
                 const text = answer.content?.trim() ?? "";
                 const audioUrl = answer.audioUrl == null ? null : answer.audioUrl.trim();
                 const videoUrl = answer.videoUrl == null ? null : answer.videoUrl.trim();
-                // Text filter only wants typed text — skip media-only turns.
-                if (text) {
+                // Name submissions label the person. Media placeholders stay on the video view.
+                if (isTypedTextAnswer(text) && !answer.isNameAnswer) {
                   texts.push({
                     id: `${item.conversationId}-t-${index}`,
                     participantName: item.participantName,

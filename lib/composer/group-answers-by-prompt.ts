@@ -1,5 +1,6 @@
 import {
   isAnonymousPersonName,
+  isMediaPlaceholderContent,
   normalizePersonKey,
 } from "@/lib/agent-interview-qa";
 
@@ -20,6 +21,8 @@ export type ComposerAnswerRow = {
   eventId?: string;
   conversationId?: string;
   turnId?: string | null;
+  /** Name-step text. Shown as the person's name, not as a question cell. */
+  isNameAnswer?: boolean;
 };
 
 export type PromptAnswerGroup = {
@@ -50,11 +53,9 @@ export function isMediaOnlyAnswer(
   return !row.content?.trim() && Boolean(row.audioUrl || row.videoUrl);
 }
 
-const MEDIA_PLACEHOLDER = /^\((photo|recording)\)$/i;
-
 export function isTypedTextAnswer(content: string | null | undefined): boolean {
   const text = (content ?? "").trim();
-  return Boolean(text) && !MEDIA_PLACEHOLDER.test(text);
+  return Boolean(text) && !isMediaPlaceholderContent(text);
 }
 
 export type PersonTableColumn = {
@@ -77,7 +78,7 @@ export function answersToPersonTable(rows: ComposerAnswerRow[]): {
   columns: PersonTableColumn[];
   rows: PersonTableRow[];
 } {
-  const typed = rows.filter((row) => isTypedTextAnswer(row.content));
+  const typed = rows.filter((row) => isTypedTextAnswer(row.content) && !row.isNameAnswer);
   const grouped = groupAnswersByPrompt(typed);
   const columns: PersonTableColumn[] = grouped.map((group) => ({
     key: group.key,

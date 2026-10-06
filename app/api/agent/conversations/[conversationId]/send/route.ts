@@ -12,7 +12,7 @@ import {
 } from "@/lib/local-agent-interview-store";
 import { scheduleTranscriptionIfMediaPresent } from "@/lib/agent-post-submit-transcribe";
 import { isEmailCaptchaPrompt, type AskAboutItemLike } from "@/lib/agent-brief-email-captcha";
-import { isNameQuestionPrompt } from "@/lib/agent-name-question";
+import { isIncomingNameStep } from "@/lib/agent-name-question";
 import { isTurnstileServerConfigured, verifyTurnstileToken } from "@/lib/turnstile";
 import {
   participantDisplayName,
@@ -372,10 +372,12 @@ export async function POST(
       }
 
       if (!isFirstMessage || managedFirstUserTurn) {
-      const journeyNameStep = body.journeyNameStep === true;
-      const isNameQuestion =
-        isNameQuestionPrompt(brief as Record<string, unknown>, lastAgentContent) ||
-        (managedFirstUserTurn && journeyNameStep);
+      const isNameQuestion = isIncomingNameStep({
+        journeyNameStep: body.journeyNameStep === true,
+        lastAgentContent,
+        questionPrompt,
+        brief: brief as Record<string, unknown>,
+      });
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
@@ -778,10 +780,12 @@ export async function POST(
     }
 
     if (!isFirstMessage || managedFirstUserTurn) {
-      const journeyNameStep = body.journeyNameStep === true;
-      const isNameQuestion =
-        isNameQuestionPrompt(briefForValidation, lastAgentContent) ||
-        (managedFirstUserTurn && journeyNameStep);
+      const isNameQuestion = isIncomingNameStep({
+        journeyNameStep: body.journeyNameStep === true,
+        lastAgentContent,
+        questionPrompt,
+        brief: briefForValidation,
+      });
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
