@@ -18,8 +18,12 @@ export const HUNTER_COST_RULES: { action: string; cost: string }[] = [
   { action: "Email Verifier", cost: "0.5 credit per completed check — unknown / failed are free" },
   { action: "Domain Search", cost: "1 credit per 1–10 emails returned" },
   {
-    action: "Find more contacts (per org)",
+    action: "Automated Domain Search (per org)",
     cost: "Top 3 people · ≤3 credits total — prefer new orgs over deeper digs",
+  },
+  {
+    action: "Manual Find more / Search Hunter",
+    cost: "Uncapped — operator chooses when to dig deeper on one org",
   },
   { action: "Account balance", cost: "Free" },
 ];

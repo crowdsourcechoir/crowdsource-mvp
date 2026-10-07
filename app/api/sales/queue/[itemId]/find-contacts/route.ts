@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const result = await findMoreContactsForQueueItem({
       itemId,
       query: typeof body?.query === "string" ? body.query : "",
+      mode: "manual",
     });
     return NextResponse.json(result);
   } catch (err) {

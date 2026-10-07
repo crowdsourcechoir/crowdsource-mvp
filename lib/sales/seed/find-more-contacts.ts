@@ -21,12 +21,23 @@ import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import { parseContactPaste } from "@/lib/sales/seed/parse-contact-paste";
 import type { QueueItemDetail } from "@/lib/sales/types";
 
-/** Domain Search returns 1–10 emails per credit; we only keep the top N for the org. */
-const MAX_RESULTS_PER_SEARCH = 3;
+/**
+ * Domain Search returns 1–10 emails per credit. Manual searches take a full page;
+ * automated enrichment stays tighter via the per-org budget below.
+ */
+const MAX_RESULTS_PER_MANUAL_SEARCH = 10;
+const MAX_RESULTS_PER_AUTOMATED_SEARCH = 3;
+
+export type FindMoreContactsMode = "manual" | "automated";
 
 export type FindMoreContactsInput = {
   itemId: string;
   query: string;
+  /**
+   * `manual` (default) — operator Find more / Search Hunter: no per-org contact or credit cap.
+   * `automated` — pipeline / overnight: keep top-3 / ≤3 credits per org.
+   */
+  mode?: FindMoreContactsMode;
 };
 
 export type FindMoreContactsResult = {
@@ -149,11 +160,13 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     throw new Error("Say who to look for — e.g. events team, director of development.");
   }
 
-  // Cap: top 3 Hunter contacts / ≤3 credits per org — spend the rest on new orgs.
+  const mode: FindMoreContactsMode = input.mode === "automated" ? "automated" : "manual";
   const existing = await listContactsForOrganization(organization.id);
   const slotsLeft = hunterContactSlotsRemaining(existing);
   const creditBudget = hunterCreditBudgetRemaining(organization);
-  if (slotsLeft <= 0 || creditBudget < 1) {
+
+  // Per-org budget is for automated enrichment only — manual Search Hunter is uncapped.
+  if (mode === "automated" && (slotsLeft <= 0 || creditBudget < 1)) {
     const detail = await assembleQueueItemDetailFromQueueItem(item);
     const reason =
       slotsLeft <= 0
@@ -174,7 +187,10 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     };
   }
 
-  const searchLimit = Math.min(MAX_RESULTS_PER_SEARCH, slotsLeft);
+  const searchLimit =
+    mode === "automated"
+      ? Math.min(MAX_RESULTS_PER_AUTOMATED_SEARCH, Math.max(1, slotsLeft))
+      : MAX_RESULTS_PER_MANUAL_SEARCH;
   const before = await getHunterAccountCredits();
   let search = await searchHunterDomain({
     domain,
@@ -235,14 +251,11 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
   let people = search.people;
   let matchedPeople = people.filter(matchesQuery);
 
-  // Broad fallback only when the filtered search returned nobody AND we still have
-  // credit budget for another Domain Search (1 credit).
+  // Broad fallback when the filtered search returned nobody. Automated mode still
+  // respects remaining per-org credit budget; manual may spend another credit.
   const spentSoFar = credits.delta ?? 0;
-  if (
-    people.length === 0 &&
-    (parsed.jobTitles.length > 0 || parsed.departments.length > 0) &&
-    creditBudget - spentSoFar >= 1
-  ) {
+  const canAffordBroad = mode === "manual" || creditBudget - spentSoFar >= 1;
+  if (people.length === 0 && (parsed.jobTitles.length > 0 || parsed.departments.length > 0) && canAffordBroad) {
     const broad = await searchHunterDomain({
       domain,
       limit: searchLimit,
@@ -289,18 +302,21 @@ export async function findMoreContactsForQueueItem(input: FindMoreContactsInput)
     existing.map((c) => (c.fullName ?? "").trim().toLowerCase()).filter(Boolean)
   );
 
-  // Rank by seniority and only keep enough candidates to fill remaining slots.
-  const ranked = pickTopHunterPeople(matchedPeople, slotsLeft);
+  // Rank by seniority. Automated mode only fills remaining per-org slots.
+  const takeLimit = mode === "automated" ? Math.max(0, slotsLeft) : matchedPeople.length;
+  const ranked = pickTopHunterPeople(matchedPeople, takeLimit);
 
   const added: FindMoreContactsResult["added"] = [];
   let skippedExisting = 0;
   let skippedInvalid = 0;
 
   for (const person of ranked) {
-    if (added.length >= slotsLeft) break;
-    // Stop before another verify if we've already hit the per-org credit cap.
-    const liveDelta = creditDelta(credits.beforeUsed, (await getHunterAccountCredits()).creditsUsed) ?? 0;
-    if (creditBudget - liveDelta < 0.5 && added.length > 0) break;
+    if (mode === "automated" && added.length >= slotsLeft) break;
+    if (mode === "automated") {
+      // Stop before another verify if we've already hit the per-org credit cap.
+      const liveDelta = creditDelta(credits.beforeUsed, (await getHunterAccountCredits()).creditsUsed) ?? 0;
+      if (creditBudget - liveDelta < 0.5 && added.length > 0) break;
+    }
 
     const fullName = personFullName(person);
     if (!fullName) continue;

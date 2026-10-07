@@ -38,9 +38,21 @@ async function main() {
     false,
     "add-manual must not refuse accept_all / risky"
   );
-  assert.match(findMore, /MAX_RESULTS_PER_SEARCH\s*=\s*3/, "find-more must cap Domain Search at 3");
-  assert.match(findMore, /hunterContactSlotsRemaining/, "find-more must enforce top-3 Hunter contacts per org");
-  assert.match(findMore, /hunterCreditBudgetRemaining/, "find-more must enforce ≤3 Hunter credits per org");
+  assert.match(findMore, /MAX_RESULTS_PER_MANUAL_SEARCH\s*=\s*10/, "manual find-more may take a full Domain Search page");
+  assert.match(findMore, /MAX_RESULTS_PER_AUTOMATED_SEARCH\s*=\s*3/, "automated find-more stays at top 3");
+  assert.match(findMore, /mode === ["']automated["']/, "per-org budget must gate on automated mode only");
+  assert.match(findMore, /hunterContactSlotsRemaining/, "automated path still uses per-org contact slots");
+  assert.match(findMore, /hunterCreditBudgetRemaining/, "automated path still uses per-org credit budget");
+  assert.match(
+    findMore,
+    /mode === ["']automated["'] && \(slotsLeft <= 0 \|\| creditBudget < 1\)/,
+    "cap early-return must require automated mode"
+  );
+  assert.match(
+    readFileSync(join(process.cwd(), "app/api/sales/queue/[itemId]/find-contacts/route.ts"), "utf8"),
+    /mode:\s*["']manual["']/,
+    "queue Find more API must call find-more in manual mode"
+  );
   assert.match(findMore, /pickTopHunterPeople/, "find-more must rank by seniority before adding");
   console.log("find-more-contacts decided-item regression tests passed");
 }
