@@ -9,15 +9,15 @@
   ],
   "crons": [
     {
-      "path": "/api/sales/cron/seed-amplify-2027",
+      "path": "/api/sales/cron/seed-elevate-vibe-create",
       "schedule": "20 1 * * *"
     },
     {
-      "path": "/api/sales/cron/seed-amplify-2027",
+      "path": "/api/sales/cron/seed-elevate-vibe-create",
       "schedule": "20 2 * * *"
     },
     {
-      "path": "/api/sales/cron/seed-amplify-2027",
+      "path": "/api/sales/cron/seed-elevate-vibe-create",
       "schedule": "20 3 * * *"
     },
     {

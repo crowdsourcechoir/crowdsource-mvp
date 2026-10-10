@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { AMPLIFY_CONFERENCES_2027_SEEDS } from "@/lib/sales/seed/amplify-conferences-2027";
+import { ELEVATE_VIBE_CREATE_PROSPECTS } from "@/lib/sales/seed/elevate-vibe-create-prospects";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
+import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import {
   SEAHAWKS_SEED,
   seedOrgWithContacts,
@@ -14,7 +16,8 @@ export const maxDuration = 300;
 /**
  * Upsert org + contacts (verified-format emails) and run pipeline into the approval queue.
  *
- * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, or `{ preset: "amplify-2027" }`.
+ * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
+ * or `{ preset: "elevate-vibe-create" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -35,6 +38,15 @@ export async function POST(request: Request) {
       return NextResponse.json({
         preset: "amplify-2027",
         seedCount: AMPLIFY_CONFERENCES_2027_SEEDS.length,
+        ...result,
+      });
+    }
+
+    if (body?.preset === "elevate-vibe-create") {
+      const result = await seedElevateVibeCreateProspects({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "elevate-vibe-create",
+        seedCount: ELEVATE_VIBE_CREATE_PROSPECTS.length,
         ...result,
       });
     }
@@ -61,7 +73,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );
