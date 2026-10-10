@@ -10,15 +10,15 @@
   "crons": [
     {
       "path": "/api/sales/cron/seed-elevate-vibe-create",
-      "schedule": "20 1 * * *"
+      "schedule": "25 20 * * *"
     },
     {
       "path": "/api/sales/cron/seed-elevate-vibe-create",
-      "schedule": "20 2 * * *"
+      "schedule": "30 20 * * *"
     },
     {
       "path": "/api/sales/cron/seed-elevate-vibe-create",
-      "schedule": "20 3 * * *"
+      "schedule": "35 20 * * *"
     },
     {
       "path": "/api/marketing/cron/send",
