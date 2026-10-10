@@ -129,9 +129,14 @@ function drawOrganism(
   }
 
   if (selected) {
+    ctx.strokeStyle = ACCENT;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(rootX, rootY, 11, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.fillStyle = ACCENT;
     ctx.beginPath();
-    ctx.arc(rootX, rootY, 3.5, 0, Math.PI * 2);
+    ctx.arc(rootX, rootY, 4, 0, Math.PI * 2);
     ctx.fill();
   }
 

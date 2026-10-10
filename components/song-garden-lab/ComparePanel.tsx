@@ -12,6 +12,22 @@ import {
 import type { Conditions, Laws } from "@/lib/song-garden-lab/types";
 
 const NOTES_KEY = "song-garden-lab-compare-notes";
+const ANSWERS_KEY = "song-garden-lab-compare-answers";
+
+type LookAnswer = "same" | "different" | "";
+
+function loadAnswers(): { community: LookAnswer; gesture: LookAnswer } {
+  try {
+    const raw = localStorage.getItem(ANSWERS_KEY);
+    if (!raw) return { community: "", gesture: "" };
+    const parsed = JSON.parse(raw) as { community?: string; gesture?: string };
+    const community = parsed.community === "same" || parsed.community === "different" ? parsed.community : "";
+    const gesture = parsed.gesture === "same" || parsed.gesture === "different" ? parsed.gesture : "";
+    return { community, gesture };
+  } catch {
+    return { community: "", gesture: "" };
+  }
+}
 
 export type CompareView = "both" | "a" | "b" | "pair";
 export type CompareSpan = "twelve" | "four";
@@ -40,53 +56,87 @@ export default function ComparePanel({
   onLaws: (patch: Partial<Laws>) => void;
 }) {
   const [notes, setNotes] = useState("");
+  const [answers, setAnswers] = useState<{ community: LookAnswer; gesture: LookAnswer }>({ community: "", gesture: "" });
   const subject = subjectRow(report);
   const order = span === "twelve" ? WORLD_B_ORDER : SHORT_B_ORDER;
+  const onGesture = view === "pair";
 
   useEffect(() => {
     const saved = localStorage.getItem(NOTES_KEY);
     if (saved) setNotes(saved);
+    setAnswers(loadAnswers());
   }, []);
 
-  return (
-    <section className="mb-4 border-t border-white/10 pt-3">
-      <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">World A / World B</h2>
-      <p className="mb-2 leading-relaxed text-white/70">Are these the same community?</p>
-      <p className="mb-3 leading-relaxed text-white/70">
-        Find {report.subjectId} in the other world. It is plant {subject ? subject.placeA : "—"} in A and plant{" "}
-        {subject ? subject.placeB : "—"} in B.
-      </p>
-      <p className="mb-3 leading-relaxed text-white/45">
-        Keys 1–5 step the official sweep. A, B, and 0 switch the view. P isolates the selected body. L hides labels. Hide
-        the names before you try to find it.
-      </p>
+  function choose(next: LookAnswer) {
+    const updated = onGesture ? { ...answers, gesture: next } : { ...answers, community: next };
+    setAnswers(updated);
+    try {
+      localStorage.setItem(ANSWERS_KEY, JSON.stringify(updated));
+    } catch {
+      /* the choice stays on screen */
+    }
+  }
 
+  const chosen = onGesture ? answers.gesture : answers.community;
+
+  return (
+    <section className="mb-4">
       <div className="mb-3 flex flex-wrap gap-2">
-        {(
-          [
-            ["both", "Both"],
-            ["a", "A"],
-            ["b", "B"],
-            ["pair", "This one"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onView(id)}
-            className="rounded-full border px-3 py-1"
-            style={{
-              borderColor: view === id ? "#cfff81" : "rgba(255,255,255,0.2)",
-              color: view === id ? "#111" : "#cfff81",
-              background: view === id ? "#cfff81" : "transparent",
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        <LookButton active={view === "both"} onClick={() => onView("both")}>
+          The grounds
+        </LookButton>
+        <LookButton active={view === "pair"} onClick={() => onView("pair")}>
+          This gesture
+        </LookButton>
+      </div>
+      <div className="mb-3 flex flex-wrap gap-3">
+        <button type="button" className="csc-link" onClick={() => onView("a")}>
+          A only
+        </button>
+        <button type="button" className="csc-link" onClick={() => onView("b")}>
+          B only
+        </button>
+        <button type="button" className="csc-link" onClick={() => onLaws({ showLabels: !laws.showLabels })}>
+          {laws.showLabels ? "Hide names" : "Show names"}
+        </button>
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-3">
+      <label className="mb-3 block text-white/70">
+        <span className="mb-1 flex justify-between">
+          <span>Push</span>
+          <span>{laws.coupling <= 0.001 ? "each one alone" : laws.coupling >= 0.999 ? "the garden pushes" : laws.coupling.toFixed(2)}</span>
+        </span>
+        <input
+          className="w-full"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={laws.coupling}
+          onChange={(event) => onSweep(Number(event.target.value))}
+        />
+      </label>
+
+      <p className="mb-2 leading-relaxed text-white/80">
+        {onGesture ? "Is this the same gesture in both?" : "Are these the same community?"}
+      </p>
+      <div className="mb-3 flex gap-2">
+        <LookButton active={chosen === "same"} onClick={() => choose("same")}>
+          Same
+        </LookButton>
+        <LookButton active={chosen === "different"} onClick={() => choose("different")}>
+          Different
+        </LookButton>
+      </div>
+      {onGesture && subject && (
+        <p className="mb-3 text-white/45">
+          The ring is {subject.id}. It is plant {subject.placeA} in A and plant {subject.placeB} in B.
+        </p>
+      )}
+
+      <details className="mb-3 border-t border-white/10 pt-3">
+        <summary className="cursor-pointer text-[var(--csc-accent)]">Measurements</summary>
+      <div className="mb-3 mt-3 flex flex-wrap gap-3">
         <button type="button" className="csc-link" onClick={() => onSpan("twelve")} style={{ color: span === "twelve" ? "#cfff81" : undefined }}>
           Twelve
         </button>
@@ -230,7 +280,33 @@ export default function ComparePanel({
           }
         }}
       />
+      </details>
     </section>
+  );
+}
+
+function LookButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border px-3 py-1"
+      style={{
+        borderColor: active ? "var(--csc-accent)" : "rgba(255,255,255,0.2)",
+        color: active ? "#111" : "var(--csc-accent)",
+        background: active ? "var(--csc-accent)" : "transparent",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

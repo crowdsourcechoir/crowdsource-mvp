@@ -395,6 +395,19 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
               key={id}
               type="button"
               onClick={() => {
+                if (id === "compare" && mode !== "compare") {
+                  setCompareView("both");
+                  setCompareSpan("twelve");
+                  setLaws((current) =>
+                    defaultLaws({
+                      ...current,
+                      showLabels: false,
+                      coupling: 1,
+                      branchFromTension: false,
+                      leak: { density: 0, pulse: 0, tension: 0 },
+                    })
+                  );
+                }
                 setMode(id);
                 setGrowEpoch((n) => n + 1);
                 setSelectedId(id === "one" ? "solo" : id === "voice" || id === "seen" ? "at zero" : SUBJECT_ID);
@@ -411,6 +424,50 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
           ))}
         </div>
 
+        {mode === "compare" && (
+          <ComparePanel
+            report={compareReport}
+            view={compareView}
+            span={compareSpan}
+            laws={laws}
+            onView={(next) => {
+              setCompareView(next);
+              setGrowEpoch((n) => n + 1);
+            }}
+            onSpan={(next) => {
+              setCompareSpan(next);
+              setSelectedId(SUBJECT_ID);
+              setGrowEpoch((n) => n + 1);
+            }}
+            onSweep={(coupling) => {
+              patchLaws({
+                coupling,
+                branchFromTension: false,
+                leak: { density: 0, pulse: 0, tension: 0 },
+              });
+              setGrowEpoch((n) => n + 1);
+            }}
+            onBoundary={() => {
+              patchLaws({
+                coupling: 0.5,
+                branchFromTension: true,
+                leak: { density: 0, pulse: 0, tension: 0 },
+              });
+              setGrowEpoch((n) => n + 1);
+            }}
+            onHear={(which) =>
+              patchLaws({
+                mute: {
+                  density: which === "tension",
+                  pulse: which !== "all",
+                  tension: which === "density",
+                },
+              })
+            }
+            onLaws={patchLaws}
+          />
+        )}
+
         {mode === "voice" && (
           <VoicePanel
             birth={birth}
@@ -426,7 +483,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
         )}
 
         <p className="mb-3 leading-relaxed text-white/55">
-          {mode === "compare" && "Two orders of the same genomes. The dot is the contribution to find. Coupling 0 keeps each body on its own gesture."}
+          {mode === "compare" && "Both grounds are the same twelve. Names are off. The ring is the one to judge."}
           {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
           {mode === "seen" && "A picture becomes six numbers. A still does not move. Coupling 0 on the left is the official reading."}
           {mode === "one" && "One genome against a birth you set. Zero birth is the pure gesture."}
@@ -504,50 +561,6 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
               setSelectedId("at zero");
               setGrowEpoch((n) => n + 1);
             }}
-          />
-        )}
-
-        {mode === "compare" && (
-          <ComparePanel
-            report={compareReport}
-            view={compareView}
-            span={compareSpan}
-            laws={laws}
-            onView={(next) => {
-              setCompareView(next);
-              setGrowEpoch((n) => n + 1);
-            }}
-            onSpan={(next) => {
-              setCompareSpan(next);
-              setSelectedId(SUBJECT_ID);
-              setGrowEpoch((n) => n + 1);
-            }}
-            onSweep={(coupling) => {
-              patchLaws({
-                coupling,
-                branchFromTension: false,
-                leak: { density: 0, pulse: 0, tension: 0 },
-              });
-              setGrowEpoch((n) => n + 1);
-            }}
-            onBoundary={() => {
-              patchLaws({
-                coupling: 0.5,
-                branchFromTension: true,
-                leak: { density: 0, pulse: 0, tension: 0 },
-              });
-              setGrowEpoch((n) => n + 1);
-            }}
-            onHear={(which) =>
-              patchLaws({
-                mute: {
-                  density: which === "tension",
-                  pulse: which !== "all",
-                  tension: which === "density",
-                },
-              })
-            }
-            onLaws={patchLaws}
           />
         )}
 
