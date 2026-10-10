@@ -542,6 +542,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         deviceId: getOrCreateSonggardenDeviceId(),
         journeyManaged,
         journeyNameStep: isNameStep,
+        journeyPrompt: promptText,
       });
       setEmailCaptchaToken(null);
       setSending(false);
@@ -614,6 +615,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           videoPublicUrl: publicUrl,
           deviceId: getOrCreateSonggardenDeviceId(),
           journeyManaged,
+          journeyPrompt: promptText,
         });
         setSending(false);
         growNode("video");
@@ -628,7 +630,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         throw err instanceof Error ? err : new Error("Submit failed");
       }
     },
-    [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, stepIndex]
+    [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, promptText, stepIndex]
   );
 
   const handlePhotoSubmitted = useCallback(
@@ -649,6 +651,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
           videoPublicUrl: publicUrl,
           deviceId: getOrCreateSonggardenDeviceId(),
           journeyManaged,
+          journeyPrompt: promptText,
         });
         setSending(false);
         growNode("video");
@@ -663,7 +666,7 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
         throw err instanceof Error ? err : new Error("Submit failed");
       }
     },
-    [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, stepIndex]
+    [celebration, ensureConversation, gardenSnap, goToStep, growNode, journeyManaged, promptText, stepIndex]
   );
 
   function handleParticipateAgain() {
