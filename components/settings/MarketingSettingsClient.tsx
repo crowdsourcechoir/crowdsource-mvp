@@ -68,7 +68,7 @@ export default function MarketingSettingsClient() {
               {resendConfigured ? "RESEND_API_KEY set" : "RESEND_API_KEY missing"}
             </StatusPill>
             <StatusPill tone={settings.sendsEnabled ? "ok" : "off"}>
-              {settings.sendsEnabled ? "Sends enabled" : "Sends paused"}
+              {settings.sendsEnabled ? "List on" : "List paused"}
             </StatusPill>
           </>
         }
