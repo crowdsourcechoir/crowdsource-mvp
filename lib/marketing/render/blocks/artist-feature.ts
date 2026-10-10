@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
 import { plainTextToHtml } from "../inline";
-import { imageRef, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageHref, imageRef, mjImage, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderArtistFeature(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -11,11 +11,12 @@ export function renderArtistFeature(section: EmailSection, ctx: SectionContext):
   const bio = plainTextToHtml(propString(section.props, "bio"));
   const href = safeHref(propString(section.props, "href"));
   const image = imageRef(section.props);
+  const photo = imageHref(image, section.props);
   const warnings = colors.warning ? [colors.warning] : [];
   const imageColumn = image ? Math.min(imageWidth(ctx.tokens, image.ratio), 200) : 0;
   const textWidth = ctx.tokens.contentWidth - imageColumn;
   const imageMjml = image
-    ? `<mj-column width="${imageColumn}px"><mj-image src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt || name)}" width="${imageColumn}px" fluid-on-mobile="true" padding="0" /></mj-column>`
+    ? `<mj-column width="${imageColumn}px">${mjImage({ src: image.url, alt: image.alt || name, width: imageColumn, href: photo })}</mj-column>`
     : "";
   const parts: string[] = [];
   if (name) {
@@ -36,10 +37,13 @@ export function renderArtistFeature(section: EmailSection, ctx: SectionContext):
       `<mj-text font-family="${ctx.tokens.fonts.body}" font-size="${ctx.tokens.type.body.size}px" line-height="${ctx.tokens.type.body.lineHeight}" color="${colors.color}" padding="0">${bio}</mj-text>`
     );
   }
-  const links = href && name ? [{ url: href, label: name }] : [];
+  const links = [
+    ...(photo ? [{ url: photo, label: image?.alt || name || photo }] : []),
+    ...(href && name ? [{ url: href, label: name }] : []),
+  ];
   return {
     mjml: wrapSection(section, ctx.tokens, `${imageMjml}<mj-column width="${textWidth}px">${parts.join("")}</mj-column>`, colors),
-    text: [name, role, propString(section.props, "bio"), href].filter(Boolean).join("\n"),
+    text: [name, role, propString(section.props, "bio"), photo, href].filter(Boolean).join("\n"),
     links,
     warnings,
   };

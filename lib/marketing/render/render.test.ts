@@ -65,13 +65,14 @@ const fixtures: Array<{ name: string; sections: EmailSection[]; assert: (html: s
         eyebrow: "Note",
         title: "Hello <there>",
         subtitle: "Hi {{first_name}}",
-        image: { assetId: null, url: "https://cdn.example/a.jpg", alt: "Cover & <art>", ratio: "landscape" },
+        image: { assetId: null, url: "https://cdn.example/a.jpg", alt: "Cover & <art>", ratio: "landscape", href: "https://example.com/cover" },
         ctaLabel: "Go",
         ctaHref: "https://example.com/go",
       }),
     ],
     assert: (html) => {
       assert.match(html, /alt="Cover &amp; &lt;art&gt;"/);
+      assert.match(html, /href="https:\/\/example.com\/cover"/);
       assert.match(html, /Hello &lt;there&gt;/);
       assert.match(html, /Bebas Neue/);
       assert.equal(html.includes("<script"), false);
@@ -206,11 +207,12 @@ const fixtures: Array<{ name: string; sections: EmailSection[]; assert: (html: s
     name: "gallery",
     sections: [
       section("gallery", {
-        images: [{ assetId: null, url: "https://cdn.example/a.jpg", alt: "One", ratio: "square" }],
+        images: [{ assetId: null, url: "https://cdn.example/a.jpg", alt: "One", ratio: "square", href: "https://example.com/one" }],
       }),
     ],
     assert: (html) => {
       assert.match(html, /alt="One"/);
+      assert.match(html, /href="https:\/\/example.com\/one"/);
     },
   },
   {
@@ -255,6 +257,7 @@ for (const fixture of fixtures) {
   assert.match(result.html, /alt="Crowdsource Choir"/);
   assert.match(result.html, /Space Mono/);
   assert.equal(result.links.some((link) => link.url === "{{unsubscribe_url}}"), true);
+  assert.equal(result.html.includes("csc-sec-"), false);
   expectSnapshot(fixture.name, result.html);
 }
 
@@ -332,5 +335,63 @@ const customFonts = resolveEmailTokens({
 });
 assert.equal(customFonts.fonts.heading, "Inter, sans-serif");
 assert.equal(customFonts.type.title.size, 18);
+
+const photoStory = compile([
+  section("image_story", {
+    image: { assetId: null, url: "https://cdn.example/c.jpg", alt: "Side", ratio: "portrait", href: "https://example.com/side" },
+    heading: "Beside",
+    text: "Copy",
+  }),
+  footer,
+]);
+assert.equal(photoStory.ok, true, photoStory.errors.join("; "));
+assert.match(photoStory.html, /href="https:\/\/example.com\/side"/);
+assert.equal(photoStory.links.some((link) => link.url === "https://example.com/side"), true);
+
+const artistPhoto = compile([
+  section("artist_feature", {
+    name: "Ada",
+    href: "https://example.com/ada",
+    image: { assetId: null, url: "https://cdn.example/ada.jpg", alt: "Ada", ratio: "square", href: "mailto:ada@example.com" },
+  }),
+  footer,
+]);
+assert.equal(artistPhoto.ok, true, artistPhoto.errors.join("; "));
+assert.match(artistPhoto.html, /href="mailto:ada@example.com"/);
+assert.match(artistPhoto.html, /href="https:\/\/example.com\/ada"/);
+
+const scriptPhoto = compile([
+  section("hero", {
+    title: "Hi",
+    image: { assetId: null, url: "https://cdn.example/a.jpg", alt: "Cover", ratio: "landscape", href: "javascript:alert(1)" },
+    photoHref: "javascript:alert(2)",
+  }),
+  footer,
+]);
+assert.equal(scriptPhoto.ok, true, scriptPhoto.errors.join("; "));
+assert.equal(scriptPhoto.html.includes("javascript:"), false);
+assert.equal(scriptPhoto.links.some((link) => link.url.startsWith("javascript:")), false);
+
+const legacyBleed = compile([
+  section("full_bleed_image", {
+    image: { assetId: null, url: "https://cdn.example/b.jpg", alt: "Wide", ratio: "landscape", href: "javascript:alert(1)" },
+    href: "https://example.com/img",
+  }),
+  footer,
+]);
+assert.match(legacyBleed.html, /href="https:\/\/example.com\/img"/);
+assert.equal(legacyBleed.html.includes("javascript:"), false);
+
+const marked = compileEmailDocument({
+  document: document([section("hero", { title: "Hi" }), footer]),
+  tokens: DEFAULT_EMAIL_TOKENS,
+  companyName: "CSC",
+  physicalAddress: "Seattle",
+  annotate: true,
+});
+assert.equal(marked.ok, true, marked.errors.join("; "));
+assert.match(marked.html, /csc-sec-hero/);
+assert.match(marked.html, /csc-sec-footer/);
+assert.equal(marked.html.includes("<script"), false);
 
 console.log("marketing render tests ok");

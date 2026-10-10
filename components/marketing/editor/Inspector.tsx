@@ -6,11 +6,53 @@ import type { EmailSection, ImageRef } from "@/lib/marketing/document/types";
 
 type EventOption = { id: string; title: string; slug: string; date: string; venue: string };
 
+const PHOTO_SECTIONS = new Set(["hero", "full_bleed_image", "image_story", "song_garden_invitation", "artist_feature", "event"]);
+
 function imageOf(props: Record<string, unknown>): ImageRef | null {
   const image = props.image;
   if (!image || typeof image !== "object") return null;
   const record = image as ImageRef;
   return typeof record.url === "string" ? record : null;
+}
+
+function storedPhotoLink(section: EmailSection): string {
+  const image = imageOf(section.props);
+  if (typeof image?.href === "string" && image.href.trim()) return image.href;
+  if (typeof section.props.photoHref === "string" && section.props.photoHref.trim()) return section.props.photoHref;
+  if (section.type === "full_bleed_image" && typeof section.props.href === "string") return section.props.href;
+  return "";
+}
+
+function withPhotoLink(section: EmailSection, href: string): EmailSection {
+  const image = imageOf(section.props);
+  const trimmed = href.trim();
+  const props: Record<string, unknown> = {
+    ...section.props,
+    photoHref: trimmed,
+    image: image ? { ...image, href: trimmed || null } : (section.props.image ?? null),
+  };
+  if (section.type === "full_bleed_image") props.href = trimmed || null;
+  return { ...section, props };
+}
+
+function nextImage(
+  section: EmailSection,
+  image: ImageRef | null,
+  next: { imageUrl: string; assetId: string | null; alt?: string }
+): ImageRef | null {
+  if (!next.imageUrl) return null;
+  const stored =
+    (typeof image?.href === "string" && image.href) ||
+    (typeof section.props.photoHref === "string" && section.props.photoHref) ||
+    (section.type === "full_bleed_image" && typeof section.props.href === "string" && section.props.href) ||
+    null;
+  return {
+    assetId: next.assetId,
+    url: next.imageUrl,
+    alt: next.alt || image?.alt || "",
+    ratio: image?.ratio ?? "landscape",
+    href: stored,
+  };
 }
 
 function setString(section: EmailSection, key: string, value: string): EmailSection {
@@ -33,7 +75,7 @@ export default function Inspector({
   onRemove: () => void;
 }) {
   if (!section) {
-    return <p className="text-sm text-gray-400">Select a section to edit its spacing, color, and images.</p>;
+    return <p className="text-sm text-gray-400">Click a section in the email to edit it.</p>;
   }
 
   const image = imageOf(section.props);
@@ -130,15 +172,11 @@ export default function Inspector({
             onChange={(next) =>
               onChange({
                 ...section,
-                props: {
-                  ...section.props,
-                  image: next.imageUrl
-                    ? { assetId: next.assetId, url: next.imageUrl, alt: next.alt || image?.alt || "", ratio: image?.ratio ?? "landscape" }
-                    : null,
-                },
+                props: { ...section.props, image: nextImage(section, image, next) },
               })
             }
           />
+          {PHOTO_SECTIONS.has(section.type) ? <PhotoLinkField section={section} onChange={onChange} /> : null}
           {image ? (
             <div className="mt-3">
               <FieldLabel>Image shape</FieldLabel>
@@ -205,23 +243,65 @@ export default function Inspector({
   );
 }
 
+function PhotoLinkField({ section, onChange }: { section: EmailSection; onChange: (section: EmailSection) => void }) {
+  const value = storedPhotoLink(section);
+  const invalid = value.trim() !== "" && !/^(https?:\/\/|mailto:)/i.test(value.trim());
+  return (
+    <div className="mt-3">
+      <FieldLabel hint="The photo opens this when someone clicks it.">Photo link</FieldLabel>
+      <TextField value={value} onChange={(next) => onChange(withPhotoLink(section, next))} placeholder="https://" />
+      {invalid ? <p className="mt-1 text-xs text-red-300">Use a full https:// or mailto: link.</p> : null}
+    </div>
+  );
+}
+
 function GalleryFields({ section, onChange }: { section: EmailSection; onChange: (section: EmailSection) => void }) {
   const images = Array.isArray(section.props.images) ? (section.props.images as ImageRef[]) : [];
   const slots = [0, 1, 2];
   return (
-    <div className="space-y-3">
-      {slots.map((index) => (
-        <EmailImageField
-          key={index}
-          imageUrl={images[index]?.url ?? ""}
-          onChange={(next) => {
-            const copy = [...images];
-            if (!next.imageUrl) copy.splice(index, 1);
-            else copy[index] = { assetId: next.assetId, url: next.imageUrl, alt: next.alt || copy[index]?.alt || "", ratio: copy[index]?.ratio ?? "square" };
-            onChange({ ...section, props: { ...section.props, images: copy.filter((image) => image?.url) } });
-          }}
-        />
-      ))}
+    <div className="space-y-4">
+      {slots.map((index) => {
+        const current = images[index];
+        const link = typeof current?.href === "string" ? current.href : "";
+        const invalid = link.trim() !== "" && !/^(https?:\/\/|mailto:)/i.test(link.trim());
+        return (
+          <div key={index}>
+            <EmailImageField
+              imageUrl={current?.url ?? ""}
+              onChange={(next) => {
+                const copy = [...images];
+                if (!next.imageUrl) copy.splice(index, 1);
+                else {
+                  copy[index] = {
+                    assetId: next.assetId,
+                    url: next.imageUrl,
+                    alt: next.alt || copy[index]?.alt || "",
+                    ratio: copy[index]?.ratio ?? "square",
+                    href: copy[index]?.href ?? null,
+                  };
+                }
+                onChange({ ...section, props: { ...section.props, images: copy.filter((image) => image?.url) } });
+              }}
+            />
+            {current?.url ? (
+              <div className="mt-2">
+                <FieldLabel hint="This photo opens this when someone clicks it.">Photo link</FieldLabel>
+                <TextField
+                  value={link}
+                  onChange={(next) => {
+                    const copy = images.map((image, imageIndex) =>
+                      imageIndex === index ? { ...image, href: next.trim() || null } : image
+                    );
+                    onChange({ ...section, props: { ...section.props, images: copy } });
+                  }}
+                  placeholder="https://"
+                />
+                {invalid ? <p className="mt-1 text-xs text-red-300">Use a full https:// or mailto: link.</p> : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

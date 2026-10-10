@@ -1,72 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { FieldLabel, TextField } from "@/components/settings/ui";
 import { insertBlock, moveBlock } from "@/lib/marketing/editor/block-order";
-import { newSection, sectionLabel, SECTION_LABELS } from "@/lib/marketing/editor/sections";
+import { duplicateSection, newSection, sectionLabel, SECTION_LABELS } from "@/lib/marketing/editor/sections";
 import type { EmailSection, SectionType } from "@/lib/marketing/document/types";
-import type { EmailDesignTokens, EmailTypeStyle } from "@/lib/marketing/render/tokens";
+import type { EmailDesignTokens } from "@/lib/marketing/render/tokens";
 import InlineTextEditor from "@/components/marketing/editor/InlineTextEditor";
 import Inspector from "@/components/marketing/editor/Inspector";
+import { editorPreviewHtml } from "@/components/marketing/editor/preview-bridge";
 
 type EventOption = { id: string; title: string; slug: string; date: string; venue: string };
 type DragPayload = { kind: "new"; type: SectionType } | { kind: "move"; id: string };
+type LayoutBox = { id: string; top: number; height: number };
 
-function paint(tokens: EmailDesignTokens, section: EmailSection): { background: string; color: string } {
-  if (section.background === "surface") return { background: tokens.colors.surface, color: tokens.colors.ink };
-  if (section.background === "brand") return { background: tokens.colors.brand, color: tokens.colors.brandInk };
-  if (section.background === "ink") return { background: tokens.colors.ink, color: tokens.colors.canvas };
-  if (section.background === "custom" && /^#[0-9a-fA-F]{6}$/.test(section.customBackground ?? "")) {
-    return { background: section.customBackground ?? tokens.colors.canvas, color: tokens.colors.ink };
+function isBox(value: unknown): value is LayoutBox {
+  if (!value || typeof value !== "object") return false;
+  const box = value as LayoutBox;
+  return typeof box.id === "string" && Number.isFinite(box.top) && Number.isFinite(box.height) && box.height >= 0 && box.height < 20000;
+}
+
+function dropIndexForY(y: number, boxes: { top: number; height: number }[]): number {
+  for (let index = 0; index < boxes.length; index += 1) {
+    const box = boxes[index];
+    if (!box) continue;
+    if (y < box.top + box.height / 2) return index;
   }
-  return { background: tokens.colors.canvas, color: tokens.colors.ink };
-}
-
-function fieldStyle(color: string, font: string, size: number, weight = 400): CSSProperties {
-  return {
-    width: "100%",
-    background: "transparent",
-    border: "none",
-    color,
-    fontFamily: font,
-    fontSize: size,
-    fontWeight: weight,
-    lineHeight: 1.35,
-    outline: "none",
-    padding: 0,
-    resize: "vertical",
-  };
-}
-
-function displayStyle(color: string, font: string, style: EmailTypeStyle): CSSProperties {
-  return {
-    ...fieldStyle(color, font, style.size, style.weight),
-    lineHeight: style.lineHeight,
-    letterSpacing: style.tracking ? `${style.tracking}px` : undefined,
-  };
-}
-
-function eyebrowStyle(tokens: EmailDesignTokens): CSSProperties {
-  return {
-    ...fieldStyle(tokens.colors.brand, tokens.fonts.ui, tokens.type.eyebrow.size, tokens.type.eyebrow.weight),
-    letterSpacing: `${tokens.type.eyebrow.tracking ?? 3.4}px`,
-    textTransform: "uppercase",
-    lineHeight: tokens.type.eyebrow.lineHeight,
-  };
-}
-
-function buttonStyle(tokens: EmailDesignTokens, outline: boolean): CSSProperties {
-  return {
-    ...fieldStyle(outline ? tokens.colors.brand : tokens.colors.brandInk, tokens.fonts.ui, tokens.button.fontSize, 700),
-    background: outline ? "transparent" : tokens.colors.brand,
-    color: outline ? tokens.colors.brand : tokens.colors.brandInk,
-    border: outline ? `1px solid ${tokens.colors.brand}` : "none",
-    borderRadius: tokens.radii.button,
-    padding: `${tokens.button.paddingY}px ${tokens.button.paddingX}px`,
-    textTransform: "uppercase",
-    letterSpacing: "0.14em",
-    width: "auto",
-    textAlign: "center",
-  };
+  return boxes.length;
 }
 
 export default function EmailEditor({
@@ -74,31 +34,50 @@ export default function EmailEditor({
   tokens,
   events,
   busy,
+  previewHtml,
+  mobile,
   onChange,
 }: {
   sections: EmailSection[];
   tokens: EmailDesignTokens;
   events: EventOption[];
   busy: boolean;
+  previewHtml: string;
+  mobile: boolean;
   onChange: (sections: EmailSection[]) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(sections[0]?.id ?? null);
   const [dragging, setDragging] = useState(false);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [boxes, setBoxes] = useState<LayoutBox[]>([]);
+  const [frameHeight, setFrameHeight] = useState(720);
   const dragPayload = useRef<DragPayload | null>(null);
   const dropIndexRef = useRef<number | null>(null);
   const dragActive = useRef(false);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const selected = sections.find((section) => section.id === selectedId) ?? null;
   const footerCount = sections.filter((section) => section.type === "footer").length;
+  const width = mobile ? 375 : tokens.emailWidth;
+  const placed = sections.flatMap((section) => {
+    const box = boxes.find((item) => item.id === section.id);
+    return box ? [{ ...box, type: section.type }] : [];
+  });
 
   useEffect(() => {
-    const id = "csc-email-house-fonts";
-    if (document.getElementById(id)) return;
-    const link = document.createElement("link");
-    link.id = id;
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap";
-    document.head.appendChild(link);
+    setBoxes([]);
+  }, [previewHtml]);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const data = event.data as { source?: string; type?: string; height?: number; boxes?: unknown };
+      if (!data || data.source !== "csc-email-preview" || data.type !== "layout") return;
+      if (typeof data.height === "number" && data.height > 0) setFrameHeight(Math.min(data.height, 20000));
+      if (Array.isArray(data.boxes)) setBoxes(data.boxes.filter(isBox));
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, []);
 
   function update(next: EmailSection) {
@@ -151,13 +130,26 @@ export default function EmailEditor({
     }, 0);
   }
 
-  function slotFromPointer(event: DragEvent<HTMLElement>, index: number) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return event.clientY >= rect.top + rect.height / 2 ? index + 1 : index;
+  function indexFromEvent(event: DragEvent<HTMLElement>): number {
+    const frame = frameRef.current;
+    if (!frame || placed.length === 0) return sections.length;
+    const y = event.clientY - frame.getBoundingClientRect().top;
+    return dropIndexForY(y, placed);
   }
 
+  const barTop =
+    dropIndex == null
+      ? null
+      : placed.length === 0
+        ? 24
+        : dropIndex <= 0
+          ? Math.max(0, (placed[0]?.top ?? 0) - 2)
+          : dropIndex >= placed.length
+            ? (placed[placed.length - 1]?.top ?? 0) + (placed[placed.length - 1]?.height ?? 0) - 2
+            : (placed[dropIndex]?.top ?? 0) - 2;
+
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,640px)_280px]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,640px)_300px]">
       <div>
         <div className="mb-4 flex flex-wrap gap-2">
           {SECTION_LABELS.map((item) => (
@@ -176,80 +168,104 @@ export default function EmailEditor({
           ))}
         </div>
         <div
-          className="mx-auto overflow-hidden rounded-xl border border-[var(--csc-row-divider)]"
-          style={{ maxWidth: tokens.emailWidth, background: tokens.colors.canvas }}
-          onDragEnd={endDrag}
+          ref={frameRef}
+          data-email-preview
+          className="relative mx-auto overflow-hidden rounded-xl border border-[var(--csc-row-divider)] bg-black"
+          style={{ width, height: previewHtml ? frameHeight : 420 }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            markDrop(indexFromEvent(event));
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            dropAt(indexFromEvent(event));
+          }}
         >
-          <div style={{ background: tokens.colors.canvas, padding: "28px 24px 8px", textAlign: "center" }}>
-            <img src="/logo.png" alt="Crowdsource Choir" style={{ width: 220, height: "auto", margin: "0 auto" }} />
+          {previewHtml ? (
+            <iframe
+              ref={iframeRef}
+              title="Email"
+              srcDoc={editorPreviewHtml(previewHtml)}
+              sandbox="allow-scripts"
+              className="pointer-events-none block h-full w-full border-0 bg-black"
+            />
+          ) : (
+            <p className="px-6 pt-16 text-center text-sm text-gray-400">The email appears here.</p>
+          )}
+          <div className="absolute inset-0">
+            {placed.map((box) => {
+              const active = selectedId === box.id;
+              return (
+                <div
+                  key={box.id}
+                  data-section-id={box.id}
+                  className={`group absolute inset-x-0 ${active ? "shadow-[inset_0_0_0_1px_var(--csc-accent)]" : "hover:shadow-[inset_0_0_0_1px_var(--csc-accent)]"}`}
+                  style={{ top: box.top, height: box.height }}
+                  onClick={() => setSelectedId(box.id)}
+                >
+                  <button
+                    type="button"
+                    draggable={!busy}
+                    title="Drag to move"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedId(box.id);
+                    }}
+                    onDragStart={(event) => beginDrag(event, { kind: "move", id: box.id })}
+                    onDragEnd={endDrag}
+                    className={`absolute left-2 top-2 cursor-grab rounded-full border border-[var(--csc-accent)] bg-black/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--csc-accent)] active:cursor-grabbing ${
+                      active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    }`}
+                  >
+                    {sectionLabel(box.type)}
+                  </button>
+                </div>
+              );
+            })}
+            {dragging && barTop != null ? (
+              <div className="pointer-events-none absolute inset-x-3 h-0.5 rounded-full bg-[var(--csc-accent)]" style={{ top: barTop }} />
+            ) : null}
+            {sections.length === 0 ? (
+              <p className="pointer-events-none pt-16 text-center text-xs uppercase tracking-[0.14em] text-gray-400">Drop a section here</p>
+            ) : null}
           </div>
-          {sections.map((section, index) => (
-            <div key={section.id}>
-              <DropSlot
-                index={index}
-                active={dropIndex === index}
-                dragging={dragging}
-                empty={sections.length === 0}
-                onOver={() => markDrop(index)}
-                onDrop={() => dropAt(index)}
-              />
-              <article
+        </div>
+        {placed.length === 0 && sections.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sections.map((section, index) => (
+              <button
+                key={section.id}
+                type="button"
+                draggable={!busy}
                 data-section-id={section.id}
                 onClick={() => setSelectedId(section.id)}
+                onDragStart={(event) => beginDrag(event, { kind: "move", id: section.id })}
+                onDragEnd={endDrag}
                 onDragOver={(event) => {
                   event.preventDefault();
-                  markDrop(slotFromPointer(event, index));
+                  markDrop(index);
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  dropAt(slotFromPointer(event, index));
+                  dropAt(index);
                 }}
-                style={{
-                  background: paint(tokens, section).background,
-                  color: paint(tokens, section).color,
-                  padding: `${tokens.spacing[section.spacing]}px 24px`,
-                  textAlign: section.align,
-                  outline: selectedId === section.id ? "1px solid var(--csc-accent)" : "1px solid transparent",
-                }}
+                className={`cursor-grab rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                  selectedId === section.id
+                    ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
+                    : "border-white/20 text-gray-300"
+                }`}
               >
-                <button
-                  type="button"
-                  draggable={!busy}
-                  title="Drag to move"
-                  onDragStart={(event) => beginDrag(event, { kind: "move", id: section.id })}
-                  onDragEnd={endDrag}
-                  className="mb-3 cursor-grab text-left active:cursor-grabbing"
-                  style={{
-                    fontFamily: tokens.fonts.ui,
-                    fontSize: tokens.type.eyebrow.size,
-                    fontWeight: tokens.type.eyebrow.weight,
-                    letterSpacing: `${tokens.type.eyebrow.tracking ?? 1.4}px`,
-                    textTransform: "uppercase",
-                    color: tokens.colors.brand,
-                    background: "transparent",
-                    border: "none",
-                  }}
-                >
-                  {sectionLabel(section.type)}
-                </button>
-                <SectionFields section={section} tokens={tokens} color={paint(tokens, section).color} onPatch={(props) => patch(section, props)} />
-              </article>
-            </div>
-          ))}
-          <DropSlot
-            index={sections.length}
-            active={dropIndex === sections.length}
-            dragging={dragging}
-            empty={sections.length === 0}
-            onOver={() => markDrop(sections.length)}
-            onDrop={() => dropAt(sections.length)}
-          />
-        </div>
+                {sectionLabel(section.type)}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
-      <aside className="rounded-xl border border-[var(--csc-row-divider)] p-4">
+      <aside className="rounded-xl border border-[var(--csc-row-divider)] p-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto">
         <p className="csc-eyebrow">{selected ? sectionLabel(selected.type) : "Section"}</p>
-        <div className="mt-4">
+        <div className="mt-4 space-y-4">
+          {selected ? <ContentFields section={selected} tokens={tokens} onPatch={(props) => patch(selected, props)} /> : null}
           <Inspector
             section={selected}
             events={events}
@@ -257,15 +273,17 @@ export default function EmailEditor({
             onChange={update}
             onDuplicate={() => {
               if (!selected) return;
-              const copy = { ...selected, id: `sec_${Date.now().toString(36)}`, props: { ...selected.props } };
+              const copy = duplicateSection(selected);
               const index = sections.findIndex((section) => section.id === selected.id);
               onChange(insertBlock(sections, copy, index + 1));
               setSelectedId(copy.id);
             }}
             onRemove={() => {
               if (!selected) return;
-              onChange(sections.filter((section) => section.id !== selected.id));
-              setSelectedId(null);
+              const index = sections.findIndex((section) => section.id === selected.id);
+              const next = sections.filter((section) => section.id !== selected.id);
+              onChange(next);
+              setSelectedId(next[Math.max(0, index - 1)]?.id ?? null);
             }}
           />
         </div>
@@ -274,199 +292,241 @@ export default function EmailEditor({
   );
 }
 
-function DropSlot({
-  index,
-  active,
-  dragging,
-  empty,
-  onOver,
-  onDrop,
+function Area({
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
 }: {
-  index: number;
-  active: boolean;
-  dragging: boolean;
-  empty: boolean;
-  onOver: () => void;
-  onDrop: () => void;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  rows?: number;
 }) {
   return (
-    <div
-      data-drop-index={index}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onOver();
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDrop();
-      }}
-      className={`relative ${active ? "bg-[var(--csc-accent)]/20" : ""}`}
-      style={{ height: empty ? 72 : dragging ? 36 : 8 }}
-    >
-      {active ? <div className="pointer-events-none absolute inset-x-3 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[var(--csc-accent)]" /> : null}
-      {empty ? <p className="pt-6 text-center text-xs uppercase tracking-[0.14em] text-gray-400">Drop a section here</p> : null}
-    </div>
+    <textarea
+      value={value}
+      rows={rows}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
+    />
   );
 }
 
-function SectionFields({
+function ContentFields({
   section,
   tokens,
-  color,
   onPatch,
 }: {
   section: EmailSection;
   tokens: EmailDesignTokens;
-  color: string;
   onPatch: (props: Record<string, unknown>) => void;
 }) {
   const text = (key: string) => (typeof section.props[key] === "string" ? String(section.props[key]) : "");
-  const image = section.props.image;
-  const imageUrl = image && typeof image === "object" && typeof (image as { url?: unknown }).url === "string" ? (image as { url: string }).url : "";
 
   if (section.type === "hero") {
     return (
-      <div className="space-y-2">
-        {imageUrl ? <img src={imageUrl} alt="" className="mb-3 max-h-48 w-full object-cover" /> : null}
-        <input value={text("eyebrow")} onChange={(event) => onPatch({ eyebrow: event.target.value })} placeholder="Eyebrow" style={eyebrowStyle(tokens)} />
-        <input value={text("title")} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Title" style={displayStyle(color, tokens.fonts.heading, tokens.type.title)} />
-        <textarea value={text("subtitle")} onChange={(event) => onPatch({ subtitle: event.target.value })} placeholder="Subtitle" rows={2} style={fieldStyle(tokens.colors.muted, tokens.fonts.body, tokens.type.body.size)} />
-        <input value={text("ctaLabel")} onChange={(event) => onPatch({ ctaLabel: event.target.value })} placeholder="Button label" style={buttonStyle(tokens, false)} />
-        <input value={text("ctaHref")} onChange={(event) => onPatch({ ctaHref: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Eyebrow</FieldLabel>
+          <TextField value={text("eyebrow")} onChange={(value) => onPatch({ eyebrow: value })} placeholder="Eyebrow" />
+        </div>
+        <div>
+          <FieldLabel>Title</FieldLabel>
+          <TextField value={text("title")} onChange={(value) => onPatch({ title: value })} placeholder="Title" />
+        </div>
+        <div>
+          <FieldLabel>Subtitle</FieldLabel>
+          <Area value={text("subtitle")} onChange={(value) => onPatch({ subtitle: value })} placeholder="Subtitle" rows={2} />
+        </div>
+        <div>
+          <FieldLabel>Button label</FieldLabel>
+          <TextField value={text("ctaLabel")} onChange={(value) => onPatch({ ctaLabel: value })} placeholder="Button label" />
+        </div>
+        <div>
+          <FieldLabel>Button link</FieldLabel>
+          <TextField value={text("ctaHref")} onChange={(value) => onPatch({ ctaHref: value })} placeholder="https://" />
+        </div>
       </div>
     );
   }
   if (section.type === "editorial_text") {
     return (
-      <div className="space-y-2 text-left">
-        <input value={text("heading")} onChange={(event) => onPatch({ heading: event.target.value })} placeholder="Heading" style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)} />
-        <InlineTextEditor
-          key={section.id}
-          value={section.props.body}
-          color={color}
-          fontFamily={tokens.fonts.body}
-          fontSize={tokens.type.body.size}
-          onChange={(body) => onPatch({ body, text: "" })}
-        />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Heading</FieldLabel>
+          <TextField value={text("heading")} onChange={(value) => onPatch({ heading: value })} placeholder="Heading" />
+        </div>
+        <div>
+          <FieldLabel>Body</FieldLabel>
+          <InlineTextEditor
+            key={section.id}
+            value={section.props.body}
+            color={tokens.colors.ink}
+            fontFamily={tokens.fonts.body}
+            fontSize={tokens.type.body.size}
+            onChange={(body) => onPatch({ body, text: "" })}
+          />
+        </div>
       </div>
     );
   }
   if (section.type === "large_statement") {
     return (
-      <textarea value={text("text")} onChange={(event) => onPatch({ text: event.target.value })} placeholder="Statement" rows={3} style={displayStyle(color, tokens.fonts.heading, tokens.type.statement)} />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Eyebrow</FieldLabel>
+          <TextField value={text("eyebrow")} onChange={(value) => onPatch({ eyebrow: value })} placeholder="Eyebrow" />
+        </div>
+        <div>
+          <FieldLabel>Statement</FieldLabel>
+          <Area value={text("text")} onChange={(value) => onPatch({ text: value })} placeholder="Statement" />
+        </div>
+      </div>
     );
   }
   if (section.type === "pull_quote") {
     return (
-      <div className="space-y-2">
-        <textarea value={text("quote")} onChange={(event) => onPatch({ quote: event.target.value })} placeholder="Quote" rows={3} style={displayStyle(tokens.colors.brand, tokens.fonts.heading, tokens.type.statement)} />
-        <input value={text("attribution")} onChange={(event) => onPatch({ attribution: event.target.value })} placeholder="Attribution" style={eyebrowStyle(tokens)} />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Quote</FieldLabel>
+          <Area value={text("quote")} onChange={(value) => onPatch({ quote: value })} placeholder="Quote" />
+        </div>
+        <div>
+          <FieldLabel>Attribution</FieldLabel>
+          <TextField value={text("attribution")} onChange={(value) => onPatch({ attribution: value })} placeholder="Attribution" />
+        </div>
       </div>
     );
   }
   if (section.type === "two_column") {
     return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        <ColumnFields heading={text("leftHeading")} body={text("leftText")} tokens={tokens} color={color} onHeading={(leftHeading) => onPatch({ leftHeading })} onBody={(leftText) => onPatch({ leftText })} />
-        <ColumnFields heading={text("rightHeading")} body={text("rightText")} tokens={tokens} color={color} onHeading={(rightHeading) => onPatch({ rightHeading })} onBody={(rightText) => onPatch({ rightText })} />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Left heading</FieldLabel>
+          <TextField value={text("leftHeading")} onChange={(value) => onPatch({ leftHeading: value })} />
+        </div>
+        <div>
+          <FieldLabel>Left body</FieldLabel>
+          <Area value={text("leftText")} onChange={(value) => onPatch({ leftText: value })} />
+        </div>
+        <div>
+          <FieldLabel>Right heading</FieldLabel>
+          <TextField value={text("rightHeading")} onChange={(value) => onPatch({ rightHeading: value })} />
+        </div>
+        <div>
+          <FieldLabel>Right body</FieldLabel>
+          <Area value={text("rightText")} onChange={(value) => onPatch({ rightText: value })} />
+        </div>
       </div>
     );
   }
-  if (section.type === "full_bleed_image" || section.type === "gallery") {
-    const images = section.type === "gallery" && Array.isArray(section.props.images) ? section.props.images : [];
-    const urls = section.type === "gallery" ? images.flatMap((item) => (item && typeof item === "object" && typeof (item as { url?: string }).url === "string" ? [(item as { url: string }).url] : [])) : imageUrl ? [imageUrl] : [];
-    return urls.length ? (
-      <div className="grid grid-cols-3 gap-2">
-        {urls.map((url) => (
-          <img key={url} src={url} alt="" className="aspect-square w-full object-cover" />
-        ))}
-      </div>
-    ) : (
-      <p style={fieldStyle(tokens.colors.muted, tokens.fonts.body, tokens.type.small.size)}>Add an image in the inspector.</p>
-    );
-  }
-  if (section.type === "image_story" || section.type === "song_garden_invitation" || section.type === "artist_feature") {
+  if (section.type === "image_story" || section.type === "song_garden_invitation") {
     return (
-      <div className="space-y-2">
-        {imageUrl ? <img src={imageUrl} alt="" className="mb-3 max-h-40 w-full object-cover" /> : null}
-        <input
-          value={text(section.type === "artist_feature" ? "name" : "heading")}
-          onChange={(event) => onPatch(section.type === "artist_feature" ? { name: event.target.value } : { heading: event.target.value })}
-          placeholder={section.type === "artist_feature" ? "Name" : "Heading"}
-          style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)}
-        />
-        {section.type === "artist_feature" ? (
-          <input value={text("role")} onChange={(event) => onPatch({ role: event.target.value })} placeholder="Role" style={fieldStyle(tokens.colors.muted, tokens.fonts.ui, tokens.type.small.size)} />
-        ) : null}
-        <textarea
-          value={text(section.type === "artist_feature" ? "bio" : "text")}
-          onChange={(event) => onPatch(section.type === "artist_feature" ? { bio: event.target.value } : { text: event.target.value })}
-          placeholder="Body"
-          rows={3}
-          style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)}
-        />
-        {section.type !== "artist_feature" ? (
-          <input value={text("ctaLabel")} onChange={(event) => onPatch({ ctaLabel: event.target.value })} placeholder="Button label" style={buttonStyle(tokens, false)} />
-        ) : (
-          <input value={text("href")} onChange={(event) => onPatch({ href: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
-        )}
-        {section.type !== "artist_feature" ? (
-          <input value={text("ctaHref")} onChange={(event) => onPatch({ ctaHref: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
-        ) : null}
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Heading</FieldLabel>
+          <TextField value={text("heading")} onChange={(value) => onPatch({ heading: value })} placeholder="Heading" />
+        </div>
+        <div>
+          <FieldLabel>Body</FieldLabel>
+          <Area value={text("text")} onChange={(value) => onPatch({ text: value })} placeholder="Body" />
+        </div>
+        <div>
+          <FieldLabel>Button label</FieldLabel>
+          <TextField value={text("ctaLabel")} onChange={(value) => onPatch({ ctaLabel: value })} placeholder="Button label" />
+        </div>
+        <div>
+          <FieldLabel>Button link</FieldLabel>
+          <TextField value={text("ctaHref")} onChange={(value) => onPatch({ ctaHref: value })} placeholder="https://" />
+        </div>
+      </div>
+    );
+  }
+  if (section.type === "artist_feature") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Name</FieldLabel>
+          <TextField value={text("name")} onChange={(value) => onPatch({ name: value })} placeholder="Name" />
+        </div>
+        <div>
+          <FieldLabel>Role</FieldLabel>
+          <TextField value={text("role")} onChange={(value) => onPatch({ role: value })} placeholder="Role" />
+        </div>
+        <div>
+          <FieldLabel>Bio</FieldLabel>
+          <Area value={text("bio")} onChange={(value) => onPatch({ bio: value })} placeholder="Bio" />
+        </div>
+        <div>
+          <FieldLabel>Name link</FieldLabel>
+          <TextField value={text("href")} onChange={(value) => onPatch({ href: value })} placeholder="https://" />
+        </div>
       </div>
     );
   }
   if (section.type === "cta") {
     return (
-      <div className="space-y-2">
-        <input value={text("label")} onChange={(event) => onPatch({ label: event.target.value })} placeholder="Button label" style={buttonStyle(tokens, section.props.style === "outline")} />
-        <input value={text("href")} onChange={(event) => onPatch({ href: event.target.value })} placeholder="https://" style={fieldStyle(tokens.colors.link, tokens.fonts.ui, 13)} />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Button label</FieldLabel>
+          <TextField value={text("label")} onChange={(value) => onPatch({ label: value })} placeholder="Button label" />
+        </div>
+        <div>
+          <FieldLabel>Button link</FieldLabel>
+          <TextField value={text("href")} onChange={(value) => onPatch({ href: value })} placeholder="https://" />
+        </div>
       </div>
     );
   }
   if (section.type === "event") {
     return (
-      <div className="space-y-2">
-        <input value={text("title")} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Event title" style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)} />
-        <input value={text("date")} onChange={(event) => onPatch({ date: event.target.value })} placeholder="Date" style={fieldStyle(tokens.colors.muted, tokens.fonts.body, tokens.type.small.size)} />
-        <input value={text("venue")} onChange={(event) => onPatch({ venue: event.target.value })} placeholder="Venue" style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)} />
-        <textarea value={text("description")} onChange={(event) => onPatch({ description: event.target.value })} placeholder="Description" rows={2} style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)} />
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Title</FieldLabel>
+          <TextField value={text("title")} onChange={(value) => onPatch({ title: value })} placeholder="Event title" />
+        </div>
+        <div>
+          <FieldLabel>Date</FieldLabel>
+          <TextField value={text("date")} onChange={(value) => onPatch({ date: value })} placeholder="Date" />
+        </div>
+        <div>
+          <FieldLabel>Venue</FieldLabel>
+          <TextField value={text("venue")} onChange={(value) => onPatch({ venue: value })} placeholder="Venue" />
+        </div>
+        <div>
+          <FieldLabel>Description</FieldLabel>
+          <Area value={text("description")} onChange={(value) => onPatch({ description: value })} placeholder="Description" rows={2} />
+        </div>
+        <div>
+          <FieldLabel>Button label</FieldLabel>
+          <TextField value={text("ctaLabel")} onChange={(value) => onPatch({ ctaLabel: value })} placeholder="Open event" />
+        </div>
+        <div>
+          <FieldLabel>Button link</FieldLabel>
+          <TextField value={text("href")} onChange={(value) => onPatch({ href: value })} placeholder="https://" />
+        </div>
       </div>
     );
   }
   if (section.type === "footer") {
     return (
-      <div className="space-y-2">
-        <input value={text("companyName")} onChange={(event) => onPatch({ companyName: event.target.value, showUnsubscribe: true })} placeholder="Company" style={fieldStyle(color, tokens.fonts.body, tokens.type.small.size)} />
-        <input value={text("physicalAddress")} onChange={(event) => onPatch({ physicalAddress: event.target.value, showUnsubscribe: true })} placeholder="Physical address" style={fieldStyle(tokens.colors.muted, tokens.fonts.body, tokens.type.small.size)} />
-        <p style={fieldStyle(tokens.colors.link, tokens.fonts.ui, tokens.type.small.size)}>Unsubscribe</p>
+      <div className="space-y-3">
+        <div>
+          <FieldLabel>Company</FieldLabel>
+          <TextField value={text("companyName")} onChange={(value) => onPatch({ companyName: value, showUnsubscribe: true })} placeholder="Company" />
+        </div>
+        <div>
+          <FieldLabel>Physical address</FieldLabel>
+          <TextField
+            value={text("physicalAddress")}
+            onChange={(value) => onPatch({ physicalAddress: value, showUnsubscribe: true })}
+            placeholder="Physical address"
+          />
+        </div>
       </div>
     );
   }
   return null;
-}
-
-function ColumnFields({
-  heading,
-  body,
-  tokens,
-  color,
-  onHeading,
-  onBody,
-}: {
-  heading: string;
-  body: string;
-  tokens: EmailDesignTokens;
-  color: string;
-  onHeading: (value: string) => void;
-  onBody: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <input value={heading} onChange={(event) => onHeading(event.target.value)} placeholder="Heading" style={displayStyle(color, tokens.fonts.heading, tokens.type.heading)} />
-      <textarea value={body} onChange={(event) => onBody(event.target.value)} placeholder="Body" rows={4} style={fieldStyle(color, tokens.fonts.body, tokens.type.body.size)} />
-    </div>
-  );
 }

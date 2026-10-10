@@ -1,5 +1,5 @@
 import type { EmailSection, ImageRatio, ImageRef } from "../document/types";
-import { escapeHtml, escapePreservingTokens } from "./html";
+import { escapeHtml, escapePreservingTokens, safeHref } from "./html";
 import type { EventBlockData } from "./event-data";
 import type { EmailDesignTokens, EmailTypeStyle } from "./tokens";
 
@@ -27,16 +27,45 @@ export function propString(props: Record<string, unknown>, key: string): string 
 export function imageRef(props: Record<string, unknown>, key = "image"): ImageRef | null {
   const image = props[key];
   if (!image || typeof image !== "object") return null;
-  const record = image as { url?: unknown; alt?: unknown; ratio?: unknown };
+  const record = image as { url?: unknown; alt?: unknown; ratio?: unknown; href?: unknown };
   if (typeof record.url !== "string" || !record.url.trim()) return null;
   const ratio: ImageRatio =
     record.ratio === "portrait" || record.ratio === "square" || record.ratio === "landscape" ? record.ratio : "landscape";
+  const href = typeof record.href === "string" && record.href.trim() ? record.href.trim() : null;
   return {
     assetId: null,
     url: record.url.trim(),
     alt: typeof record.alt === "string" ? record.alt : "",
     ratio,
+    ...(href ? { href } : {}),
   };
+}
+
+/** Photo click-through. An image href wins, then photoHref, then a legacy section href when asked. */
+export function imageHref(
+  image: { href?: string | null } | null,
+  props: Record<string, unknown>,
+  legacyProp?: "href"
+): string | null {
+  const direct = typeof image?.href === "string" ? safeHref(image.href) : null;
+  if (direct) return direct;
+  const photo = safeHref(propString(props, "photoHref"));
+  if (photo) return photo;
+  if (legacyProp) return safeHref(propString(props, legacyProp));
+  return null;
+}
+
+export function mjImage(input: {
+  src: string;
+  alt: string;
+  width: number;
+  href?: string | null;
+  align?: "left" | "center";
+  padding?: string;
+}): string {
+  const href = input.href ? ` href="${escapeHtml(input.href)}"` : "";
+  const align = input.align ? ` align="${input.align}"` : "";
+  return `<mj-image src="${escapeHtml(input.src)}" alt="${escapeHtml(input.alt)}" width="${input.width}px" fluid-on-mobile="true"${href} padding="${input.padding ?? "0"}"${align} />`;
 }
 
 function luminance(hex: string): number {

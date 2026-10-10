@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FieldLabel, SettingsButton, SettingsPanel, StatusPill, TextField, ToggleRow } from "@/components/settings/ui";
 import EmailEditor from "@/components/marketing/editor/EmailEditor";
 import type { EmailSection } from "@/lib/marketing/document/types";
@@ -46,6 +46,8 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
   const [templateId, setTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
+  const [previewNote, setPreviewNote] = useState<string | null>(null);
+  const previewRequest = useRef(0);
   const [testTo, setTestTo] = useState("");
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [mobilePreview, setMobilePreview] = useState(false);
@@ -86,18 +88,26 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
 
   useEffect(() => {
     if (!documentId) return;
+    const requestId = ++previewRequest.current;
     const timer = window.setTimeout(() => {
       fetch(`/api/marketing/documents/${documentId}/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sections, previewText: email?.previewText ?? "" }),
+        body: JSON.stringify({ sections, previewText: email?.previewText ?? "", editor: true }),
       })
         .then((res) => res.json())
         .then((data) => {
-          if (typeof data.html === "string") setPreviewHtml(data.html);
+          if (requestId !== previewRequest.current) return;
+          if (typeof data.html === "string" && data.html) {
+            setPreviewHtml(data.html);
+            setPreviewNote(null);
+            return;
+          }
+          const errors = Array.isArray(data.errors) ? data.errors.filter((item: unknown) => typeof item === "string") : [];
+          if (errors.length) setPreviewNote(errors.join(" "));
         })
         .catch(() => undefined);
-    }, 500);
+    }, 300);
     return () => window.clearTimeout(timer);
   }, [documentId, sections, email?.previewText]);
 
@@ -231,7 +241,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       <SettingsPanel
         eyebrow="Campaign"
         title={campaign.name}
-        description="The column is the email. The iframe underneath is the message that will send."
+        description="Subject, preview text, and who receives this."
         actions={
           <>
             <StatusPill tone={email.status === "sent" ? "ok" : "neutral"}>{email.status}</StatusPill>
@@ -272,7 +282,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
         </div>
       </SettingsPanel>
 
-      <SettingsPanel title="Email" description="Drag a section type onto the email. Drag a section by its name to move it. Click a section to edit it.">
+      <SettingsPanel title="Email" description="This preview is the email. Click a section to edit it. Drag its name to move it.">
         <div className="mb-4 flex flex-wrap items-end gap-2">
           <div className="min-w-[12rem] flex-1">
             <FieldLabel>Template</FieldLabel>
@@ -300,29 +310,22 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
             Save template
           </SettingsButton>
         </div>
-        <EmailEditor sections={sections} tokens={tokens} events={events} busy={busy} onChange={setSections} />
-      </SettingsPanel>
-
-      <SettingsPanel title="Sendable preview">
-        <div className="flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <SettingsButton variant="primary" disabled={busy} onClick={() => save()}>
             Save draft
           </SettingsButton>
-          <ToggleRow label={mobilePreview ? "Mobile preview" : "Desktop preview"} checked={mobilePreview} onChange={setMobilePreview} />
+          <ToggleRow label={mobilePreview ? "Mobile" : "Desktop"} checked={mobilePreview} onChange={setMobilePreview} />
         </div>
-        {previewHtml ? (
-          <div className="mt-4 overflow-hidden rounded-xl border border-[var(--csc-row-divider)] bg-black">
-            <iframe
-              title="Email preview"
-              srcDoc={previewHtml}
-              className="min-h-[480px] w-full bg-black"
-              sandbox=""
-              style={{ maxWidth: mobilePreview ? 375 : 600, margin: "0 auto", display: "block" }}
-            />
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-gray-400">The compiled email appears here as you edit.</p>
-        )}
+        <EmailEditor
+          sections={sections}
+          tokens={tokens}
+          events={events}
+          busy={busy}
+          previewHtml={previewHtml}
+          mobile={mobilePreview}
+          onChange={setSections}
+        />
+        {previewNote ? <p className="mt-3 text-sm text-red-300">{previewNote}</p> : null}
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <div>
             <FieldLabel hint="This uses Google when sending is on in Settings → Google connections. The list switch does not block it.">

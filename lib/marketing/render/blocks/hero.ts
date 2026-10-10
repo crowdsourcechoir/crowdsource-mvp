@@ -1,6 +1,6 @@
 import type { EmailSection } from "../../document/types";
 import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
-import { imageRef, mjButton, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageHref, imageRef, mjButton, mjImage, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderHero(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -10,17 +10,19 @@ export function renderHero(section: EmailSection, ctx: SectionContext): Rendered
   const title = propString(section.props, "title");
   const subtitle = propString(section.props, "subtitle");
   const image = imageRef(section.props);
+  const photo = imageHref(image, section.props);
   const label = propString(section.props, "ctaLabel");
   const href = safeHref(propString(section.props, "ctaHref"));
   const warnings = colors.warning ? [colors.warning] : [];
-  const links = href && label ? [{ url: href, label }] : [];
+  const links = [
+    ...(photo ? [{ url: photo, label: image?.alt || photo }] : []),
+    ...(href && label ? [{ url: href, label }] : []),
+  ];
   const type = ctx.tokens.type;
   const parts: string[] = [];
   if (image) {
     const width = Math.min(imageWidth(ctx.tokens, image.ratio), ctx.tokens.contentWidth);
-    parts.push(
-      `<mj-image src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt)}" width="${width}px" fluid-on-mobile="true" padding="0 0 16px 0" align="${align}" />`
-    );
+    parts.push(mjImage({ src: image.url, alt: image.alt, width, href: photo, align, padding: "0 0 16px 0" }));
   }
   if (eyebrow) {
     parts.push(
@@ -50,7 +52,7 @@ export function renderHero(section: EmailSection, ctx: SectionContext): Rendered
   );
   return {
     mjml,
-    text: [eyebrow, title, subtitle, label && href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
+    text: [eyebrow, title, subtitle, photo, label && href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
     links,
     warnings,
   };

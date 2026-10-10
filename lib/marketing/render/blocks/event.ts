@@ -1,6 +1,6 @@
 import type { EmailSection } from "../../document/types";
-import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
-import { imageRef, mjButton, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { escapePreservingTokens, safeHref } from "../html";
+import { imageHref, imageRef, mjButton, mjImage, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 function pick(override: string, fallback: string | null | undefined): string {
@@ -17,13 +17,12 @@ export function renderEvent(section: EmailSection, ctx: SectionContext): Rendere
   const href = safeHref(pick(propString(section.props, "href"), resolved?.url));
   const label = pick(propString(section.props, "ctaLabel"), resolved?.ctaText) || "Open event";
   const image = imageRef(section.props) ?? (resolved?.heroImage ? { assetId: null, url: resolved.heroImage, alt: title, ratio: "landscape" as const } : null);
+  const photo = imageHref(image, section.props);
   const warnings = colors.warning ? [colors.warning] : [];
   const parts: string[] = [];
   if (image) {
     const width = Math.min(imageWidth(ctx.tokens, image.ratio), ctx.tokens.contentWidth);
-    parts.push(
-      `<mj-image src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt)}" width="${width}px" fluid-on-mobile="true" padding="0 0 12px 0" />`
-    );
+    parts.push(mjImage({ src: image.url, alt: image.alt, width, href: photo, padding: "0 0 12px 0" }));
   }
   parts.push(
     `<mj-text font-family="${ctx.tokens.fonts.ui}" font-size="${ctx.tokens.type.eyebrow.size}px" font-weight="${ctx.tokens.type.eyebrow.weight}" letter-spacing="${ctx.tokens.type.eyebrow.tracking ?? 3.4}px" text-transform="uppercase" color="${ctx.tokens.colors.brand}" padding="0 0 8px 0">Bloom</mj-text>`
@@ -51,8 +50,8 @@ export function renderEvent(section: EmailSection, ctx: SectionContext): Rendere
   }
   return {
     mjml: wrapSection(section, ctx.tokens, `<mj-column width="${ctx.tokens.contentWidth}px">${parts.join("")}</mj-column>`, colors),
-    text: [title, meta, description, href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
-    links: href ? [{ url: href, label }] : [],
+    text: [title, meta, description, photo, href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
+    links: [...(photo ? [{ url: photo, label: image?.alt || photo }] : []), ...(href ? [{ url: href, label }] : [])],
     warnings,
   };
 }
