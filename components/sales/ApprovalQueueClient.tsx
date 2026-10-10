@@ -29,6 +29,13 @@ import {
   type QueueFunnelFilter,
 } from "@/lib/sales/queue/funnel";
 import {
+  QUEUE_ADDED_OPTIONS,
+  countQueueAdded,
+  matchesQueueAdded,
+  parseQueueAdded,
+  type QueueAddedFilter,
+} from "@/lib/sales/queue/added";
+import {
   applySelectContactResponse,
   applySelectedContact,
   draftFromMutationPayload,
@@ -83,6 +90,7 @@ export default function ApprovalQueueClient() {
   const category = parseQueueCategory(searchParams.get("category"));
   const scope = parseQueueScope(searchParams.get("scope"));
   const funnel = parseQueueFunnel(searchParams.get("funnel"));
+  const added = parseQueueAdded(searchParams.get("added"));
   const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
@@ -152,13 +160,20 @@ export default function ApprovalQueueClient() {
     load();
   }, [load]);
 
-  const visible = useMemo(
-    () =>
-      sidebar.filter(
-        (item) => matchesQueueCategory(item, category) && matchesQueueFunnel(item.relationshipStage, funnel)
-      ),
-    [sidebar, category, funnel]
-  );
+  const visible = useMemo(() => {
+    const filtered = sidebar.filter(
+      (item) =>
+        matchesQueueCategory(item, category) &&
+        matchesQueueFunnel(item.relationshipStage, funnel) &&
+        matchesQueueAdded(item.queueItem.createdAt, added)
+    );
+    if (added !== "new") return filtered;
+    return [...filtered].sort((a, b) => {
+      const aT = Date.parse(a.queueItem.createdAt) || 0;
+      const bT = Date.parse(b.queueItem.createdAt) || 0;
+      return bT - aT;
+    });
+  }, [sidebar, category, funnel, added]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
   const funnelCounts = useMemo(() => {
     const counts: Record<QueueFunnelFilter, number> = {
@@ -174,6 +189,7 @@ export default function ApprovalQueueClient() {
     }
     return counts;
   }, [sidebar]);
+  const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
@@ -581,7 +597,7 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope, funnel]);
+  }, [category, scope, funnel, added]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
@@ -604,6 +620,14 @@ export default function ApprovalQueueClient() {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "all") params.delete("funnel");
     else params.set("funnel", next === "purchase" ? "won" : next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setAdded(next: QueueAddedFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("added");
+    else params.set("added", next);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -670,6 +694,16 @@ export default function ApprovalQueueClient() {
               count: funnelCounts[opt.key],
             }))}
             onChange={setFunnel}
+          />
+          <QueueFilterSelect
+            label="Added"
+            value={added}
+            options={QUEUE_ADDED_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: addedCounts[opt.key],
+            }))}
+            onChange={setAdded}
           />
           <QueueFilterSelect
             label="Queue"
@@ -755,9 +789,11 @@ export default function ApprovalQueueClient() {
             ? `${pendingCount} follow-ups`
             : scope === "all"
               ? `${pendingCount} orgs`
-              : category === "all" && funnel === "all"
+              : category === "all" && funnel === "all" && added === "all"
                 ? `${pendingCount} to send`
-                : `${pendingCount} filtered · ${sidebar.length} total`}
+                : added === "new" && category === "all" && funnel === "all"
+                  ? `${pendingCount} recently added`
+                  : `${pendingCount} filtered · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
