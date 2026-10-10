@@ -9,6 +9,10 @@
   ],
   "crons": [
     {
+      "path": "/api/sales/cron/seed-amplify-2027",
+      "schedule": "10 * * * *"
+    },
+    {
       "path": "/api/marketing/cron/send",
       "schedule": "20 12 * * *"
     },

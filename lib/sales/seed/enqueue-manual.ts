@@ -265,6 +265,8 @@ export async function enqueueOrgManually(input: {
   title: string;
   description: string;
   eventOrInitiativeName?: string | null;
+  eventDateEstimate?: string | null;
+  eventDateConfidence?: "confirmed" | "estimated" | "unknown" | null;
   opportunityTypeKey?: string;
   totalScoreHint?: number;
   /** Reopen a previously rejected/deferred initial queue row (manual operator action only). */
@@ -288,6 +290,8 @@ export async function enqueueOrgManually(input: {
       opportunityTypeId: oppType?.id ?? null,
       title: input.title,
       eventOrInitiativeName: input.eventOrInitiativeName ?? null,
+      eventDateEstimate: input.eventDateEstimate ?? null,
+      eventDateConfidence: input.eventDateConfidence ?? null,
       description: input.description,
       status: "ready_for_review",
       targetContactRoleHint: primary.roleTitle,

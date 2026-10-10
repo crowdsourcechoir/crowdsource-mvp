@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ensureDigestTarget } from "@/lib/sales/digest/ensure";
 import { scheduleDigestContinuation } from "@/lib/sales/digest/continue";
 import { runPipelineBatch } from "@/lib/sales/pipeline/run-pipeline-batch";
+import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 290;
@@ -27,6 +28,17 @@ export async function GET(request: Request) {
   }
 
   try {
+    // One-shot Amplify 2027 seed (idempotent) — runs before the batch so new orgs
+    // land even when the agent cannot call production with operator auth.
+    let amplifySeed = null;
+    try {
+      amplifySeed = await seedAmplifyConferences2027();
+    } catch (err) {
+      amplifySeed = {
+        error: err instanceof Error ? err.message : "Amplify 2027 seed failed",
+      };
+    }
+
     const limit = Number(process.env.SALES_PIPELINE_BATCH_SIZE) || undefined;
     const summary = await runPipelineBatch(limit);
     // Best-effort: never fail the pipeline cron if digest ensure errors (email/provider issues).
@@ -38,7 +50,7 @@ export async function GET(request: Request) {
     } catch (err) {
       digest = { status: "failed", error: err instanceof Error ? err.message : "Digest ensure failed" };
     }
-    return NextResponse.json({ summary, digest, continuation });
+    return NextResponse.json({ amplifySeed, summary, digest, continuation });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
   }

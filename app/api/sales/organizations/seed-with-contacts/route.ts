@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
+import { AMPLIFY_CONFERENCES_2027_SEEDS } from "@/lib/sales/seed/amplify-conferences-2027";
+import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import {
   SEAHAWKS_SEED,
   seedOrgWithContacts,
@@ -12,7 +14,7 @@ export const maxDuration = 300;
 /**
  * Upsert org + contacts (verified-format emails) and run pipeline into the approval queue.
  *
- * Body: full SeedOrgWithContactsInput, or `{ preset: "seahawks" }` for the Hunter-sourced list.
+ * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, or `{ preset: "amplify-2027" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -25,7 +27,18 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SeedOrgWithContactsInput & {
       preset?: string;
       remintTyler?: boolean;
+      force?: boolean;
     };
+
+    if (body?.preset === "amplify-2027") {
+      const result = await seedAmplifyConferences2027({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "amplify-2027",
+        seedCount: AMPLIFY_CONFERENCES_2027_SEEDS.length,
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -46,7 +59,10 @@ export async function POST(request: Request) {
 
     if (!input?.name || !input?.websiteUrl || !Array.isArray(input.contacts)) {
       return NextResponse.json(
-        { error: "Provide { preset: 'seahawks' } or { name, websiteUrl, contacts[] }" },
+        {
+          error:
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, or { name, websiteUrl, contacts[] }",
+        },
         { status: 400 }
       );
     }

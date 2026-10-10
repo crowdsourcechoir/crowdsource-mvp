@@ -48,6 +48,9 @@ export type SeedOrgWithContactsInput = {
   manualQueueTitle?: string;
   manualQueueDescription?: string;
   manualEventName?: string;
+  /** ISO start date for the opportunity when manually enqueued. */
+  eventDateEstimate?: string | null;
+  eventDateConfidence?: "confirmed" | "estimated" | "unknown" | null;
   /** Opportunity type for manual enqueue (default fan_engagement_initiative). */
   opportunityTypeKey?: string;
   /** Tag for queue filters: sports_fan_culture, conferences_associations, fundraising_galas, arts_culture, entertainment_media, tech_conferences. */
@@ -193,6 +196,8 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         input.manualQueueDescription ??
         "Participatory anthem / belonging ritual for training camp and in-stadium moments. Doorway contacts (COO, game entertainment, marketing) verified via Hunter Email Finder.",
       eventOrInitiativeName: input.manualEventName ?? "Training camp / game entertainment ritual",
+      eventDateEstimate: input.eventDateEstimate,
+      eventDateConfidence: input.eventDateConfidence,
       opportunityTypeKey: input.opportunityTypeKey ?? "fan_engagement_initiative",
       totalScoreHint: 82,
       reopenDecided: Boolean(input.reopenDecided),
