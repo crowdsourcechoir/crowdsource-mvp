@@ -3,6 +3,7 @@ import {
   seedOrgWithContacts,
   type SeedOrgWithContactsResult,
 } from "@/lib/sales/seed/seed-org-with-contacts";
+import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findExistingOrganization, updateOrganization } from "@/lib/sales/db/organizations";
 
 export type SeedAmplifyConferencesResult = {
@@ -99,4 +100,59 @@ export async function seedAmplifyConferences2027(options?: {
   }
 
   return result;
+}
+
+/** Read-only progress check — org names + contact counts, no emails. */
+export async function getAmplifyConferences2027SeedStatus(): Promise<{
+  expected: number;
+  present: number;
+  markedSeeded: number;
+  withThreeContacts: number;
+  done: boolean;
+  organizations: Array<{
+    name: string;
+    present: boolean;
+    markedSeeded: boolean;
+    contactCount: number;
+  }>;
+}> {
+  const organizations: Array<{
+    name: string;
+    present: boolean;
+    markedSeeded: boolean;
+    contactCount: number;
+  }> = [];
+
+  for (const seed of AMPLIFY_CONFERENCES_2027_SEEDS) {
+    const existing = await findExistingOrganization(seed.name, seed.websiteUrl);
+    if (!existing) {
+      organizations.push({
+        name: seed.name,
+        present: false,
+        markedSeeded: false,
+        contactCount: 0,
+      });
+      continue;
+    }
+    const meta = (existing.importMetadata ?? {}) as Record<string, unknown>;
+    const contacts = await listContactsForOrganization(existing.id);
+    organizations.push({
+      name: seed.name,
+      present: true,
+      markedSeeded: meta.amplify2027Seeded === true,
+      contactCount: contacts.length,
+    });
+  }
+
+  const present = organizations.filter((o) => o.present).length;
+  const markedSeeded = organizations.filter((o) => o.markedSeeded).length;
+  const withThreeContacts = organizations.filter((o) => o.contactCount >= 3).length;
+  return {
+    expected: AMPLIFY_CONFERENCES_2027_SEEDS.length,
+    present,
+    markedSeeded,
+    withThreeContacts,
+    done: markedSeeded === AMPLIFY_CONFERENCES_2027_SEEDS.length && withThreeContacts === AMPLIFY_CONFERENCES_2027_SEEDS.length,
+    organizations,
+  };
 }

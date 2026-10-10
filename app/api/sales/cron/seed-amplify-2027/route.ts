@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
-import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
+import {
+  getAmplifyConferences2027SeedStatus,
+  seedAmplifyConferences2027,
+} from "@/lib/sales/seed/seed-amplify-conferences-2027";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -10,9 +13,38 @@ export const maxDuration = 300;
  * Same CRON_SECRET gate as other sales crons. Re-runs are no-ops once
  * import_metadata.amplify2027Seeded is set on each org.
  *
- * Body/query: { force?: boolean } to re-seed.
+ * GET ?status=1 — public progress check (names + counts only, no emails).
+ * Body/query force=1 — re-seed (requires Bearer CRON_SECRET).
  */
-async function handle(request: Request) {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  if (url.searchParams.get("status") === "1") {
+    try {
+      requireSupabaseAdmin();
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Database not configured." },
+        { status: 503 }
+      );
+    }
+    try {
+      const status = await getAmplifyConferences2027SeedStatus();
+      return NextResponse.json(status);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Server error" },
+        { status: 500 }
+      );
+    }
+  }
+  return runSeed(request);
+}
+
+export async function POST(request: Request) {
+  return runSeed(request);
+}
+
+async function runSeed(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return NextResponse.json({ error: "CRON_SECRET is not configured." }, { status: 503 });
@@ -56,12 +88,4 @@ async function handle(request: Request) {
       { status: 500 }
     );
   }
-}
-
-export async function GET(request: Request) {
-  return handle(request);
-}
-
-export async function POST(request: Request) {
-  return handle(request);
 }
