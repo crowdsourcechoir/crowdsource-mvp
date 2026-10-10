@@ -34,6 +34,11 @@ export type SongGardenConfig = {
   completionEyebrow?: string;
   /** Final-screen button (defaults to "Let's do it again"). */
   completionButtonText?: string;
+  /**
+   * Optional URL for the closing-screen button. When set (and the button is shown),
+   * the CTA opens this link instead of restarting the journey.
+   */
+  completionButtonUrl?: string;
   /** When false, the closing screen has no button. Default true. */
   showCompletionButton?: boolean;
 };
@@ -136,7 +141,11 @@ export function defaultSongGardenConfig(): SongGardenConfig {
 
 function pickScreenCopy(input: Partial<SongGardenConfig> | null | undefined): Pick<
   SongGardenConfig,
-  "welcomeEyebrow" | "completionEyebrow" | "completionButtonText" | "showCompletionButton"
+  | "welcomeEyebrow"
+  | "completionEyebrow"
+  | "completionButtonText"
+  | "completionButtonUrl"
+  | "showCompletionButton"
 > {
   return {
     ...(typeof input?.welcomeEyebrow === "string" ? { welcomeEyebrow: input.welcomeEyebrow } : {}),
@@ -145,6 +154,9 @@ function pickScreenCopy(input: Partial<SongGardenConfig> | null | undefined): Pi
       : {}),
     ...(typeof input?.completionButtonText === "string"
       ? { completionButtonText: input.completionButtonText }
+      : {}),
+    ...(typeof input?.completionButtonUrl === "string"
+      ? { completionButtonUrl: input.completionButtonUrl }
       : {}),
     ...(typeof input?.showCompletionButton === "boolean"
       ? { showCompletionButton: input.showCompletionButton }
@@ -155,6 +167,24 @@ function pickScreenCopy(input: Partial<SongGardenConfig> | null | undefined): Pi
 /** Closing-screen CTA is on unless explicitly turned off. */
 export function isCompletionButtonVisible(config: SongGardenConfig | null | undefined): boolean {
   return config?.showCompletionButton !== false;
+}
+
+/**
+ * Safe http(s) href for the closing-screen CTA, or null to keep restart-journey behavior.
+ */
+export function resolveCompletionButtonUrl(
+  config: SongGardenConfig | null | undefined
+): string | null {
+  const raw = config?.completionButtonUrl?.trim();
+  if (!raw) return null;
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withProtocol);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeSongGardenConfig(
