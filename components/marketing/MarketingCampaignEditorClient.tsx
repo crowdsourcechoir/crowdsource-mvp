@@ -153,7 +153,13 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Action failed");
-      if (action === "test") setMessage(`Test sent (${data.providerMessageId})`);
+      if (action === "test") {
+        setMessage(
+          data.via === "gmail"
+            ? `Test sent from Google (${data.providerMessageId})`
+            : `Test sent (${data.providerMessageId})`
+        );
+      }
       else if (typeof data.remaining === "number" && data.remaining > 0) {
         setMessage(`Mailing ${data.sent} of ${data.queued}. ${data.remaining} still in the queue.`);
         await load();
@@ -229,7 +235,7 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
         actions={
           <>
             <StatusPill tone={email.status === "sent" ? "ok" : "neutral"}>{email.status}</StatusPill>
-            <StatusPill tone={settings?.sendsEnabled ? "ok" : "off"}>{settings?.sendsEnabled ? "Sends on" : "Sends paused"}</StatusPill>
+            <StatusPill tone={settings?.sendsEnabled ? "ok" : "off"}>{settings?.sendsEnabled ? "List on" : "List paused"}</StatusPill>
             <SettingsButton href="/admin/marketing/campaigns">Back</SettingsButton>
           </>
         }
@@ -319,7 +325,9 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
         )}
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <div>
-            <FieldLabel>Test send to</FieldLabel>
+            <FieldLabel hint="This uses Google when sending is on in Settings → Google connections. The list switch does not block it.">
+              Test send to
+            </FieldLabel>
             <TextField value={testTo} onChange={setTestTo} placeholder="you@crowdsourcechoir.com" />
             <div className="mt-2">
               <SettingsButton disabled={busy || !testTo.trim()} onClick={() => runAction("test")}>

@@ -39,6 +39,7 @@ export async function sendGmailMessage(input: {
   to: string;
   subject: string;
   body: string;
+  html?: string | null;
   threadId?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
@@ -57,6 +58,7 @@ export async function sendGmailMessage(input: {
       to: input.to,
       subject: input.subject,
       body: input.body,
+      htmlBody: input.html ?? undefined,
       inReplyTo: input.inReplyTo,
       references: input.references,
     })
