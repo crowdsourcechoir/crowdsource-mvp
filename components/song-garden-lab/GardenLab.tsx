@@ -380,7 +380,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
         </p>
       </div>
       <aside className="h-[48dvh] overflow-y-auto border-t border-white/10 px-4 py-3 font-mono text-[11px] md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-t-0">
-        <div className="mb-3 flex gap-2">
+        <div className="mb-3 flex flex-wrap gap-2">
           {(
             [
               ["compare", "A/B"],
