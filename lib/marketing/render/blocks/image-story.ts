@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
-import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
+import { escapePreservingTokens, safeHref } from "../html";
 import { inlineDocumentToHtml, inlineToPlainText, plainTextToHtml } from "../inline";
-import { imageRef, mjButton, propString, sectionColors, trackingAttr, type RenderedSection, type SectionContext } from "../section";
+import { imageHref, imageRef, mjButton, mjImage, propString, sectionColors, trackingAttr, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderImageStory(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -11,6 +11,7 @@ export function renderImageStory(section: EmailSection, ctx: SectionContext): Re
   const text = propString(section.props, "text");
   const bodyHtml = text ? plainTextToHtml(text) : inlineDocumentToHtml(section.props.body, ctx.tokens.colors.link);
   const bodyText = text || inlineToPlainText(section.props.body);
+  const photo = imageHref(image, section.props);
   const label = propString(section.props, "ctaLabel");
   const href = safeHref(propString(section.props, "ctaHref"));
   const warnings = colors.warning ? [colors.warning] : [];
@@ -20,7 +21,7 @@ export function renderImageStory(section: EmailSection, ctx: SectionContext): Re
   const textColumn = ctx.tokens.contentWidth - imageColumn;
   const position = section.props.imagePosition === "right" ? "right" : "left";
   const imageMjml = image
-    ? `<mj-column width="${imageColumn}px"><mj-image src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt)}" width="${imageColumn}px" fluid-on-mobile="true" padding="0" /></mj-column>`
+    ? `<mj-column width="${imageColumn}px">${mjImage({ src: image.url, alt: image.alt, width: imageColumn, href: photo })}</mj-column>`
     : "";
   const textParts: string[] = [];
   if (heading) {
@@ -47,8 +48,8 @@ export function renderImageStory(section: EmailSection, ctx: SectionContext): Re
   const mjml = `<mj-section background-color="${colors.background}" padding="${pad}px 20px" direction="${direction}"${hidden}>${imageMjml}${textMjml}</mj-section>`;
   return {
     mjml,
-    text: [heading, bodyText, label && href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
-    links: href && label ? [{ url: href, label }] : [],
+    text: [heading, bodyText, photo, label && href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
+    links: [...(photo ? [{ url: photo, label: image?.alt || photo }] : []), ...(href && label ? [{ url: href, label }] : [])],
     warnings,
   };
 }

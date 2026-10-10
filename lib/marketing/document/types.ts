@@ -25,6 +25,8 @@ export type ImageRef = {
   url: string;
   alt: string;
   ratio: ImageRatio;
+  /** Click-through for this photo. http(s) or mailto. */
+  href?: string | null;
 };
 
 export type EmailSection = {

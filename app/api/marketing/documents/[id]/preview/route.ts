@@ -40,7 +40,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { id } = await ctx.params;
     const loaded = await getWorkingDocument(id);
     if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const body = (await request.json().catch(() => null)) as { sections?: unknown; previewText?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as { sections?: unknown; previewText?: unknown; editor?: unknown } | null;
     const document =
       body && Array.isArray(body.sections)
         ? parseEmailDocument({ ...loaded.document, sections: body.sections })
@@ -56,6 +56,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       companyName: settings.companyName,
       physicalAddress: settings.physicalAddress,
       eventsBySectionId: await resolveEvents(document, origin),
+      annotate: body?.editor === true,
     });
     if (!compiled.ok) {
       return NextResponse.json({ html: "", text: compiled.text, errors: compiled.errors }, { status: 422 });

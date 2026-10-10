@@ -1,7 +1,7 @@
 import type { EmailSection } from "../../document/types";
-import { escapeHtml, escapePreservingTokens, safeHref } from "../html";
+import { escapePreservingTokens, safeHref } from "../html";
 import { plainTextToHtml } from "../inline";
-import { imageRef, mjButton, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
+import { imageHref, imageRef, mjButton, mjImage, propString, sectionColors, trackingAttr, wrapSection, type RenderedSection, type SectionContext } from "../section";
 import { imageWidth } from "../tokens";
 
 export function renderSongGardenInvitation(section: EmailSection, ctx: SectionContext): RenderedSection {
@@ -12,13 +12,12 @@ export function renderSongGardenInvitation(section: EmailSection, ctx: SectionCo
   const label = propString(section.props, "ctaLabel");
   const href = safeHref(propString(section.props, "ctaHref"));
   const image = imageRef(section.props);
+  const photo = imageHref(image, section.props);
   const warnings = colors.warning ? [colors.warning] : [];
   const parts: string[] = [];
   if (image) {
     const width = Math.min(imageWidth(ctx.tokens, image.ratio), ctx.tokens.contentWidth);
-    parts.push(
-      `<mj-image src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt)}" width="${width}px" fluid-on-mobile="true" padding="0 0 16px 0" align="${align}" />`
-    );
+    parts.push(mjImage({ src: image.url, alt: image.alt, width, href: photo, align, padding: "0 0 16px 0" }));
   }
   if (heading) {
     parts.push(
@@ -36,10 +35,13 @@ export function renderSongGardenInvitation(section: EmailSection, ctx: SectionCo
   } else if (label) {
     warnings.push("song garden button href must be http(s) or mailto");
   }
-  const links = href && label ? [{ url: href, label }] : [];
+  const links = [
+    ...(photo ? [{ url: photo, label: image?.alt || photo }] : []),
+    ...(href && label ? [{ url: href, label }] : []),
+  ];
   return {
     mjml: wrapSection(section, ctx.tokens, `<mj-column width="${ctx.tokens.contentWidth}px">${parts.join("")}</mj-column>`, colors),
-    text: [heading, text, label && href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
+    text: [heading, text, photo, label && href ? `${label}: ${href}` : ""].filter(Boolean).join("\n"),
     links,
     warnings,
   };

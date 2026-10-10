@@ -14,6 +14,17 @@ type MjmlCompile = (input: string, options: { validationLevel: "soft" }) => { ht
 
 const compileMjml = mjml2html as unknown as MjmlCompile;
 
+function annotateSectionMjml(mjml: string, id: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) return mjml;
+  const token = `csc-sec-${id}`;
+  return mjml.replace(/<mj-section\b([^>]*)>/, (_match, attrs: string) => {
+    if (/\bcss-class="/.test(attrs)) {
+      return `<mj-section${attrs.replace(/\bcss-class="([^"]*)"/, `css-class="$1 ${token}"`)}>`;
+    }
+    return `<mj-section css-class="${token}"${attrs}>`;
+  });
+}
+
 export type CompiledEmail = {
   ok: boolean;
   html: string;
@@ -31,6 +42,8 @@ export function compileEmailDocument(input: {
   companyName: string;
   physicalAddress: string;
   eventsBySectionId?: Record<string, EventBlockData | null>;
+  /** Mark each section so the editor can select it on the compiled preview. Omitted from sends. */
+  annotate?: boolean;
 }): CompiledEmail {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -51,7 +64,7 @@ export function compileEmailDocument(input: {
       errors.push(rendered.error);
       continue;
     }
-    sections.push(rendered.mjml);
+    sections.push(input.annotate ? annotateSectionMjml(rendered.mjml, section.id) : rendered.mjml);
     if (rendered.text) textParts.push(rendered.text);
     links.push(...rendered.links);
     warnings.push(...rendered.warnings);
