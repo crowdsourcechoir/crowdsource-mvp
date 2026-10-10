@@ -21,7 +21,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       const to = typeof body?.to === "string" ? body.to : "";
       const result = await sendTestEmail({ sendId: id, to });
       if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-      return NextResponse.json({ providerMessageId: result.providerMessageId });
+      return NextResponse.json({ providerMessageId: result.providerMessageId, via: result.via });
     }
 
     if (action === "send") {

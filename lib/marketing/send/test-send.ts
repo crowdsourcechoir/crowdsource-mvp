@@ -1,13 +1,15 @@
+import { getGmailConnectionStatus } from "../../sales/db/gmail";
+import { sendGmailMessage } from "../../sales/gmail/send";
 import { marketingDb } from "../db/client";
 import { MarketingDbError, raiseDb } from "../db/errors";
 import type { MailSender } from "../providers/types";
 import { resendConfigured, resendSender } from "../providers/resend";
-import { checkTestSend } from "./checks";
+import { chooseTestTransport } from "./checks";
 import { messageForRecipient, testSubject, testUnsubscribeLink } from "./deliver";
 import { prepareSendVersion } from "./prepare";
 
 export type TestSendResult =
-  | { ok: true; providerMessageId: string }
+  | { ok: true; providerMessageId: string; via: "resend" | "gmail" }
   | { ok: false; error: string; status: number };
 
 function failure(err: unknown): TestSendResult {
@@ -19,16 +21,22 @@ function failure(err: unknown): TestSendResult {
   return { ok: false, error: message.includes("Nothing was mailed") ? message : `${message} Nothing was mailed.`, status: 500 };
 }
 
-export async function sendTestEmail(input: { sendId: string; to: string; sender?: MailSender }): Promise<TestSendResult> {
-  const gate = checkTestSend({
-    to: input.to,
-    fromEmail: "pending",
-    resendConfigured: input.sender ? true : resendConfigured(),
-  });
-  if (!gate.ok && gate.error.startsWith("Enter a real")) return { ok: false, error: gate.error, status: 400 };
-  if (!gate.ok && gate.error.includes("RESEND_API_KEY")) return { ok: false, error: gate.error, status: 409 };
-  if (!gate.ok && gate.error.includes("MARKETING_SENDS_ENABLED")) return { ok: false, error: gate.error, status: 409 };
+async function gmailSendingOn(override: boolean | undefined): Promise<boolean> {
+  if (typeof override === "boolean") return override;
+  try {
+    const status = await getGmailConnectionStatus();
+    return status.connected && status.sendsEnabled;
+  } catch {
+    return false;
+  }
+}
 
+export async function sendTestEmail(input: {
+  sendId: string;
+  to: string;
+  sender?: MailSender;
+  gmailSendsEnabled?: boolean;
+}): Promise<TestSendResult> {
   let prepared;
   try {
     prepared = await prepareSendVersion(input.sendId);
@@ -36,38 +44,57 @@ export async function sendTestEmail(input: { sendId: string; to: string; sender?
     return failure(err);
   }
 
-  const ready = checkTestSend({
+  const choice = chooseTestTransport({
     to: input.to,
     fromEmail: prepared.fromEmail,
     resendConfigured: input.sender ? true : resendConfigured(),
+    gmailSendsEnabled: await gmailSendingOn(input.gmailSendsEnabled),
   });
-  if (!ready.ok) return { ok: false, error: ready.error, status: 409 };
+  if (!choice.ok) {
+    return { ok: false, error: choice.error, status: choice.error.startsWith("Enter a real") ? 400 : 409 };
+  }
 
   const message = messageForRecipient({
     prepared,
-    to: ready.to,
-    unsubscribe: testUnsubscribeLink(ready.to),
+    to: choice.to,
+    unsubscribe: testUnsubscribeLink(choice.to),
     subject: testSubject(prepared.subject),
-    idempotencyKey: `test:${prepared.versionId}:${ready.to}`,
+    idempotencyKey: `test:${prepared.versionId}:${choice.to}`,
   });
-  const sender = input.sender ?? resendSender();
-  let outcome;
-  try {
-    outcome = await sender.sendOne(message);
-  } catch (err) {
-    return failure(err);
-  }
-  if (!outcome.id) {
-    return { ok: false, error: `${outcome.error || "Resend rejected the test."} Nothing was mailed.`, status: 502 };
+
+  let providerMessageId: string | null = null;
+  if (choice.transport === "gmail") {
+    try {
+      const sent = await sendGmailMessage({
+        to: choice.to,
+        subject: message.subject,
+        body: message.text,
+        html: message.html,
+      });
+      providerMessageId = sent.messageId;
+    } catch (err) {
+      return failure(err);
+    }
+  } else {
+    const sender = input.sender ?? resendSender();
+    try {
+      const outcome = await sender.sendOne(message);
+      if (!outcome.id) {
+        return { ok: false, error: `${outcome.error || "Resend rejected the test."} Nothing was mailed.`, status: 502 };
+      }
+      providerMessageId = outcome.id;
+    } catch (err) {
+      return failure(err);
+    }
   }
 
   const db = marketingDb();
   const { error } = await db.from("email_test_sends").insert({
     campaign_id: prepared.campaignId,
     document_version_id: prepared.versionId,
-    to_email: ready.to,
-    provider_message_id: outcome.id,
+    to_email: choice.to,
+    provider_message_id: providerMessageId,
   });
   raiseDb(error);
-  return { ok: true, providerMessageId: outcome.id };
+  return { ok: true, providerMessageId, via: choice.transport };
 }

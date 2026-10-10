@@ -1,7 +1,7 @@
 // node --experimental-strip-types --import ./scripts/marketing/register-strip-types.mjs lib/marketing/send/delivery.test.ts
 import assert from "node:assert/strict";
 import { personMatchesSegment, sendablePeople, type AudiencePerson } from "./audience";
-import { auditSendableHtml, checkListSend, checkTestSend } from "./checks";
+import { auditSendableHtml, checkListSend, checkTestSend, chooseTestTransport } from "./checks";
 import { listHeaders, messageForRecipient, testSubject, testUnsubscribeLink } from "./deliver";
 import type { PreparedSend } from "./prepare";
 import { liveUnsubscribeToken, testUnsubscribeToken, verifyUnsubscribeToken } from "../unsubscribe";
@@ -43,7 +43,36 @@ assert.equal(testOk.ok, true);
 if (testOk.ok) assert.equal(testOk.to, "a@b.co");
 process.env.MARKETING_SENDS_ENABLED = "false";
 assert.match(checkTestSend({ to: "a@b.co", fromEmail: "from@example.com", resendConfigured: true }).ok ? "" : "killed", /killed/);
+const killedButGmail = chooseTestTransport({
+  to: "a@b.co",
+  fromEmail: "from@example.com",
+  resendConfigured: true,
+  gmailSendsEnabled: true,
+});
+assert.equal(killedButGmail.ok && killedButGmail.transport, "gmail");
+const killedNoGmail = chooseTestTransport({
+  to: "a@b.co",
+  fromEmail: "from@example.com",
+  resendConfigured: true,
+  gmailSendsEnabled: false,
+});
+assert.equal(killedNoGmail.ok, false);
 process.env.MARKETING_SENDS_ENABLED = "";
+const viaGoogle = chooseTestTransport({
+  to: "Sing@Example.com",
+  fromEmail: "",
+  resendConfigured: false,
+  gmailSendsEnabled: true,
+});
+assert.equal(viaGoogle.ok && viaGoogle.transport, "gmail");
+if (viaGoogle.ok) assert.equal(viaGoogle.to, "sing@example.com");
+const resendFirst = chooseTestTransport({
+  to: "a@b.co",
+  fromEmail: "from@example.com",
+  resendConfigured: true,
+  gmailSendsEnabled: true,
+});
+assert.equal(resendFirst.ok && resendFirst.transport, "resend");
 
 const listInput = {
   confirmPhrase: "SEND",

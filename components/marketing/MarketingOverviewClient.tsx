@@ -38,7 +38,7 @@ export default function MarketingOverviewClient() {
         description="Audience, segments, and branded email campaigns — separate from Sales outreach and without changing live Gardens or Blooms."
         actions={
           <>
-            <StatusPill tone={sendsEnabled ? "ok" : "off"}>{sendsEnabled ? "Sends on" : "Sends paused"}</StatusPill>
+            <StatusPill tone={sendsEnabled ? "ok" : "off"}>{sendsEnabled ? "List on" : "List paused"}</StatusPill>
             <StatusPill tone={resendConfigured ? "ok" : "warn"}>
               {resendConfigured ? "Resend ready" : "Resend missing"}
             </StatusPill>

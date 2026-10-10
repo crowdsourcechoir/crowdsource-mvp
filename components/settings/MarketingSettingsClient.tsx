@@ -75,7 +75,7 @@ export default function MarketingSettingsClient() {
       >
         <ToggleRow
           label="Enable marketing sends"
-          hint="Required before a list send. Test send still works while this is paused, once Resend and a from address are set."
+          hint="Required before a list send. A test send still goes out through Google when sending is on in Settings → Google connections."
           checked={settings.sendsEnabled}
           onChange={(sendsEnabled) => setSettings({ ...settings, sendsEnabled })}
         />
