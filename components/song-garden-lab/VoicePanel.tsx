@@ -219,41 +219,37 @@ export default function VoicePanel({
   }
 
   return (
-    <section className="mb-4 border-t border-white/10 pt-3">
-      <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">Voice · {ANALYSIS_VERSION}</h2>
-      <p className="mb-3 leading-relaxed text-white/55">
-        Record up to eight seconds, or bring a file. The take is resampled to 16 kHz and quantized once. The left body is the
-        official reading: birth at zero, coupling 0. The right body uses the birth below and the coupling in Laws.
-      </p>
-
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {PROMPTS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setPrompt(item)}
-            className="rounded-full border px-2 py-1"
-            style={{
-              borderColor: prompt === item ? "#cfff81" : "rgba(255,255,255,0.2)",
-              color: prompt === item ? "#111" : "#cfff81",
-              background: prompt === item ? "#cfff81" : "transparent",
-            }}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-3 flex flex-wrap gap-3">
+    <section className="mb-4">
+      <div className="sticky top-0 z-10 -mx-4 mb-3 bg-black px-4 pb-3">
         {recording ? (
-          <button type="button" className="csc-link" onClick={stopRecord}>
+          <button
+            type="button"
+            className="w-full rounded-full bg-[var(--csc-accent)] px-4 py-3 text-sm text-black"
+            onClick={stopRecord}
+          >
             Stop {seconds.toFixed(1)}s
           </button>
         ) : (
-          <button type="button" className="csc-link" onClick={() => void startRecord()} disabled={busy}>
-            Record
+          <button
+            type="button"
+            data-record-voice=""
+            className="w-full rounded-full bg-[var(--csc-accent)] px-4 py-3 text-sm text-black disabled:opacity-40"
+            onClick={() => void startRecord()}
+            disabled={busy}
+          >
+            Record voice
           </button>
         )}
+      </div>
+
+      <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">Voice · {ANALYSIS_VERSION}</h2>
+      <p className="mb-3 leading-relaxed text-white/55">
+        Record up to eight seconds, or bring a file. The take is resampled to 16 kHz and quantized once. The left body is the
+        official reading: birth at zero, coupling 0. The right body uses the birth below and the coupling in Laws. Nothing plays
+        the take back.
+      </p>
+
+      <div className="mb-3 flex flex-wrap gap-3">
         <button type="button" className="csc-link" onClick={() => fileRef.current?.click()} disabled={busy || recording}>
           Import
         </button>
@@ -277,6 +273,24 @@ export default function VoicePanel({
             void decodeBlob(file).catch(() => setError("That file could not be decoded."));
           }}
         />
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {PROMPTS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setPrompt(item)}
+            className="rounded-full border px-2 py-1"
+            style={{
+              borderColor: prompt === item ? "#cfff81" : "rgba(255,255,255,0.2)",
+              color: prompt === item ? "#111" : "#cfff81",
+              background: prompt === item ? "#cfff81" : "transparent",
+            }}
+          >
+            {item}
+          </button>
+        ))}
       </div>
 
       <div className="mb-3 flex flex-wrap gap-3 text-white/50">

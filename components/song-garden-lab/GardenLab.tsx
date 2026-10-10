@@ -411,6 +411,20 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
           ))}
         </div>
 
+        {mode === "voice" && (
+          <VoicePanel
+            birth={birth}
+            coupling={laws.coupling}
+            onBirth={setBirth}
+            onCoupling={(coupling) => patchLaws({ coupling })}
+            onReading={(reading) => {
+              setVoiceReading(reading);
+              setSelectedId("at zero");
+              setGrowEpoch((n) => n + 1);
+            }}
+          />
+        )}
+
         <p className="mb-3 leading-relaxed text-white/55">
           {mode === "compare" && "Two orders of the same genomes. The dot is the contribution to find. Coupling 0 keeps each body on its own gesture."}
           {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
@@ -419,6 +433,8 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
           {mode === "sheet" && "Thirty genomes, each born at zero. This is the family, before the garden has a history."}
           {mode === "field" && "Twelve planted in order. Return gives part of a deposit back to the ground and takes that body off the living set. The planting stays in the log."}
         </p>
+
+        {mode === "voice" && <WordsPanel />}
 
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <button type="button" className="csc-link" onClick={() => setGrowEpoch((n) => n + 1)}>
@@ -476,21 +492,6 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
             )}
           </section>
         )}
-
-        {mode === "voice" && (
-          <VoicePanel
-            birth={birth}
-            coupling={laws.coupling}
-            onBirth={setBirth}
-            onCoupling={(coupling) => patchLaws({ coupling })}
-            onReading={(reading) => {
-              setVoiceReading(reading);
-              setSelectedId("at zero");
-              setGrowEpoch((n) => n + 1);
-            }}
-          />
-        )}
-        {mode === "voice" && <WordsPanel />}
 
         {mode === "seen" && (
           <SeenPanel
