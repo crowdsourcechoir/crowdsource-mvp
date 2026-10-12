@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FollowUpControls from "@/components/sales/FollowUpControls";
+import OrgAttachmentsPanel from "@/components/sales/OrgAttachmentsPanel";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import type { Organization, Opportunity } from "@/lib/sales/types";
 
@@ -262,6 +263,8 @@ export default function QueueOrgWorkspace({
         nextFollowUpAt={opportunity.nextFollowUpAt}
         onSaved={onFollowUpSaved}
       />
+
+      <OrgAttachmentsPanel organization={organization} onOrganizationSaved={onOrganizationSaved} />
 
       <div className="rounded-lg border border-white/10 bg-black p-3">
         <p className="csc-eyebrow">Notes</p>
