@@ -3,6 +3,7 @@ import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { AMPLIFY_CONFERENCES_2027_SEEDS } from "@/lib/sales/seed/amplify-conferences-2027";
 import { ELEVATE_VIBE_CREATE_PROSPECTS } from "@/lib/sales/seed/elevate-vibe-create-prospects";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
+import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import {
   SEAHAWKS_SEED,
@@ -51,6 +52,14 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "ballard-fc") {
+      const result = await seedBallardFcConversation({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "ballard-fc",
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -73,7 +82,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'ballard-fc' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );
