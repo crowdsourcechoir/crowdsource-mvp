@@ -33,6 +33,7 @@ import {
   countQueueAdded,
   matchesQueueAdded,
   parseQueueAdded,
+  queueItemAddedAt,
   type QueueAddedFilter,
 } from "@/lib/sales/queue/added";
 import {
@@ -165,12 +166,12 @@ export default function ApprovalQueueClient() {
       (item) =>
         matchesQueueCategory(item, category) &&
         matchesQueueFunnel(item.relationshipStage, funnel) &&
-        matchesQueueAdded(item.queueItem.createdAt, added)
+        matchesQueueAdded(queueItemAddedAt(item), added)
     );
     if (added !== "new") return filtered;
     return [...filtered].sort((a, b) => {
-      const aT = Date.parse(a.queueItem.createdAt) || 0;
-      const bT = Date.parse(b.queueItem.createdAt) || 0;
+      const aT = Date.parse(queueItemAddedAt(a) ?? "") || 0;
+      const bT = Date.parse(queueItemAddedAt(b) ?? "") || 0;
       return bT - aT;
     });
   }, [sidebar, category, funnel, added]);

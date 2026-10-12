@@ -7,6 +7,7 @@ import {
 import {
   createOrganization,
   findExistingOrganization,
+  getOrganization,
   updateOrganization,
 } from "@/lib/sales/db/organizations";
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
@@ -203,6 +204,8 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
       reopenDecided: Boolean(input.reopenDecided),
       remintApprovedEmails: input.remintApprovedEmails,
     });
+    // Reload so operatorQueuedAt (and any other enqueue stamps) survive follow-up seed markers.
+    organization = (await getOrganization(organization.id)) ?? organization;
   }
 
   return {

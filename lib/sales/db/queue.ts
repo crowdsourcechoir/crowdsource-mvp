@@ -1,6 +1,7 @@
 import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
+import { resolveQueueRecentlyAddedAt } from "../queue/added";
 import { readSalesInitiative } from "../initiatives";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
@@ -58,6 +59,11 @@ export async function createOrUpdateQueueItem(input: {
    * never clobbers a human reject/defer/duplicate decision.
    */
   reopenDecided?: boolean;
+  /**
+   * Bump created_at so "Last 7 days" treats a manual re-queue / seed as newly added.
+   * Pipeline refreshes leave created_at alone.
+   */
+  touchCreatedAt?: boolean;
 }): Promise<ApprovalQueueItem> {
   const db = requireSupabaseAdmin();
   const existing = await getInitialQueueItemByOpportunity(input.opportunityId);
@@ -77,6 +83,9 @@ export async function createOrUpdateQueueItem(input: {
       row.decided_by = null;
       row.decided_at = null;
       row.deferred_until = null;
+    }
+    if (input.touchCreatedAt || (existing.status !== "pending" && input.reopenDecided)) {
+      row.created_at = new Date().toISOString();
     }
     const { data, error } = await db
       .from("approval_queue_items")
@@ -155,29 +164,24 @@ export async function hasPendingNudgeForContact(opportunityId: string, contactId
 
 export async function listQueueItems(status?: ApprovalQueueItemStatus | "all"): Promise<ApprovalQueueItem[]> {
   const db = requireSupabaseAdmin();
-  if (status === "all") {
-    const pageSize = 1000;
-    const out: ApprovalQueueItem[] = [];
-    let from = 0;
-    for (;;) {
-      const { data, error } = await db
-        .from("approval_queue_items")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []).map(rowToQueueItem);
-      out.push(...rows);
-      if (rows.length < pageSize || from > 8000) break;
-      from += pageSize;
+  // PostgREST silently caps unpaged selects at 1000. Pending used to take that path ordered
+  // oldest-first, which dropped recently seeded Elevate/Amplify rows from "To send" / Last 7 days.
+  const pageSize = 1000;
+  const out: ApprovalQueueItem[] = [];
+  let from = 0;
+  for (;;) {
+    let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });
+    if (status !== "all") {
+      query = query.eq("status", status ?? "pending");
     }
-    return out;
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map(rowToQueueItem);
+    out.push(...rows);
+    if (rows.length < pageSize || from > 8000) break;
+    from += pageSize;
   }
-  let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });
-  query = query.eq("status", status ?? "pending");
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToQueueItem);
+  return out;
 }
 
 /**
@@ -328,6 +332,7 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       category,
       opportunityTypeKey,
       organizationTypeKey,
+      recentlyAddedAt: resolveQueueRecentlyAddedAt(queueItem.createdAt, organization.import_metadata),
       outreachKind: opportunityOutreachKind({
         lastInboundAt: opportunity.last_inbound_at ?? null,
         lastOutboundAt: opportunity.last_outbound_at ?? null,

@@ -408,6 +408,11 @@ export type QueueSidebarItem = {
   category: string;
   opportunityTypeKey: string | null;
   organizationTypeKey: string | null;
+  /**
+   * Best "when Joel added this" signal for Last 7 days — max of queueItem.createdAt and
+   * org import_metadata *SeededAt / operatorQueuedAt stamps.
+   */
+  recentlyAddedAt: string | null;
   outreachKind: OpportunityOutreachKind;
   nextFollowUpAt: string | null;
   gmailThreadId: string | null;
