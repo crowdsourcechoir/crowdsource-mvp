@@ -4,6 +4,8 @@ import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { listOpportunitiesForOrganization } from "@/lib/sales/db/opportunities";
 import { listPipelineRunsForOrganization, listAgentRuns } from "@/lib/sales/db/pipeline";
 import { listFindingsForOrganization, getSource } from "@/lib/sales/db/research";
+import { deleteOrganizationFromQueue } from "@/lib/sales/organizations/delete-organization";
+import { publicErrorMessage } from "@/lib/sales/http-error";
 
 export const dynamic = "force-dynamic";
 
@@ -96,5 +98,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
     return NextResponse.json({ organization });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
+  }
+}
+
+/** Soft-delete: hide from queue / prospecting. Keeps outreach history. */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ orgId: string }> }) {
+  try {
+    const { orgId } = await params;
+    const result = await deleteOrganizationFromQueue(orgId);
+    return NextResponse.json(
+      {
+        ok: true,
+        deleted: { id: result.organization.id, name: result.organization.name },
+        alreadyHidden: result.alreadyHidden,
+        queueItemsClosed: result.queueItemsClosed,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Delete failed";
+    const status = /not found/i.test(message) ? 404 : 500;
+    return NextResponse.json({ error: publicErrorMessage(err, "Delete failed") }, { status });
   }
 }

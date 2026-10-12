@@ -57,6 +57,7 @@ import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
 import { isExternalSentDraft } from "@/lib/sales/outreach/external-sent";
 import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales/queue/scope";
+import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -116,6 +117,7 @@ export default function ApprovalQueueClient() {
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
+  const [deletingOrg, setDeletingOrg] = useState(false);
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
   const draftIdentityRef = useRef("");
@@ -224,6 +226,38 @@ export default function ApprovalQueueClient() {
       return rest;
     });
   }, []);
+
+  const dropOrganizationRows = useCallback((organizationId: string) => {
+    setSidebar((prev) => prev.filter((row) => row.organizationId !== organizationId));
+    setDetailsById((details) => {
+      const next: typeof details = {};
+      for (const [id, detail] of Object.entries(details)) {
+        if (detail.organization?.id !== organizationId) next[id] = detail;
+      }
+      return next;
+    });
+  }, []);
+
+  const deleteOrganization = useCallback(async () => {
+    if (!current || busy || deletingOrg) return;
+    if (!confirmRareDelete("organization", current.organization.name)) return;
+    setDeletingOrg(true);
+    setActionError(null);
+    const organizationId = current.organization.id;
+    const organizationName = current.organization.name;
+    try {
+      const res = await fetch(`/api/sales/organizations/${organizationId}`, { method: "DELETE" });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not delete organization"));
+      dropOrganizationRows(organizationId);
+      setMobileDetailOpen(false);
+      showCopyStatus(`Deleted ${organizationName} from the queue.`);
+    } catch (err) {
+      setActionError(publicErrorMessage(err, "Could not delete organization"));
+    } finally {
+      setDeletingOrg(false);
+    }
+  }, [current, busy, deletingOrg, dropOrganizationRows, showCopyStatus]);
 
   useEffect(() => {
     if (selectedIndex >= visible.length) {
@@ -1256,21 +1290,34 @@ export default function ApprovalQueueClient() {
           </div>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {showSendableDraft ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {showSendableDraft ? (
+                <button
+                  type="button"
+                  disabled={busy || deletingOrg || !current.draft || !current.contact?.email || selectedAlreadySent}
+                  onClick={requestSend}
+                  className="rounded-lg bg-[var(--csc-accent)] px-5 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
+                >
+                  Send
+                </button>
+              ) : null}
+              {copyStatus && <span className="text-xs text-[var(--csc-accent)]">{copyStatus}</span>}
+              <Link
+                href={`/admin/sales/organizations/${current.organization.id}`}
+                className="text-xs text-gray-500 underline"
+              >
+                Organization
+              </Link>
+            </div>
             <button
               type="button"
-              disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
-              onClick={requestSend}
-              className="rounded-lg bg-[var(--csc-accent)] px-5 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
+              disabled={busy || deletingOrg}
+              onClick={() => void deleteOrganization()}
+              className="text-xs font-medium text-red-300/90 underline hover:text-red-200 disabled:opacity-50"
             >
-              Send
+              {deletingOrg ? "Deleting…" : "Delete organization"}
             </button>
-            ) : null}
-            {copyStatus && <span className="text-xs text-[var(--csc-accent)]">{copyStatus}</span>}
-            <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
-              Organization
-            </Link>
           </div>
           </>
           )}
