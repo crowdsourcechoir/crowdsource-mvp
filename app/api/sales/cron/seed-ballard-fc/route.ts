@@ -14,7 +14,6 @@ export const maxDuration = 300;
  *
  * GET ?status=1 — public progress (no emails).
  * GET/POST with Bearer CRON_SECRET — run seed.
- * Temporary: ?bootstrap=ballard-fc-now-c243 also runs seed (remove after success).
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -47,14 +46,11 @@ export async function POST(request: Request) {
 async function runSeed(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const url = new URL(request.url);
-  const bootstrapOk = url.searchParams.get("bootstrap") === "ballard-fc-now-c243";
-  if (!bootstrapOk) {
-    if (!cronSecret) {
-      return NextResponse.json({ error: "CRON_SECRET is not configured." }, { status: 503 });
-    }
-    if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronSecret) {
+    return NextResponse.json({ error: "CRON_SECRET is not configured." }, { status: 503 });
+  }
+  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
