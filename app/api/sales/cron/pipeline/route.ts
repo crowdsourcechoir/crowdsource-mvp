@@ -4,6 +4,7 @@ import { scheduleDigestContinuation } from "@/lib/sales/digest/continue";
 import { runPipelineBatch } from "@/lib/sales/pipeline/run-pipeline-batch";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
+import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 290;
@@ -49,6 +50,15 @@ export async function GET(request: Request) {
       };
     }
 
+    let ballardFcSeed = null;
+    try {
+      ballardFcSeed = await seedBallardFcConversation();
+    } catch (err) {
+      ballardFcSeed = {
+        error: err instanceof Error ? err.message : "Ballard FC seed failed",
+      };
+    }
+
     const limit = Number(process.env.SALES_PIPELINE_BATCH_SIZE) || undefined;
     const summary = await runPipelineBatch(limit);
     // Best-effort: never fail the pipeline cron if digest ensure errors (email/provider issues).
@@ -60,7 +70,14 @@ export async function GET(request: Request) {
     } catch (err) {
       digest = { status: "failed", error: err instanceof Error ? err.message : "Digest ensure failed" };
     }
-    return NextResponse.json({ amplifySeed, elevateVibeCreateSeed, summary, digest, continuation });
+    return NextResponse.json({
+      amplifySeed,
+      elevateVibeCreateSeed,
+      ballardFcSeed,
+      summary,
+      digest,
+      continuation,
+    });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
   }
