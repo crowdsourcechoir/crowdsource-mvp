@@ -19,6 +19,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       return NextResponse.json({ error: "editedSubject and editedBody are required." }, { status: 400 });
     }
 
+    const requestedDraftId = typeof body?.draftId === "string" ? body.draftId.trim() : "";
+
     let item = await getQueueItem(itemId);
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (item.status !== "pending") {
@@ -31,10 +33,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       return NextResponse.json({ error: "No draft on this queue item." }, { status: 400 });
     }
 
-    const existing = await getDraft(item.outreachDraftId);
+    // After multi-contact send, the queue row advances to the next draft. A blur/save from the
+    // previous editor must not write the sent contact's body onto the next person's draft.
+    if (requestedDraftId && requestedDraftId !== item.outreachDraftId) {
+      return NextResponse.json(
+        { skipped: true, reason: "draft_changed", draftId: item.outreachDraftId },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    const targetDraftId = requestedDraftId || item.outreachDraftId;
+    const existing = await getDraft(targetDraftId);
     if (!existing) return NextResponse.json({ error: "Draft not found." }, { status: 404 });
 
-    const draft = await updateDraftEdits(item.outreachDraftId, { editedSubject, editedBody });
+    const draft = await updateDraftEdits(targetDraftId, { editedSubject, editedBody });
     return NextResponse.json({ draft }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });

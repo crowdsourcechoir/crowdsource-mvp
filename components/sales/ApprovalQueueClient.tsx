@@ -196,8 +196,13 @@ export default function ApprovalQueueClient() {
   const selectedId = selected?.queueItem.id ?? null;
   const current = selectedId ? detailsById[selectedId] ?? null : null;
 
-  const draftIdentity = `${current?.queueItem.id ?? ""}:${current?.draft?.id ?? ""}`;
-  if (draftIdentityRef.current !== draftIdentity) {
+  const draftIdentity = `${current?.queueItem.id ?? ""}:${current?.draft?.id ?? ""}:${current?.contact?.id ?? ""}`;
+
+  // Keep subject/body in sync when the active draft changes (manual contact switch or
+  // post-send auto-advance). Must be an effect — syncing during render races TipTap's
+  // contentKey update and leaves the previous contact's greeting on screen.
+  useEffect(() => {
+    if (draftIdentityRef.current === draftIdentity) return;
     draftIdentityRef.current = draftIdentity;
     if (current?.draft) {
       setEditedSubject(coalesceDraftSubject(current.draft.editedSubject, current.draft.aiSubject));
@@ -206,7 +211,7 @@ export default function ApprovalQueueClient() {
       setEditedSubject("");
       setEditedBody("");
     }
-  }
+  }, [draftIdentity, current?.draft]);
 
   const replaceDetail = useCallback((itemId: string, next: QueueItemDetail) => {
     setDetailsById((prev) => ({ ...prev, [itemId]: next }));
@@ -305,22 +310,29 @@ export default function ApprovalQueueClient() {
     }
   }, [jumpToQueueItemId, visible, selectItem]);
 
-  const persistDraftSnapshot = useCallback(async (itemId: string, subject: string, body: string) => {
-    const cleanedEditedBody = stripEmailSignature(body);
-    const res = await fetch(`/api/sales/queue/${itemId}/save-draft`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ editedSubject: subject, editedBody: cleanedEditedBody }),
-    });
-    const data = await readApiJson(res);
-    if (!res.ok) throw new Error(apiErrorFromBody(data, "Save failed"));
-  }, []);
+  const persistDraftSnapshot = useCallback(
+    async (itemId: string, subject: string, body: string, draftId?: string | null) => {
+      const cleanedEditedBody = stripEmailSignature(body);
+      const res = await fetch(`/api/sales/queue/${itemId}/save-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          editedSubject: subject,
+          editedBody: cleanedEditedBody,
+          ...(draftId ? { draftId } : {}),
+        }),
+      });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Save failed"));
+    },
+    []
+  );
 
   const persistDraft = useCallback(async () => {
-    if (!current?.draft) return;
+    if (!current?.draft || busy) return;
     if (isBlankEmailBody(editedBody) && !isBlankEmailBody(current.draft.aiBody)) return;
-    await persistDraftSnapshot(current.queueItem.id, editedSubject, editedBody);
-  }, [current, editedSubject, editedBody, persistDraftSnapshot]);
+    await persistDraftSnapshot(current.queueItem.id, editedSubject, editedBody, current.draft.id);
+  }, [current, busy, editedSubject, editedBody, persistDraftSnapshot]);
 
   const selectContact = useCallback(
     (contactId: string) => {
@@ -330,6 +342,7 @@ export default function ApprovalQueueClient() {
       const itemId = current.queueItem.id;
       const prevSubject = editedSubject;
       const prevBody = editedBody;
+      const prevDraftId = current.draft?.id ?? null;
       const switched = applySelectedContact(current, contactId);
       if (switched) {
         replaceDetail(itemId, switched);
@@ -341,7 +354,7 @@ export default function ApprovalQueueClient() {
       }
       void (async () => {
         try {
-          await persistDraftSnapshot(itemId, prevSubject, prevBody).catch(() => undefined);
+          await persistDraftSnapshot(itemId, prevSubject, prevBody, prevDraftId).catch(() => undefined);
           const res = await fetch(`/api/sales/queue/${itemId}/select-contact`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -426,13 +439,17 @@ export default function ApprovalQueueClient() {
           // Keep the org in To send while other contacts still have drafts — even if
           // the slim response omitted `detail` (clear cache so the item fetch reloads).
           if (body.detail) {
+            // Reset identity so the draft-sync effect always reloads subject/body for the
+            // next contact even if React batches oddly with the TipTap editor.
+            draftIdentityRef.current = "";
             replaceDetail(current.queueItem.id, body.detail);
-            const nextDraft = draftFromMutationPayload(body);
+            const nextDraft = draftFromMutationPayload(body) ?? body.detail.draft ?? null;
             if (nextDraft) {
               setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
               setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
             }
           } else {
+            draftIdentityRef.current = "";
             const keepId = current.queueItem.id;
             setDetailsById((prev) => {
               const { [keepId]: _removed, ...rest } = prev;
@@ -1203,12 +1220,14 @@ export default function ApprovalQueueClient() {
             {current.draft ? (
               <div className="mt-2 space-y-2">
                 <input
+                  key={`subject-${draftIdentity}`}
                   value={editedSubject}
                   onChange={(e) => setEditedSubject(e.target.value)}
                   onBlur={() => void persistDraft().catch(() => undefined)}
                   className="w-full rounded-md border border-gray-700 bg-black px-3 py-2 text-sm font-medium text-white"
                 />
                 <QueueEmailBodyEditor
+                  key={draftIdentity}
                   value={editedBody}
                   contentKey={draftIdentity}
                   onChange={setEditedBody}
