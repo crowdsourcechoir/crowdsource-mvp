@@ -14,11 +14,14 @@ function main() {
   assert.equal(parseQueueAdded("recently_added"), "new");
   assert.equal(parseQueueAdded("nope"), "all");
 
-  const now = Date.parse("2026-10-10T20:00:00.000Z");
-  const within = new Date(now - QUEUE_ADDED_LOOKBACK_MS + 60_000).toISOString();
-  const outside = new Date(now - QUEUE_ADDED_LOOKBACK_MS - 60_000).toISOString();
+  const now = Date.parse("2026-10-12T20:00:00.000Z");
+  const within = new Date(now - QUEUE_ADDED_LOOKBACK_MS + 60_000).toISOString(); // just inside 7d
+  const midWeek = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const outside = new Date(now - QUEUE_ADDED_LOOKBACK_MS - 60_000).toISOString(); // just outside 7d
 
+  assert.ok(QUEUE_ADDED_LOOKBACK_MS >= 7 * 24 * 60 * 60 * 1000);
   assert.equal(isRecentlyAddedQueueItem(within, now), true);
+  assert.equal(isRecentlyAddedQueueItem(midWeek, now), true);
   assert.equal(isRecentlyAddedQueueItem(outside, now), false);
   assert.equal(isRecentlyAddedQueueItem(null, now), false);
   assert.equal(matchesQueueAdded(within, "all", now), true);

@@ -792,7 +792,7 @@ export default function ApprovalQueueClient() {
               : category === "all" && funnel === "all" && added === "all"
                 ? `${pendingCount} to send`
                 : added === "new" && category === "all" && funnel === "all"
-                  ? `${pendingCount} recently added`
+                  ? `${pendingCount} added in last 7 days`
                   : `${pendingCount} filtered · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (

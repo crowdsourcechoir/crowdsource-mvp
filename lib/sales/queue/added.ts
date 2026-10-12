@@ -1,15 +1,15 @@
 /**
- * Queue "Recently added" filter — pending/queued rows created in the last 24h
- * (same lookback the morning digest uses for net-new).
+ * Queue "Recently added" filter — rows whose queue item was created in the last 7 days.
  */
 
-export const QUEUE_ADDED_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+export const QUEUE_ADDED_LOOKBACK_DAYS = 7;
+export const QUEUE_ADDED_LOOKBACK_MS = QUEUE_ADDED_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 
 export type QueueAddedFilter = "all" | "new";
 
 export const QUEUE_ADDED_OPTIONS: { key: QueueAddedFilter; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "new", label: "Recently added" },
+  { key: "new", label: "Last 7 days" },
 ];
 
 export function parseQueueAdded(raw: string | null | undefined): QueueAddedFilter {
