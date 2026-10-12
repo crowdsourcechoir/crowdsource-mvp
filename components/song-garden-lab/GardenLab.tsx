@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalysisReading } from "@/lib/song-garden-lab/analyze";
 import {
   SHORT_B_ORDER,
@@ -24,12 +24,14 @@ import { noteName, sounding } from "@/lib/song-garden-lab/sound";
 import SoundBed from "@/components/song-garden-lab/SoundBed";
 import type { Conditions, Genome, Laws, Organism, StructuralAxis } from "@/lib/song-garden-lab/types";
 import { STRUCTURAL_AXES } from "@/lib/song-garden-lab/types";
+import RoomPanel, { type RoomSlot } from "@/components/song-garden-lab/RoomPanel";
+import { STARTER_GENOMES } from "@/lib/song-garden-lab/starters";
 import SeenPanel from "@/components/song-garden-lab/SeenPanel";
 import VoicePanel from "@/components/song-garden-lab/VoicePanel";
 import WordsPanel from "@/components/song-garden-lab/WordsPanel";
 import type { VisionReading } from "@/lib/song-garden-lab/vision";
 
-type Mode = "one" | "sheet" | "field" | "voice" | "compare" | "seen";
+type Mode = "one" | "sheet" | "field" | "voice" | "compare" | "seen" | "play";
 
 const SHEET = haltonGenomes(30);
 const FIELD_SEED = publishedField();
@@ -62,6 +64,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
   const [compareView, setCompareView] = useState<CompareView>("both");
   const [compareSpan, setCompareSpan] = useState<CompareSpan>("twelve");
   const [soundOn, setSoundOn] = useState(false);
+  const [roomSlots, setRoomSlots] = useState<RoomSlot[]>(() => STARTER_GENOMES);
   const [timePassing, setTimePassing] = useState(false);
   const tickSerial = useRef(0);
 
@@ -140,6 +143,29 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
     ];
   }, [foldA, foldB, focusId]);
 
+  const onRoomSlots = useCallback((slots: RoomSlot[]) => {
+    setRoomSlots((current) => {
+      if (current.length === slots.length && current.every((item, index) => item.id === slots[index]?.id)) return current;
+      return slots;
+    });
+  }, []);
+
+  const roomOrganisms = useMemo(() => {
+    const origin = zeroConditions();
+    return roomSlots.map((slot, index) => {
+      const organism = organismFrom(
+        slot.id,
+        slot.genome,
+        origin,
+        depositOf(slot.genome, origin, officialLaws),
+        [],
+        officialLaws
+      );
+      organism.position = { x: (index + 1) / (roomSlots.length + 1), y: 0.78 };
+      return organism;
+    });
+  }, [roomSlots, officialLaws]);
+
   const soundConditions: Conditions =
     mode === "field"
       ? fieldFold.conditions
@@ -166,7 +192,9 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
               : compareView === "b"
                 ? foldB.organisms
                 : foldA.organisms
-            : fieldFold.organisms;
+            : mode === "play"
+              ? roomOrganisms
+              : fieldFold.organisms;
 
   const soundFrame = useMemo(
     () => sounding(organisms, soundConditions, laws),
@@ -311,6 +339,11 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
   }, [mode]);
 
   useEffect(() => {
+    if (mode !== "play") return;
+    setGrowEpoch((n) => n + 1);
+  }, [mode, roomSlots]);
+
+  useEffect(() => {
     if (mode !== "field") setTimePassing(false);
   }, [mode]);
 
@@ -383,6 +416,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
         <div className="mb-3 flex flex-wrap gap-2">
           {(
             [
+              ["play", "Play"],
               ["compare", "A/B"],
               ["voice", "Voice"],
               ["seen", "Seen"],
@@ -410,7 +444,15 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
                 }
                 setMode(id);
                 setGrowEpoch((n) => n + 1);
-                setSelectedId(id === "one" ? "solo" : id === "voice" || id === "seen" ? "at zero" : SUBJECT_ID);
+                setSelectedId(
+                  id === "one"
+                    ? "solo"
+                    : id === "voice" || id === "seen"
+                      ? "at zero"
+                      : id === "play"
+                        ? STARTER_GENOMES[0].id
+                        : SUBJECT_ID
+                );
               }}
               className="rounded-full border px-3 py-1"
               style={{
@@ -423,6 +465,13 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
             </button>
           ))}
         </div>
+
+        {mode === "play" && (
+          <RoomPanel
+            onSlots={onRoomSlots}
+            onSelect={setSelectedId}
+          />
+        )}
 
         {mode === "compare" && (
           <ComparePanel
@@ -483,6 +532,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
         )}
 
         <p className="mb-3 leading-relaxed text-white/55">
+          {mode === "play" && "Four pads. The ribbon is the sound on that pad. Playing it marks the body."}
           {mode === "compare" && "Both grounds are the same twelve. Names are off. The ring is the one to judge."}
           {mode === "voice" && "A recording becomes six numbers. Coupling 0 on the left is the official reading of the gesture."}
           {mode === "seen" && "A picture becomes six numbers. A still does not move. Coupling 0 on the left is the official reading."}
