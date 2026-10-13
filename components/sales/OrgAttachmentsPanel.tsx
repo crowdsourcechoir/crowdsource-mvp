@@ -21,6 +21,7 @@ export default function OrgAttachmentsPanel({
   const [items, setItems] = useState<OrgAttachment[]>(() =>
     parseOrgAttachments(organization.importMetadata)
   );
+  const [addingLink, setAddingLink] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,9 @@ export default function OrgAttachmentsPanel({
   useEffect(() => {
     setItems(parseOrgAttachments(organization.importMetadata));
     setError(null);
+    setAddingLink(false);
+    setLinkUrl("");
+    setLinkLabel("");
   }, [organization.id, organization.updatedAt, organization.importMetadata]);
 
   async function addLink() {
@@ -50,6 +54,7 @@ export default function OrgAttachmentsPanel({
       if (body.organization) onOrganizationSaved?.(body.organization);
       setLinkUrl("");
       setLinkLabel("");
+      setAddingLink(false);
     } catch (err) {
       setError(publicErrorMessage(err, "Could not add link"));
     } finally {
@@ -135,13 +140,72 @@ export default function OrgAttachmentsPanel({
 
   return (
     <div className="rounded-lg border border-white/10 bg-black p-3">
-      <p className="csc-eyebrow">Attachments</p>
-      <p className="mt-1 text-xs text-gray-500">
-        Google Docs / Drive links, PDFs, Keynote, PowerPoint — kept on this organization.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="csc-eyebrow">Attachments</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setAddingLink((v) => !v);
+              setError(null);
+            }}
+            className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-gray-200 transition-colors hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
+          >
+            {addingLink ? "Cancel" : "Add link"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            title={`Max ${Math.round(ORG_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB`}
+            onClick={() => fileRef.current?.click()}
+            className="rounded-full border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-2.5 py-1 text-xs font-medium text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+          >
+            {busy ? "Working…" : "Upload"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.key,.keynote,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.apple.keynote"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadFile(file);
+            }}
+          />
+        </div>
+      </div>
+
+      {addingLink ? (
+        <div className="mt-2 space-y-2">
+          <input
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            placeholder="https://"
+            autoFocus
+            className="w-full rounded-md border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={linkLabel}
+              onChange={(e) => setLinkLabel(e.target.value)}
+              placeholder="Label (optional)"
+              className="min-w-0 flex-1 rounded-md border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+            />
+            <button
+              type="button"
+              disabled={busy || !linkUrl.trim()}
+              onClick={() => void addLink()}
+              className="rounded-full border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-2.5 py-1 text-xs font-medium text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+            >
+              Save link
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {items.length > 0 ? (
-        <ul className="csc-list mt-3">
+        <ul className="csc-list mt-2">
           {items.map((item) => (
             <li key={item.id} className="csc-list-row flex items-center justify-between gap-3 py-2">
               <div className="min-w-0 flex-1">
@@ -179,62 +243,11 @@ export default function OrgAttachmentsPanel({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="mt-3 text-xs text-gray-500">No attachments yet.</p>
-      )}
+      ) : !addingLink ? (
+        <p className="mt-2 text-xs text-gray-500">No attachments yet.</p>
+      ) : null}
 
-      <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-        <label className="block text-xs text-gray-500">
-          Link (Google Doc, Drive, Notion…)
-          <input
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-            placeholder="https://"
-            className="mt-1 w-full rounded-md border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
-          />
-        </label>
-        <label className="block text-xs text-gray-500">
-          Label (optional)
-          <input
-            value={linkLabel}
-            onChange={(e) => setLinkLabel(e.target.value)}
-            placeholder="Partnership brief"
-            className="mt-1 w-full rounded-md border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
-          />
-        </label>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={busy || !linkUrl.trim()}
-            onClick={() => void addLink()}
-            className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-gray-200 hover:border-[var(--csc-accent)] disabled:opacity-50"
-          >
-            {busy ? "Working…" : "Add link"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-            className="rounded-full border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-2.5 py-1 text-xs font-medium text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
-          >
-            Upload file
-          </button>
-          <span className="text-[11px] text-gray-600">
-            Max {Math.round(ORG_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB
-          </span>
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            accept=".pdf,.key,.keynote,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.apple.keynote"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void uploadFile(file);
-            }}
-          />
-        </div>
-        {error ? <p className="text-xs text-red-400">{error}</p> : null}
-      </div>
+      {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }
