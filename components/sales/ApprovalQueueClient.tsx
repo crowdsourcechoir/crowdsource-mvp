@@ -49,7 +49,7 @@ import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrg
 import AddContactForm from "@/components/sales/AddContactForm";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
-import QueueOrgWorkspace from "@/components/sales/QueueOrgWorkspace";
+import QueueOrgWorkspace, { QueueOpportunityNotes } from "@/components/sales/QueueOrgWorkspace";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import FillQueueClient from "@/components/sales/FillQueueClient";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
@@ -995,6 +995,25 @@ export default function ApprovalQueueClient() {
             })}
           </div>
 
+          {current.opportunity.id ? (
+            <QueueOrgWorkspace
+              organization={current.organization}
+              opportunity={current.opportunity}
+              onOrganizationSaved={(organization) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  organization,
+                });
+              }}
+              onFollowUpSaved={(nextFollowUpAt) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  opportunity: { ...current.opportunity, nextFollowUpAt },
+                });
+              }}
+            />
+          ) : null}
+
           <div className="mt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Contacts{(current.contacts?.length ?? 0) > 1 ? ` (${current.contacts.length})` : ""}
@@ -1204,25 +1223,6 @@ export default function ApprovalQueueClient() {
             </div>
           ) : null}
 
-          {current.opportunity.id ? (
-            <QueueOrgWorkspace
-              organization={current.organization}
-              opportunity={current.opportunity}
-              onOrganizationSaved={(organization) => {
-                replaceDetail(current.queueItem.id, {
-                  ...current,
-                  organization,
-                });
-              }}
-              onFollowUpSaved={(nextFollowUpAt) => {
-                replaceDetail(current.queueItem.id, {
-                  ...current,
-                  opportunity: { ...current.opportunity, nextFollowUpAt },
-                });
-              }}
-            />
-          ) : null}
-
           {current.brief && (
             <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-3">
               <p className="text-sm text-gray-100">{current.brief.summary}</p>
@@ -1289,6 +1289,12 @@ export default function ApprovalQueueClient() {
             <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
           </div>
           )}
+
+          {current.opportunity.id ? (
+            <div className="mt-4">
+              <QueueOpportunityNotes opportunityId={current.opportunity.id} />
+            </div>
+          ) : null}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">

@@ -16,7 +16,97 @@ function formatWhen(iso: string): string {
 }
 
 /**
- * Inline org editor + notes + follow-up, designed for the sales queue detail pane.
+ * Opportunity notes panel — placed below draft email in the queue detail layout.
+ */
+export function QueueOpportunityNotes({ opportunityId }: { opportunityId: string }) {
+  const [notes, setNotes] = useState<NoteRow[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [notesBusy, setNotesBusy] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadNotes() {
+      try {
+        const res = await fetch(`/api/sales/opportunities/${opportunityId}/notes`, { cache: "no-store" });
+        const data = await readApiJson(res);
+        if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not load notes"));
+        if (!cancelled) {
+          setNotes(Array.isArray((data as { notes?: NoteRow[] }).notes) ? (data as { notes: NoteRow[] }).notes : []);
+          setNotesError(null);
+        }
+      } catch (err) {
+        if (!cancelled) setNotesError(publicErrorMessage(err, "Could not load notes"));
+      }
+    }
+    void loadNotes();
+    return () => {
+      cancelled = true;
+    };
+  }, [opportunityId]);
+
+  async function addNote() {
+    const text = noteDraft.trim();
+    if (!text) return;
+    setNotesBusy(true);
+    setNotesError(null);
+    try {
+      const res = await fetch(`/api/sales/opportunities/${opportunityId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not save note"));
+      const note = (data as { note: NoteRow }).note;
+      setNotes((prev) => [note, ...prev]);
+      setNoteDraft("");
+    } catch (err) {
+      setNotesError(publicErrorMessage(err, "Could not save note"));
+    } finally {
+      setNotesBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-black p-3">
+      <p className="csc-eyebrow">Notes</p>
+      <textarea
+        value={noteDraft}
+        onChange={(e) => setNoteDraft(e.target.value)}
+        rows={2}
+        placeholder="Quick note on this opportunity…"
+        className="mt-2 w-full rounded-md border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+      />
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={notesBusy || !noteDraft.trim()}
+          onClick={() => void addNote()}
+          className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-gray-200 hover:border-[var(--csc-accent)] disabled:opacity-50"
+        >
+          {notesBusy ? "Adding…" : "Add note"}
+        </button>
+        {notesError ? <p className="text-xs text-red-400">{notesError}</p> : null}
+      </div>
+      {notes.length > 0 ? (
+        <ul className="csc-list mt-3">
+          {notes.map((note) => (
+            <li key={note.id} className="csc-list-row !block py-2">
+              <p className="whitespace-pre-wrap text-sm text-gray-200">{note.text}</p>
+              <p className="mt-1 text-[11px] text-gray-500">{formatWhen(note.occurredAt)}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-xs text-gray-500">No notes yet.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Org summary row for the queue detail pane: Organization | Follow up | Attachments.
  * Uses design-system tokens (black shell, accent borders) — no gray card fork.
  */
 export default function QueueOrgWorkspace({
@@ -45,11 +135,6 @@ export default function QueueOrgWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
 
-  const [notes, setNotes] = useState<NoteRow[]>([]);
-  const [noteDraft, setNoteDraft] = useState("");
-  const [notesBusy, setNotesBusy] = useState(false);
-  const [notesError, setNotesError] = useState<string | null>(null);
-
   useEffect(() => {
     setName(organization.name);
     setWebsiteUrl(organization.websiteUrl ?? "");
@@ -65,27 +150,6 @@ export default function QueueOrgWorkspace({
     setError(null);
     setSavedFlash(null);
   }, [organization.id, organization.updatedAt]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadNotes() {
-      try {
-        const res = await fetch(`/api/sales/opportunities/${opportunity.id}/notes`, { cache: "no-store" });
-        const data = await readApiJson(res);
-        if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not load notes"));
-        if (!cancelled) {
-          setNotes(Array.isArray((data as { notes?: NoteRow[] }).notes) ? (data as { notes: NoteRow[] }).notes : []);
-          setNotesError(null);
-        }
-      } catch (err) {
-        if (!cancelled) setNotesError(publicErrorMessage(err, "Could not load notes"));
-      }
-    }
-    void loadNotes();
-    return () => {
-      cancelled = true;
-    };
-  }, [opportunity.id]);
 
   async function saveOrg() {
     setBusy(true);
@@ -117,32 +181,9 @@ export default function QueueOrgWorkspace({
     }
   }
 
-  async function addNote() {
-    const text = noteDraft.trim();
-    if (!text) return;
-    setNotesBusy(true);
-    setNotesError(null);
-    try {
-      const res = await fetch(`/api/sales/opportunities/${opportunity.id}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await readApiJson(res);
-      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not save note"));
-      const note = (data as { note: NoteRow }).note;
-      setNotes((prev) => [note, ...prev]);
-      setNoteDraft("");
-    } catch (err) {
-      setNotesError(publicErrorMessage(err, "Could not save note"));
-    } finally {
-      setNotesBusy(false);
-    }
-  }
-
   return (
-    <div className="mt-4 space-y-3">
-      <div className="rounded-lg border border-white/10 bg-black p-3">
+    <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-start">
+      <div className="min-w-0 rounded-lg border border-white/10 bg-black p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="csc-eyebrow">Organization</p>
           <div className="flex items-center gap-2">
@@ -258,46 +299,16 @@ export default function QueueOrgWorkspace({
         )}
       </div>
 
-      <FollowUpControls
-        opportunityId={opportunity.id}
-        nextFollowUpAt={opportunity.nextFollowUpAt}
-        onSaved={onFollowUpSaved}
-      />
-
-      <OrgAttachmentsPanel organization={organization} onOrganizationSaved={onOrganizationSaved} />
-
-      <div className="rounded-lg border border-white/10 bg-black p-3">
-        <p className="csc-eyebrow">Notes</p>
-        <textarea
-          value={noteDraft}
-          onChange={(e) => setNoteDraft(e.target.value)}
-          rows={2}
-          placeholder="Quick note on this opportunity…"
-          className="mt-2 w-full rounded-md border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+      <div className="min-w-0">
+        <FollowUpControls
+          opportunityId={opportunity.id}
+          nextFollowUpAt={opportunity.nextFollowUpAt}
+          onSaved={onFollowUpSaved}
         />
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            type="button"
-            disabled={notesBusy || !noteDraft.trim()}
-            onClick={() => void addNote()}
-            className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-gray-200 hover:border-[var(--csc-accent)] disabled:opacity-50"
-          >
-            {notesBusy ? "Adding…" : "Add note"}
-          </button>
-          {notesError ? <p className="text-xs text-red-400">{notesError}</p> : null}
-        </div>
-        {notes.length > 0 ? (
-          <ul className="csc-list mt-3">
-            {notes.map((note) => (
-              <li key={note.id} className="csc-list-row !block py-2">
-                <p className="whitespace-pre-wrap text-sm text-gray-200">{note.text}</p>
-                <p className="mt-1 text-[11px] text-gray-500">{formatWhen(note.occurredAt)}</p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-xs text-gray-500">No notes yet.</p>
-        )}
+      </div>
+
+      <div className="min-w-0">
+        <OrgAttachmentsPanel organization={organization} onOrganizationSaved={onOrganizationSaved} />
       </div>
     </div>
   );
