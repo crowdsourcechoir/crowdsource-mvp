@@ -182,8 +182,8 @@ export default function QueueOrgWorkspace({
   }
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-start">
-      <div className="min-w-0 rounded-lg border border-white/10 bg-black p-3">
+    <div className="mt-4 grid grid-cols-1 items-stretch gap-3 lg:grid-cols-3">
+      <div className="flex h-full min-w-0 flex-col rounded-lg border border-white/10 bg-black p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="csc-eyebrow">Organization</p>
           <div className="flex items-center gap-2">
@@ -299,7 +299,7 @@ export default function QueueOrgWorkspace({
         )}
       </div>
 
-      <div className="min-w-0">
+      <div className="flex h-full min-w-0 flex-col">
         <FollowUpControls
           opportunityId={opportunity.id}
           nextFollowUpAt={opportunity.nextFollowUpAt}
@@ -307,7 +307,7 @@ export default function QueueOrgWorkspace({
         />
       </div>
 
-      <div className="min-w-0">
+      <div className="flex h-full min-w-0 flex-col">
         <OrgAttachmentsPanel organization={organization} onOrganizationSaved={onOrganizationSaved} />
       </div>
     </div>

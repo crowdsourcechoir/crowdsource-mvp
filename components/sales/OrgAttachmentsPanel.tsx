@@ -139,7 +139,7 @@ export default function OrgAttachmentsPanel({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-black p-3">
+    <div className="flex h-full flex-col rounded-lg border border-white/10 bg-black p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="csc-eyebrow">Attachments</p>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -243,8 +243,6 @@ export default function OrgAttachmentsPanel({
             </li>
           ))}
         </ul>
-      ) : !addingLink ? (
-        <p className="mt-2 text-xs text-gray-500">No attachments yet.</p>
       ) : null}
 
       {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}

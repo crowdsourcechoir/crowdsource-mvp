@@ -58,7 +58,7 @@ export default function FollowUpControls({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-[var(--csc-shell-bg,#000)] p-3">
+    <div className="flex h-full flex-col rounded-lg border border-white/10 bg-[var(--csc-shell-bg,#000)] p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="csc-eyebrow">Follow up</p>
         <p className="text-sm text-white">{value ? formatFollowUpDay(value) : "Not set"}</p>
