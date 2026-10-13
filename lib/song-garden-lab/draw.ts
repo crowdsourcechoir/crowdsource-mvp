@@ -40,40 +40,11 @@ function clipRibbon(spine: Point[], widths: number[], grow: number): { spine: Po
   return { spine: nextSpine, widths: nextWidths };
 }
 
-function outline(spine: Point[], widths: number[]): Point[] {
-  if (spine.length < 2) return [];
-  const left: Point[] = [];
-  const right: Point[] = [];
-  for (let i = 0; i < spine.length; i++) {
-    const prev = spine[Math.max(0, i - 1)];
-    const next = spine[Math.min(spine.length - 1, i + 1)];
-    let dx = next.x - prev.x;
-    let dy = next.y - prev.y;
-    const len = Math.hypot(dx, dy) || 1;
-    dx /= len;
-    dy /= len;
-    const w = widths[i] / 2;
-    left.push({ x: spine[i].x + -dy * w, y: spine[i].y + dx * w });
-    right.push({ x: spine[i].x - -dy * w, y: spine[i].y - dx * w });
-  }
-  return [...left, ...right.reverse()];
-}
-
 function toCanvas(point: Point, rootX: number, rootY: number, scale: number): Point {
   return { x: rootX + point.x * scale, y: rootY - point.y * scale };
 }
 
-function trace(ctx: CanvasRenderingContext2D, points: Point[], rootX: number, rootY: number, scale: number) {
-  const first = toCanvas(points[0], rootX, rootY, scale);
-  ctx.moveTo(first.x, first.y);
-  for (let i = 1; i < points.length; i++) {
-    const point = toCanvas(points[i], rootX, rootY, scale);
-    ctx.lineTo(point.x, point.y);
-  }
-  ctx.closePath();
-}
-
-function paintRibbon(
+function paintFilament(
   ctx: CanvasRenderingContext2D,
   spine: Point[],
   widths: number[],
@@ -82,22 +53,82 @@ function paintRibbon(
   scale: number,
   alpha: number
 ) {
-  const shape = outline(spine, widths);
-  if (shape.length < 3) return;
+  if (spine.length < 2) return;
+  const points = spine.map((point) => toCanvas(point, rootX, rootY, scale));
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   ctx.beginPath();
-  trace(ctx, shape, rootX, rootY, scale);
-  ctx.fillStyle = `rgba(207, 255, 129, ${alpha})`;
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.strokeStyle = `rgba(207, 255, 129, ${alpha * 0.2})`;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  for (let i = 1; i < points.length; i++) {
+    const width = Math.max(1.15, (widths[i] ?? widths[widths.length - 1]) * scale * 0.28);
+    ctx.beginPath();
+    ctx.moveTo(points[i - 1].x, points[i - 1].y);
+    ctx.lineTo(points[i].x, points[i].y);
+    ctx.strokeStyle = `rgba(207, 255, 129, ${alpha * 0.55})`;
+    ctx.lineWidth = Math.max(1, width * 0.65);
+    ctx.stroke();
+  }
+
+  const tip = points[points.length - 1];
+  const tipRadius = Math.max(2, Math.min(4.5, (widths[widths.length - 1] ?? 0.02) * scale * 0.35));
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, tipRadius * 1.7, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(207, 255, 129, ${alpha * 0.2})`;
   ctx.fill();
   ctx.beginPath();
-  const a = toCanvas(spine[0], rootX, rootY, scale);
-  ctx.moveTo(a.x, a.y);
-  for (let i = 1; i < spine.length; i++) {
-    const point = toCanvas(spine[i], rootX, rootY, scale);
-    ctx.lineTo(point.x, point.y);
+  ctx.arc(tip.x, tip.y, tipRadius, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(207, 255, 129, ${Math.min(1, alpha + 0.05)})`;
+  ctx.fill();
+}
+
+function paintNodes(
+  ctx: CanvasRenderingContext2D,
+  spine: Point[],
+  widths: number[],
+  articulation: number,
+  rootX: number,
+  rootY: number,
+  scale: number,
+  alpha: number,
+  grow: number
+) {
+  if (spine.length < 2 || grow <= 0) return;
+  const count = 2 + Math.round(Math.max(0, Math.min(1, articulation)) * 5);
+  ctx.lineWidth = 1.25;
+  for (let mark = 1; mark <= count; mark++) {
+    const t = mark / (count + 1);
+    if (t > grow) continue;
+    const exact = t * (spine.length - 1);
+    const i0 = Math.min(spine.length - 1, Math.floor(exact));
+    const i1 = Math.min(spine.length - 1, i0 + 1);
+    const frac = exact - i0;
+    const prev = spine[Math.max(0, i0 - 1)];
+    const next = spine[i1];
+    let dx = next.x - prev.x;
+    let dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const half = 0.028 + (widths[i0] ?? 0.02) * 1.6;
+    const across = { x: -dy * half, y: dx * half };
+    const mid = {
+      x: spine[i0].x + (spine[i1].x - spine[i0].x) * frac,
+      y: spine[i0].y + (spine[i1].y - spine[i0].y) * frac,
+    };
+    const a = toCanvas({ x: mid.x + across.x, y: mid.y + across.y }, rootX, rootY, scale);
+    const b = toCanvas({ x: mid.x - across.x, y: mid.y - across.y }, rootX, rootY, scale);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = `rgba(207, 255, 129, ${alpha})`;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
   }
-  ctx.strokeStyle = `rgba(207, 255, 129, ${Math.min(1, alpha + 0.2)})`;
-  ctx.lineWidth = 1;
-  ctx.stroke();
 }
 
 function drawOrganism(
@@ -110,7 +141,8 @@ function drawOrganism(
   grow: number,
   laws: Laws,
   selected: boolean,
-  remnant = false
+  remnant = false,
+  skipLabel = false
 ) {
   const behavior = live(organism, organism.birthConditions, [], laws);
   const sway = remnant ? 0 : Math.sin((time / organism.motion.periodSec) * Math.PI * 2 + organism.motion.phase) * behavior.swayAmplitude;
@@ -119,13 +151,14 @@ function drawOrganism(
   const spine = swayPoints(organism.ribbon.spine, organism.ribbon.spine[0], sway, reach);
   const body = clipRibbon(spine, organism.ribbon.widths, shownGrow);
   const alpha = remnant ? (selected ? 0.28 : 0.14) : selected ? 0.95 : 0.72;
-  paintRibbon(ctx, body.spine, body.widths, rootX, rootY, scale, alpha);
+  paintFilament(ctx, body.spine, body.widths, rootX, rootY, scale, alpha);
+  paintNodes(ctx, spine, organism.ribbon.widths, organism.genome.articulation, rootX, rootY, scale, alpha, shownGrow);
 
   if (organism.ribbon.arm && organism.ribbon.armWidths && shownGrow >= organism.ribbon.armStart) {
     const armGrow = (shownGrow - organism.ribbon.armStart) / Math.max(0.001, 1 - organism.ribbon.armStart);
     const swayedArm = swayPoints(organism.ribbon.arm, organism.ribbon.spine[0], sway, reach);
     const arm = clipRibbon(swayedArm, organism.ribbon.armWidths, armGrow);
-    paintRibbon(ctx, arm.spine, arm.widths, rootX, rootY, scale, alpha * 0.9);
+    paintFilament(ctx, arm.spine, arm.widths, rootX, rootY, scale, alpha * 0.72);
   }
 
   if (selected) {
@@ -140,7 +173,7 @@ function drawOrganism(
     ctx.fill();
   }
 
-  if (laws.showLabels && shownGrow > 0.85) {
+  if (!skipLabel && laws.showLabels && shownGrow > 0.85) {
     ctx.fillStyle = remnant ? "rgba(207, 255, 129, 0.35)" : selected ? ACCENT : "rgba(207, 255, 129, 0.55)";
     ctx.font = "11px ui-monospace, monospace";
     ctx.textAlign = "center";
@@ -162,18 +195,9 @@ function paintField(
   }
 ): DrawHit[] {
   const { x, y, width, height } = bounds;
-  const groundY = y + height * 0.78;
-  const gradient = ctx.createLinearGradient(0, groundY - 40, 0, y + height);
-  gradient.addColorStop(0, "rgba(207, 255, 129, 0)");
-  gradient.addColorStop(1, "rgba(207, 255, 129, 0.06)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(x, groundY, width, y + height - groundY);
-  ctx.strokeStyle = "rgba(207, 255, 129, 0.45)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x, groundY);
-  ctx.lineTo(x + width, groundY);
-  ctx.stroke();
+  const cx = x + width * 0.5;
+  const cy = y + height * 0.62;
+  const reach = Math.min(width, height) * 0.16;
 
   if (options.label) {
     ctx.fillStyle = "rgba(207, 255, 129, 0.8)";
@@ -182,22 +206,29 @@ function paintField(
     ctx.fillText(options.label, x + width - 16, y + 28);
   }
 
-  const scale = Math.min(width, height) * 0.52;
+  const scale = Math.min(width, height) * 0.4;
   const hits: DrawHit[] = [];
-  for (const organism of options.remnants ?? []) {
-    const rootX = x + organism.position.x * width;
-    const rootY = groundY;
+  const place = (organism: Organism, remnant: boolean) => {
+    const angle = (organism.position.x - 0.5) * Math.PI * 1.15;
+    const rootX = cx + Math.sin(angle) * reach;
+    const rootY = cy - Math.cos(angle) * reach * 0.45;
     const selected = organism.id === options.selectedId;
-    drawOrganism(ctx, organism, rootX, rootY, scale, options.time, options.grow, options.laws, selected, true);
+    ctx.save();
+    ctx.translate(rootX, rootY);
+    ctx.rotate(angle);
+    drawOrganism(ctx, organism, 0, 0, scale, options.time, options.grow, options.laws, selected, remnant, true);
+    ctx.restore();
+    if (options.laws.showLabels && options.grow > 0.85) {
+      const lift = scale * 0.7;
+      ctx.fillStyle = selected ? ACCENT : "rgba(207, 255, 129, 0.55)";
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(organism.id, rootX + Math.sin(angle) * lift, rootY - Math.cos(angle) * lift);
+    }
     hits.push({ id: organism.id, x: rootX, y: rootY });
-  }
-  for (const organism of organisms) {
-    const rootX = x + organism.position.x * width;
-    const rootY = groundY;
-    const selected = organism.id === options.selectedId;
-    drawOrganism(ctx, organism, rootX, rootY, scale, options.time, options.grow, options.laws, selected);
-    hits.push({ id: organism.id, x: rootX, y: rootY });
-  }
+  };
+  for (const organism of options.remnants ?? []) place(organism, true);
+  for (const organism of organisms) place(organism, false);
   return hits;
 }
 
