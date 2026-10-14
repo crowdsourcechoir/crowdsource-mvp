@@ -37,6 +37,7 @@ function decide(path: string, method: string, actor: Actor | null, query = "") {
 
 const checks: Array<[string, boolean]> = [
   ["public journey", decide("/e/csc-oct2", "GET", null).kind === "public"],
+  ["public field lab", decide("/lab/field", "GET", null).kind === "public"],
   ["public snapshot", decide("/api/gardens/wfea/snapshot", "GET", null).kind === "public"],
   ["public submit", decide("/api/songgarden", "POST", null).kind === "public"],
   ["artist composer", decide("/admin/composer", "GET", artist, "bloom=bloom-1").kind === "allow"],

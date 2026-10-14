@@ -140,7 +140,7 @@ function isOwnerPath(pathname: string): boolean {
 }
 
 export function isPublicPath(pathname: string, method: string, searchParams: URLSearchParams): boolean {
-  if (pathname === "/" || pathname.startsWith("/e/") || pathname.startsWith("/g/")) return true;
+  if (pathname === "/" || pathname.startsWith("/e/") || pathname.startsWith("/g/") || pathname.startsWith("/lab/")) return true;
   if (pathname === "/forgot" || pathname === "/reset-password" || pathname === "/invite") return true;
   if (pathname === "/reset-root-password") return true;
   if (
