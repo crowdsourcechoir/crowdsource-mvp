@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { AMPLIFY_CONFERENCES_2027_SEEDS } from "@/lib/sales/seed/amplify-conferences-2027";
 import { ELEVATE_VIBE_CREATE_PROSPECTS } from "@/lib/sales/seed/elevate-vibe-create-prospects";
+import { SEATTLE_FUNDRAISERS_2027_SEEDS } from "@/lib/sales/seed/seattle-fundraisers-2027";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
+import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
 import {
   SEAHAWKS_SEED,
   seedOrgWithContacts,
@@ -18,7 +20,7 @@ export const maxDuration = 300;
  * Upsert org + contacts (verified-format emails) and run pipeline into the approval queue.
  *
  * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
- * or `{ preset: "elevate-vibe-create" }`.
+ * `{ preset: "elevate-vibe-create" }`, or `{ preset: "seattle-fundraisers-2027" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -48,6 +50,15 @@ export async function POST(request: Request) {
       return NextResponse.json({
         preset: "elevate-vibe-create",
         seedCount: ELEVATE_VIBE_CREATE_PROSPECTS.length,
+        ...result,
+      });
+    }
+
+    if (body?.preset === "seattle-fundraisers-2027") {
+      const result = await seedSeattleFundraisers2027({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "seattle-fundraisers-2027",
+        seedCount: SEATTLE_FUNDRAISERS_2027_SEEDS.length,
         ...result,
       });
     }
@@ -82,7 +93,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'ballard-fc' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );
