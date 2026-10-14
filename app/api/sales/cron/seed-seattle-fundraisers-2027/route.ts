@@ -68,12 +68,14 @@ async function runSeed(request: Request) {
       force = new URL(request.url).searchParams.get("force") === "1";
     }
 
-    const result = await seedSeattleFundraisers2027({ force });
+    // Process in batches so Vercel maxDuration can't strand the list mid-run;
+    // later cron ticks skip already-marked orgs and continue.
+    const result = await seedSeattleFundraisers2027({ force, limit: force ? 55 : 20 });
+    const status = await getSeattleFundraisers2027SeedStatus();
     return NextResponse.json({
       ok: result.errors.length === 0,
-      done:
-        result.errors.length === 0 &&
-        result.createdOrgs + result.updatedOrgs + result.skippedAlreadySeeded === result.attempted,
+      done: status.done,
+      status,
       ...result,
     });
   } catch (err) {
