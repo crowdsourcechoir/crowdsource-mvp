@@ -121,12 +121,14 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     }
 
     // Generic inboxes (info@ / events@ / development@) are sendable without SMTP verify.
-    // Named people must clear Hunter Email Verifier or they never enqueue.
+    // When the seed already stamped a status (incl. valid_format from Domain Search), trust it —
+    // re-running Verifier on 50+ orgs blows the cron time budget and burns credits.
+    // Unspecified named emails still clear Hunter Email Verifier before enqueue.
     let status: Contact["emailVerificationStatus"];
     let verifierMeta: Record<string, unknown> = {};
     if (isGenericMailboxEmail(email)) {
       status = c.emailVerificationStatus ?? "valid_format";
-    } else if (c.emailVerificationStatus && c.emailVerificationStatus !== "valid_format") {
+    } else if (c.emailVerificationStatus) {
       status = c.emailVerificationStatus;
     } else {
       const verified = await verifyEmailAddress(email);

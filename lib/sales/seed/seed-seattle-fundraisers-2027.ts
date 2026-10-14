@@ -30,8 +30,11 @@ export type SeedSeattleFundraisersResult = {
  */
 export async function seedSeattleFundraisers2027(options?: {
   force?: boolean;
+  /** Cap how many not-yet-seeded orgs to process this run (cron resumes later). */
+  limit?: number;
 }): Promise<SeedSeattleFundraisersResult> {
   const force = Boolean(options?.force);
+  const limit = typeof options?.limit === "number" && options.limit > 0 ? options.limit : 20;
   const result: SeedSeattleFundraisersResult = {
     attempted: SEATTLE_FUNDRAISERS_2027_SEEDS.length,
     createdOrgs: 0,
@@ -44,6 +47,7 @@ export async function seedSeattleFundraisers2027(options?: {
     organizations: [],
   };
 
+  let processed = 0;
   for (const seed of SEATTLE_FUNDRAISERS_2027_SEEDS) {
     try {
       if (!force) {
@@ -61,6 +65,11 @@ export async function seedSeattleFundraisers2027(options?: {
           continue;
         }
       }
+
+      if (processed >= limit) {
+        break;
+      }
+      processed += 1;
 
       const seeded: SeedOrgWithContactsResult = await seedOrgWithContacts(seed);
 

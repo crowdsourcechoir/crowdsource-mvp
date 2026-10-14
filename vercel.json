@@ -10,11 +10,15 @@
   "crons": [
     {
       "path": "/api/sales/cron/seed-seattle-fundraisers-2027",
-      "schedule": "35 22 * * *"
+      "schedule": "10 23 * * *"
     },
     {
       "path": "/api/sales/cron/seed-seattle-fundraisers-2027",
-      "schedule": "10 23 * * *"
+      "schedule": "40 23 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-seattle-fundraisers-2027",
+      "schedule": "10 0 * * *"
     },
     {
       "path": "/api/sales/cron/seed-seattle-fundraisers-2027",
