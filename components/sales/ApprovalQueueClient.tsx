@@ -57,6 +57,7 @@ import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
 import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
 import { isExternalSentDraft } from "@/lib/sales/outreach/external-sent";
+import { formatQueuePlace, matchesQueuePlace } from "@/lib/sales/queue/place";
 import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales/queue/scope";
 import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
@@ -94,6 +95,7 @@ export default function ApprovalQueueClient() {
   const scope = parseQueueScope(searchParams.get("scope"));
   const funnel = parseQueueFunnel(searchParams.get("funnel"));
   const added = parseQueueAdded(searchParams.get("added"));
+  const placeParam = (searchParams.get("place") ?? "").slice(0, 80);
   const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
@@ -116,6 +118,9 @@ export default function ApprovalQueueClient() {
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [addOrgOpen, setAddOrgOpen] = useState(false);
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
+  const [placeDraft, setPlaceDraft] = useState(placeParam);
+  const placePushed = useRef(placeParam);
+  const placeQuery = placeDraft.trim().slice(0, 80);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
   const [deletingOrg, setDeletingOrg] = useState(false);
@@ -182,12 +187,33 @@ export default function ApprovalQueueClient() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (placeParam === placePushed.current) return;
+    placePushed.current = placeParam;
+    setPlaceDraft(placeParam);
+  }, [placeParam]);
+
+  useEffect(() => {
+    const next = placeDraft.trim().slice(0, 80);
+    if (next === placeParam.trim()) return;
+    const handle = window.setTimeout(() => {
+      placePushed.current = next;
+      const params = new URLSearchParams(searchParams.toString());
+      if (!next) params.delete("place");
+      else params.set("place", next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [placeDraft, placeParam, searchParams, pathname, router]);
+
   const visible = useMemo(() => {
     const filtered = sidebar.filter(
       (item) =>
         matchesQueueCategory(item, category) &&
         matchesQueueFunnel(item.relationshipStage, funnel) &&
-        matchesQueueAdded(queueItemAddedAt(item), added)
+        matchesQueueAdded(queueItemAddedAt(item), added) &&
+        matchesQueuePlace(item, placeQuery)
     );
     if (added !== "new") return filtered;
     return [...filtered].sort((a, b) => {
@@ -195,7 +221,7 @@ export default function ApprovalQueueClient() {
       const bT = Date.parse(queueItemAddedAt(b) ?? "") || 0;
       return bT - aT;
     });
-  }, [sidebar, category, funnel, added]);
+  }, [sidebar, category, funnel, added, placeQuery]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
   const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
   const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
@@ -688,7 +714,7 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope, funnel, added]);
+  }, [category, scope, funnel, added, placeQuery]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
@@ -724,6 +750,7 @@ export default function ApprovalQueueClient() {
   }
 
   const pendingCount = visible.length;
+  const placeActive = placeQuery.length > 0;
   const selectedAlreadySent = Boolean(
     current &&
       (current.contactDrafts ?? []).some(
@@ -813,6 +840,26 @@ export default function ApprovalQueueClient() {
             }))}
             onChange={setScope}
           />
+          <label className="inline-flex min-w-0 items-center gap-2 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs font-medium text-gray-200 focus-within:border-[var(--csc-accent)]">
+            <span className="shrink-0 text-gray-500">Place</span>
+            <input
+              value={placeDraft}
+              onChange={(e) => setPlaceDraft(e.target.value.slice(0, 80))}
+              placeholder="City or region"
+              aria-label="Search queue by city or region"
+              className="w-28 min-w-0 bg-transparent text-xs text-white placeholder:text-gray-600 focus:outline-none sm:w-36"
+            />
+            {placeDraft ? (
+              <button
+                type="button"
+                aria-label="Clear city or region"
+                onClick={() => setPlaceDraft("")}
+                className="shrink-0 text-gray-500 hover:text-white"
+              >
+                ×
+              </button>
+            ) : null}
+          </label>
         </div>
         <button
           type="button"
@@ -885,20 +932,22 @@ export default function ApprovalQueueClient() {
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">
           {funnel !== "all"
-            ? `${pendingCount} in ${QUEUE_FUNNEL_OPTIONS.find((o) => o.key === funnel)?.label ?? funnel}`
+            ? `${pendingCount} in ${QUEUE_FUNNEL_OPTIONS.find((o) => o.key === funnel)?.label ?? funnel}${placeActive ? ` · ${placeQuery}` : ""}`
             : scope === "due"
-              ? `${pendingCount} follow-ups`
+              ? `${pendingCount} follow-ups${placeActive ? ` · ${placeQuery}` : ""}`
               : scope === "all"
-                ? `${pendingCount} orgs`
-                : category === "all" && added === "all"
+                ? `${pendingCount} orgs${placeActive ? ` · ${placeQuery}` : ""}`
+                : category === "all" && added === "all" && !placeActive
                   ? `${pendingCount} to send`
-                  : added === "new" && category === "all"
+                  : added === "new" && category === "all" && !placeActive
                     ? `${pendingCount} added in last 7 days`
-                    : `${pendingCount} filtered · ${sidebar.length} total`}
+                    : placeActive && category === "all" && added === "all"
+                      ? `${pendingCount} in ${placeQuery}`
+                      : `${pendingCount} filtered · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
-            No matches for these filters.
+            {placeActive ? `No queue items in ${placeQuery}.` : "No matches for these filters."}
           </p>
         ) : (
         <ul className="max-h-[75vh] overflow-y-auto overscroll-contain">
@@ -917,6 +966,9 @@ export default function ApprovalQueueClient() {
                     {item.organizationName}
                   </span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
+                  {formatQueuePlace(item) ? (
+                    <span className="mt-0.5 block truncate text-[11px] text-gray-500">{formatQueuePlace(item)}</span>
+                  ) : null}
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
                     {queueCategoryLabel(parseQueueCategory(item.category))}
                     {item.outreachKind === "replied" ? " · replied" : item.outreachKind === "sent" ? " · sent" : item.outreachKind === "bounced" ? " · bounced" : ""}
@@ -1053,6 +1105,17 @@ export default function ApprovalQueueClient() {
                   ...current,
                   organization,
                 });
+                setSidebar((prev) =>
+                  prev.map((row) =>
+                    row.organizationId === organization.id
+                      ? {
+                          ...row,
+                          locationCity: organization.locationCity,
+                          locationRegion: organization.locationRegion,
+                        }
+                      : row
+                  )
+                );
               }}
               onFollowUpSaved={(nextFollowUpAt) => {
                 replaceDetail(current.queueItem.id, {
