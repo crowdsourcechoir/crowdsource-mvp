@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { documentToLegacyBlocks } from "../document/migrate";
 import { parseEmailDocument } from "../document/schema";
-import { documentFromTemplate, newSection } from "./sections";
+import { documentFromTemplate, duplicateCampaignName, newSection } from "./sections";
 
 const statement = newSection("large_statement");
 const document = parseEmailDocument({
@@ -20,5 +20,8 @@ assert.equal(applied.designSystemId, "design-2");
 assert.equal(applied.meta.internalTitle, "Spring");
 assert.equal(applied.sections.length, document.sections.length);
 assert.notEqual(applied.sections[0]?.id, document.sections[0]?.id);
+assert.equal(duplicateCampaignName("Weekly"), "Weekly copy");
+assert.equal(duplicateCampaignName("  "), "Campaign copy");
+assert.equal(duplicateCampaignName("Weekly copy"), "Weekly copy copy");
 
 console.log("email section tests ok");

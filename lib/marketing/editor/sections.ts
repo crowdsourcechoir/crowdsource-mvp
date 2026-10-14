@@ -87,6 +87,12 @@ export function duplicateSection(section: EmailSection): EmailSection {
   return { ...section, id: id(), props: { ...section.props } };
 }
 
+/** Name for a new draft made from an existing campaign. */
+export function duplicateCampaignName(name: string): string {
+  const trimmed = name.trim() || "Campaign";
+  return `${trimmed} copy`;
+}
+
 /** Copy a template document onto a campaign without keeping a live pointer. */
 export function documentFromTemplate(template: EmailDocument, designSystemId: string, internalTitle: string): EmailDocument {
   return parseEmailDocument({

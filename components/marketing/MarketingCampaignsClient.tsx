@@ -46,6 +46,20 @@ export default function MarketingCampaignsClient() {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
   }, [load]);
 
+  async function duplicateCampaign(id: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${id}/duplicate`, { method: "POST" });
+      const data = await parseJson(res);
+      if (!res.ok || !data.campaign?.id) throw new Error(data.error ?? "Could not duplicate");
+      window.location.href = `/admin/marketing/campaigns/${data.campaign.id}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not duplicate");
+      setBusy(false);
+    }
+  }
+
   async function createCampaign() {
     setBusy(true);
     setError(null);
@@ -72,7 +86,7 @@ export default function MarketingCampaignsClient() {
       <SettingsPanel
         eyebrow="Campaigns"
         title="Email campaigns"
-        description="Create a campaign, compose with constrained blocks, preview, test, then send to a segment."
+        description="Create a campaign, or duplicate one when the next email only needs a small change. The copy is a new draft."
       >
         <div className="flex flex-wrap gap-2">
           <input
@@ -96,20 +110,22 @@ export default function MarketingCampaignsClient() {
           campaigns.map((campaign) => {
             const email = emails.find((e) => e.campaignId === campaign.id);
             return (
-              <Link
+              <div
                 key={campaign.id}
-                href={`/admin/marketing/campaigns/${campaign.id}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--csc-row-divider)] px-4 py-4 transition-[border-color] hover:border-[var(--csc-accent)]"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--csc-row-divider)] px-4 py-4"
               >
-                <div>
+                <Link href={`/admin/marketing/campaigns/${campaign.id}`} className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold text-white">{campaign.name}</h3>
                   <p className="mt-1 text-xs text-gray-500">{email?.subject || "No subject yet"}</p>
-                </div>
-                <div className="flex gap-2">
+                </Link>
+                <div className="flex flex-wrap items-center gap-2">
                   <StatusPill tone="neutral">{campaign.status}</StatusPill>
                   {email ? <StatusPill tone={email.status === "sent" ? "ok" : "neutral"}>{email.status}</StatusPill> : null}
+                  <SettingsButton disabled={busy} title="New draft with this email" onClick={() => duplicateCampaign(campaign.id)}>
+                    Duplicate
+                  </SettingsButton>
                 </div>
-              </Link>
+              </div>
             );
           })
         )}

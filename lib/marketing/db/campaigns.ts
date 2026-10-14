@@ -1,3 +1,4 @@
+import { documentFromTemplate, duplicateCampaignName } from "../editor/sections";
 import { defaultEmailBlocks } from "../email/render";
 import { documentToLegacyBlocks, legacyBlocksToDocument, migrateEmailDocument } from "../document/migrate";
 import { parseEmailDocument } from "../document/schema";
@@ -231,6 +232,67 @@ export async function createCampaign(input: { name: string; purpose?: string | n
       from_name: settings.fromName,
       from_email: settings.fromEmail,
       reply_to: settings.replyTo,
+      stats: { ...EMPTY_EMAIL_STATS },
+      updated_at: now,
+    })
+    .select("*")
+    .single();
+  raiseDb(sendError);
+  return { campaign: toCampaign(campaignRow), email: toEmail(send as SendRow, documentRow) };
+}
+
+/** New draft with the same email, subject, sender, and segment. The source stays as it was. */
+export async function duplicateCampaign(
+  id: string,
+  name?: string
+): Promise<{ campaign: MarketingCampaign; email: MarketingEmail } | null> {
+  const bundle = await getCampaignBundle(id);
+  if (!bundle?.document) return null;
+  const source = bundle.emails[0] ?? null;
+  const settings = await getMarketingSettings();
+  const copyName = (name?.trim() || duplicateCampaignName(bundle.campaign.name)).slice(0, 200);
+  const document = documentFromTemplate(bundle.document, bundle.document.designSystemId, copyName);
+  const db = marketingDb();
+  const now = new Date().toISOString();
+  const { data: doc, error: docError } = await db
+    .from("email_documents")
+    .insert({
+      kind: "campaign",
+      design_system_id: document.designSystemId,
+      working_document: document,
+      schema_version: 1,
+      updated_at: now,
+    })
+    .select("id, design_system_id, working_document")
+    .single();
+  raiseDb(docError);
+  const documentRow = doc as DocumentRow;
+  const { data: campaign, error: campaignError } = await db
+    .from("campaigns")
+    .insert({
+      name: copyName,
+      purpose: bundle.campaign.purpose,
+      status: "draft",
+      document_id: documentRow.id,
+      source_campaign_id: bundle.campaign.id,
+      source_send_id: source?.id ?? null,
+      updated_at: now,
+    })
+    .select("*")
+    .single();
+  raiseDb(campaignError);
+  const campaignRow = campaign as CampaignRow;
+  const { data: send, error: sendError } = await db
+    .from("campaign_sends")
+    .insert({
+      campaign_id: campaignRow.id,
+      status: "draft",
+      subject: source?.subject || "Crowdsource Choir",
+      preview_text: source?.previewText ?? "",
+      from_name: source?.fromName || settings.fromName,
+      from_email: source?.fromEmail || settings.fromEmail,
+      reply_to: source?.replyTo ?? settings.replyTo,
+      segment_id: source?.segmentId ?? null,
       stats: { ...EMPTY_EMAIL_STATS },
       updated_at: now,
     })
