@@ -184,6 +184,23 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
     }
   }
 
+  async function duplicateThis() {
+    const saved = await save();
+    if (!saved) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${campaignId}/duplicate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || typeof data.campaign?.id !== "string") throw new Error(data.error ?? "Could not duplicate");
+      window.location.href = `/admin/marketing/campaigns/${data.campaign.id}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not duplicate");
+      setBusy(false);
+    }
+  }
+
   async function saveTemplate() {
     if (!templateName.trim()) return;
     setBusy(true);
@@ -246,6 +263,9 @@ export default function MarketingCampaignEditorClient({ campaignId }: { campaign
           <>
             <StatusPill tone={email.status === "sent" ? "ok" : "neutral"}>{email.status}</StatusPill>
             <StatusPill tone={settings?.sendsEnabled ? "ok" : "off"}>{settings?.sendsEnabled ? "List on" : "List paused"}</StatusPill>
+            <SettingsButton disabled={busy} title="New draft with this email" onClick={() => duplicateThis()}>
+              Duplicate
+            </SettingsButton>
             <SettingsButton href="/admin/marketing/campaigns">Back</SettingsButton>
           </>
         }
