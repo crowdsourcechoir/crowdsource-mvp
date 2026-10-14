@@ -207,6 +207,45 @@ export async function listQueueSidebarByScope(scope: QueueScope): Promise<QueueS
   return dedupeSidebarByOrganization(sidebar);
 }
 
+/**
+ * Queue sidebar for a CRM funnel stage (same population as /admin/sales/funnel + dashboard).
+ * Picks the best queue row per opportunity (pending nudge preferred, else newest).
+ */
+export async function listQueueSidebarByFunnelStage(stage: RelationshipStage): Promise<QueueSidebarItem[]> {
+  const db = requireSupabaseAdmin();
+  const { data: oppRows, error: oppErr } = await db
+    .from("opportunities")
+    .select("id")
+    .eq("relationship_stage", stage)
+    .order("stage_updated_at", { ascending: true });
+  if (oppErr) throw new Error(oppErr.message);
+  const oppIds = (oppRows ?? []).map((row) => String(row.id));
+  if (oppIds.length === 0) return [];
+
+  const queueRows = await fetchInChunks<Record<string, unknown>>(oppIds, async (chunk) =>
+    db.from("approval_queue_items").select("*").in("opportunity_id", chunk)
+  );
+  const byOpp = new Map<string, ApprovalQueueItem>();
+  for (const row of queueRows) {
+    const item = rowToQueueItem(row);
+    const prev = byOpp.get(item.opportunityId);
+    if (!prev) {
+      byOpp.set(item.opportunityId, item);
+      continue;
+    }
+    const prevPending = prev.status === "pending";
+    const nextPending = item.status === "pending";
+    if (nextPending && !prevPending) {
+      byOpp.set(item.opportunityId, item);
+      continue;
+    }
+    if (nextPending === prevPending && item.createdAt > prev.createdAt) {
+      byOpp.set(item.opportunityId, item);
+    }
+  }
+  return assembleQueueSidebar(Array.from(byOpp.values()));
+}
+
 function dedupeSidebarByOrganization(items: QueueSidebarItem[]): QueueSidebarItem[] {
   const byOrg = new Map<string, QueueSidebarItem>();
   for (const item of items) {

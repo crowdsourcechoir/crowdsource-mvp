@@ -24,6 +24,7 @@ import {
 } from "@/lib/sales/queue/category";
 import {
   QUEUE_FUNNEL_OPTIONS,
+  funnelCountsFromStages,
   matchesQueueFunnel,
   parseQueueFunnel,
   type QueueFunnelFilter,
@@ -118,6 +119,13 @@ export default function ApprovalQueueClient() {
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
   const [deletingOrg, setDeletingOrg] = useState(false);
+  const [nudging, setNudging] = useState(false);
+  const [funnelByStage, setFunnelByStage] = useState<Record<RelationshipStage, number>>({
+    awareness: 0,
+    interest: 0,
+    purchase: 0,
+    lost: 0,
+  });
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
   const draftIdentityRef = useRef("");
@@ -137,11 +145,22 @@ export default function ApprovalQueueClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/sales/queue?scope=${encodeURIComponent(scope)}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      const params = new URLSearchParams();
+      params.set("scope", scope);
+      if (funnel !== "all") params.set("funnel", funnel === "purchase" ? "won" : funnel);
+      const res = await fetch(`/api/sales/queue?${params.toString()}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30_000),
+      });
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load queue"));
-      const body = data as { items?: QueueSidebarItem[]; gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean } };
+      const body = data as {
+        items?: QueueSidebarItem[];
+        gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean };
+        funnelByStage?: Record<RelationshipStage, number>;
+      };
       setSidebar(body.items ?? []);
+      if (body.funnelByStage) setFunnelByStage(body.funnelByStage);
       setDetailsById({});
       setGmailConnected(Boolean(body.gmail?.connected));
       setGmailEmail(body.gmail?.email ?? null);
@@ -157,7 +176,7 @@ export default function ApprovalQueueClient() {
     } finally {
       setLoading(false);
     }
-  }, [scope, deepLinkItem]);
+  }, [scope, funnel, deepLinkItem]);
 
   useEffect(() => {
     load();
@@ -178,20 +197,7 @@ export default function ApprovalQueueClient() {
     });
   }, [sidebar, category, funnel, added]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
-  const funnelCounts = useMemo(() => {
-    const counts: Record<QueueFunnelFilter, number> = {
-      all: sidebar.length,
-      awareness: 0,
-      interest: 0,
-      purchase: 0,
-      lost: 0,
-    };
-    for (const item of sidebar) {
-      const stage = item.relationshipStage ?? "awareness";
-      counts[stage] += 1;
-    }
-    return counts;
-  }, [sidebar]);
+  const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
   const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
@@ -514,6 +520,39 @@ export default function ApprovalQueueClient() {
     setSendConfirmOpen(true);
   }, [current, busy]);
 
+  const draftNudge = useCallback(async () => {
+    if (!current?.opportunity.id || !current.contact?.id || busy || nudging) return;
+    setNudging(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/sales/opportunities/${current.opportunity.id}/nudge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId: current.contact.id }),
+      });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not draft follow-up"));
+      const queueItemId = (data as { queueItemId?: string }).queueItemId;
+      if (!queueItemId) throw new Error("Follow-up drafted but no queue item returned");
+      showCopyStatus("Follow-up draft ready — review and send.");
+      // Jump to the new pending nudge under To send (clear stage filter).
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("funnel");
+      params.delete("scope");
+      params.set("item", queueItemId);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      setJumpToQueueItemId(queueItemId);
+      if (funnel === "all" && scope === "to_send") {
+        await load();
+      }
+    } catch (err) {
+      setActionError(publicErrorMessage(err, "Could not draft follow-up"));
+    } finally {
+      setNudging(false);
+    }
+  }, [current, busy, nudging, showCopyStatus, searchParams, router, pathname, funnel, scope, load]);
+
   const markContactVerified = useCallback(
     (contactId: string) => {
       if (!current || busy) return;
@@ -705,6 +744,14 @@ export default function ApprovalQueueClient() {
       current.queueItem.status === "pending" &&
       !selectedAlreadySent
   );
+  const canDraftNudge = Boolean(
+    current?.contact?.id &&
+      current.contact.email &&
+      current.opportunity.lastOutboundAt &&
+      current.opportunity.relationshipStage !== "purchase" &&
+      current.opportunity.relationshipStage !== "lost" &&
+      !showSendableDraft
+  );
 
   const addOrgModal = (
     <AddOrganizationForm open={addOrgOpen} onClose={() => setAddOrgOpen(false)} onQueued={() => void load()} />
@@ -837,15 +884,17 @@ export default function ApprovalQueueClient() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">
-          {scope === "due"
-            ? `${pendingCount} follow-ups`
-            : scope === "all"
-              ? `${pendingCount} orgs`
-              : category === "all" && funnel === "all" && added === "all"
-                ? `${pendingCount} to send`
-                : added === "new" && category === "all" && funnel === "all"
-                  ? `${pendingCount} added in last 7 days`
-                  : `${pendingCount} filtered · ${sidebar.length} total`}
+          {funnel !== "all"
+            ? `${pendingCount} in ${QUEUE_FUNNEL_OPTIONS.find((o) => o.key === funnel)?.label ?? funnel}`
+            : scope === "due"
+              ? `${pendingCount} follow-ups`
+              : scope === "all"
+                ? `${pendingCount} orgs`
+                : category === "all" && added === "all"
+                  ? `${pendingCount} to send`
+                  : added === "new" && category === "all"
+                    ? `${pendingCount} added in last 7 days`
+                    : `${pendingCount} filtered · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
@@ -1276,17 +1325,51 @@ export default function ApprovalQueueClient() {
             )}
           </div>
           ) : conversationThreadId ? (
-            <p className="mt-4 text-sm text-gray-500">
-              Reply in Gmail on that thread — this contact was already emailed.
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-gray-500">
+                Already emailed — open the thread in Gmail, or draft a follow-up here.
+              </p>
+              {canDraftNudge ? (
+                <button
+                  type="button"
+                  disabled={busy || nudging || deletingOrg}
+                  onClick={() => void draftNudge()}
+                  className="rounded-lg border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+                >
+                  {nudging ? "Drafting follow-up…" : "Draft follow-up"}
+                </button>
+              ) : null}
+            </div>
           ) : externalSentDraft ? (
-            <p className="mt-4 text-sm text-gray-500">
-              Recorded as already emailed outside this app. No Gmail thread is stored for this contact, so there is nothing to open here.
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-gray-500">
+                Recorded as already emailed outside this app. Draft a follow-up to try again from here.
+              </p>
+              {canDraftNudge ? (
+                <button
+                  type="button"
+                  disabled={busy || nudging || deletingOrg}
+                  onClick={() => void draftNudge()}
+                  className="rounded-lg border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+                >
+                  {nudging ? "Drafting follow-up…" : "Draft follow-up"}
+                </button>
+              ) : null}
+            </div>
           ) : (
           <div className="mt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
             <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
+            {canDraftNudge ? (
+              <button
+                type="button"
+                disabled={busy || nudging || deletingOrg}
+                onClick={() => void draftNudge()}
+                className="mt-3 rounded-lg border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+              >
+                {nudging ? "Drafting follow-up…" : "Draft follow-up"}
+              </button>
+            ) : null}
           </div>
           )}
 
