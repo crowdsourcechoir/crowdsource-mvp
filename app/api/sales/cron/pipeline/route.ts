@@ -5,6 +5,7 @@ import { runPipelineBatch } from "@/lib/sales/pipeline/run-pipeline-batch";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
+import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 290;
@@ -59,6 +60,15 @@ export async function GET(request: Request) {
       };
     }
 
+    let seattleFundraisersSeed = null;
+    try {
+      seattleFundraisersSeed = await seedSeattleFundraisers2027();
+    } catch (err) {
+      seattleFundraisersSeed = {
+        error: err instanceof Error ? err.message : "Seattle fundraisers seed failed",
+      };
+    }
+
     const limit = Number(process.env.SALES_PIPELINE_BATCH_SIZE) || undefined;
     const summary = await runPipelineBatch(limit);
     // Best-effort: never fail the pipeline cron if digest ensure errors (email/provider issues).
@@ -74,6 +84,7 @@ export async function GET(request: Request) {
       amplifySeed,
       elevateVibeCreateSeed,
       ballardFcSeed,
+      seattleFundraisersSeed,
       summary,
       digest,
       continuation,
