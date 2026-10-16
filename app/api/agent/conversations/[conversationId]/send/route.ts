@@ -12,7 +12,7 @@ import {
 } from "@/lib/local-agent-interview-store";
 import { scheduleTranscriptionIfMediaPresent } from "@/lib/agent-post-submit-transcribe";
 import { isEmailCaptchaPrompt, type AskAboutItemLike } from "@/lib/agent-brief-email-captcha";
-import { isNameQuestionPrompt } from "@/lib/agent-name-question";
+import { isIncomingNameStep } from "@/lib/agent-name-question";
 import { isTurnstileServerConfigured, verifyTurnstileToken } from "@/lib/turnstile";
 import {
   participantDisplayName,
@@ -246,6 +246,8 @@ export async function POST(
       const videoDataUrl = typeof body.videoDataUrl === "string" ? body.videoDataUrl : null;
       const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
       const journeyManagedRequested = body.journeyManaged === true;
+      const questionPrompt =
+        typeof body.questionPrompt === "string" ? body.questionPrompt.trim() : "";
       const deviceId =
         typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
           ? body.deviceId.trim()
@@ -370,10 +372,12 @@ export async function POST(
       }
 
       if (!isFirstMessage || managedFirstUserTurn) {
-      const journeyNameStep = body.journeyNameStep === true;
-      const isNameQuestion =
-        isNameQuestionPrompt(brief as Record<string, unknown>, lastAgentContent) ||
-        (managedFirstUserTurn && journeyNameStep);
+      const isNameQuestion = isIncomingNameStep({
+        journeyNameStep: body.journeyNameStep === true,
+        lastAgentContent,
+        questionPrompt,
+        brief: brief as Record<string, unknown>,
+      });
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
@@ -409,9 +413,24 @@ export async function POST(
         });
       }
 
+      let userTurnIndex = existingTurns.length;
+      if (
+        journeyManagedRequested &&
+        questionPrompt &&
+        questionPrompt !== lastAgentContent.trim()
+      ) {
+        await localInsertTurn({
+          conversationId,
+          turnIndex: userTurnIndex,
+          role: "agent",
+          content: questionPrompt,
+        });
+        userTurnIndex += 1;
+      }
+
       const userTurnInserted = await localInsertTurn({
         conversationId,
-        turnIndex: existingTurns.length,
+        turnIndex: userTurnIndex,
         role: "user",
         content,
         audioUrl: audioDataUrl,
@@ -553,6 +572,8 @@ export async function POST(
     const videoPublicUrl = typeof body.videoPublicUrl === "string" ? body.videoPublicUrl : null;
     const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken : null;
     const journeyManagedRequested = body.journeyManaged === true;
+    const questionPrompt =
+      typeof body.questionPrompt === "string" ? body.questionPrompt.trim() : "";
     const deviceId =
       typeof body.deviceId === "string" && /^dev_[a-zA-Z0-9_-]{8,64}$/.test(body.deviceId.trim())
         ? body.deviceId.trim()
@@ -759,10 +780,12 @@ export async function POST(
     }
 
     if (!isFirstMessage || managedFirstUserTurn) {
-      const journeyNameStep = body.journeyNameStep === true;
-      const isNameQuestion =
-        isNameQuestionPrompt(briefForValidation, lastAgentContent) ||
-        (managedFirstUserTurn && journeyNameStep);
+      const isNameQuestion = isIncomingNameStep({
+        journeyNameStep: body.journeyNameStep === true,
+        lastAgentContent,
+        questionPrompt,
+        brief: briefForValidation,
+      });
       if (isNameQuestion && !content) {
         return NextResponse.json({ error: "Please enter a name." }, { status: 400 });
       }
@@ -794,7 +817,25 @@ export async function POST(
           .update(participantNameUpdatePayload(content))
           .eq("id", conv.participant_id);
       }
-      const nextIndex = existingTurns.length;
+      let nextIndex = existingTurns.length;
+      if (
+        journeyManagedRequested &&
+        questionPrompt &&
+        questionPrompt !== lastAgentContent.trim()
+      ) {
+        const { error: questionError } = await supabaseAdmin
+          .from("agent_conversation_turns")
+          .insert({
+            conversation_id: conversationId,
+            turn_index: nextIndex,
+            role: "agent",
+            content: questionPrompt,
+          });
+        if (questionError) {
+          return NextResponse.json({ error: questionError.message }, { status: 400 });
+        }
+        nextIndex += 1;
+      }
       const { data: inserted, error: eInsert } = await supabaseAdmin
         .from("agent_conversation_turns")
         .insert({

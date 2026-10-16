@@ -5,8 +5,21 @@ import {
   AGENT_PARTICIPANT_IDENTITY_SELECT,
   participantDisplayName,
 } from "@/lib/agent-participant-db";
-import { pairInterviewAnswers, type PairedInterviewAnswer } from "@/lib/agent-interview-qa";
+import {
+  pairInterviewAnswers,
+  presentInterviewConversation,
+  type PairedInterviewAnswer,
+  type PresentedInterviewAnswer,
+} from "@/lib/agent-interview-qa";
 import { proxiedAgentMediaUrl } from "@/lib/agent-media/storage-upload";
+import { localEventsGetById } from "@/lib/local-events-store";
+import type { Event } from "@/data/mockEvents";
+import type { SongGardenConfig } from "@/lib/songgarden/config";
+import {
+  contributionPrompts,
+  resolveJourneySteps,
+  type ContributionPrompt,
+} from "@/lib/songgarden/journey-steps";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -14,10 +27,33 @@ type InterviewSubmissionItem = {
   participantName: string;
   email?: string | null;
   conversationId: string;
-  answers: PairedInterviewAnswer[];
+  answers: PresentedInterviewAnswer[];
 };
 
 /** Point Composer at the same-origin media proxy (private Storage buckets otherwise 403). */
+function questionPromptsForEvent(config: {
+  agentBrief?: unknown;
+  songGardenConfig?: SongGardenConfig | null;
+}): ContributionPrompt[] {
+  const eventLike = {
+    agentBrief: config.agentBrief ?? null,
+    songGardenConfig: config.songGardenConfig ?? null,
+  } as Event;
+  return contributionPrompts(resolveJourneySteps(eventLike));
+}
+
+function presentConversation(
+  participantName: string,
+  answers: PairedInterviewAnswer[],
+  prompts: ContributionPrompt[]
+): { participantName: string; answers: PresentedInterviewAnswer[] } {
+  return presentInterviewConversation({
+    participantName,
+    answers: withProxiedMediaUrls(answers),
+    prompts,
+  });
+}
+
 function withProxiedMediaUrls(answers: PairedInterviewAnswer[]): PairedInterviewAnswer[] {
   return answers.map((a) => ({
     ...a,
@@ -32,13 +68,23 @@ export async function GET(request: Request) {
   if (!eventId) return NextResponse.json({ error: "eventId is required." }, { status: 400 });
 
   if (USE_LOCAL_EVENTS) {
+    const localEvent = localEventsGetById(eventId);
+    const prompts = localEvent
+      ? questionPromptsForEvent({
+          agentBrief: localEvent.agent_brief,
+          songGardenConfig: (localEvent.song_garden_config as SongGardenConfig | null) ?? null,
+        })
+      : [];
     const transcripts = await localGetEventTranscripts(eventId);
-    const items: InterviewSubmissionItem[] = transcripts.map((t) => ({
-      participantName: t.participantName,
-      email: t.email ?? null,
-      conversationId: t.conversationId,
-      answers: withProxiedMediaUrls(pairInterviewAnswers(t.turns)),
-    }));
+    const items: InterviewSubmissionItem[] = transcripts.map((t) => {
+      const presented = presentConversation(t.participantName, pairInterviewAnswers(t.turns), prompts);
+      return {
+        participantName: presented.participantName,
+        email: t.email ?? null,
+        conversationId: t.conversationId,
+        answers: presented.answers,
+      };
+    });
 
     return NextResponse.json({ items });
   }
@@ -57,6 +103,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ items: [] });
     }
     if (convs.length === 0) return NextResponse.json({ items: [] });
+
+    const { data: eventRow } = await supabaseAdmin
+      .from("events")
+      .select("agent_brief, song_garden_config")
+      .eq("id", eventId)
+      .maybeSingle();
+    const prompts = questionPromptsForEvent({
+      agentBrief: eventRow?.agent_brief,
+      songGardenConfig: (eventRow?.song_garden_config as SongGardenConfig | null) ?? null,
+    });
 
     const participantIds = convs.map((c: { participant_id: string }) => c.participant_id);
     const { data: participants } = await supabaseAdmin
@@ -78,7 +134,7 @@ export async function GET(request: Request) {
     const { data: turns, error: eTurns } = await supabaseAdmin
       .from("agent_conversation_turns")
       .select(
-        "conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
+        "id, conversation_id, turn_index, role, content, created_at, audio_url, video_url, audio_transcript, video_transcript"
       )
       .in("conversation_id", conversationIds);
     if (eTurns || !Array.isArray(turns)) {
@@ -95,11 +151,16 @@ export async function GET(request: Request) {
 
     const items: InterviewSubmissionItem[] = convs.map((conv: { id: string; participant_id: string }) => {
       const convTurns = turnsByConv.get(conv.id) ?? [];
+      const presented = presentConversation(
+        identityById.get(conv.participant_id)?.name ?? "Anonymous",
+        pairInterviewAnswers(convTurns),
+        prompts
+      );
       return {
-        participantName: identityById.get(conv.participant_id)?.name ?? "Anonymous",
+        participantName: presented.participantName,
         conversationId: conv.id,
         email: identityById.get(conv.participant_id)?.email ?? null,
-        answers: withProxiedMediaUrls(pairInterviewAnswers(convTurns)),
+        answers: presented.answers,
       };
     });
 

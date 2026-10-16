@@ -11,6 +11,7 @@ import { songgardenCategoryLabel } from "@/lib/songgarden/categories";
 import { formatClipDuration } from "@/lib/songgarden/clip-prompt";
 import { wavFilename } from "@/lib/songgarden/sound-pack";
 import ClipWaveform from "./ClipWaveform";
+import ContributionActionsMenu from "./ContributionActionsMenu";
 
 type DraggableAudioClipProps = {
   eventId: string;
@@ -20,6 +21,7 @@ type DraggableAudioClipProps = {
   onSelectToggle: (clipId: string, multi: boolean) => void;
   onPlayed?: () => void;
   onOpenDetail?: (clip: SonggardenClip) => void;
+  onDelete?: (clip: SonggardenClip) => Promise<void>;
 };
 
 export { wavFilename };
@@ -32,6 +34,7 @@ export default function DraggableAudioClip({
   onSelectToggle,
   onPlayed,
   onOpenDetail,
+  onDelete,
 }: DraggableAudioClipProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileCacheRef = useRef<File | null>(null);
@@ -300,6 +303,12 @@ export default function DraggableAudioClip({
             >
               Edit
             </button>
+          ) : null}
+          {onDelete ? (
+            <ContributionActionsMenu
+              kindLabel="sound"
+              onDelete={() => onDelete(clip)}
+            />
           ) : null}
         </div>
       </div>

@@ -189,6 +189,8 @@ export async function sendMessage(
     journeyManaged?: boolean;
     /** WorldJourney name step — persist participant display name on first turn. */
     journeyNameStep?: boolean;
+    /** Prompt the participant just answered. Stored so Composer can batch by question. */
+    questionPrompt?: string | null;
   }
 ): Promise<{
   turn: AgentConversationTurn | null;
@@ -209,6 +211,7 @@ export async function sendMessage(
     deviceId: options?.deviceId ?? null,
     journeyManaged: options?.journeyManaged === true,
     journeyNameStep: options?.journeyNameStep === true,
+    questionPrompt: options?.questionPrompt?.trim() || null,
   });
 }
 

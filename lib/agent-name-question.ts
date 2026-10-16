@@ -18,3 +18,20 @@ export function isNameQuestionPrompt(brief: NameBrief, message: string | null | 
   if (!collectsNameFromBrief(brief) || !message) return false;
   return message.trim() === resolveNameQuestionPrompt(brief).trim();
 }
+
+/**
+ * True when this submit is the journey's name step.
+ * The client flag counts on every turn, not only the first message — a name
+ * asked later in the journey still has to be saved on the participant.
+ */
+export function isIncomingNameStep(args: {
+  journeyNameStep: boolean;
+  lastAgentContent?: string | null;
+  questionPrompt?: string | null;
+  brief: NameBrief;
+}): boolean {
+  if (args.journeyNameStep) return true;
+  if (isNameQuestionPrompt(args.brief, args.lastAgentContent)) return true;
+  if (isNameQuestionPrompt(args.brief, args.questionPrompt)) return true;
+  return false;
+}

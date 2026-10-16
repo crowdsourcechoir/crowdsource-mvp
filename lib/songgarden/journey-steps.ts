@@ -304,6 +304,35 @@ export function resolveCategoryLabel(step: JourneyStep): string {
   return defaultCategoryLabelForStep("name");
 }
 
+export type ContributionPrompt = {
+  prompt: string;
+  /** Name-step answers identify the person; they are not a response column. */
+  isName: boolean;
+};
+
+/**
+ * Prompts that become a conversation turn, in journey order.
+ * Sound-only steps stay on the garden clip path and are omitted.
+ * Name steps are included so later answers stay aligned with the questions
+ * that were actually asked.
+ */
+export function contributionPrompts(steps: JourneyStep[]): ContributionPrompt[] {
+  const prompts: ContributionPrompt[] = [];
+  for (const step of steps) {
+    if (!isAgentContributionStep(step)) continue;
+    const prompt =
+      step.prompt?.trim() ||
+      (step.kind === "name" ? DEFAULT_NAME_QUESTION_PROMPT : "");
+    if (!prompt) continue;
+    prompts.push({ prompt, isName: step.kind === "name" });
+  }
+  return prompts;
+}
+
+export function contributionQuestionPrompts(steps: JourneyStep[]): string[] {
+  return contributionPrompts(steps).map((item) => item.prompt);
+}
+
 /** True when the step needs the agent interview / text-media conversation path. */
 export function isAgentContributionStep(
   step: JourneyStep
