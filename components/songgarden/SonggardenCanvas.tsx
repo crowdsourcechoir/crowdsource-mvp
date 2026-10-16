@@ -15,6 +15,11 @@ import {
 } from "@/lib/agent-interview-qa";
 import { groupAnswersByPrompt } from "@/lib/composer/group-answers-by-prompt";
 import ComposerMediaCard from "@/components/songgarden/ComposerMediaCard";
+import {
+  ComposerAnswerTable,
+  ComposerPromptSection,
+  personLabel,
+} from "@/components/songgarden/ComposerPromptGroup";
 
 type ComposerScope = "bloom" | "garden" | "master";
 export type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
@@ -31,6 +36,7 @@ type TextItem = {
   eventId: string;
   audioUrl: string | null;
   videoUrl: string | null;
+  promptIndex: number | null;
 };
 
 type VideoItem = {
@@ -41,6 +47,7 @@ type VideoItem = {
   transcript: string | null;
   createdAt: string;
   eventId: string;
+  promptIndex: number | null;
 };
 
 type Props = {
@@ -274,6 +281,7 @@ export default function SonggardenCanvas({
                   audioUrl: string | null;
                   videoUrl: string | null;
                   videoTranscript: string | null;
+                  promptIndex?: number | null;
                 }>;
               }>;
             };
@@ -293,6 +301,7 @@ export default function SonggardenCanvas({
                     eventId: id,
                     audioUrl,
                     videoUrl,
+                    promptIndex: answer.promptIndex ?? null,
                   });
                 }
                 if (videoUrl !== null) {
@@ -304,6 +313,7 @@ export default function SonggardenCanvas({
                     transcript: answer.videoTranscript,
                     createdAt: answer.createdAt,
                     eventId: id,
+                    promptIndex: answer.promptIndex ?? null,
                   });
                 }
               });
@@ -390,6 +400,7 @@ export default function SonggardenCanvas({
           audioUrl: item.audioUrl,
           videoUrl: item.videoUrl,
           eventId: item.eventId,
+          promptIndex: item.promptIndex,
         }))
       ),
     [filteredText]
@@ -422,6 +433,7 @@ export default function SonggardenCanvas({
           createdAt: item.createdAt,
           videoUrl: item.videoUrl,
           eventId: item.eventId,
+          promptIndex: item.promptIndex,
         }))
       ),
     [filteredVideo]
@@ -854,61 +866,47 @@ export default function SonggardenCanvas({
       ) : null}
 
       {showTextAlone ? (
-        <section className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Text by prompt ({filteredText.length})
-          </h2>
-          {filteredText.length === 0 ? (
-            <p className="text-sm text-gray-500">No text responses in this scope.</p>
-          ) : (
-            <div className="space-y-5">
-              {textByPrompt.map((group) => (
-                <div key={group.key} className="space-y-2">
-                  <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
-                  <ul className="space-y-1 border-l border-white/10 pl-3">
-                    {group.answers.map((item) => (
-                      <li key={item.id} className="text-sm leading-snug text-gray-200">
-                        <span className="text-gray-500">
-                          {item.participantName || "Anonymous"} ·{" "}
-                        </span>
-                        <span className="whitespace-pre-wrap">{item.content}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        <ComposerPromptSection
+          title={`Text by prompt · ${filteredText.length}`}
+          empty={filteredText.length === 0 ? "No text responses in this scope." : undefined}
+        >
+          <ComposerAnswerTable
+            groups={textByPrompt.map((group) => ({
+              key: group.key,
+              prompt: group.prompt,
+              answers: group.answers.map((item) => ({
+                id: item.id,
+                name: item.participantName,
+                content: item.content,
+              })),
+            }))}
+          />
+        </ComposerPromptSection>
       ) : null}
 
       {showVideo ? (
-        <section className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Video & photo by prompt ({filteredVideo.length})
-          </h2>
-          {filteredVideo.length === 0 ? (
-            <p className="text-sm text-gray-500">No video or photo responses in this scope.</p>
-          ) : (
-            <div className="space-y-5">
-              {videoByPrompt.map((group) => (
-                <div key={group.key} className="space-y-2">
-                  <h3 className="text-sm font-medium text-white">{group.prompt}</h3>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {group.answers.map((item) => (
-                      <ComposerMediaCard
-                        key={item.id}
-                        url={item.videoUrl || ""}
-                        participantName={item.participantName || "Anonymous"}
-                        caption={item.content}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+        <ComposerPromptSection
+          title={`Video and photo by prompt · ${filteredVideo.length}`}
+          empty={filteredVideo.length === 0 ? "No video or photo responses in this scope." : undefined}
+        >
+          {videoByPrompt.map((group) => (
+            <div key={group.key} className="mt-3 first:mt-0">
+              <p className="text-sm font-medium" style={{ color: "var(--csc-accent)" }}>
+                {group.prompt}
+              </p>
+              <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                {group.answers.map((item) => (
+                  <ComposerMediaCard
+                    key={item.id}
+                    url={item.videoUrl || ""}
+                    participantName={personLabel(item.participantName)}
+                    caption={item.content}
+                  />
+                ))}
+              </div>
             </div>
-          )}
-        </section>
+          ))}
+        </ComposerPromptSection>
       ) : null}
 
       {selectedIds.size > 0 && showSounds ? (
