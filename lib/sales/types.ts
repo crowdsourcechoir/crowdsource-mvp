@@ -400,6 +400,10 @@ export type QueueSidebarItem = {
   queueItem: ApprovalQueueItem;
   organizationId: string;
   organizationName: string;
+  /** Organization city — used by the queue place search. */
+  locationCity: string | null;
+  /** Organization region / state — used by the queue place search. */
+  locationRegion: string | null;
   opportunityId: string;
   opportunityTitle: string;
   totalScore: number | null;

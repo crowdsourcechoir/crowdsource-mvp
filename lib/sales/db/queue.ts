@@ -2,6 +2,7 @@ import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
 import { resolveQueueRecentlyAddedAt } from "../queue/added";
+import { resolveQueuePlace } from "../queue/place";
 import { readSalesInitiative } from "../initiatives";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
@@ -327,11 +328,16 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
     id: string;
     name: string;
     organization_type_id: string | null;
+    location_city: string | null;
+    location_region: string | null;
     import_metadata: Record<string, unknown> | null;
   }>(
     opportunities.map((row) => row.organization_id),
     async (chunk) =>
-      db.from("organizations").select("id, name, organization_type_id, import_metadata").in("id", chunk)
+      db
+        .from("organizations")
+        .select("id, name, organization_type_id, location_city, location_region, import_metadata")
+        .in("id", chunk)
   );
   const orgById = new Map(organizations.map((row) => [row.id, row]));
 
@@ -358,10 +364,17 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       salesInitiative: readSalesInitiative(organization.import_metadata),
     });
     const nextFollowUpAt = opportunity.next_follow_up_at ?? null;
+    const place = resolveQueuePlace({
+      locationCity: organization.location_city,
+      locationRegion: organization.location_region,
+      importMetadata: organization.import_metadata,
+    });
     sidebar.push({
       queueItem,
       organizationId: organization.id,
       organizationName: organization.name,
+      locationCity: place.locationCity,
+      locationRegion: place.locationRegion,
       opportunityId: opportunity.id,
       opportunityTitle: opportunity.title,
       totalScore: queueItem.prospectScoreId ? scoresById.get(queueItem.prospectScoreId) ?? null : null,
