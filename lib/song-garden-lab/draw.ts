@@ -181,6 +181,10 @@ function drawOrganism(
   }
 }
 
+function organismCaption(id: string, captions?: Readonly<Record<string, string>>): string {
+  return captions?.[id] ?? id;
+}
+
 function paintField(
   ctx: CanvasRenderingContext2D,
   organisms: Organism[],
@@ -192,6 +196,7 @@ function paintField(
     selectedId: string | null;
     label?: string;
     remnants?: Organism[];
+    captions?: Readonly<Record<string, string>>;
   }
 ): DrawHit[] {
   const { x, y, width, height } = bounds;
@@ -223,7 +228,7 @@ function paintField(
       ctx.fillStyle = selected ? ACCENT : "rgba(207, 255, 129, 0.55)";
       ctx.font = "11px ui-monospace, monospace";
       ctx.textAlign = "center";
-      ctx.fillText(organism.id, rootX + Math.sin(angle) * lift, rootY - Math.cos(angle) * lift);
+      ctx.fillText(organismCaption(organism.id, options.captions), rootX + Math.sin(angle) * lift, rootY - Math.cos(angle) * lift);
     }
     hits.push({ id: organism.id, x: rootX, y: rootY });
   };
@@ -245,12 +250,17 @@ export function drawGarden(
     layout: "field" | "sheet";
     marks?: { x: number; text: string }[];
     remnants?: Organism[];
+    captions?: Readonly<Record<string, string>>;
+    /** Clear leaves the point field visible behind the bodies. */
+    ground?: "solid" | "clear";
   }
 ): DrawHit[] {
   const { width, height, layout, laws } = options;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = GROUND;
-  ctx.fillRect(0, 0, width, height);
+  if (options.ground !== "clear") {
+    ctx.fillStyle = GROUND;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   const hits: DrawHit[] = [];
   if (layout === "sheet") {
@@ -282,6 +292,7 @@ export function drawGarden(
       laws,
       selectedId: options.selectedId,
       remnants: options.remnants,
+      captions: options.captions,
     })
   );
   if (options.marks?.length) {

@@ -15,7 +15,7 @@ export default function GardenLabSettingsPage() {
     <SettingsSubpage
       eyebrow="Workspace"
       title={card?.title ?? "Garden lab"}
-      description="The generative lab. The public journeys stay as they are."
+      description="Harbor contributions and the generative lab. The public journeys stay as they are."
     >
       <div className="h-[calc(100dvh-12rem)] min-h-[560px] overflow-hidden border border-white/10">
         <GardenLab embedded />

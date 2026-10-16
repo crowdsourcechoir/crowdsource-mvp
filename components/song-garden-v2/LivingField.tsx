@@ -163,9 +163,14 @@ export default function LivingField({ energy, quiet = false, accent }: LivingFie
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const pointer = { x: 0, y: 0, tx: 0, ty: 0, on: 0, ton: 0 };
     const onMove = (event: PointerEvent) => {
-      pointer.tx = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.ty = -((event.clientY / window.innerHeight) * 2 - 1);
-      pointer.ton = event.pointerType === "touch" || reduce ? 0 : 1;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return;
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = (event.clientY - rect.top) / rect.height;
+      const inside = nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1;
+      pointer.tx = nx * 2 - 1;
+      pointer.ty = -(ny * 2 - 1);
+      pointer.ton = inside && event.pointerType !== "touch" && !reduce ? 1 : 0;
     };
     const onLeave = () => {
       pointer.ton = 0;

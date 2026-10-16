@@ -13,6 +13,16 @@ import { foldSteps, plantedSteps, scaleConditions, type LogStep } from "@/lib/so
 import { depositOf } from "@/lib/song-garden-lab/conditions";
 import ComparePanel, { type CompareSpan, type CompareView } from "@/components/song-garden-lab/ComparePanel";
 import { drawCompare, drawGarden, type DrawHit } from "@/lib/song-garden-lab/draw";
+import {
+  HARBOR_STARTER,
+  genomeForHarbor,
+  harborEnergy,
+  harborNotes,
+  harborPlanting,
+  nextHarborNote,
+  type HarborKind,
+  type HarborNote,
+} from "@/lib/song-garden-lab/harbor";
 import { expressChannels } from "@/lib/song-garden-lab/express";
 import { foldLog, organismFrom } from "@/lib/song-garden-lab/fold";
 import { haltonGenomes, publishedField } from "@/lib/song-garden-lab/genomes";
@@ -30,6 +40,7 @@ import SeenPanel from "@/components/song-garden-lab/SeenPanel";
 import VoicePanel from "@/components/song-garden-lab/VoicePanel";
 import WordsPanel from "@/components/song-garden-lab/WordsPanel";
 import type { VisionReading } from "@/lib/song-garden-lab/vision";
+import LivingField from "@/components/song-garden-v2/LivingField";
 
 type Mode = "one" | "sheet" | "field" | "voice" | "compare" | "seen" | "play";
 
@@ -54,9 +65,11 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
   const [laws, setLaws] = useState<Laws>(() => defaultLaws());
   const [solo, setSolo] = useState<Genome>(() => cloneGenome(SHEET[3].genome));
   const [birth, setBirth] = useState<Conditions>(() => zeroConditions());
-  const [field, setField] = useState<LogStep[]>(() => plantedSteps(FIELD_SEED));
+  const [field, setField] = useState<LogStep[]>(() => plantedSteps(HARBOR_STARTER.map(harborPlanting)));
+  const [notes, setNotes] = useState<Record<string, HarborNote>>(() => harborNotes(HARBOR_STARTER));
+  const [liveMoment, setLiveMoment] = useState(false);
   const [moment, setMoment] = useState<number | null>(null);
-  const [selectedId, setSelectedId] = useState("h04");
+  const [selectedId, setSelectedId] = useState(HARBOR_STARTER[0].id);
   const [growEpoch, setGrowEpoch] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
   const [voiceReading, setVoiceReading] = useState<AnalysisReading | null>(null);
@@ -219,7 +232,13 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
     worldB: foldB.organisms,
     pair: pairOrganisms,
     remnants: [] as Organism[],
+    captions: {} as Record<string, string>,
   });
+  const captions = useMemo(() => {
+    const next: Record<string, string> = {};
+    for (const note of Object.values(notes)) next[note.id] = note.label;
+    return next;
+  }, [notes]);
   drawRef.current = {
     organisms,
     laws,
@@ -230,6 +249,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
     worldB: foldB.organisms,
     pair: pairOrganisms,
     remnants: laws.showRemnants ? fieldFold.remnants : [],
+    captions,
   };
 
   useEffect(() => {
@@ -292,6 +312,8 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
           ...frameOptions,
           layout: current.mode === "sheet" ? "sheet" : "field",
           remnants: current.mode === "field" ? current.remnants : [],
+          captions: current.mode === "field" ? current.captions : undefined,
+          ground: current.mode === "field" ? "clear" : "solid",
         });
       }
       frame = requestAnimationFrame(tick);
@@ -373,6 +395,30 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
     setGrowEpoch((n) => n + 1);
   }
 
+  function addHarbor(kind: HarborKind) {
+    const planted = field.filter((step) => step.type === "contribution.planted").length;
+    const note = nextHarborNote(kind, planted);
+    setNotes((current) => ({ ...current, [note.id]: note }));
+    setField((current) => [
+      ...current,
+      { id: note.id, type: "contribution.planted", genome: genomeForHarbor(note.kind, note.label) },
+    ]);
+    setSelectedId(note.id);
+    setLiveMoment(false);
+    setMoment(null);
+    setGrowEpoch((n) => n + 1);
+  }
+
+  function resetHarbor() {
+    setTimePassing(false);
+    setNotes(harborNotes(HARBOR_STARTER));
+    setField(plantedSteps(HARBOR_STARTER.map(harborPlanting)));
+    setLiveMoment(false);
+    setMoment(null);
+    setSelectedId(HARBOR_STARTER[0].id);
+    setGrowEpoch((n) => n + 1);
+  }
+
   function returnSelected() {
     const organism = fieldFold.organisms.find((item) => item.id === selectedId);
     if (!organism) return;
@@ -407,9 +453,12 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
   return (
     <div className={`flex flex-col overflow-hidden bg-black text-white md:flex-row ${embedded ? "h-full" : "h-[100dvh]"}`}>
       <div className="relative min-h-[52dvh] flex-1 md:min-h-0">
-        <canvas ref={canvasRef} onClick={onCanvasClick} className="h-full w-full cursor-pointer" />
-        <p className="pointer-events-none absolute left-4 top-3 font-mono text-[11px] tracking-wide text-[#cfff81]/80">
-          Garden lab · draft {laws.rulesVersion}
+        {mode === "field" && (
+          <LivingField energy={harborEnergy(fieldFold.organisms.length)} quiet={liveMoment} />
+        )}
+        <canvas ref={canvasRef} onClick={onCanvasClick} className="relative z-10 h-full w-full cursor-pointer bg-transparent" />
+        <p className="pointer-events-none absolute left-4 top-3 z-20 font-mono text-[11px] tracking-wide text-[#cfff81]/80">
+          {mode === "field" ? "Harbor · Garden lab" : `Garden lab · draft ${laws.rulesVersion}`}
         </p>
       </div>
       <aside className="h-[48dvh] overflow-y-auto border-t border-white/10 px-4 py-3 font-mono text-[11px] md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-t-0">
@@ -451,7 +500,9 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
                       ? "at zero"
                       : id === "play"
                         ? STARTER_GENOMES[0].id
-                        : SUBJECT_ID
+                        : id === "field"
+                          ? HARBOR_STARTER[0].id
+                          : SUBJECT_ID
                 );
               }}
               className="rounded-full border px-3 py-1"
@@ -465,6 +516,73 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
             </button>
           ))}
         </div>
+
+        {mode === "field" && (
+          <section className="mb-4" data-harbor-field="">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--csc-accent)]">
+                {fieldFold.organisms.length} living · field {Math.round(harborEnergy(fieldFold.organisms.length) * 100)}%
+                {liveMoment ? " · resting" : ""}
+              </p>
+              <button
+                type="button"
+                data-live-moment=""
+                onClick={() => setLiveMoment((on) => !on)}
+                className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                style={{
+                  borderColor: "var(--csc-accent)",
+                  color: liveMoment ? "#111" : "var(--csc-accent)",
+                  background: liveMoment ? "var(--csc-accent)" : "transparent",
+                }}
+              >
+                {liveMoment ? "Leave the moment" : "Live moment"}
+              </button>
+            </div>
+            <ul className="csc-list max-h-40 overflow-y-auto">
+              {shownField
+                .filter((step) => step.type === "contribution.planted")
+                .map((step) => {
+                  const note = notes[step.id];
+                  if (!note) return null;
+                  const active = step.id === selectedId;
+                  const living = fieldFold.organisms.some((organism) => organism.id === step.id);
+                  return (
+                    <li key={step.id}>
+                      <button
+                        type="button"
+                        data-harbor-label={note.label}
+                        onClick={() => setSelectedId(step.id)}
+                        className="csc-list-row w-full py-2 text-left"
+                        style={{ color: active ? "var(--csc-accent)" : "white", opacity: living ? 1 : 0.4 }}
+                      >
+                        <span className="text-[11px] uppercase tracking-[0.14em] text-[var(--csc-accent)]">{note.kind}</span>
+                        <span className="text-sm">{note.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["Voice", "Add a voice"],
+                  ["Line", "Add a line"],
+                  ["Hit", "Add a hit"],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  data-add-harbor={kind}
+                  onClick={() => addHarbor(kind)}
+                  className="rounded-full border border-[var(--csc-accent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--csc-accent)]"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {mode === "play" && (
           <RoomPanel
@@ -538,7 +656,8 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
           {mode === "seen" && "A picture becomes six numbers. A still does not move. Coupling 0 on the left is the official reading."}
           {mode === "one" && "One genome against a birth you set. Zero birth is the pure gesture."}
           {mode === "sheet" && "Thirty genomes, each born at zero. This is the family, before the garden has a history."}
-          {mode === "field" && "Twelve planted in order. Return gives part of a deposit back to the ground and takes that body off the living set. The planting stays in the log."}
+          {mode === "field" &&
+            "Harbor voices, lines, and hits are the plantings. Each phrase is a body in the point field. A live moment rests the points. Returning a body gives part of its deposit back and takes it off the living set. The planting stays in the log."}
         </p>
 
         {mode === "voice" && <WordsPanel />}
@@ -573,7 +692,14 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
 
         {selected && mode !== "compare" && (
           <section className="mb-4 border-t border-white/10 pt-3">
-            <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">{selected.id}</h2>
+            <h2 className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/50">
+              {notes[selected.id]?.label ?? selected.id}
+            </h2>
+            {notes[selected.id] && (
+              <p className="mb-1 text-white/50">
+                {notes[selected.id].kind} · {selected.id}
+              </p>
+            )}
             <p className="text-[#cfff81]">
               hash {ribbonHash(selected.ribbon)} · {structureStable ? "replay matches" : "replay drifted"}
             </p>
@@ -741,7 +867,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
               }
               onClick={returnSelected}
             >
-              Return {selectedId} to the ground
+              Return {notes[selectedId]?.label ?? selectedId} to the ground
             </button>
             <label className="mb-3 block text-white/60">
               <span className="flex justify-between">
@@ -767,6 +893,7 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
               {field.map((entry, index) => {
                 const ahead = moment != null && index >= moment;
                 const organismId = entry.type === "contribution.planted" ? entry.id : entry.type === "compost" ? entry.organismId : "";
+                const note = organismId ? notes[organismId] : undefined;
                 const organism =
                   fieldFold.organisms.find((item) => item.id === organismId) ??
                   fieldFold.remnants.find((item) => item.id === organismId);
@@ -782,7 +909,11 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
                       style={{ color: active ? "#cfff81" : "rgba(255,255,255,0.7)" }}
                     >
                       {index + 1}.{" "}
-                      {entry.type === "compost" ? `return ${entry.organismId}` : entry.type === "tick" ? "time" : entry.id}
+                      {entry.type === "compost"
+                        ? `return ${note?.label ?? entry.organismId}`
+                        : entry.type === "tick"
+                          ? "time"
+                          : (note?.label ?? entry.id)}
                       {entry.type === "compost"
                         ? ` · density ${entry.returns.density.toFixed(3)}`
                         : entry.type === "tick"
@@ -804,14 +935,9 @@ export default function GardenLab({ embedded = false }: { embedded?: boolean }) 
             <button
               type="button"
               className="csc-link mt-3"
-              onClick={() => {
-                setTimePassing(false);
-                setField(plantedSteps(FIELD_SEED));
-                setMoment(null);
-                setGrowEpoch((n) => n + 1);
-              }}
+              onClick={resetHarbor}
             >
-              Reset log
+              Reset to the harbor eight
             </button>
           </section>
         )}
