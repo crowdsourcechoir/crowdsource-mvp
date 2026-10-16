@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import FieldLabClient from "./FieldLabClient";
+import GardenLab from "@/components/song-garden-lab/GardenLab";
 
 export const metadata: Metadata = {
-  title: "Field test",
+  title: "Garden lab",
   robots: { index: false, follow: false },
 };
 
 export default function FieldLabPage() {
-  return <FieldLabClient />;
+  return <GardenLab />;
 }

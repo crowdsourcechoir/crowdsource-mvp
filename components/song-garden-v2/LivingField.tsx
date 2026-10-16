@@ -165,14 +165,12 @@ export default function LivingField({ energy, quiet = false, accent }: LivingFie
     const onMove = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       if (rect.width < 2 || rect.height < 2) return;
-      pointer.tx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.ty = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-      const inside =
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom;
-      pointer.ton = !inside || event.pointerType === "touch" || reduce ? 0 : 1;
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = (event.clientY - rect.top) / rect.height;
+      const inside = nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1;
+      pointer.tx = nx * 2 - 1;
+      pointer.ty = -(ny * 2 - 1);
+      pointer.ton = inside && event.pointerType !== "touch" && !reduce ? 1 : 0;
     };
     const onLeave = () => {
       pointer.ton = 0;

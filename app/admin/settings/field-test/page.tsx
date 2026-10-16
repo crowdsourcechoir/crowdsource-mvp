@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import FieldLabClient from "@/app/lab/field/FieldLabClient";
+import GardenLab from "@/components/song-garden-lab/GardenLab";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
 import { getSettingsCard } from "@/lib/settings/catalog";
 
@@ -15,10 +15,10 @@ export default function FieldTestSettingsPage() {
     <SettingsSubpage
       eyebrow="Workspace"
       title={card?.title ?? "Field test"}
-      description="Harbor Test. Live Gardens and Blooms stay as they are."
+      description="Harbor Test is the field. Live Gardens and Blooms stay as they are."
     >
       <div className="h-[calc(100dvh-12rem)] min-h-[560px] overflow-hidden border border-white/10">
-        <FieldLabClient embedded />
+        <GardenLab embedded />
       </div>
     </SettingsSubpage>
   );
