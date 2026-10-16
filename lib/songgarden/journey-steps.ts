@@ -701,6 +701,9 @@ export function syncLegacyFromJourneySteps(
     ...(typeof prevGarden?.completionButtonText === "string"
       ? { completionButtonText: prevGarden.completionButtonText }
       : {}),
+    ...(typeof prevGarden?.completionButtonUrl === "string"
+      ? { completionButtonUrl: prevGarden.completionButtonUrl }
+      : {}),
     ...(typeof prevGarden?.showCompletionButton === "boolean"
       ? { showCompletionButton: prevGarden.showCompletionButton }
       : {}),
