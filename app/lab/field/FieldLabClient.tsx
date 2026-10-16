@@ -36,7 +36,7 @@ function energyFor(count: number): number {
  * Standalone world for trying the point field.
  * It does not read or write a Garden or a Bloom.
  */
-export default function FieldLabClient() {
+export default function FieldLabClient({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<Contribution[]>(STARTER);
   const [liveMoment, setLiveMoment] = useState(false);
   const energy = energyFor(items.length);
@@ -49,7 +49,7 @@ export default function FieldLabClient() {
   }
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden bg-black text-white">
+    <main className={`relative overflow-hidden bg-black text-white ${embedded ? "h-full min-h-0" : "min-h-[100dvh]"}`}>
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -60,7 +60,7 @@ export default function FieldLabClient() {
       />
       <LivingField energy={energy} quiet={liveMoment} />
 
-      <div className="relative z-10 flex min-h-[100dvh] flex-col justify-between px-5 py-6 sm:px-8">
+      <div className={`relative z-10 flex flex-col justify-between px-5 py-6 sm:px-8 ${embedded ? "h-full" : "min-h-[100dvh]"}`}>
         <header className="max-w-xl">
           <p className="csc-eyebrow">Test world</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Harbor Test</h1>

@@ -286,6 +286,21 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         ],
       },
       {
+        id: "field-test",
+        domain: "Song Garden",
+        title: "Field test",
+        description: "Harbor Test, already planted",
+        href: "/admin/settings/field-test",
+        statusLabel: "Open",
+        status: "live",
+        controls: [
+          "Harbor Test with eight contributions already in the field",
+          "Add a voice, a line, or a hit",
+          "Live moment rests the field",
+          "Does not write a Garden or a Bloom",
+        ],
+      },
+      {
         id: "song-garden-pitch",
         domain: "Content",
         title: "Song Garden pitch",
