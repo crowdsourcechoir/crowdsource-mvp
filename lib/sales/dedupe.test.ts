@@ -8,6 +8,7 @@ import {
   isSendableContact,
   looksLikeGenericRoleName,
   looksLikePersonName,
+  operatorVouchedEmail,
   thanksSignOff,
 } from "./dedupe";
 import type { Contact } from "./types";
@@ -65,6 +66,7 @@ async function main() {
     fullName: "Info inbox",
     email: "info@fredhutch.org",
     emailVerificationStatus: "invalid",
+    source: "ai_discovered",
   });
 
   assert.equal(isSelectableContact(events), true);
@@ -84,6 +86,24 @@ async function main() {
     "accept_all / risky must not block send"
   );
   assert.equal(isSendableContact(bouncedInbox), false);
+  const manualBounce = contact({
+    fullName: "Jane Doe",
+    email: "jane@ama.org",
+    emailVerificationStatus: "invalid",
+    source: "manual",
+  });
+  assert.equal(operatorVouchedEmail(manualBounce), true);
+  assert.equal(isSelectableContact(manualBounce), true, "a manual add Hunter called a bounce stays on the org");
+  assert.equal(isSendableContact(manualBounce), true);
+  const seededBounce = contact({
+    fullName: "Jane Doe",
+    email: "jane@ama.org",
+    emailVerificationStatus: "invalid",
+    source: "manual",
+    importMetadata: { seededManually: true },
+  });
+  assert.equal(operatorVouchedEmail(seededBounce), false);
+  assert.equal(isSendableContact(seededBounce), false);
   assert.equal(hasVerifiedEmail(events), false);
   assert.equal(hasVerifiedEmail(thomasUnverified), false);
   assert.equal(hasVerifiedEmail(thomasVerified), true);

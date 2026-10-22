@@ -3,10 +3,9 @@ import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { findExistingOrganization } from "@/lib/sales/db/organizations";
 import { listOpportunitiesForOrganization, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
 import { createOrUpdateQueueItem, getInitialQueueItemByOpportunity, getQueueItem } from "@/lib/sales/db/queue";
-import { extractDomain, normalizeEmail } from "@/lib/sales/dedupe";
+import { extractDomain, normalizeEmail, withOperatorConfirmedEmail } from "@/lib/sales/dedupe";
 import { getHunterAccountCredits } from "@/lib/sales/enrichment/hunter-account";
 import { searchHunterDomain, type HunterDomainSearchPerson } from "@/lib/sales/enrichment/hunter-domain-search";
-import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
 import type { PastedContact } from "@/lib/sales/seed/parse-contact-paste";
 import type { ApprovalQueueItem, Opportunity, Organization, QueueItemDetail } from "@/lib/sales/types";
@@ -172,10 +171,21 @@ export async function addPastedContactsForQueueItem(input: {
       const existingContact = existing.find(
         (c) => (c.normalizedEmail ?? normalizeEmail(c.email)) === email
       );
-      if (existingContact && roleTitle && !existingContact.roleTitle) {
+      if (
+        existingContact &&
+        ((roleTitle && !existingContact.roleTitle) || existingContact.emailVerificationStatus === "invalid")
+      ) {
         const updated = await updateContact(existingContact.id, {
-          roleTitle,
-          roleCategory,
+          roleTitle: roleTitle && !existingContact.roleTitle ? roleTitle : existingContact.roleTitle,
+          roleCategory: roleCategory ?? existingContact.roleCategory,
+          emailVerificationStatus:
+            existingContact.emailVerificationStatus === "invalid"
+              ? "valid_format"
+              : existingContact.emailVerificationStatus,
+          importMetadata: withOperatorConfirmedEmail({
+            ...(existingContact.importMetadata ?? {}),
+            pastedContact: true,
+          }),
         });
         added.push({
           id: updated.id,
@@ -189,12 +199,6 @@ export async function addPastedContactsForQueueItem(input: {
       continue;
     }
 
-    const verified = await verifyEmailAddress(email);
-    if (verified.status === "invalid") {
-      skippedInvalid += 1;
-      continue;
-    }
-
     const contact = await createContact({
       organizationId: organization.id,
       fullName: pasted.fullName,
@@ -204,19 +208,17 @@ export async function addPastedContactsForQueueItem(input: {
       phone: hunter?.phone ?? null,
       linkedinUrl: hunter?.linkedin ?? null,
       source: "manual",
-      emailVerificationStatus:
-        verified.status === "unverified" ? "valid_format" : verified.status,
-      importMetadata: {
+      emailVerificationStatus: "valid_format",
+      importMetadata: withOperatorConfirmedEmail({
         pastedContact: true,
         hunterDomainSearch: Boolean(hunter),
         hunterConfidence: hunter?.confidence ?? null,
         hunterDepartment: hunter?.department ?? null,
         hunterSeniority: hunter?.seniority ?? null,
-        hunterVerifier: verified.hunterStatus,
         roleDescription: roleTitle
           ? `${roleTitle} — pasted contact; title from Hunter.`
           : `Pasted contact (${email}).`,
-      },
+      }),
     });
 
     existingEmails.add(email);

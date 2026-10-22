@@ -9,7 +9,7 @@ import { draftToEmailHtml, draftToPlainText, coalesceDraftBody, coalesceDraftSub
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import QueueEmailBodyEditor from "@/components/sales/QueueEmailBodyEditor";
 import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/contacts/role-description";
-import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
+import { isGenericMailboxEmail, operatorVouchedEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
@@ -48,6 +48,7 @@ import {
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrganizationForm";
 import AddContactForm from "@/components/sales/AddContactForm";
+import GmailOrgContactSuggestions from "@/components/sales/GmailOrgContactSuggestions";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
 import QueueOrgWorkspace, { QueueOpportunityNotes } from "@/components/sales/QueueOrgWorkspace";
@@ -1081,6 +1082,7 @@ export default function ApprovalQueueClient() {
                   );
                   const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle, c.email);
                   const source = findingForContact(current.findings ?? [], c);
+                  const vouched = operatorVouchedEmail(c);
                   return (
                     <li key={c.id} className="relative">
                       <div
@@ -1106,7 +1108,7 @@ export default function ApprovalQueueClient() {
                               ) : hasDraft ? (
                                 <span className="ml-2 text-xs text-gray-500">draft</span>
                               ) : null}
-                              {c.emailVerificationStatus === "invalid" ? (
+                              {c.emailVerificationStatus === "invalid" && !vouched ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
                               ) : c.emailVerificationStatus === "risky" ? (
                                 <span className="ml-2 text-xs font-medium text-amber-400" title="Hunter catch-all / accept_all — you decide">
@@ -1118,7 +1120,7 @@ export default function ApprovalQueueClient() {
                             </span>
                             <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
                           </button>
-                          {c.email && c.emailVerificationStatus !== "invalid" ? (
+                          {c.email && (c.emailVerificationStatus !== "invalid" || vouched) ? (
                             c.emailVerificationStatus === "verified_deliverable" ? (
                               <span
                                 title="Verified"
@@ -1198,6 +1200,19 @@ export default function ApprovalQueueClient() {
             ) : (
               <p className="mt-1 text-sm text-gray-500">No contact identified yet.</p>
             )}
+            <div className="mt-4">
+              <GmailOrgContactSuggestions
+                organizationId={current.organization.id}
+                onApproved={(message) => {
+                  showCopyStatus(message);
+                  setDetailsById((prev) => {
+                    const next = { ...prev };
+                    delete next[current.queueItem.id];
+                    return next;
+                  });
+                }}
+              />
+            </div>
             {current.queueItem.id ? (
               <div className="mt-3 flex flex-wrap items-start gap-2">
                 <AddContactForm

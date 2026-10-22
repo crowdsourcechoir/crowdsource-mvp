@@ -38,6 +38,11 @@ async function main() {
     false,
     "add-manual must not refuse accept_all / risky"
   );
+  assert.equal(
+    /will bounce/.test(addManual),
+    false,
+    "manual add must not refuse an address Hunter calls a bounce"
+  );
   assert.match(findMore, /MAX_RESULTS_PER_MANUAL_SEARCH\s*=\s*10/, "manual find-more may take a full Domain Search page");
   assert.match(findMore, /MAX_RESULTS_PER_AUTOMATED_SEARCH\s*=\s*3/, "automated find-more stays at top 3");
   assert.match(findMore, /mode === ["']automated["']/, "per-org budget must gate on automated mode only");

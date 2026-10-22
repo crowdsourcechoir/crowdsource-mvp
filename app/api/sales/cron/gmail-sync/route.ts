@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scanGmailForOrgContactsIfStale } from "@/lib/sales/gmail/scan-org-contacts";
 import { syncGmailReplies } from "@/lib/sales/gmail/sync";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,13 @@ export async function GET(request: Request) {
 
   try {
     const result = await syncGmailReplies();
-    return NextResponse.json({ result });
+    let contactScan: Awaited<ReturnType<typeof scanGmailForOrgContactsIfStale>> | { error: string } | null = null;
+    try {
+      contactScan = await scanGmailForOrgContactsIfStale();
+    } catch (err) {
+      contactScan = { error: err instanceof Error ? err.message : "Contact scan failed" };
+    }
+    return NextResponse.json({ result, contactScan });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
   }
