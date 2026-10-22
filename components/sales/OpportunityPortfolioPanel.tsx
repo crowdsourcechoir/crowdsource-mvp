@@ -305,6 +305,7 @@ export default function OpportunityPortfolioPanel({
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-gray-500">1st</span>
               <CscDatePicker
+                className="[&>button]:min-w-[7.5rem] [&>button]:py-1.5"
                 value={firstAt}
                 disabled={busy}
                 onChange={(ymd) => {
@@ -320,6 +321,7 @@ export default function OpportunityPortfolioPanel({
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-gray-500">2nd</span>
               <CscDatePicker
+                className="[&>button]:min-w-[7.5rem] [&>button]:py-1.5"
                 value={secondAt}
                 disabled={busy}
                 onChange={(ymd) => {
