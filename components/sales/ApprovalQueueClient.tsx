@@ -58,6 +58,15 @@ import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
 import { isExternalSentDraft } from "@/lib/sales/outreach/external-sent";
 import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales/queue/scope";
+import {
+  QUEUE_CASH_WINDOW_OPTIONS,
+  countCashNow,
+  matchesQueueCashWindow,
+  parseQueueCashWindow,
+  type QueueCashWindow,
+} from "@/lib/sales/queue/cash-window";
+import { REVENUE_ENGINES, isRevenueEngineKey } from "@/lib/sales/engines";
+import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
@@ -94,6 +103,7 @@ export default function ApprovalQueueClient() {
   const scope = parseQueueScope(searchParams.get("scope"));
   const funnel = parseQueueFunnel(searchParams.get("funnel"));
   const added = parseQueueAdded(searchParams.get("added"));
+  const cashWindow = parseQueueCashWindow(searchParams.get("cash"));
   const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
@@ -187,18 +197,31 @@ export default function ApprovalQueueClient() {
       (item) =>
         matchesQueueCategory(item, category) &&
         matchesQueueFunnel(item.relationshipStage, funnel) &&
-        matchesQueueAdded(queueItemAddedAt(item), added)
+        matchesQueueAdded(queueItemAddedAt(item), added) &&
+        matchesQueueCashWindow(item, cashWindow)
     );
-    if (added !== "new") return filtered;
-    return [...filtered].sort((a, b) => {
-      const aT = Date.parse(queueItemAddedAt(a) ?? "") || 0;
-      const bT = Date.parse(queueItemAddedAt(b) ?? "") || 0;
-      return bT - aT;
-    });
-  }, [sidebar, category, funnel, added]);
+    if (added === "new") {
+      return [...filtered].sort((a, b) => {
+        const aT = Date.parse(queueItemAddedAt(a) ?? "") || 0;
+        const bT = Date.parse(queueItemAddedAt(b) ?? "") || 0;
+        return bT - aT;
+      });
+    }
+    if (cashWindow === "cash_now") {
+      return [...filtered].sort((a, b) => {
+        const aDate = a.eventDateEstimate ?? "9999-12-31";
+        const bDate = b.eventDateEstimate ?? "9999-12-31";
+        if (aDate !== bDate) return aDate.localeCompare(bDate);
+        if (a.followUpDue !== b.followUpDue) return a.followUpDue ? -1 : 1;
+        return 0;
+      });
+    }
+    return filtered;
+  }, [sidebar, category, funnel, added, cashWindow]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
   const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
   const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
+  const cashCounts = useMemo(() => countCashNow(sidebar), [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
@@ -688,7 +711,7 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope, funnel, added]);
+  }, [category, scope, funnel, added, cashWindow]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
@@ -719,6 +742,16 @@ export default function ApprovalQueueClient() {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "all") params.delete("added");
     else params.set("added", next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setCashWindow(next: QueueCashWindow) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("cash");
+    else params.set("cash", "now");
+    // Cash-now spans to-send and follow-ups — show the full scoped list.
+    if (next === "cash_now" && scope === "to_send") params.set("scope", "all");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -812,6 +845,16 @@ export default function ApprovalQueueClient() {
               label: chip.label,
             }))}
             onChange={setScope}
+          />
+          <QueueFilterSelect
+            label="Timing"
+            value={cashWindow}
+            options={QUEUE_CASH_WINDOW_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: cashCounts[opt.key],
+            }))}
+            onChange={setCashWindow}
           />
         </div>
         <button
@@ -919,6 +962,10 @@ export default function ApprovalQueueClient() {
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
                     {queueCategoryLabel(parseQueueCategory(item.category))}
+                    {item.revenueEngine && isRevenueEngineKey(item.revenueEngine)
+                      ? ` · ${REVENUE_ENGINES[item.revenueEngine].shortLabel}`
+                      : ""}
+                    {item.eventDateEstimate ? ` · ${item.eventDateEstimate}` : ""}
                     {item.outreachKind === "replied" ? " · replied" : item.outreachKind === "sent" ? " · sent" : item.outreachKind === "bounced" ? " · bounced" : ""}
                     {item.followUpDue ? " · due" : item.nextFollowUpAt ? ` · ${formatFollowUpDay(item.nextFollowUpAt)}` : ""}
                   </span>
@@ -1043,6 +1090,25 @@ export default function ApprovalQueueClient() {
               );
             })}
           </div>
+
+          <OpportunityPortfolioPanel
+            opportunityId={current.opportunity.id}
+            importMetadata={current.opportunity.importMetadata}
+            showDealEconomics={current.opportunity.relationshipStage === "purchase"}
+            onUpdated={({ importMetadata, revenueEngine, flagshipOffer }) => {
+              replaceDetail(current.queueItem.id, {
+                ...current,
+                opportunity: { ...current.opportunity, importMetadata },
+              });
+              setSidebar((rows) =>
+                rows.map((row) =>
+                  row.queueItem.id === current.queueItem.id
+                    ? { ...row, revenueEngine, flagshipOffer }
+                    : row
+                )
+              );
+            }}
+          />
 
           {current.opportunity.id ? (
             <QueueOrgWorkspace

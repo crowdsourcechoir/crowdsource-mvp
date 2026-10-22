@@ -134,6 +134,21 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         ],
       },
       {
+        id: "sales-offers",
+        domain: "Sales",
+        title: "Offers & engines",
+        description: "Premium, Partnership, Owned + package $",
+        href: "/admin/settings/sales-offers",
+        statusLabel: "Manage",
+        status: "live",
+        controls: [
+          "Revenue engines: Premium / Partnership / Owned (labels + defaults)",
+          "Flagship offers: Anthem Experience, Crowdsource Partnership, Song Garden",
+          "Suggested package amounts (placeholders on Won deal form)",
+          "Run-rate targets readout ($15K survival / $30K baseline / $50K growth)",
+        ],
+      },
+      {
         id: "marketing",
         domain: "Marketing",
         title: "Marketing",

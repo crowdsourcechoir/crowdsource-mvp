@@ -3,6 +3,7 @@ import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
 import { resolveQueueRecentlyAddedAt } from "../queue/added";
 import { readSalesInitiative } from "../initiatives";
+import { resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
@@ -285,13 +286,15 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       last_inbound_at: string | null;
       last_outbound_at: string | null;
       relationship_stage: string | null;
+      event_date_estimate: string | null;
+      import_metadata: Record<string, unknown> | null;
     }>(
       items.map((item) => item.opportunityId),
       async (chunk) =>
         db
           .from("opportunities")
           .select(
-            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at, relationship_stage"
+            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at, relationship_stage, event_date_estimate, import_metadata"
           )
           .in("id", chunk)
     ),
@@ -380,6 +383,9 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       gmailThreadId: opportunity.gmail_thread_id ?? null,
       followUpDue: isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt),
       relationshipStage: (opportunity.relationship_stage as RelationshipStage | null) ?? null,
+      eventDateEstimate: opportunity.event_date_estimate ?? null,
+      revenueEngine: resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata),
+      flagshipOffer: resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata),
     });
   }
   return sortQueueSidebarItems(sidebar);

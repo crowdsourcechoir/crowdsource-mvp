@@ -146,6 +146,22 @@ export async function updateOpportunityRelationshipStage(id: string, stage: Rela
   return rowToOpportunity(data);
 }
 
+/** Merge-replace import_metadata on an opportunity (engines, offers, deal economics). */
+export async function updateOpportunityImportMetadata(
+  id: string,
+  importMetadata: Record<string, unknown> | null
+): Promise<Opportunity> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("opportunities")
+    .update({ import_metadata: importMetadata, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return rowToOpportunity(data);
+}
+
 export async function updateOpportunityTouchTimestamps(
   id: string,
   input: {

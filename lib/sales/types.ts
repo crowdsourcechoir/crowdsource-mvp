@@ -418,6 +418,12 @@ export type QueueSidebarItem = {
   gmailThreadId: string | null;
   followUpDue: boolean;
   relationshipStage: RelationshipStage | null;
+  /** YYYY-MM-DD when known — used by Cash now filter. */
+  eventDateEstimate: string | null;
+  /** premium | partnership | owned — from opp or org import_metadata. */
+  revenueEngine: string | null;
+  /** anthem_experience | crowdsource_partnership | song_garden */
+  flagshipOffer: string | null;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

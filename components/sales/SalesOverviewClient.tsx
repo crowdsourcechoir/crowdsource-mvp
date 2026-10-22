@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { SalesDashboardBuckets } from "@/lib/sales/db/dashboard";
 import type { SalesTodayTask } from "@/lib/sales/db/follow-ups";
+import { formatUsd, RUN_RATE_TARGETS } from "@/lib/sales/engines";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 
@@ -47,10 +48,42 @@ export default function SalesOverviewClient() {
   const today = buckets?.today;
   const tasks = today?.tasks.slice(0, PREVIEW) ?? [];
   const extra = Math.max(0, (today?.dueCount ?? 0) - tasks.length);
+  const dealTotals = buckets?.dealTotals;
 
   return (
     <div className="mb-6">
       {error ? <p className="mb-3 text-sm text-red-400">{error}</p> : null}
+
+      <section className="mb-4 rounded-xl border border-[var(--csc-accent)]/30 bg-black px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="csc-eyebrow">Deal economics (Won)</p>
+            <p className="mt-1 text-sm text-gray-300">
+              {buckets ? (
+                <>
+                  <span className="font-semibold text-white">{formatUsd(dealTotals?.bookedAmount ?? 0)}</span> booked
+                  {" · "}
+                  <span className="font-semibold text-white">{formatUsd(dealTotals?.cashCollected ?? 0)}</span> cash
+                  {" · "}
+                  <span className="font-semibold text-white">{formatUsd(dealTotals?.earnedAmount ?? 0)}</span> earned
+                </>
+              ) : (
+                "Loading…"
+              )}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Targets {formatUsd(RUN_RATE_TARGETS.survival)} / {formatUsd(RUN_RATE_TARGETS.baseline)} /{" "}
+              {formatUsd(RUN_RATE_TARGETS.growth)} per month · three separate numbers
+            </p>
+          </div>
+          <Link
+            href="/admin/sales/queue?cash=now&scope=all"
+            className="csc-link shrink-0 text-sm hover:underline"
+          >
+            Cash now ({buckets ? buckets.cashNowCount : "—"}) →
+          </Link>
+        </div>
+      </section>
 
       <section className="mb-4 rounded-xl border border-[var(--csc-accent)]/30 bg-black px-4 py-3 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
