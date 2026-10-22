@@ -65,7 +65,7 @@ import {
   parseQueueCashWindow,
   type QueueCashWindow,
 } from "@/lib/sales/queue/cash-window";
-import { REVENUE_ENGINES, isRevenueEngineKey } from "@/lib/sales/engines";
+import { REVENUE_ENGINES, formatUsd, isRevenueEngineKey } from "@/lib/sales/engines";
 import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
@@ -965,6 +965,7 @@ export default function ApprovalQueueClient() {
                     {item.revenueEngine && isRevenueEngineKey(item.revenueEngine)
                       ? ` · ${REVENUE_ENGINES[item.revenueEngine].shortLabel}`
                       : ""}
+                    {item.potentialAmount != null ? ` · ${formatUsd(item.potentialAmount)}` : ""}
                     {item.eventDateEstimate ? ` · ${item.eventDateEstimate}` : ""}
                     {item.outreachKind === "replied" ? " · replied" : item.outreachKind === "sent" ? " · sent" : item.outreachKind === "bounced" ? " · bounced" : ""}
                     {item.followUpDue ? " · due" : item.nextFollowUpAt ? ` · ${formatFollowUpDay(item.nextFollowUpAt)}` : ""}
@@ -1094,8 +1095,9 @@ export default function ApprovalQueueClient() {
           <OpportunityPortfolioPanel
             opportunityId={current.opportunity.id}
             importMetadata={current.opportunity.importMetadata}
+            showDealForecast
             showDealEconomics={current.opportunity.relationshipStage === "purchase"}
-            onUpdated={({ importMetadata, revenueEngine, flagshipOffer }) => {
+            onUpdated={({ importMetadata, revenueEngine, flagshipOffer, dealForecast }) => {
               replaceDetail(current.queueItem.id, {
                 ...current,
                 opportunity: { ...current.opportunity, importMetadata },
@@ -1103,7 +1105,12 @@ export default function ApprovalQueueClient() {
               setSidebar((rows) =>
                 rows.map((row) =>
                   row.queueItem.id === current.queueItem.id
-                    ? { ...row, revenueEngine, flagshipOffer }
+                    ? {
+                        ...row,
+                        revenueEngine,
+                        flagshipOffer,
+                        potentialAmount: dealForecast.potentialAmount,
+                      }
                     : row
                 )
               );

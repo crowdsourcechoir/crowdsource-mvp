@@ -7,7 +7,14 @@ import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
-import { formatUsd, readDealEconomics, readRevenueEngine, REVENUE_ENGINES, isRevenueEngineKey } from "@/lib/sales/engines";
+import {
+  formatUsd,
+  readDealEconomics,
+  readDealForecast,
+  readRevenueEngine,
+  REVENUE_ENGINES,
+  isRevenueEngineKey,
+} from "@/lib/sales/engines";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 
 const STAGES = FUNNEL_STAGES.map((s) => ({
@@ -48,6 +55,7 @@ function FunnelCard({
   const isWon = item.opportunity.relationshipStage === "purchase";
   const engine = readRevenueEngine(item.opportunity.importMetadata);
   const economics = readDealEconomics(item.opportunity.importMetadata);
+  const forecast = readDealForecast(item.opportunity.importMetadata);
 
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
@@ -58,7 +66,12 @@ function FunnelCard({
       {engine && isRevenueEngineKey(engine) ? (
         <p className="mt-1 text-[11px] uppercase tracking-wide text-[var(--csc-accent)]">
           {REVENUE_ENGINES[engine].shortLabel}
+          {forecast.potentialAmount != null ? ` · ${formatUsd(forecast.potentialAmount)} potential` : ""}
           {isWon && economics.bookedAmount != null ? ` · ${formatUsd(economics.bookedAmount)} booked` : ""}
+        </p>
+      ) : forecast.potentialAmount != null ? (
+        <p className="mt-1 text-[11px] uppercase tracking-wide text-[var(--csc-accent)]">
+          {formatUsd(forecast.potentialAmount)} potential
         </p>
       ) : null}
       <p className="mt-1 truncate text-xs text-gray-500">
@@ -124,6 +137,7 @@ function FunnelCard({
       <OpportunityPortfolioPanel
         opportunityId={item.opportunity.id}
         importMetadata={item.opportunity.importMetadata}
+        showDealForecast
         showDealEconomics={isWon}
         compact
         onUpdated={({ importMetadata }) => onPortfolioMeta(item.opportunity.id, importMetadata)}

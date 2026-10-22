@@ -148,6 +148,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
         <OpportunityPortfolioPanel
           opportunityId={opportunity.id}
           importMetadata={opportunity.importMetadata}
+          showDealForecast
           showDealEconomics={
             opportunity.relationshipStage === "purchase" || opportunity.relationshipStage === "interest"
           }

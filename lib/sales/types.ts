@@ -424,6 +424,8 @@ export type QueueSidebarItem = {
   revenueEngine: string | null;
   /** anthem_experience | crowdsource_partnership | song_garden */
   flagshipOffer: string | null;
+  /** Pipeline potential deal $ from import_metadata.potentialAmount. */
+  potentialAmount: number | null;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

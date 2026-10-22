@@ -77,6 +77,20 @@ export type DealEconomics = {
   earnedAmount: number | null;
 };
 
+/**
+ * Pipeline forecast on an opportunity — potential deal $ and expected cash dates
+ * (typically deposit / balance, often ~half and half). Distinct from booked/cash/earned.
+ */
+export type DealForecast = {
+  potentialAmount: number | null;
+  firstPaymentAmount: number | null;
+  firstPaymentAt: string | null;
+  secondPaymentAmount: number | null;
+  secondPaymentAt: string | null;
+};
+
+export const PREMIUM_DEAL_QUICK_AMOUNTS = [15_000, 25_000] as const;
+
 export function isRevenueEngineKey(value: unknown): value is RevenueEngineKey {
   return typeof value === "string" && value in REVENUE_ENGINES;
 }
@@ -160,6 +174,21 @@ function coerceMoney(raw: unknown): number | null {
   return Math.round(n * 100) / 100;
 }
 
+function coerceDateOnly(raw: unknown): string | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw !== "string") return null;
+  const value = raw.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+/** Split potential into two halves (cents-safe: first gets the remainder penny). */
+export function splitPotentialHalves(potential: number): { first: number; second: number } {
+  const cents = Math.round(potential * 100);
+  const second = Math.floor(cents / 2);
+  const first = cents - second;
+  return { first: first / 100, second: second / 100 };
+}
+
 export function readDealEconomics(importMetadata: unknown): DealEconomics {
   const meta = asMetadata(importMetadata);
   if (!meta) return { bookedAmount: null, cashCollected: null, earnedAmount: null };
@@ -170,10 +199,40 @@ export function readDealEconomics(importMetadata: unknown): DealEconomics {
   };
 }
 
+export function readDealForecast(importMetadata: unknown): DealForecast {
+  const meta = asMetadata(importMetadata);
+  if (!meta) {
+    return {
+      potentialAmount: null,
+      firstPaymentAmount: null,
+      firstPaymentAt: null,
+      secondPaymentAmount: null,
+      secondPaymentAt: null,
+    };
+  }
+  return {
+    potentialAmount: coerceMoney(meta.potentialAmount),
+    firstPaymentAmount: coerceMoney(meta.firstPaymentAmount),
+    firstPaymentAt: coerceDateOnly(meta.firstPaymentAt),
+    secondPaymentAmount: coerceMoney(meta.secondPaymentAmount),
+    secondPaymentAt: coerceDateOnly(meta.secondPaymentAt),
+  };
+}
+
 export type DealEconomicsPatch = {
   bookedAmount?: number | string | null;
   cashCollected?: number | string | null;
   earnedAmount?: number | string | null;
+};
+
+export type DealForecastPatch = {
+  potentialAmount?: number | string | null;
+  firstPaymentAmount?: number | string | null;
+  firstPaymentAt?: string | null;
+  secondPaymentAmount?: number | string | null;
+  secondPaymentAt?: string | null;
+  /** When true with a potentialAmount, fills first/second amounts as 50/50 if those keys are omitted. */
+  splitHalves?: boolean;
 };
 
 export function withDealEconomics(
@@ -194,6 +253,61 @@ export function withDealEconomics(
   else next.cashCollected = merged.cashCollected;
   if (merged.earnedAmount == null) delete next.earnedAmount;
   else next.earnedAmount = merged.earnedAmount;
+  return next;
+}
+
+export function withDealForecast(
+  importMetadata: Record<string, unknown> | null | undefined,
+  patch: DealForecastPatch
+): Record<string, unknown> {
+  const next = { ...(importMetadata ?? {}) };
+  const current = readDealForecast(next);
+  let potential =
+    patch.potentialAmount !== undefined ? coerceMoney(patch.potentialAmount) : current.potentialAmount;
+  let firstAmount =
+    patch.firstPaymentAmount !== undefined
+      ? coerceMoney(patch.firstPaymentAmount)
+      : current.firstPaymentAmount;
+  let secondAmount =
+    patch.secondPaymentAmount !== undefined
+      ? coerceMoney(patch.secondPaymentAmount)
+      : current.secondPaymentAmount;
+
+  const shouldSplit =
+    Boolean(patch.splitHalves) ||
+    (patch.potentialAmount !== undefined &&
+      potential != null &&
+      patch.firstPaymentAmount === undefined &&
+      patch.secondPaymentAmount === undefined &&
+      current.firstPaymentAmount == null &&
+      current.secondPaymentAmount == null);
+
+  if (shouldSplit && potential != null) {
+    const halves = splitPotentialHalves(potential);
+    firstAmount = halves.first;
+    secondAmount = halves.second;
+  }
+
+  const merged: DealForecast = {
+    potentialAmount: potential,
+    firstPaymentAmount: firstAmount,
+    firstPaymentAt:
+      patch.firstPaymentAt !== undefined ? coerceDateOnly(patch.firstPaymentAt) : current.firstPaymentAt,
+    secondPaymentAmount: secondAmount,
+    secondPaymentAt:
+      patch.secondPaymentAt !== undefined ? coerceDateOnly(patch.secondPaymentAt) : current.secondPaymentAt,
+  };
+
+  if (merged.potentialAmount == null) delete next.potentialAmount;
+  else next.potentialAmount = merged.potentialAmount;
+  if (merged.firstPaymentAmount == null) delete next.firstPaymentAmount;
+  else next.firstPaymentAmount = merged.firstPaymentAmount;
+  if (merged.firstPaymentAt == null) delete next.firstPaymentAt;
+  else next.firstPaymentAt = merged.firstPaymentAt;
+  if (merged.secondPaymentAmount == null) delete next.secondPaymentAmount;
+  else next.secondPaymentAmount = merged.secondPaymentAmount;
+  if (merged.secondPaymentAt == null) delete next.secondPaymentAt;
+  else next.secondPaymentAt = merged.secondPaymentAt;
   return next;
 }
 

@@ -3,7 +3,7 @@ import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
 import { resolveQueueRecentlyAddedAt } from "../queue/added";
 import { readSalesInitiative } from "../initiatives";
-import { resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
+import { readDealForecast, resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
@@ -386,6 +386,7 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       eventDateEstimate: opportunity.event_date_estimate ?? null,
       revenueEngine: resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata),
       flagshipOffer: resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata),
+      potentialAmount: readDealForecast(opportunity.import_metadata).potentialAmount,
     });
   }
   return sortQueueSidebarItems(sidebar);
