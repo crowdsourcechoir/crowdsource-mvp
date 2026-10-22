@@ -147,6 +147,19 @@ function isUsableSubmittedName(content: string | null | undefined): boolean {
   return !isAnonymousPersonName(text);
 }
 
+/**
+ * A name typed on the way in: a few words, not a sentence they wrote for a question.
+ * Used when the journey never marked that turn as the name step.
+ */
+export function looksLikeSubmittedName(content: string | null | undefined): boolean {
+  const text = (content ?? "").trim();
+  if (!isUsableSubmittedName(text)) return false;
+  if (text.length > 40) return false;
+  if (/[?]/.test(text)) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.length <= 4;
+}
+
 export type PresentedInterviewAnswer = PairedInterviewAnswer & {
   isNameAnswer: boolean;
 };
@@ -169,30 +182,48 @@ export function presentInterviewConversation<T extends PairedInterviewAnswer>(ar
   const nameKeys = new Set(
     args.prompts.filter((item) => item.isName).flatMap((item) => namePromptKeys(item.prompt))
   );
+  const nameIndexes = new Set(
+    args.prompts.map((item, index) => (item.isName ? index : -1)).filter((index) => index >= 0)
+  );
   const stored = (args.participantName ?? "").trim();
   const storedIsReal = Boolean(stored) && !isAnonymousPersonName(stored);
-  const nameAnswers = filled.filter(
-    (answer) => nameKeys.size > 0 && nameKeys.has(normalizeKey(answer.questionText))
-  );
-  const submitted = nameAnswers.find((answer) => isUsableSubmittedName(answer.content));
-  const participantName = storedIsReal
-    ? stored
-    : submitted
-      ? submitted.content.trim()
-      : "Anonymous";
+
+  function onNameSlot(answer: T, index: number): boolean {
+    if (nameIndexes.has(index)) return true;
+    return nameKeys.size > 0 && nameKeys.has(normalizeKey(answer.questionText));
+  }
+
+  let submittedIndex = -1;
+  if (!storedIsReal) {
+    for (let index = 0; index < filled.length; index += 1) {
+      const answer = filled[index];
+      if (!onNameSlot(answer, index) || !isUsableSubmittedName(answer.content)) continue;
+      submittedIndex = index;
+      break;
+    }
+    // Older blooms stored the name as the first typed turn and never marked a name step.
+    if (submittedIndex < 0 && nameIndexes.size === 0 && nameKeys.size === 0) {
+      for (let index = 0; index < filled.length; index += 1) {
+        const answer = filled[index];
+        if (!isUsableSubmittedName(answer.content)) continue;
+        if (looksLikeSubmittedName(answer.content)) submittedIndex = index;
+        break;
+      }
+    }
+  }
+
+  const submitted = submittedIndex >= 0 ? filled[submittedIndex].content.trim() : "";
+  const participantName = storedIsReal ? stored : submitted || "Anonymous";
   const identityKey = normalizeKey(participantName);
-  const answers = filled.map((answer) => {
-    const onNamePrompt = nameKeys.size > 0 && nameKeys.has(normalizeKey(answer.questionText));
-    // A real saved name stays. Only hide the turn that actually submitted it,
-    // so a later answer is not swallowed when the prompt zip is short.
+  const answers = filled.map((answer, index) => {
     const matchesIdentity =
       !isAnonymousPersonName(participantName) &&
       normalizeKey(answer.content) === identityKey &&
       isUsableSubmittedName(answer.content);
-    return {
-      ...answer,
-      isNameAnswer: onNamePrompt && matchesIdentity,
-    };
+    const isNameAnswer =
+      (submittedIndex === index && matchesIdentity) ||
+      (storedIsReal && onNameSlot(answer, index) && matchesIdentity);
+    return { ...answer, isNameAnswer };
   });
   return { participantName, answers };
 }

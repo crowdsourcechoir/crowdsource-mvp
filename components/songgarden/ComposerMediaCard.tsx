@@ -8,6 +8,8 @@ type Props = {
   url: string;
   participantName: string;
   caption?: string | null;
+  /** Turn was submitted as a still, even when the file URL has no image extension. */
+  asPhoto?: boolean;
   selected?: boolean;
   onSelectToggle?: (multi: boolean) => void;
   onDelete?: () => Promise<void>;
@@ -18,6 +20,7 @@ export default function ComposerMediaCard({
   url,
   participantName,
   caption,
+  asPhoto = false,
   selected = false,
   onSelectToggle,
   onDelete,
@@ -28,7 +31,7 @@ export default function ComposerMediaCard({
   const [muted, setMuted] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileCacheRef = useRef<File | null>(null);
-  const photo = isPhotoMediaUrl(url);
+  const photo = asPhoto || isPhotoMediaUrl(url);
   const meta = mediaDragMeta(url, participantName);
 
   async function cachedFile(): Promise<File | null> {

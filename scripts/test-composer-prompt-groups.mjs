@@ -11,13 +11,13 @@ async function load(rel) {
 }
 
 async function main() {
-  const { fillMissingJourneyQuestions, pairInterviewAnswers, presentInterviewConversation } =
+  const { fillMissingJourneyQuestions, pairInterviewAnswers, presentInterviewConversation, looksLikeSubmittedName } =
     await load("lib/agent-interview-qa.ts");
   const { contributionQuestionPrompts, contributionPrompts } = await load(
     "lib/songgarden/journey-steps.ts"
   );
   const { isIncomingNameStep } = await load("lib/agent-name-question.ts");
-  const { groupAnswersByPrompt, answersToPersonTable } = await load(
+  const { groupAnswersByPrompt, answersToPersonTable, groupJourneySubmissions } = await load(
     "lib/composer/group-answers-by-prompt.ts"
   );
 
@@ -326,6 +326,101 @@ async function main() {
       questionPrompt: "",
       brief: { collectName: true },
     }),
+    false
+  );
+
+  assert.equal(looksLikeSubmittedName("Lady A"), true);
+  assert.equal(looksLikeSubmittedName("Lara Stanton"), true);
+  assert.equal(looksLikeSubmittedName("Dr. Trevor Lane"), true);
+  assert.equal(
+    looksLikeSubmittedName("i'd like to meet a producer and talk about big dreams"),
+    false
+  );
+
+  // No stored name step. The name is still the first thing they typed on the way in.
+  const lady = presentInterviewConversation({
+    participantName: "Anonymous",
+    answers: pairInterviewAnswers([
+      { id: "a0", role: "user", content: "Lady A", turn_index: 0, created_at: "2026-05-01T00:00:01Z" },
+      {
+        id: "a1",
+        role: "user",
+        content: "I'm new to WFEA, but looking forward to learning, sharing and being heard.",
+        turn_index: 1,
+        created_at: "2026-05-01T00:00:02Z",
+      },
+      {
+        id: "a2",
+        role: "user",
+        content: "Looking forward to meeting the members themselves.",
+        turn_index: 2,
+        created_at: "2026-05-01T00:00:03Z",
+      },
+      {
+        id: "a3",
+        role: "user",
+        content: "I would like to grow more networking opportunities.",
+        turn_index: 3,
+        created_at: "2026-05-01T00:00:04Z",
+      },
+      { id: "a4", role: "user", content: "(photo)", turn_index: 4, created_at: "2026-05-01T00:00:05Z", video_url: "https://cdn.example/photo-1.jpg" },
+      { id: "a5", role: "user", content: "(photo)", turn_index: 5, created_at: "2026-05-01T00:00:06Z", video_url: "https://cdn.example/photo-2.jpg" },
+    ]),
+    prompts: [],
+  });
+  assert.equal(lady.participantName, "Lady A");
+  assert.equal(lady.answers[0].isNameAnswer, true);
+  assert.equal(lady.answers[4].isNameAnswer, false);
+
+  const laraOne = presentInterviewConversation({
+    participantName: null,
+    answers: pairInterviewAnswers([
+      { id: "r0", role: "user", content: "Lara Stanton", turn_index: 0, created_at: "2026-05-02T00:00:01Z" },
+      { id: "r1", role: "user", content: "What makes our community so special is the incredible people who are part of it", turn_index: 1, created_at: "2026-05-02T00:00:02Z" },
+      { id: "r2", role: "user", content: "(photo)", turn_index: 2, created_at: "2026-05-02T00:00:03Z", video_url: "https://cdn.example/photo-lara.jpg" },
+    ]),
+    prompts: [],
+  });
+  const laraTwo = presentInterviewConversation({
+    participantName: "Anonymous",
+    answers: pairInterviewAnswers([
+      { id: "s0", role: "user", content: "Lara Stanton", turn_index: 0, created_at: "2026-05-03T00:00:01Z" },
+      { id: "s1", role: "user", content: "I want to grow deeper community engagement.", turn_index: 1, created_at: "2026-05-03T00:00:02Z" },
+      { id: "s2", role: "user", content: "(photo)", turn_index: 2, created_at: "2026-05-03T00:00:03Z", video_url: "https://cdn.example/photo-lara-b.jpg" },
+      { id: "s3", role: "user", content: "(photo)", turn_index: 3, created_at: "2026-05-03T00:00:04Z", video_url: "https://cdn.example/photo-lara-c.jpg" },
+    ]),
+    prompts: [],
+  });
+
+  function rowsFrom(presented, conversationId) {
+    return presented.answers.map((answer) => ({
+      id: answer.turnId,
+      participantName: presented.participantName,
+      questionText: answer.questionText,
+      content: answer.content,
+      createdAt: answer.createdAt,
+      conversationId,
+      turnId: answer.turnId,
+      videoUrl: answer.videoUrl,
+      isNameAnswer: answer.isNameAnswer,
+    }));
+  }
+  const ladyRows = rowsFrom(lady, "lady");
+  const allRows = [...ladyRows, ...rowsFrom(laraOne, "lara-1"), ...rowsFrom(laraTwo, "lara-2")];
+  const groupedPeople = groupJourneySubmissions(
+    allRows.filter((row) => !row.videoUrl || row.isNameAnswer || !/^\(photo\)$/i.test(row.content)),
+    allRows.filter((row) => row.videoUrl && /^\(photo\)$/i.test(row.content))
+  );
+  const laraBlocks = groupedPeople.filter((person) => person.name === "Lara Stanton");
+  assert.equal(laraBlocks.length, 2);
+  assert.equal(laraBlocks[0].answers.length, 1);
+  assert.equal(laraBlocks[0].media.length, 1);
+  assert.equal(laraBlocks[1].media.length, 2);
+  const ladyBlock = groupedPeople.find((person) => person.name === "Lady A");
+  assert.equal(ladyBlock.answers.length, 3);
+  assert.equal(ladyBlock.media.length, 2);
+  assert.equal(
+    ladyBlock.answers.some((answer) => answer.content === "Lady A"),
     false
   );
 

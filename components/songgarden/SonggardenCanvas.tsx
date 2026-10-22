@@ -20,17 +20,21 @@ import SelectionActionsMenu from "@/components/songgarden/SelectionActionsMenu";
 import { deleteInterviewContribution } from "@/data/interviewSubmissionsClient";
 import {
   isAnonymousPersonName,
+  isMediaPlaceholderContent,
   normalizePersonKey,
 } from "@/lib/agent-interview-qa";
 import {
   groupAnswersByPrompt,
+  groupJourneySubmissions,
+  isPhotoRow,
   isTypedTextAnswer,
 } from "@/lib/composer/group-answers-by-prompt";
 import ComposerMediaCard from "@/components/songgarden/ComposerMediaCard";
+import ComposerPeople from "@/components/songgarden/ComposerPeople";
 import ComposerTextTable from "@/components/songgarden/ComposerTextTable";
 
 type ComposerScope = "bloom" | "garden" | "master";
-export type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "all";
+export type ContentView = "sounds" | "sounds_lyrics" | "text" | "video" | "photos" | "people" | "all";
 
 type GardenLink = { id: string; slug: string; title: string };
 type ChapterLink = { id: string; eventId: string; label: string; index: number };
@@ -46,6 +50,7 @@ type TextItem = {
   videoUrl: string | null;
   conversationId: string;
   turnId: string | null;
+  isNameAnswer?: boolean;
 };
 
 type VideoItem = {
@@ -58,6 +63,7 @@ type VideoItem = {
   eventId: string;
   conversationId: string;
   turnId: string | null;
+  content: string;
 };
 
 type Props = {
@@ -303,8 +309,9 @@ export default function SonggardenCanvas({
                 const text = answer.content?.trim() ?? "";
                 const audioUrl = answer.audioUrl == null ? null : answer.audioUrl.trim();
                 const videoUrl = answer.videoUrl == null ? null : answer.videoUrl.trim();
-                // Name submissions label the person. Media placeholders stay on the video view.
-                if (isTypedTextAnswer(text) && !answer.isNameAnswer) {
+                // Keep the name turn so a name-only visit still has a person. The
+                // people view uses it as the heading and does not repeat it as an answer.
+                if (isTypedTextAnswer(text) || answer.isNameAnswer) {
                   texts.push({
                     id: `${item.conversationId}-t-${index}`,
                     participantName: item.participantName,
@@ -316,6 +323,7 @@ export default function SonggardenCanvas({
                     videoUrl,
                     conversationId: item.conversationId,
                     turnId: answer.turnId,
+                    isNameAnswer: answer.isNameAnswer === true,
                   });
                 }
                 if (videoUrl !== null) {
@@ -325,6 +333,7 @@ export default function SonggardenCanvas({
                     questionText: answer.questionText,
                     videoUrl,
                     transcript: answer.videoTranscript,
+                    content: text,
                     createdAt: answer.createdAt,
                     eventId: id,
                     conversationId: item.conversationId,
@@ -417,6 +426,7 @@ export default function SonggardenCanvas({
           eventId: item.eventId,
           conversationId: item.conversationId,
           turnId: item.turnId,
+          isNameAnswer: item.isNameAnswer,
         }))
       ),
     [filteredText]
@@ -445,7 +455,8 @@ export default function SonggardenCanvas({
           id: item.id,
           participantName: item.participantName,
           questionText: item.questionText,
-          content: item.transcript?.trim() || "",
+          content: item.content,
+          videoTranscript: item.transcript,
           createdAt: item.createdAt,
           videoUrl: item.videoUrl,
           eventId: item.eventId,
@@ -456,9 +467,46 @@ export default function SonggardenCanvas({
     [filteredVideo]
   );
 
+  const peopleSubmissions = useMemo(
+    () =>
+      groupJourneySubmissions(
+        filteredText.map((item) => ({
+          id: item.id,
+          participantName: item.participantName,
+          questionText: item.questionText,
+          content: item.content,
+          createdAt: item.createdAt,
+          audioUrl: item.audioUrl,
+          videoUrl: item.videoUrl,
+          eventId: item.eventId,
+          conversationId: item.conversationId,
+          turnId: item.turnId,
+          isNameAnswer: item.isNameAnswer,
+        })),
+        filteredVideo.map((item) => ({
+          id: item.id,
+          participantName: item.participantName,
+          questionText: item.questionText,
+          content: item.content,
+          createdAt: item.createdAt,
+          videoUrl: item.videoUrl,
+          eventId: item.eventId,
+          conversationId: item.conversationId,
+          turnId: item.turnId,
+        }))
+      ),
+    [filteredText, filteredVideo]
+  );
+
+  const photoItems = useMemo(
+    () => filteredVideo.filter((item) => isPhotoRow({ content: item.content, videoUrl: item.videoUrl })),
+    [filteredVideo]
+  );
+
   const lyricByContributor = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of filteredText) {
+      if (item.isNameAnswer || !isTypedTextAnswer(item.content)) continue;
       const key = normalizeName(item.participantName);
       if (!key || map.has(key)) continue;
       map.set(key, item.content);
@@ -491,9 +539,11 @@ export default function SonggardenCanvas({
 
   const showSounds =
     contentView === "sounds" || contentView === "sounds_lyrics" || contentView === "all";
-  const showTextAlone = contentView === "text" || contentView === "all";
+  const showPeople = contentView === "people" || contentView === "all";
+  const showPhotos = contentView === "photos";
+  const showTextAlone = contentView === "text";
   const showLyricsUnderSounds = contentView === "sounds_lyrics" || contentView === "all";
-  const showVideo = contentView === "video" || contentView === "all";
+  const showVideo = contentView === "video";
 
   /** Scope totals (not search/category filtered) — foundation for richer analytics later. */
   const contributionStats = useMemo(() => {
@@ -784,6 +834,8 @@ export default function SonggardenCanvas({
                 value={contentView}
                 options={[
                   { key: "all", label: "All" },
+                  { key: "people", label: "People" },
+                  { key: "photos", label: "Photos" },
                   { key: "sounds", label: "Sounds" },
                   { key: "sounds_lyrics", label: "Sounds + lyrics" },
                   { key: "text", label: "Text" },
@@ -942,6 +994,73 @@ export default function SonggardenCanvas({
         </>
       ) : null}
 
+      {showPeople ? (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            By person ({peopleSubmissions.length})
+          </h2>
+          <ComposerPeople
+            submissions={peopleSubmissions}
+            selectedIds={selectedIds}
+            onSelectToggle={toggleSelect}
+            onDelete={deleteAnswer}
+          />
+        </section>
+      ) : null}
+
+      {showPhotos ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Photos ({photoItems.length})
+            </h2>
+            {photoItems.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const ids = photoItems.map((item) => mediaSelectionId(item.id));
+                  const allOn = ids.every((id) => selectedIds.has(id));
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (allOn) {
+                      for (const id of ids) next.delete(id);
+                    } else {
+                      for (const id of ids) next.add(id);
+                    }
+                    return next;
+                  });
+                }}
+                className="text-xs text-[#CFFF81] hover:underline"
+              >
+                {photoItems.every((item) => selectedIds.has(mediaSelectionId(item.id)))
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+            ) : null}
+          </div>
+          {photoItems.length === 0 ? (
+            <p className="text-sm text-gray-500">No photos in this scope.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {photoItems.map((item) => (
+                <ComposerMediaCard
+                  key={item.id}
+                  url={item.videoUrl}
+                  asPhoto
+                  participantName={item.participantName || "Anonymous"}
+                  caption={null}
+                  selected={selectedIds.has(mediaSelectionId(item.id))}
+                  onSelectToggle={(multi) => toggleSelect(mediaSelectionId(item.id), multi)}
+                  onDelete={
+                    item.turnId ? () => deleteAnswer(item.conversationId, item.turnId) : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
       {showTextAlone ? (
         <section className="space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -996,8 +1115,13 @@ export default function SonggardenCanvas({
                       <ComposerMediaCard
                         key={item.id}
                         url={item.videoUrl || ""}
+                        asPhoto={isPhotoRow({ content: item.content, videoUrl: item.videoUrl })}
                         participantName={item.participantName || "Anonymous"}
-                        caption={item.content}
+                        caption={
+                          isMediaPlaceholderContent(item.content)
+                            ? item.videoTranscript
+                            : item.content
+                        }
                         selected={selectedIds.has(mediaSelectionId(item.id))}
                         onSelectToggle={(multi) =>
                           toggleSelect(mediaSelectionId(item.id), multi)

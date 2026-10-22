@@ -20,6 +20,15 @@ function extensionOf(url: string): string {
   }
 }
 
+/** Photos reuse the video column. The turn text "(photo)" is the reliable marker. */
+export function isPhotoContribution(
+  content: string | null | undefined,
+  url: string | null | undefined
+): boolean {
+  if (/^\(photo\)$/i.test((content ?? "").trim())) return true;
+  return Boolean(url && isPhotoMediaUrl(url));
+}
+
 export function isPhotoMediaUrl(url: string): boolean {
   if (/^data:image\//i.test(url)) return true;
   const ext = extensionOf(url);
