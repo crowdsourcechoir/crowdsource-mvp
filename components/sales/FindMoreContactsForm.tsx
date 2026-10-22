@@ -147,8 +147,8 @@ export default function FindMoreContactsForm({
               ))}
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Role search: ~1 Hunter credit per 10 people. Paste Name: email to add those people and look up
-              titles.
+              Role search: ~1 Hunter credit per 10 people. Manual search is uncapped — dig as deep as you
+              want on this org. Paste Name: email to add those people and look up titles.
             </p>
             {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
             {!error && info && <p className="mt-2 text-xs text-[var(--csc-accent)]">{info}</p>}

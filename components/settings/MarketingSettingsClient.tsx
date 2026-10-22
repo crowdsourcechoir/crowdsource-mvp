@@ -68,14 +68,14 @@ export default function MarketingSettingsClient() {
               {resendConfigured ? "RESEND_API_KEY set" : "RESEND_API_KEY missing"}
             </StatusPill>
             <StatusPill tone={settings.sendsEnabled ? "ok" : "off"}>
-              {settings.sendsEnabled ? "Sends enabled" : "Sends paused"}
+              {settings.sendsEnabled ? "List on" : "List paused"}
             </StatusPill>
           </>
         }
       >
         <ToggleRow
           label="Enable marketing sends"
-          hint="Required before Send now. Test sends still need Resend + from address."
+          hint="Required before a list send. A test send still goes out through Google when sending is on in Settings → Google connections."
           checked={settings.sendsEnabled}
           onChange={(sendsEnabled) => setSettings({ ...settings, sendsEnabled })}
         />

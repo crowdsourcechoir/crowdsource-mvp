@@ -5,6 +5,10 @@ const nextConfig = {
   distDir:
     process.env.NEXT_DIST_DIR_OVERRIDE ||
     (process.env.NODE_ENV === "production" ? ".next" : ".next-dev"),
+  // Next 14.2 name for serverExternalPackages. MJML stays external so the pinned 4.18 compiler is not bundled.
+  experimental: {
+    serverComponentsExternalPackages: ["mjml"],
+  },
 };
 
 module.exports = nextConfig;

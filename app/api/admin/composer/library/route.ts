@@ -4,6 +4,8 @@ import { listGardens } from "@/lib/song-garden-v2/garden/store";
 import { localSonggardenList } from "@/lib/local-songgarden-store";
 import { localEventsGetAll } from "@/lib/local-events-store";
 import type { SonggardenCategoryId, SonggardenClip } from "@/lib/songgarden/types";
+import { canComposeBloom, canComposeGarden } from "@/lib/operators/access";
+import { readActorFromRequest } from "@/lib/operators/current";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +65,7 @@ function isTrimSchemaMissing(message: string): boolean {
 /**
  * Master Composer library — every Song Garden sound across blooms/gardens.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     if (USE_LOCAL) {
       const events = localEventsGetAll();
@@ -78,10 +80,17 @@ export async function GET() {
         );
       }
       const gardens = await listGardens();
+      const actor = await readActorFromRequest(request);
+      const scoped = actor && actor.role !== "owner" && !actor.legacy;
+      const visibleClips = scoped ? clips.filter((clip) => canComposeBloom(actor, clip.eventId)) : clips;
+      const visibleGardens = scoped ? gardens.filter((garden) => canComposeGarden(actor, garden.id)) : gardens;
+      const visibleEvents = scoped
+        ? events.filter((event) => canComposeBloom(actor, String(event.id)))
+        : events;
       return NextResponse.json({
-        clips,
-        gardens: gardens.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
-        events: events.map((e) => ({
+        clips: visibleClips,
+        gardens: visibleGardens.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
+        events: visibleEvents.map((e) => ({
           id: String(e.id),
           slug: String(e.slug ?? ""),
           title: String(e.title ?? "Untitled"),
@@ -133,10 +142,22 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(500);
 
+    const actor = await readActorFromRequest(request);
+    const scoped = actor && actor.role !== "owner" && !actor.legacy;
+    const visibleClips = scoped
+      ? clips.filter((clip) => canComposeBloom(actor, clip.eventId))
+      : clips;
+    const visibleGardens = scoped
+      ? gardens.filter((garden) => canComposeGarden(actor, garden.id))
+      : gardens;
+    const visibleEvents = scoped
+      ? (eventRows ?? []).filter((event) => canComposeBloom(actor, String(event.id)))
+      : eventRows ?? [];
+
     return NextResponse.json({
-      clips,
-      gardens: gardens.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
-      events: (eventRows ?? []).map((e) => ({
+      clips: visibleClips,
+      gardens: visibleGardens.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
+      events: visibleEvents.map((e) => ({
         id: String(e.id),
         slug: String(e.slug ?? ""),
         title: String(e.title ?? "Untitled"),

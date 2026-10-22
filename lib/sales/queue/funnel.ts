@@ -20,7 +20,26 @@ export function matchesQueueFunnel(
   filter: QueueFunnelFilter
 ): boolean {
   if (filter === "all") return true;
-  return (stage ?? "awareness") === filter;
+  // Null stage means not yet in the CRM funnel (unsent). Do not treat as Awareness —
+  // dashboard / funnel board only count non-null relationship_stage.
+  return stage === filter;
+}
+
+/** Badge counts for the queue Funnel dropdown — same population as sales dashboard. */
+export function funnelCountsFromStages(
+  funnelByStage: Record<RelationshipStage, number>
+): Record<QueueFunnelFilter, number> {
+  const awareness = funnelByStage.awareness ?? 0;
+  const interest = funnelByStage.interest ?? 0;
+  const purchase = funnelByStage.purchase ?? 0;
+  const lost = funnelByStage.lost ?? 0;
+  return {
+    all: awareness + interest + purchase + lost,
+    awareness,
+    interest,
+    purchase,
+    lost,
+  };
 }
 
 export function queueFunnelLabel(key: QueueFunnelFilter): string {

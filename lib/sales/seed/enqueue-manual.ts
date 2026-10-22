@@ -5,6 +5,7 @@ import { createOutreachDraft, listDraftsForOpportunity, updateDraftAiCopy } from
 import { createOrUpdateQueueItem } from "@/lib/sales/db/queue";
 import { listContactsForOrganization } from "@/lib/sales/db/contacts";
 import { findOpportunityTypeByKey } from "@/lib/sales/db/lookups";
+import { updateOrganization } from "@/lib/sales/db/organizations";
 import {
   contactGreetingName,
   emailLocalPart,
@@ -265,6 +266,8 @@ export async function enqueueOrgManually(input: {
   title: string;
   description: string;
   eventOrInitiativeName?: string | null;
+  eventDateEstimate?: string | null;
+  eventDateConfidence?: "confirmed" | "estimated" | "unknown" | null;
   opportunityTypeKey?: string;
   totalScoreHint?: number;
   /** Reopen a previously rejected/deferred initial queue row (manual operator action only). */
@@ -288,6 +291,8 @@ export async function enqueueOrgManually(input: {
       opportunityTypeId: oppType?.id ?? null,
       title: input.title,
       eventOrInitiativeName: input.eventOrInitiativeName ?? null,
+      eventDateEstimate: input.eventDateEstimate ?? null,
+      eventDateConfidence: input.eventDateConfidence ?? null,
       description: input.description,
       status: "ready_for_review",
       targetContactRoleHint: primary.roleTitle,
@@ -335,18 +340,28 @@ export async function enqueueOrgManually(input: {
     remintApprovedEmails: input.remintApprovedEmails,
   });
 
+  const queuedAt = new Date().toISOString();
   const queueItem = await createOrUpdateQueueItem({
     opportunityId: opportunity.id,
     outreachDraftId: primaryDraft.id,
     prospectScoreId: score.id,
     duplicateWarning: false,
     reopenDecided: Boolean(input.reopenDecided),
+    // Manual / seed enqueue always counts as "recently added" for the Last 7 days filter.
+    touchCreatedAt: true,
   });
+
+  await updateOrganization(input.organization.id, {
+    importMetadata: {
+      ...(input.organization.importMetadata ?? {}),
+      operatorQueuedAt: queuedAt,
+    },
+  }).catch(() => undefined);
 
   await updatePipelineRun(pipelineRun.id, {
     status: "succeeded",
     currentStage: "queue",
-    finishedAt: new Date().toISOString(),
+    finishedAt: queuedAt,
   });
 
   return {

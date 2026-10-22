@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Fixed top progress strip (same motion as public event loading), styled for admin (blue).
+ * Fixed top progress strip. Same lime line as the full-page loading shell.
  */
 export default function AdminIndeterminateProgress() {
   return (
@@ -10,7 +10,7 @@ export default function AdminIndeterminateProgress() {
       role="progressbar"
       aria-hidden
     >
-      <div className="crowdsource-indeterminate-bar bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.55)]" />
+      <div className="crowdsource-indeterminate-bar bg-[var(--csc-accent,#cfff81)] shadow-[0_0_12px_rgba(207,255,129,0.45)]" />
     </div>
   );
 }

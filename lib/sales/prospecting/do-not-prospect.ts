@@ -5,6 +5,8 @@
  */
 
 export const DO_NOT_PROSPECT_REASON_STATE_ASSOC = "state_or_regional_association";
+/** Operator removed the org from the sales queue (Delete organization). */
+export const DO_NOT_PROSPECT_REASON_OPERATOR_DELETED = "operator_deleted";
 
 export type DoNotProspectMeta = {
   doNotProspect: true;

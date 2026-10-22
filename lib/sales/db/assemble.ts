@@ -59,6 +59,18 @@ function pickActiveContact(
   return pickBestContact(contacts);
 }
 
+/** Queue editor: always follow the draft being written, not a live-thread correspondent. */
+function pickQueueActiveContact(
+  contacts: Contact[],
+  draftContactId: string | null | undefined
+): Contact | null {
+  if (draftContactId) {
+    const drafted = contacts.find((contact) => contact.id === draftContactId);
+    if (drafted) return drafted;
+  }
+  return pickBestContact(contacts);
+}
+
 function buildSourceLinks(
   organizationWebsiteUrl: string | null,
   findings: { claimType: string; sourceUrl: string }[]
@@ -159,7 +171,9 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
   const contactsList = orgContacts ?? [];
   const draftsList = allDrafts ?? [];
   const contacts = contactsList.filter((c) => isSelectableContact(c));
-  const contact = pickActiveContact(contactsList, draft?.contactId, activities);
+  // Queue multi-send advances outreachDraftId to the next person — selection must follow
+  // that draft, not a prior reply correspondent on the opportunity.
+  const contact = pickQueueActiveContact(contactsList, draft?.contactId);
 
   const latestByContact = new Map<string, (typeof draftsList)[number]>();
   const selectableIds = new Set(contacts.map((c) => c.id));

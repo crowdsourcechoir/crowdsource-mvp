@@ -34,7 +34,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ opp
     const body = await request.json().catch(() => ({}));
     const text = typeof body?.text === "string" ? body.text.trim() : "";
     if (!text) return NextResponse.json({ error: "text is required" }, { status: 400 });
-    if (text.length > 4000) return NextResponse.json({ error: "Note is too long (max 4000)." }, { status: 400 });
+    if (text.length > 20_000) {
+      return NextResponse.json({ error: "Note is too long (max 20000)." }, { status: 400 });
+    }
 
     const activity = await createOutreachActivity({
       opportunityId: oppId,

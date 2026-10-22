@@ -39,6 +39,7 @@ export async function sendGmailMessage(input: {
   to: string;
   subject: string;
   body: string;
+  html?: string | null;
   threadId?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
@@ -57,6 +58,7 @@ export async function sendGmailMessage(input: {
       to: input.to,
       subject: input.subject,
       body: input.body,
+      htmlBody: input.html ?? undefined,
       inReplyTo: input.inReplyTo,
       references: input.references,
     })
@@ -116,6 +118,35 @@ export async function sendSelfEmailViaGmail(input: {
     throw new Error("Gmail send succeeded but returned no message/thread id.");
   }
   return { messageId, threadId, to: bundle.email };
+}
+
+/**
+ * Access mail (invites, password resets) from the connected Gmail account.
+ * The Sales pause does not apply. Returns false when Gmail is not connected.
+ * SALES_GMAIL_SENDS_ENABLED=false still blocks the send.
+ */
+export async function trySendAccessMailViaGmail(input: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}): Promise<boolean> {
+  if (process.env.SALES_GMAIL_SENDS_ENABLED?.trim() === "false") return false;
+  const bundle = await getGmailClient();
+  if (!bundle) return false;
+  assertOutboundEmailAllowed(input.to);
+  const raw = encodeRawMessage(
+    buildGmailMime({
+      from: bundle.email,
+      to: input.to,
+      subject: input.subject,
+      body: input.text,
+      htmlBody: input.html,
+    })
+  );
+  const res = await bundle.gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+  if (!res.data.id) throw new Error("Gmail send succeeded but returned no message id.");
+  return true;
 }
 
 /** Best-effort RFC Message-ID header from a sent message — used for In-Reply-To on nudges. */

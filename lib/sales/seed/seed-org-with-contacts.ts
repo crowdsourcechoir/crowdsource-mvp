@@ -7,6 +7,7 @@ import {
 import {
   createOrganization,
   findExistingOrganization,
+  getOrganization,
   updateOrganization,
 } from "@/lib/sales/db/organizations";
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
@@ -48,6 +49,9 @@ export type SeedOrgWithContactsInput = {
   manualQueueTitle?: string;
   manualQueueDescription?: string;
   manualEventName?: string;
+  /** ISO start date for the opportunity when manually enqueued. */
+  eventDateEstimate?: string | null;
+  eventDateConfidence?: "confirmed" | "estimated" | "unknown" | null;
   /** Opportunity type for manual enqueue (default fan_engagement_initiative). */
   opportunityTypeKey?: string;
   /** Tag for queue filters: sports_fan_culture, conferences_associations, fundraising_galas, arts_culture, entertainment_media, tech_conferences. */
@@ -117,12 +121,14 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
     }
 
     // Generic inboxes (info@ / events@ / development@) are sendable without SMTP verify.
-    // Named people must clear Hunter Email Verifier or they never enqueue.
+    // When the seed already stamped a status (incl. valid_format from Domain Search), trust it —
+    // re-running Verifier on 50+ orgs blows the cron time budget and burns credits.
+    // Unspecified named emails still clear Hunter Email Verifier before enqueue.
     let status: Contact["emailVerificationStatus"];
     let verifierMeta: Record<string, unknown> = {};
     if (isGenericMailboxEmail(email)) {
       status = c.emailVerificationStatus ?? "valid_format";
-    } else if (c.emailVerificationStatus && c.emailVerificationStatus !== "valid_format") {
+    } else if (c.emailVerificationStatus) {
       status = c.emailVerificationStatus;
     } else {
       const verified = await verifyEmailAddress(email);
@@ -193,11 +199,15 @@ export async function seedOrgWithContacts(input: SeedOrgWithContactsInput): Prom
         input.manualQueueDescription ??
         "Participatory anthem / belonging ritual for training camp and in-stadium moments. Doorway contacts (COO, game entertainment, marketing) verified via Hunter Email Finder.",
       eventOrInitiativeName: input.manualEventName ?? "Training camp / game entertainment ritual",
+      eventDateEstimate: input.eventDateEstimate,
+      eventDateConfidence: input.eventDateConfidence,
       opportunityTypeKey: input.opportunityTypeKey ?? "fan_engagement_initiative",
       totalScoreHint: 82,
       reopenDecided: Boolean(input.reopenDecided),
       remintApprovedEmails: input.remintApprovedEmails,
     });
+    // Reload so operatorQueuedAt (and any other enqueue stamps) survive follow-up seed markers.
+    organization = (await getOrganization(organization.id)) ?? organization;
   }
 
   return {

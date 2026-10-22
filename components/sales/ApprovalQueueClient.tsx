@@ -24,10 +24,19 @@ import {
 } from "@/lib/sales/queue/category";
 import {
   QUEUE_FUNNEL_OPTIONS,
+  funnelCountsFromStages,
   matchesQueueFunnel,
   parseQueueFunnel,
   type QueueFunnelFilter,
 } from "@/lib/sales/queue/funnel";
+import {
+  QUEUE_ADDED_OPTIONS,
+  countQueueAdded,
+  matchesQueueAdded,
+  parseQueueAdded,
+  queueItemAddedAt,
+  type QueueAddedFilter,
+} from "@/lib/sales/queue/added";
 import {
   applySelectContactResponse,
   applySelectedContact,
@@ -41,7 +50,7 @@ import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrg
 import AddContactForm from "@/components/sales/AddContactForm";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
-import QueueOrgWorkspace from "@/components/sales/QueueOrgWorkspace";
+import QueueOrgWorkspace, { QueueOpportunityNotes } from "@/components/sales/QueueOrgWorkspace";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import FillQueueClient from "@/components/sales/FillQueueClient";
 import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
@@ -49,6 +58,16 @@ import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
 import { outreachLabel } from "@/lib/sales/outreach/contact-outreach";
 import { isExternalSentDraft } from "@/lib/sales/outreach/external-sent";
 import { parseQueueScope, QUEUE_SCOPE_CHIPS, type QueueScope } from "@/lib/sales/queue/scope";
+import {
+  QUEUE_CASH_WINDOW_OPTIONS,
+  countCashNow,
+  matchesQueueCashWindow,
+  parseQueueCashWindow,
+  type QueueCashWindow,
+} from "@/lib/sales/queue/cash-window";
+import { REVENUE_ENGINES, formatUsd, isRevenueEngineKey } from "@/lib/sales/engines";
+import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
+import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
 type ActionKey = "approve" | "approve_with_edits" | "reject" | "defer" | "request_more_research" | "mark_duplicate";
 
@@ -83,6 +102,8 @@ export default function ApprovalQueueClient() {
   const category = parseQueueCategory(searchParams.get("category"));
   const scope = parseQueueScope(searchParams.get("scope"));
   const funnel = parseQueueFunnel(searchParams.get("funnel"));
+  const added = parseQueueAdded(searchParams.get("added"));
+  const cashWindow = parseQueueCashWindow(searchParams.get("cash"));
   const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
@@ -107,6 +128,14 @@ export default function ApprovalQueueClient() {
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
+  const [deletingOrg, setDeletingOrg] = useState(false);
+  const [nudging, setNudging] = useState(false);
+  const [funnelByStage, setFunnelByStage] = useState<Record<RelationshipStage, number>>({
+    awareness: 0,
+    interest: 0,
+    purchase: 0,
+    lost: 0,
+  });
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
   const draftIdentityRef = useRef("");
@@ -126,11 +155,22 @@ export default function ApprovalQueueClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/sales/queue?scope=${encodeURIComponent(scope)}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      const params = new URLSearchParams();
+      params.set("scope", scope);
+      if (funnel !== "all") params.set("funnel", funnel === "purchase" ? "won" : funnel);
+      const res = await fetch(`/api/sales/queue?${params.toString()}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30_000),
+      });
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load queue"));
-      const body = data as { items?: QueueSidebarItem[]; gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean } };
+      const body = data as {
+        items?: QueueSidebarItem[];
+        gmail?: { connected?: boolean; email?: string | null; sendsEnabled?: boolean; sendEnabled?: boolean };
+        funnelByStage?: Record<RelationshipStage, number>;
+      };
       setSidebar(body.items ?? []);
+      if (body.funnelByStage) setFunnelByStage(body.funnelByStage);
       setDetailsById({});
       setGmailConnected(Boolean(body.gmail?.connected));
       setGmailEmail(body.gmail?.email ?? null);
@@ -146,41 +186,54 @@ export default function ApprovalQueueClient() {
     } finally {
       setLoading(false);
     }
-  }, [scope, deepLinkItem]);
+  }, [scope, funnel, deepLinkItem]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const visible = useMemo(
-    () =>
-      sidebar.filter(
-        (item) => matchesQueueCategory(item, category) && matchesQueueFunnel(item.relationshipStage, funnel)
-      ),
-    [sidebar, category, funnel]
-  );
-  const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
-  const funnelCounts = useMemo(() => {
-    const counts: Record<QueueFunnelFilter, number> = {
-      all: sidebar.length,
-      awareness: 0,
-      interest: 0,
-      purchase: 0,
-      lost: 0,
-    };
-    for (const item of sidebar) {
-      const stage = item.relationshipStage ?? "awareness";
-      counts[stage] += 1;
+  const visible = useMemo(() => {
+    const filtered = sidebar.filter(
+      (item) =>
+        matchesQueueCategory(item, category) &&
+        matchesQueueFunnel(item.relationshipStage, funnel) &&
+        matchesQueueAdded(queueItemAddedAt(item), added) &&
+        matchesQueueCashWindow(item, cashWindow)
+    );
+    if (added === "new") {
+      return [...filtered].sort((a, b) => {
+        const aT = Date.parse(queueItemAddedAt(a) ?? "") || 0;
+        const bT = Date.parse(queueItemAddedAt(b) ?? "") || 0;
+        return bT - aT;
+      });
     }
-    return counts;
-  }, [sidebar]);
+    if (cashWindow === "cash_now") {
+      return [...filtered].sort((a, b) => {
+        const aDate = a.eventDateEstimate ?? "9999-12-31";
+        const bDate = b.eventDateEstimate ?? "9999-12-31";
+        if (aDate !== bDate) return aDate.localeCompare(bDate);
+        if (a.followUpDue !== b.followUpDue) return a.followUpDue ? -1 : 1;
+        return 0;
+      });
+    }
+    return filtered;
+  }, [sidebar, category, funnel, added, cashWindow]);
+  const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
+  const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
+  const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
+  const cashCounts = useMemo(() => countCashNow(sidebar), [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
   const current = selectedId ? detailsById[selectedId] ?? null : null;
 
-  const draftIdentity = `${current?.queueItem.id ?? ""}:${current?.draft?.id ?? ""}`;
-  if (draftIdentityRef.current !== draftIdentity) {
+  const draftIdentity = `${current?.queueItem.id ?? ""}:${current?.draft?.id ?? ""}:${current?.contact?.id ?? ""}`;
+
+  // Keep subject/body in sync when the active draft changes (manual contact switch or
+  // post-send auto-advance). Must be an effect — syncing during render races TipTap's
+  // contentKey update and leaves the previous contact's greeting on screen.
+  useEffect(() => {
+    if (draftIdentityRef.current === draftIdentity) return;
     draftIdentityRef.current = draftIdentity;
     if (current?.draft) {
       setEditedSubject(coalesceDraftSubject(current.draft.editedSubject, current.draft.aiSubject));
@@ -189,7 +242,7 @@ export default function ApprovalQueueClient() {
       setEditedSubject("");
       setEditedBody("");
     }
-  }
+  }, [draftIdentity, current?.draft]);
 
   const replaceDetail = useCallback((itemId: string, next: QueueItemDetail) => {
     setDetailsById((prev) => ({ ...prev, [itemId]: next }));
@@ -202,6 +255,38 @@ export default function ApprovalQueueClient() {
       return rest;
     });
   }, []);
+
+  const dropOrganizationRows = useCallback((organizationId: string) => {
+    setSidebar((prev) => prev.filter((row) => row.organizationId !== organizationId));
+    setDetailsById((details) => {
+      const next: typeof details = {};
+      for (const [id, detail] of Object.entries(details)) {
+        if (detail.organization?.id !== organizationId) next[id] = detail;
+      }
+      return next;
+    });
+  }, []);
+
+  const deleteOrganization = useCallback(async () => {
+    if (!current || busy || deletingOrg) return;
+    if (!confirmRareDelete("organization", current.organization.name)) return;
+    setDeletingOrg(true);
+    setActionError(null);
+    const organizationId = current.organization.id;
+    const organizationName = current.organization.name;
+    try {
+      const res = await fetch(`/api/sales/organizations/${organizationId}`, { method: "DELETE" });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not delete organization"));
+      dropOrganizationRows(organizationId);
+      setMobileDetailOpen(false);
+      showCopyStatus(`Deleted ${organizationName} from the queue.`);
+    } catch (err) {
+      setActionError(publicErrorMessage(err, "Could not delete organization"));
+    } finally {
+      setDeletingOrg(false);
+    }
+  }, [current, busy, deletingOrg, dropOrganizationRows, showCopyStatus]);
 
   useEffect(() => {
     if (selectedIndex >= visible.length) {
@@ -288,22 +373,29 @@ export default function ApprovalQueueClient() {
     }
   }, [jumpToQueueItemId, visible, selectItem]);
 
-  const persistDraftSnapshot = useCallback(async (itemId: string, subject: string, body: string) => {
-    const cleanedEditedBody = stripEmailSignature(body);
-    const res = await fetch(`/api/sales/queue/${itemId}/save-draft`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ editedSubject: subject, editedBody: cleanedEditedBody }),
-    });
-    const data = await readApiJson(res);
-    if (!res.ok) throw new Error(apiErrorFromBody(data, "Save failed"));
-  }, []);
+  const persistDraftSnapshot = useCallback(
+    async (itemId: string, subject: string, body: string, draftId?: string | null) => {
+      const cleanedEditedBody = stripEmailSignature(body);
+      const res = await fetch(`/api/sales/queue/${itemId}/save-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          editedSubject: subject,
+          editedBody: cleanedEditedBody,
+          ...(draftId ? { draftId } : {}),
+        }),
+      });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Save failed"));
+    },
+    []
+  );
 
   const persistDraft = useCallback(async () => {
-    if (!current?.draft) return;
+    if (!current?.draft || busy) return;
     if (isBlankEmailBody(editedBody) && !isBlankEmailBody(current.draft.aiBody)) return;
-    await persistDraftSnapshot(current.queueItem.id, editedSubject, editedBody);
-  }, [current, editedSubject, editedBody, persistDraftSnapshot]);
+    await persistDraftSnapshot(current.queueItem.id, editedSubject, editedBody, current.draft.id);
+  }, [current, busy, editedSubject, editedBody, persistDraftSnapshot]);
 
   const selectContact = useCallback(
     (contactId: string) => {
@@ -313,6 +405,7 @@ export default function ApprovalQueueClient() {
       const itemId = current.queueItem.id;
       const prevSubject = editedSubject;
       const prevBody = editedBody;
+      const prevDraftId = current.draft?.id ?? null;
       const switched = applySelectedContact(current, contactId);
       if (switched) {
         replaceDetail(itemId, switched);
@@ -324,7 +417,7 @@ export default function ApprovalQueueClient() {
       }
       void (async () => {
         try {
-          await persistDraftSnapshot(itemId, prevSubject, prevBody).catch(() => undefined);
+          await persistDraftSnapshot(itemId, prevSubject, prevBody, prevDraftId).catch(() => undefined);
           const res = await fetch(`/api/sales/queue/${itemId}/select-contact`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -409,13 +502,17 @@ export default function ApprovalQueueClient() {
           // Keep the org in To send while other contacts still have drafts — even if
           // the slim response omitted `detail` (clear cache so the item fetch reloads).
           if (body.detail) {
+            // Reset identity so the draft-sync effect always reloads subject/body for the
+            // next contact even if React batches oddly with the TipTap editor.
+            draftIdentityRef.current = "";
             replaceDetail(current.queueItem.id, body.detail);
-            const nextDraft = draftFromMutationPayload(body);
+            const nextDraft = draftFromMutationPayload(body) ?? body.detail.draft ?? null;
             if (nextDraft) {
               setEditedSubject(coalesceDraftSubject(nextDraft.editedSubject, nextDraft.aiSubject));
               setEditedBody(stripEmailSignature(coalesceDraftBody(nextDraft.editedBody, nextDraft.aiBody)));
             }
           } else {
+            draftIdentityRef.current = "";
             const keepId = current.queueItem.id;
             setDetailsById((prev) => {
               const { [keepId]: _removed, ...rest } = prev;
@@ -445,6 +542,39 @@ export default function ApprovalQueueClient() {
     if (alreadySent) return;
     setSendConfirmOpen(true);
   }, [current, busy]);
+
+  const draftNudge = useCallback(async () => {
+    if (!current?.opportunity.id || !current.contact?.id || busy || nudging) return;
+    setNudging(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/sales/opportunities/${current.opportunity.id}/nudge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId: current.contact.id }),
+      });
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not draft follow-up"));
+      const queueItemId = (data as { queueItemId?: string }).queueItemId;
+      if (!queueItemId) throw new Error("Follow-up drafted but no queue item returned");
+      showCopyStatus("Follow-up draft ready — review and send.");
+      // Jump to the new pending nudge under To send (clear stage filter).
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("funnel");
+      params.delete("scope");
+      params.set("item", queueItemId);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      setJumpToQueueItemId(queueItemId);
+      if (funnel === "all" && scope === "to_send") {
+        await load();
+      }
+    } catch (err) {
+      setActionError(publicErrorMessage(err, "Could not draft follow-up"));
+    } finally {
+      setNudging(false);
+    }
+  }, [current, busy, nudging, showCopyStatus, searchParams, router, pathname, funnel, scope, load]);
 
   const markContactVerified = useCallback(
     (contactId: string) => {
@@ -581,7 +711,7 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope, funnel]);
+  }, [category, scope, funnel, added, cashWindow]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
@@ -608,6 +738,24 @@ export default function ApprovalQueueClient() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
+  function setAdded(next: QueueAddedFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("added");
+    else params.set("added", next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setCashWindow(next: QueueCashWindow) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("cash");
+    else params.set("cash", "now");
+    // Cash-now spans to-send and follow-ups — show the full scoped list.
+    if (next === "cash_now" && scope === "to_send") params.set("scope", "all");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
   const pendingCount = visible.length;
   const selectedAlreadySent = Boolean(
     current &&
@@ -628,6 +776,14 @@ export default function ApprovalQueueClient() {
       !externalSentDraft &&
       current.queueItem.status === "pending" &&
       !selectedAlreadySent
+  );
+  const canDraftNudge = Boolean(
+    current?.contact?.id &&
+      current.contact.email &&
+      current.opportunity.lastOutboundAt &&
+      current.opportunity.relationshipStage !== "purchase" &&
+      current.opportunity.relationshipStage !== "lost" &&
+      !showSendableDraft
   );
 
   const addOrgModal = (
@@ -672,6 +828,16 @@ export default function ApprovalQueueClient() {
             onChange={setFunnel}
           />
           <QueueFilterSelect
+            label="Added"
+            value={added}
+            options={QUEUE_ADDED_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: addedCounts[opt.key],
+            }))}
+            onChange={setAdded}
+          />
+          <QueueFilterSelect
             label="Queue"
             value={scope}
             options={QUEUE_SCOPE_CHIPS.map((chip) => ({
@@ -679,6 +845,16 @@ export default function ApprovalQueueClient() {
               label: chip.label,
             }))}
             onChange={setScope}
+          />
+          <QueueFilterSelect
+            label="Timing"
+            value={cashWindow}
+            options={QUEUE_CASH_WINDOW_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: cashCounts[opt.key],
+            }))}
+            onChange={setCashWindow}
           />
         </div>
         <button
@@ -751,13 +927,17 @@ export default function ApprovalQueueClient() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
         <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-400">
-          {scope === "due"
-            ? `${pendingCount} follow-ups`
-            : scope === "all"
-              ? `${pendingCount} orgs`
-              : category === "all" && funnel === "all"
-                ? `${pendingCount} to send`
-                : `${pendingCount} filtered · ${sidebar.length} total`}
+          {funnel !== "all"
+            ? `${pendingCount} in ${QUEUE_FUNNEL_OPTIONS.find((o) => o.key === funnel)?.label ?? funnel}`
+            : scope === "due"
+              ? `${pendingCount} follow-ups`
+              : scope === "all"
+                ? `${pendingCount} orgs`
+                : category === "all" && added === "all"
+                  ? `${pendingCount} to send`
+                  : added === "new" && category === "all"
+                    ? `${pendingCount} added in last 7 days`
+                    : `${pendingCount} filtered · ${sidebar.length} total`}
         </div>
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-500">
@@ -782,6 +962,11 @@ export default function ApprovalQueueClient() {
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
                     {queueCategoryLabel(parseQueueCategory(item.category))}
+                    {item.revenueEngine && isRevenueEngineKey(item.revenueEngine)
+                      ? ` · ${REVENUE_ENGINES[item.revenueEngine].shortLabel}`
+                      : ""}
+                    {item.potentialAmount != null ? ` · ${formatUsd(item.potentialAmount)}` : ""}
+                    {item.eventDateEstimate ? ` · ${item.eventDateEstimate}` : ""}
                     {item.outreachKind === "replied" ? " · replied" : item.outreachKind === "sent" ? " · sent" : item.outreachKind === "bounced" ? " · bounced" : ""}
                     {item.followUpDue ? " · due" : item.nextFollowUpAt ? ` · ${formatFollowUpDay(item.nextFollowUpAt)}` : ""}
                   </span>
@@ -906,6 +1091,50 @@ export default function ApprovalQueueClient() {
               );
             })}
           </div>
+
+          <OpportunityPortfolioPanel
+            opportunityId={current.opportunity.id}
+            importMetadata={current.opportunity.importMetadata}
+            showDealForecast
+            showDealEconomics={current.opportunity.relationshipStage === "purchase"}
+            onUpdated={({ importMetadata, revenueEngine, flagshipOffer, dealForecast }) => {
+              replaceDetail(current.queueItem.id, {
+                ...current,
+                opportunity: { ...current.opportunity, importMetadata },
+              });
+              setSidebar((rows) =>
+                rows.map((row) =>
+                  row.queueItem.id === current.queueItem.id
+                    ? {
+                        ...row,
+                        revenueEngine,
+                        flagshipOffer,
+                        potentialAmount: dealForecast.potentialAmount,
+                      }
+                    : row
+                )
+              );
+            }}
+          />
+
+          {current.opportunity.id ? (
+            <QueueOrgWorkspace
+              organization={current.organization}
+              opportunity={current.opportunity}
+              onOrganizationSaved={(organization) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  organization,
+                });
+              }}
+              onFollowUpSaved={(nextFollowUpAt) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  opportunity: { ...current.opportunity, nextFollowUpAt },
+                });
+              }}
+            />
+          ) : null}
 
           <div className="mt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1116,25 +1345,6 @@ export default function ApprovalQueueClient() {
             </div>
           ) : null}
 
-          {current.opportunity.id ? (
-            <QueueOrgWorkspace
-              organization={current.organization}
-              opportunity={current.opportunity}
-              onOrganizationSaved={(organization) => {
-                replaceDetail(current.queueItem.id, {
-                  ...current,
-                  organization,
-                });
-              }}
-              onFollowUpSaved={(nextFollowUpAt) => {
-                replaceDetail(current.queueItem.id, {
-                  ...current,
-                  opportunity: { ...current.opportunity, nextFollowUpAt },
-                });
-              }}
-            />
-          ) : null}
-
           {current.brief && (
             <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-3">
               <p className="text-sm text-gray-100">{current.brief.summary}</p>
@@ -1166,12 +1376,14 @@ export default function ApprovalQueueClient() {
             {current.draft ? (
               <div className="mt-2 space-y-2">
                 <input
+                  key={`subject-${draftIdentity}`}
                   value={editedSubject}
                   onChange={(e) => setEditedSubject(e.target.value)}
                   onBlur={() => void persistDraft().catch(() => undefined)}
                   className="w-full rounded-md border border-gray-700 bg-black px-3 py-2 text-sm font-medium text-white"
                 />
                 <QueueEmailBodyEditor
+                  key={draftIdentity}
                   value={editedBody}
                   contentKey={draftIdentity}
                   onChange={setEditedBody}
@@ -1186,35 +1398,88 @@ export default function ApprovalQueueClient() {
             )}
           </div>
           ) : conversationThreadId ? (
-            <p className="mt-4 text-sm text-gray-500">
-              Reply in Gmail on that thread — this contact was already emailed.
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-gray-500">
+                Already emailed — open the thread in Gmail, or draft a follow-up here.
+              </p>
+              {canDraftNudge ? (
+                <button
+                  type="button"
+                  disabled={busy || nudging || deletingOrg}
+                  onClick={() => void draftNudge()}
+                  className="rounded-lg border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+                >
+                  {nudging ? "Drafting follow-up…" : "Draft follow-up"}
+                </button>
+              ) : null}
+            </div>
           ) : externalSentDraft ? (
-            <p className="mt-4 text-sm text-gray-500">
-              Recorded as already emailed outside this app. No Gmail thread is stored for this contact, so there is nothing to open here.
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-gray-500">
+                Recorded as already emailed outside this app. Draft a follow-up to try again from here.
+              </p>
+              {canDraftNudge ? (
+                <button
+                  type="button"
+                  disabled={busy || nudging || deletingOrg}
+                  onClick={() => void draftNudge()}
+                  className="rounded-lg border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+                >
+                  {nudging ? "Drafting follow-up…" : "Draft follow-up"}
+                </button>
+              ) : null}
+            </div>
           ) : (
           <div className="mt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Draft email</h3>
             <p className="mt-1 text-sm text-gray-500">No draft yet.</p>
+            {canDraftNudge ? (
+              <button
+                type="button"
+                disabled={busy || nudging || deletingOrg}
+                onClick={() => void draftNudge()}
+                className="mt-3 rounded-lg border border-[var(--csc-accent)]/50 bg-[var(--csc-accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--csc-accent)] hover:bg-[var(--csc-accent)]/20 disabled:opacity-50"
+              >
+                {nudging ? "Drafting follow-up…" : "Draft follow-up"}
+              </button>
+            ) : null}
           </div>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {showSendableDraft ? (
+          {current.opportunity.id ? (
+            <div className="mt-4">
+              <QueueOpportunityNotes opportunityId={current.opportunity.id} />
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {showSendableDraft ? (
+                <button
+                  type="button"
+                  disabled={busy || deletingOrg || !current.draft || !current.contact?.email || selectedAlreadySent}
+                  onClick={requestSend}
+                  className="rounded-lg bg-[var(--csc-accent)] px-5 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
+                >
+                  Send
+                </button>
+              ) : null}
+              {copyStatus && <span className="text-xs text-[var(--csc-accent)]">{copyStatus}</span>}
+              <Link
+                href={`/admin/sales/organizations/${current.organization.id}`}
+                className="text-xs text-gray-500 underline"
+              >
+                Organization
+              </Link>
+            </div>
             <button
               type="button"
-              disabled={busy || !current.draft || !current.contact?.email || selectedAlreadySent}
-              onClick={requestSend}
-              className="rounded-lg bg-[var(--csc-accent)] px-5 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
+              disabled={busy || deletingOrg}
+              onClick={() => void deleteOrganization()}
+              className="text-xs font-medium text-red-300/90 underline hover:text-red-200 disabled:opacity-50"
             >
-              Send
+              {deletingOrg ? "Deleting…" : "Delete organization"}
             </button>
-            ) : null}
-            {copyStatus && <span className="text-xs text-[var(--csc-accent)]">{copyStatus}</span>}
-            <Link href={`/admin/sales/organizations/${current.organization.id}`} className="text-xs text-gray-500 underline">
-              Organization
-            </Link>
           </div>
           </>
           )}

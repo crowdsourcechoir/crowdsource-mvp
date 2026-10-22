@@ -28,4 +28,11 @@ answers = [false];
 assert.equal(confirmRareDelete("bloom", "Populus"), false);
 assert.equal(prompts.length, 1);
 
+prompts.length = 0;
+answers = [true, true];
+assert.equal(confirmRareDelete("organization", "Elevate — Swaim Strategies"), true);
+assert.equal(prompts.length, 2);
+assert.match(prompts[0], /removes the organization from the sales queue/);
+assert.match(prompts[1], /Really delete “Elevate — Swaim Strategies”/);
+
 console.log("confirm-rare-delete tests passed");

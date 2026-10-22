@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
 import { createGarden, listGardens } from "@/lib/song-garden-v2/garden/store";
+import { canStewardGarden } from "@/lib/operators/access";
+import { readActorFromRequest } from "@/lib/operators/current";
 import type { BrandKit, GardenKind, GardenStatus, MutationPolicy } from "@/lib/song-garden-v2/garden/types";
 
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { headers: { "Cache-Control": "no-store" } };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const gardens = await listGardens();
-    return NextResponse.json({ gardens }, NO_STORE);
+    const actor = await readActorFromRequest(request);
+    const visible =
+      actor && actor.role !== "owner" && !actor.legacy
+        ? gardens.filter((garden) => canStewardGarden(actor, garden.id))
+        : gardens;
+    return NextResponse.json({ gardens: visible }, NO_STORE);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json({ error: message }, { status: 500 });

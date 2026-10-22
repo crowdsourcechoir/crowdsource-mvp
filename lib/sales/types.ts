@@ -408,11 +408,24 @@ export type QueueSidebarItem = {
   category: string;
   opportunityTypeKey: string | null;
   organizationTypeKey: string | null;
+  /**
+   * Best "when Joel added this" signal for Last 7 days — max of queueItem.createdAt and
+   * org import_metadata *SeededAt / operatorQueuedAt stamps.
+   */
+  recentlyAddedAt: string | null;
   outreachKind: OpportunityOutreachKind;
   nextFollowUpAt: string | null;
   gmailThreadId: string | null;
   followUpDue: boolean;
   relationshipStage: RelationshipStage | null;
+  /** YYYY-MM-DD when known — used by Cash now filter. */
+  eventDateEstimate: string | null;
+  /** premium | partnership | owned — from opp or org import_metadata. */
+  revenueEngine: string | null;
+  /** anthem_experience | crowdsource_partnership | song_garden */
+  flagshipOffer: string | null;
+  /** Pipeline potential deal $ from import_metadata.potentialAmount. */
+  potentialAmount: number | null;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

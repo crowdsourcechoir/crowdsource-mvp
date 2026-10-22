@@ -430,4 +430,5 @@ for UI + commerce (edition / living merch), and backward-compatible event
 chapters.
 
 **Spec:** [`persistent-world-spec.md`](./persistent-world-spec.md)  
-**Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)
+**Testing (Phases A–D):** [`TESTING.md`](./TESTING.md)  
+**Generative living world (strategy, not a build):** [`generative-living-world.md`](./generative-living-world.md)

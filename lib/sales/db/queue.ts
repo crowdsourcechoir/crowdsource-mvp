@@ -1,7 +1,9 @@
 import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
+import { resolveQueueRecentlyAddedAt } from "../queue/added";
 import { readSalesInitiative } from "../initiatives";
+import { readDealForecast, resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
@@ -58,6 +60,11 @@ export async function createOrUpdateQueueItem(input: {
    * never clobbers a human reject/defer/duplicate decision.
    */
   reopenDecided?: boolean;
+  /**
+   * Bump created_at so "Last 7 days" treats a manual re-queue / seed as newly added.
+   * Pipeline refreshes leave created_at alone.
+   */
+  touchCreatedAt?: boolean;
 }): Promise<ApprovalQueueItem> {
   const db = requireSupabaseAdmin();
   const existing = await getInitialQueueItemByOpportunity(input.opportunityId);
@@ -77,6 +84,9 @@ export async function createOrUpdateQueueItem(input: {
       row.decided_by = null;
       row.decided_at = null;
       row.deferred_until = null;
+    }
+    if (input.touchCreatedAt || (existing.status !== "pending" && input.reopenDecided)) {
+      row.created_at = new Date().toISOString();
     }
     const { data, error } = await db
       .from("approval_queue_items")
@@ -155,29 +165,24 @@ export async function hasPendingNudgeForContact(opportunityId: string, contactId
 
 export async function listQueueItems(status?: ApprovalQueueItemStatus | "all"): Promise<ApprovalQueueItem[]> {
   const db = requireSupabaseAdmin();
-  if (status === "all") {
-    const pageSize = 1000;
-    const out: ApprovalQueueItem[] = [];
-    let from = 0;
-    for (;;) {
-      const { data, error } = await db
-        .from("approval_queue_items")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []).map(rowToQueueItem);
-      out.push(...rows);
-      if (rows.length < pageSize || from > 8000) break;
-      from += pageSize;
+  // PostgREST silently caps unpaged selects at 1000. Pending used to take that path ordered
+  // oldest-first, which dropped recently seeded Elevate/Amplify rows from "To send" / Last 7 days.
+  const pageSize = 1000;
+  const out: ApprovalQueueItem[] = [];
+  let from = 0;
+  for (;;) {
+    let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });
+    if (status !== "all") {
+      query = query.eq("status", status ?? "pending");
     }
-    return out;
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map(rowToQueueItem);
+    out.push(...rows);
+    if (rows.length < pageSize || from > 8000) break;
+    from += pageSize;
   }
-  let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });
-  query = query.eq("status", status ?? "pending");
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToQueueItem);
+  return out;
 }
 
 /**
@@ -201,6 +206,45 @@ export async function listQueueSidebarByScope(scope: QueueScope): Promise<QueueS
   const sidebar = await assembleQueueSidebar(items);
   if (scope !== "all") return sidebar;
   return dedupeSidebarByOrganization(sidebar);
+}
+
+/**
+ * Queue sidebar for a CRM funnel stage (same population as /admin/sales/funnel + dashboard).
+ * Picks the best queue row per opportunity (pending nudge preferred, else newest).
+ */
+export async function listQueueSidebarByFunnelStage(stage: RelationshipStage): Promise<QueueSidebarItem[]> {
+  const db = requireSupabaseAdmin();
+  const { data: oppRows, error: oppErr } = await db
+    .from("opportunities")
+    .select("id")
+    .eq("relationship_stage", stage)
+    .order("stage_updated_at", { ascending: true });
+  if (oppErr) throw new Error(oppErr.message);
+  const oppIds = (oppRows ?? []).map((row) => String(row.id));
+  if (oppIds.length === 0) return [];
+
+  const queueRows = await fetchInChunks<Record<string, unknown>>(oppIds, async (chunk) =>
+    db.from("approval_queue_items").select("*").in("opportunity_id", chunk)
+  );
+  const byOpp = new Map<string, ApprovalQueueItem>();
+  for (const row of queueRows) {
+    const item = rowToQueueItem(row);
+    const prev = byOpp.get(item.opportunityId);
+    if (!prev) {
+      byOpp.set(item.opportunityId, item);
+      continue;
+    }
+    const prevPending = prev.status === "pending";
+    const nextPending = item.status === "pending";
+    if (nextPending && !prevPending) {
+      byOpp.set(item.opportunityId, item);
+      continue;
+    }
+    if (nextPending === prevPending && item.createdAt > prev.createdAt) {
+      byOpp.set(item.opportunityId, item);
+    }
+  }
+  return assembleQueueSidebar(Array.from(byOpp.values()));
 }
 
 function dedupeSidebarByOrganization(items: QueueSidebarItem[]): QueueSidebarItem[] {
@@ -242,13 +286,15 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       last_inbound_at: string | null;
       last_outbound_at: string | null;
       relationship_stage: string | null;
+      event_date_estimate: string | null;
+      import_metadata: Record<string, unknown> | null;
     }>(
       items.map((item) => item.opportunityId),
       async (chunk) =>
         db
           .from("opportunities")
           .select(
-            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at, relationship_stage"
+            "id, title, organization_id, opportunity_type_id, gmail_thread_id, next_follow_up_at, last_inbound_at, last_outbound_at, relationship_stage, event_date_estimate, import_metadata"
           )
           .in("id", chunk)
     ),
@@ -328,6 +374,7 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       category,
       opportunityTypeKey,
       organizationTypeKey,
+      recentlyAddedAt: resolveQueueRecentlyAddedAt(queueItem.createdAt, organization.import_metadata),
       outreachKind: opportunityOutreachKind({
         lastInboundAt: opportunity.last_inbound_at ?? null,
         lastOutboundAt: opportunity.last_outbound_at ?? null,
@@ -336,6 +383,10 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       gmailThreadId: opportunity.gmail_thread_id ?? null,
       followUpDue: isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt),
       relationshipStage: (opportunity.relationship_stage as RelationshipStage | null) ?? null,
+      eventDateEstimate: opportunity.event_date_estimate ?? null,
+      revenueEngine: resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata),
+      flagshipOffer: resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata),
+      potentialAmount: readDealForecast(opportunity.import_metadata).potentialAmount,
     });
   }
   return sortQueueSidebarItems(sidebar);

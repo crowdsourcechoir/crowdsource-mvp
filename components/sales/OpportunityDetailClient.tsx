@@ -12,6 +12,7 @@ import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { looksLikeHtml, sanitizeEmailHtml, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { funnelStageLabel } from "@/lib/sales/funnel-labels";
+import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 
 const FINDING_LABELS: Record<string, string> = {
   audience_size: "Audience",
@@ -144,6 +145,15 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             onSaved={() => void load()}
           />
         </div>
+        <OpportunityPortfolioPanel
+          opportunityId={opportunity.id}
+          importMetadata={opportunity.importMetadata}
+          showDealForecast
+          showDealEconomics={
+            opportunity.relationshipStage === "purchase" || opportunity.relationshipStage === "interest"
+          }
+          onUpdated={() => void load()}
+        />
         <div className="mt-4">
           <OpportunityMeetingsStrip opportunityId={opportunity.id} contactId={contact?.id ?? null} />
           <OpportunityPitchesStrip opportunityId={opportunity.id} />

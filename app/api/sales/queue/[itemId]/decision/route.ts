@@ -74,6 +74,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     const providedEditedBody = typeof body?.editedBody === "string" ? (body.editedBody as string) : undefined;
 
     const isApproveAction = action === "approve" || action === "approve_with_edits";
+    if (isApproveAction) {
+      const { readActorFromRequest } = await import("@/lib/operators/current");
+      const { isOwner } = await import("@/lib/operators/access");
+      const actor = await readActorFromRequest(request);
+      if (actor && !actor.legacy && !isOwner(actor)) {
+        return NextResponse.json({ error: "Sending stays with the owner." }, { status: 403 });
+      }
+    }
     if (isApproveAction && body?.confirmed !== true) {
       return NextResponse.json(
         {

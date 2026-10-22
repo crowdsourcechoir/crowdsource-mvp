@@ -18,9 +18,9 @@ import {
 } from "./types";
 
 /**
- * Marketing persistence — JSON in Supabase Storage when configured,
- * otherwise `.data/marketing-v1.json` for local/dev.
- * Additive only: never writes Gardens, Blooms/events, or Sales tables.
+ * Legacy JSON blob at marketing/v1.json.
+ * Application routes must not write this. The migrator reads it once.
+ * Postgres (supabase/email-marketing-tables.sql) is the system of record.
  */
 
 const BUCKET = process.env.SUPABASE_MEDIA_BUCKET || "agent-media";

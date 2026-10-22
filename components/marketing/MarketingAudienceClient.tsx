@@ -51,7 +51,13 @@ export default function MarketingAudienceClient() {
       setEmail("");
       setDisplayName("");
       setCity("");
-      setMessage(data.created ? "Added subscriber" : "Updated existing person");
+      setMessage(
+        data.skippedReason
+          ? String(data.skippedReason)
+          : data.created
+            ? "Added subscriber"
+            : "Updated existing person"
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Add failed");

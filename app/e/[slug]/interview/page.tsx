@@ -159,7 +159,7 @@ export default function InterviewPage() {
   }
 
   if (!loaded) {
-    return <EventPageLoadingShell compact />;
+    return <EventPageLoadingShell />;
   }
   if (!event) {
     return (

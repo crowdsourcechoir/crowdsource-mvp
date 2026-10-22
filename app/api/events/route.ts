@@ -18,6 +18,8 @@ import {
 import { leanWorldConfigKeepingVibe, type WorldConfig } from "@/lib/song-garden-v2/world-config";
 import { PUBLIC_EVENT_CACHE, NO_STORE } from "@/lib/http/public-cache";
 import { scheduleBloomCalendarUpsert } from "@/lib/events/schedule-bloom-calendar";
+import { canComposeBloom } from "@/lib/operators/access";
+import { readActorFromRequest } from "@/lib/operators/current";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +96,12 @@ export async function GET(request: Request) {
     } catch (err) {
       console.error("[events] attach hosted heroes failed:", err);
     }
-    return NextResponse.json(list, NO_STORE);
+    const actor = await readActorFromRequest(request);
+    const visible =
+      actor && actor.role !== "owner" && !actor.legacy
+        ? list.filter((event) => canComposeBloom(actor, String(event.id)))
+        : list;
+    return NextResponse.json(visible, NO_STORE);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import VisitTracker from "@/components/analytics/VisitTracker";
 import "./globals.css";
 import { siteUrl } from "@/lib/site-url";
 
@@ -30,7 +31,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <VisitTracker />
+        {children}
+      </body>
     </html>
   );
 }

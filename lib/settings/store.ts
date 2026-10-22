@@ -1,3 +1,4 @@
+import { measurementIdFrom } from "@/lib/analytics/model";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 /**
@@ -20,13 +21,32 @@ export type DigestSettingsOverrides = {
   recipient: string | null;
 };
 
+/** Suggested package amounts (USD) for deal-form placeholders — null = built-in default. */
+export type SalesOffersSettingsOverrides = {
+  anthemExperienceAmount: number | null;
+  partnershipMonthlyAmount: number | null;
+  songGardenAmount: number | null;
+};
+
 export type WorkspaceSettings = {
   digest: DigestSettingsOverrides;
+  /** Public SoBECA Song Garden copy override. Null uses the copy in code. */
+  songGarden: unknown;
+  /** GA4 measurement id. Null means first-party analytics only. */
+  gaMeasurementId: string | null;
+  salesOffers: SalesOffersSettingsOverrides;
   updatedAt: string | null;
 };
 
 export const EMPTY_WORKSPACE_SETTINGS: WorkspaceSettings = {
   digest: { enabled: null, minScore: null, targetCount: null, recipient: null },
+  songGarden: null,
+  gaMeasurementId: null,
+  salesOffers: {
+    anthemExperienceAmount: null,
+    partnershipMonthlyAmount: null,
+    songGardenAmount: null,
+  },
   updatedAt: null,
 };
 
@@ -94,12 +114,20 @@ function coerceEmail(raw: unknown): string | null {
 export function normalizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
   const source = (raw ?? {}) as Record<string, unknown>;
   const digest = (source.digest ?? {}) as Record<string, unknown>;
+  const salesOffers = (source.salesOffers ?? {}) as Record<string, unknown>;
   return {
     digest: {
       enabled: typeof digest.enabled === "boolean" ? digest.enabled : null,
       minScore: coerceNumber(digest.minScore, 0, 100),
       targetCount: coerceNumber(digest.targetCount, 1, 100),
       recipient: coerceEmail(digest.recipient),
+    },
+    songGarden: source.songGarden === undefined ? null : source.songGarden,
+    gaMeasurementId: measurementIdFrom(source.gaMeasurementId),
+    salesOffers: {
+      anthemExperienceAmount: coerceNumber(salesOffers.anthemExperienceAmount, 0, 1_000_000),
+      partnershipMonthlyAmount: coerceNumber(salesOffers.partnershipMonthlyAmount, 0, 1_000_000),
+      songGardenAmount: coerceNumber(salesOffers.songGardenAmount, 0, 1_000_000),
     },
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : null,
   };
@@ -142,7 +170,12 @@ export async function readWorkspaceSettings(options?: { skipCache?: boolean }): 
 }
 
 export async function writeWorkspaceSettings(
-  patch: Partial<{ digest: Partial<DigestSettingsOverrides> }>
+  patch: Partial<{
+    digest: Partial<DigestSettingsOverrides>;
+    songGarden: unknown;
+    gaMeasurementId: string | null;
+    salesOffers: Partial<SalesOffersSettingsOverrides>;
+  }>
 ): Promise<WorkspaceSettingsRead> {
   if (!supabaseAdmin) {
     return {
@@ -156,6 +189,13 @@ export async function writeWorkspaceSettings(
   const current = await readWorkspaceSettings({ skipCache: true });
   const merged = normalizeWorkspaceSettings({
     digest: { ...current.settings.digest, ...(patch.digest ?? {}) },
+    songGarden: Object.prototype.hasOwnProperty.call(patch, "songGarden")
+      ? patch.songGarden
+      : current.settings.songGarden,
+    gaMeasurementId: Object.prototype.hasOwnProperty.call(patch, "gaMeasurementId")
+      ? measurementIdFrom(patch.gaMeasurementId)
+      : current.settings.gaMeasurementId,
+    salesOffers: { ...current.settings.salesOffers, ...(patch.salesOffers ?? {}) },
     updatedAt: new Date().toISOString(),
   });
 

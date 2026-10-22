@@ -5,7 +5,16 @@ import Link from "next/link";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import type { FunnelItemDetail, RelationshipStage } from "@/lib/sales/types";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
+import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 import { formatFollowUpDay } from "@/lib/sales/follow-up/calendar";
+import {
+  formatUsd,
+  readDealEconomics,
+  readDealForecast,
+  readRevenueEngine,
+  REVENUE_ENGINES,
+  isRevenueEngineKey,
+} from "@/lib/sales/engines";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 
 const STAGES = FUNNEL_STAGES.map((s) => ({
@@ -31,10 +40,22 @@ function daysSince(iso: string | null): number | null {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
-function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportunityId: string, stage: RelationshipStage) => void }) {
+function FunnelCard({
+  item,
+  onMove,
+  onPortfolioMeta,
+}: {
+  item: FunnelItemDetail;
+  onMove: (opportunityId: string, stage: RelationshipStage) => void;
+  onPortfolioMeta: (opportunityId: string, importMetadata: Record<string, unknown> | null) => void;
+}) {
   const anchor = item.opportunity.stageUpdatedAt ?? item.approvedAt;
   const days = daysSince(anchor);
   const advance = ADVANCE_ACTION[item.opportunity.relationshipStage ?? "lost"];
+  const isWon = item.opportunity.relationshipStage === "purchase";
+  const engine = readRevenueEngine(item.opportunity.importMetadata);
+  const economics = readDealEconomics(item.opportunity.importMetadata);
+  const forecast = readDealForecast(item.opportunity.importMetadata);
 
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
@@ -42,6 +63,17 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
         <p className="truncate text-sm font-semibold text-white">{item.organization.name}</p>
       </Link>
       <p className="truncate text-xs text-gray-400">{item.opportunity.title}</p>
+      {engine && isRevenueEngineKey(engine) ? (
+        <p className="mt-1 text-[11px] uppercase tracking-wide text-[var(--csc-accent)]">
+          {REVENUE_ENGINES[engine].shortLabel}
+          {forecast.potentialAmount != null ? ` · ${formatUsd(forecast.potentialAmount)} potential` : ""}
+          {isWon && economics.bookedAmount != null ? ` · ${formatUsd(economics.bookedAmount)} booked` : ""}
+        </p>
+      ) : forecast.potentialAmount != null ? (
+        <p className="mt-1 text-[11px] uppercase tracking-wide text-[var(--csc-accent)]">
+          {formatUsd(forecast.potentialAmount)} potential
+        </p>
+      ) : null}
       <p className="mt-1 truncate text-xs text-gray-500">
         {item.contact ? `${item.contact.fullName ?? "Unnamed"} — ${item.contact.roleTitle ?? "unknown role"}` : "No contact on record"}
       </p>
@@ -101,6 +133,15 @@ function FunnelCard({ item, onMove }: { item: FunnelItemDetail; onMove: (opportu
           ))}
         </select>
       </div>
+
+      <OpportunityPortfolioPanel
+        opportunityId={item.opportunity.id}
+        importMetadata={item.opportunity.importMetadata}
+        showDealForecast
+        showDealEconomics={isWon}
+        compact
+        onUpdated={({ importMetadata }) => onPortfolioMeta(item.opportunity.id, importMetadata)}
+      />
     </div>
   );
 }
@@ -153,6 +194,16 @@ export default function FunnelClient() {
     }
   }, [load]);
 
+  const patchPortfolioMeta = useCallback((opportunityId: string, importMetadata: Record<string, unknown> | null) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.opportunity.id === opportunityId
+          ? { ...item, opportunity: { ...item.opportunity, importMetadata } }
+          : item
+      )
+    );
+  }, []);
+
   const grouped = useMemo(() => {
     const byStage = new Map<RelationshipStage, FunnelItemDetail[]>(STAGES.map((s) => [s.key, []]));
     for (const item of items) {
@@ -186,7 +237,14 @@ export default function FunnelClient() {
               {stageItems.length === 0 ? (
                 <p className="px-1 py-2 text-xs text-gray-600">Empty</p>
               ) : (
-                stageItems.map((item) => <FunnelCard key={item.opportunity.id} item={item} onMove={moveStage} />)
+                stageItems.map((item) => (
+                  <FunnelCard
+                    key={item.opportunity.id}
+                    item={item}
+                    onMove={moveStage}
+                    onPortfolioMeta={patchPortfolioMeta}
+                  />
+                ))
               )}
             </div>
           </div>
