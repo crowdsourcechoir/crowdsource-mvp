@@ -13,6 +13,8 @@ export type ComposerAnswerRow = {
   audioTranscript?: string | null;
   videoTranscript?: string | null;
   eventId?: string;
+  /** Position in the bloom journey. Used to keep prompt groups in journey order. */
+  promptIndex?: number | null;
 };
 
 export type PromptAnswerGroup = {
@@ -28,7 +30,7 @@ export function normalizePromptKey(questionText: string | null | undefined): str
 
 export function promptLabel(questionText: string | null | undefined): string {
   const trimmed = (questionText ?? "").trim();
-  return trimmed || "Untitled prompt";
+  return trimmed || "Prompt not recorded";
 }
 
 /** Text-only rows: must have typed text; media-only answers are excluded. */
@@ -62,6 +64,30 @@ export function groupAnswersByPrompt(rows: ComposerAnswerRow[]): PromptAnswerGro
   return Array.from(map.values()).sort((a, b) => {
     if (a.key === "__untitled__") return 1;
     if (b.key === "__untitled__") return -1;
+    const ai = earliestPromptIndex(a);
+    const bi = earliestPromptIndex(b);
+    if (ai !== bi) return ai - bi;
+    const at = earliestCreatedAt(a);
+    const bt = earliestCreatedAt(b);
+    if (at !== bt) return at.localeCompare(bt);
     return a.prompt.localeCompare(b.prompt, undefined, { sensitivity: "base" });
   });
+}
+
+function earliestPromptIndex(group: PromptAnswerGroup): number {
+  let min = Number.POSITIVE_INFINITY;
+  for (const answer of group.answers) {
+    if (typeof answer.promptIndex === "number" && answer.promptIndex < min) {
+      min = answer.promptIndex;
+    }
+  }
+  return min;
+}
+
+function earliestCreatedAt(group: PromptAnswerGroup): string {
+  let min = "";
+  for (const answer of group.answers) {
+    if (!min || answer.createdAt < min) min = answer.createdAt;
+  }
+  return min;
 }

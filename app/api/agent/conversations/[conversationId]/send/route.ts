@@ -27,6 +27,7 @@ import type { SongGardenConfig } from "@/lib/songgarden/config";
 import {
   eventHasManagedJourney,
   JOURNEY_MANAGED_STUB,
+  readJourneyPrompt,
 } from "@/lib/agent-journey-managed";
 import {
   agentMediaPublicUrl,
@@ -409,9 +410,33 @@ export async function POST(
         });
       }
 
+      const journeyPrompt =
+        journeyManagedRequested &&
+        eventHasManagedJourney(
+          (eventData.song_garden_config as SongGardenConfig | null) ?? null,
+          null,
+          eventData.agent_brief
+        )
+          ? readJourneyPrompt(body)
+          : "";
+      let userTurnIndex = existingTurns.length;
+      if (journeyPrompt) {
+        try {
+          await localInsertTurn({
+            conversationId,
+            turnIndex: userTurnIndex,
+            role: "agent",
+            content: journeyPrompt,
+          });
+          userTurnIndex += 1;
+        } catch (err) {
+          console.warn("[agent/send] could not store journey prompt", err);
+        }
+      }
+
       const userTurnInserted = await localInsertTurn({
         conversationId,
-        turnIndex: existingTurns.length,
+        turnIndex: userTurnIndex,
         role: "user",
         content,
         audioUrl: audioDataUrl,
@@ -794,7 +819,46 @@ export async function POST(
           .update(participantNameUpdatePayload(content))
           .eq("id", conv.participant_id);
       }
-      const nextIndex = existingTurns.length;
+      const journeyPromptText = journeyManagedRequested ? readJourneyPrompt(body) : "";
+      let storeJourneyPrompt = false;
+      if (journeyPromptText) {
+        if (managedFirstUserTurn) {
+          storeJourneyPrompt = true;
+        } else {
+          const { data: cfgRow } = await supabaseAdmin
+            .from("events")
+            .select("song_garden_config, agent_brief")
+            .eq("id", conv.event_id)
+            .maybeSingle();
+          let promptConfig =
+            (cfgRow as { song_garden_config?: SongGardenConfig | null } | null)?.song_garden_config ??
+            null;
+          let promptBrief =
+            (cfgRow as { agent_brief?: unknown } | null)?.agent_brief ?? briefForValidation;
+          if (USE_LOCAL_EVENTS && conv.local_event_id) {
+            const local = localEventsGetById(conv.local_event_id);
+            if (local) {
+              promptConfig = (local.song_garden_config as SongGardenConfig | null) ?? null;
+              promptBrief = local.agent_brief ?? null;
+            }
+          }
+          storeJourneyPrompt = eventHasManagedJourney(promptConfig, null, promptBrief);
+        }
+      }
+      let nextIndex = existingTurns.length;
+      if (storeJourneyPrompt) {
+        const { error: ePrompt } = await supabaseAdmin.from("agent_conversation_turns").insert({
+          conversation_id: conversationId,
+          turn_index: nextIndex,
+          role: "agent",
+          content: journeyPromptText,
+        });
+        if (ePrompt) {
+          console.warn("[agent/send] could not store journey prompt", ePrompt.message);
+        } else {
+          nextIndex += 1;
+        }
+      }
       const { data: inserted, error: eInsert } = await supabaseAdmin
         .from("agent_conversation_turns")
         .insert({

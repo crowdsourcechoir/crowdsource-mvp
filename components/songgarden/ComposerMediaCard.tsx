@@ -40,7 +40,9 @@ export default function ComposerMediaCard({
           Could not load media for this response.
         </p>
         <figcaption className="space-y-1 px-3 py-2">
-          <p className="text-xs text-gray-500">{participantName || "Anonymous"}</p>
+          <p className="text-xs font-semibold" style={{ color: "var(--csc-accent)" }}>
+            {participantName || "Anonymous"}
+          </p>
         </figcaption>
       </figure>
     );
@@ -71,7 +73,9 @@ export default function ComposerMediaCard({
         />
       )}
       <figcaption className="space-y-1 px-3 py-2">
-        <p className="text-xs text-gray-500">{participantName || "Anonymous"}</p>
+        <p className="text-xs font-semibold" style={{ color: "var(--csc-accent)" }}>
+          {participantName || "Anonymous"}
+        </p>
         {caption ? <p className="line-clamp-3 text-xs text-gray-300">{caption}</p> : null}
       </figcaption>
     </figure>
