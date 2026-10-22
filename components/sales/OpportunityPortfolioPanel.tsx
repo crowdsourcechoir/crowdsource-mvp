@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CscDatePicker from "@/components/ui/CscDatePicker";
 import {
   FLAGSHIP_OFFERS,
@@ -44,6 +44,13 @@ function moneyDraft(value: number | null): string {
   return value != null ? String(value) : "";
 }
 
+function formatShortDate(ymd: string | null): string {
+  if (!ymd) return "Date";
+  const [y, m, d] = ymd.split("-");
+  if (!y || !m || !d) return ymd;
+  return `${m}/${d}/${y.slice(2)}`;
+}
+
 export default function OpportunityPortfolioPanel({
   opportunityId,
   importMetadata,
@@ -68,6 +75,8 @@ export default function OpportunityPortfolioPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [cashOpen, setCashOpen] = useState(false);
+  const [customDeal, setCustomDeal] = useState(false);
 
   useEffect(() => {
     setEngine(readRevenueEngine(importMetadata) ?? "");
@@ -82,6 +91,10 @@ export default function OpportunityPortfolioPanel({
     setSecondAmount(moneyDraft(nextForecast.secondPaymentAmount));
     setFirstAt(nextForecast.firstPaymentAt ?? "");
     setSecondAt(nextForecast.secondPaymentAt ?? "");
+    const preset = nextForecast.potentialAmount;
+    setCustomDeal(
+      preset != null && !(PREMIUM_DEAL_QUICK_AMOUNTS as readonly number[]).includes(preset)
+    );
   }, [importMetadata]);
 
   useEffect(() => {
@@ -132,311 +145,322 @@ export default function OpportunityPortfolioPanel({
   const selectClass =
     "rounded-md border border-white/15 bg-black px-2 py-1.5 text-xs text-white focus:border-[var(--csc-accent)] focus:outline-none";
   const inputClass =
-    "w-full rounded-md border border-white/15 bg-black px-2 py-1.5 text-xs text-white tabular-nums focus:border-[var(--csc-accent)] focus:outline-none";
+    "w-full min-w-0 rounded-md border border-white/15 bg-black px-2 py-1.5 text-xs text-white tabular-nums focus:border-[var(--csc-accent)] focus:outline-none";
 
-  const placeholderForOffer =
-    offer && suggestions ? String(suggestions[offer]) : undefined;
+  const placeholderForOffer = offer && suggestions ? String(suggestions[offer]) : undefined;
 
-  const quickAmounts =
-    engine === "premium" || offer === "anthem_experience"
-      ? [...PREMIUM_DEAL_QUICK_AMOUNTS]
-      : placeholderForOffer
-        ? [Number(placeholderForOffer)].filter((n) => Number.isFinite(n) && n > 0)
-        : [];
+  const dealPresets = useMemo(() => {
+    const base =
+      engine === "premium" || offer === "anthem_experience"
+        ? [...PREMIUM_DEAL_QUICK_AMOUNTS]
+        : placeholderForOffer
+          ? [Number(placeholderForOffer)].filter((n) => Number.isFinite(n) && n > 0)
+          : [...PREMIUM_DEAL_QUICK_AMOUNTS];
+    return Array.from(new Set(base));
+  }, [engine, offer, placeholderForOffer]);
 
-  async function savePotential(raw: string, opts?: { split?: boolean; note?: string }) {
+  const dealSelectValue = customDeal
+    ? "custom"
+    : forecast.potentialAmount != null && dealPresets.includes(forecast.potentialAmount)
+      ? String(forecast.potentialAmount)
+      : forecast.potentialAmount != null
+        ? "custom"
+        : "";
+
+  const cashSummary = useMemo(() => {
+    if (
+      forecast.firstPaymentAmount == null &&
+      forecast.secondPaymentAmount == null &&
+      !forecast.firstPaymentAt &&
+      !forecast.secondPaymentAt
+    ) {
+      return "Cash schedule";
+    }
+    const a = forecast.firstPaymentAmount != null ? formatUsd(forecast.firstPaymentAmount) : "—";
+    const b = forecast.secondPaymentAmount != null ? formatUsd(forecast.secondPaymentAmount) : "—";
+    return `${a} ${formatShortDate(forecast.firstPaymentAt)} · ${b} ${formatShortDate(forecast.secondPaymentAt)}`;
+  }, [forecast]);
+
+  function applyPotential(amount: number) {
+    const halves = splitPotentialHalves(amount);
+    setPotential(String(amount));
+    setFirstAmount(String(halves.first));
+    setSecondAmount(String(halves.second));
+    setCustomDeal(false);
+    void patch(
+      { potentialAmount: amount, splitHalves: true },
+      `${formatUsd(amount)} potential · 50/50`
+    );
+  }
+
+  async function savePotential(raw: string) {
     const trimmed = raw.trim();
     const current = readDealForecast(importMetadata).potentialAmount;
     if (trimmed === "" && current == null) return;
-    if (current != null && String(current) === trimmed && !opts?.split) return;
-    await patch(
-      {
-        potentialAmount: trimmed === "" ? null : trimmed,
-        ...(opts?.split ? { splitHalves: true } : {}),
-      },
-      opts?.note ?? "Potential deal saved"
-    );
+    if (current != null && String(current) === trimmed) return;
+    const n = Number(trimmed.replace(/[$,\s]/g, ""));
+    if (trimmed !== "" && Number.isFinite(n) && n > 0) {
+      const halves = splitPotentialHalves(n);
+      setFirstAmount(String(halves.first));
+      setSecondAmount(String(halves.second));
+      await patch({ potentialAmount: trimmed, splitHalves: true }, "Potential deal saved");
+      return;
+    }
+    await patch({ potentialAmount: trimmed === "" ? null : trimmed }, "Potential deal saved");
   }
 
   return (
     <div
       className={
-        compact ? "mt-2 space-y-2" : "mt-4 space-y-3 rounded-xl border border-[var(--csc-row-divider)] p-3"
+        compact ? "mt-2 space-y-1.5" : "mt-3 space-y-2 rounded-xl border border-[var(--csc-row-divider)] px-3 py-2.5"
       }
     >
-      {!compact ? <p className="csc-eyebrow">Portfolio</p> : null}
-      <div className={`flex flex-wrap gap-2 ${compact ? "" : "mt-2"}`}>
-        <select
-          aria-label="Revenue engine"
-          className={selectClass}
-          value={engine}
-          disabled={busy}
-          onChange={(e) => {
-            const next = e.target.value as RevenueEngineKey | "";
-            setEngine(next);
-            void patch({ revenueEngine: next === "" ? null : next }, "Engine saved");
-          }}
-        >
-          <option value="">Engine…</option>
-          {REVENUE_ENGINE_KEYS.map((key) => (
-            <option key={key} value={key}>
-              {REVENUE_ENGINES[key].label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Flagship offer"
-          className={selectClass}
-          value={offer}
-          disabled={busy}
-          onChange={(e) => {
-            const next = e.target.value as FlagshipOfferKey | "";
-            setOffer(next);
-            void patch({ flagshipOffer: next === "" ? null : next }, "Offer saved");
-          }}
-        >
-          <option value="">Offer…</option>
-          {FLAGSHIP_OFFER_KEYS.map((key) => (
-            <option key={key} value={key}>
-              {FLAGSHIP_OFFERS[key].label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {!compact ? <p className="csc-eyebrow shrink-0">Portfolio</p> : null}
+          <select
+            aria-label="Revenue engine"
+            className={selectClass}
+            value={engine}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value as RevenueEngineKey | "";
+              setEngine(next);
+              void patch({ revenueEngine: next === "" ? null : next }, "Engine saved");
+            }}
+          >
+            <option value="">Engine…</option>
+            {REVENUE_ENGINE_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {REVENUE_ENGINES[key].label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Flagship offer"
+            className={selectClass}
+            value={offer}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value as FlagshipOfferKey | "";
+              setOffer(next);
+              void patch({ flagshipOffer: next === "" ? null : next }, "Offer saved");
+            }}
+          >
+            <option value="">Offer…</option>
+            {FLAGSHIP_OFFER_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {FLAGSHIP_OFFERS[key].label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {showDealForecast ? (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
-            Potential deal
-          </p>
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-gray-500">Deal value ($)</span>
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              placeholder={placeholderForOffer ?? "15000"}
-              value={potential}
-              disabled={busy}
-              onChange={(e) => setPotential(e.target.value)}
-              onBlur={() => void savePotential(potential)}
-            />
-          </label>
-          {quickAmounts.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {quickAmounts.map((amount) => (
-                <button
-                  key={amount}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setPotential(String(amount));
-                    const halves = splitPotentialHalves(amount);
-                    setFirstAmount(String(halves.first));
-                    setSecondAmount(String(halves.second));
-                    void patch(
-                      { potentialAmount: amount, splitHalves: true },
-                      `${formatUsd(amount)} potential · 50/50 split`
-                    );
-                  }}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums transition-colors disabled:opacity-50 ${
-                    forecast.potentialAmount === amount
-                      ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
-                      : "border-white/15 text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
-                  }`}
-                >
-                  {formatUsd(amount)}
-                </button>
-              ))}
-              <button
-                type="button"
-                disabled={busy || !potential.trim()}
-                onClick={() => {
-                  const n = Number(potential.replace(/[$,\s]/g, ""));
-                  if (!Number.isFinite(n) || n <= 0) return;
-                  const halves = splitPotentialHalves(n);
-                  setFirstAmount(String(halves.first));
-                  setSecondAmount(String(halves.second));
-                  void patch(
-                    {
-                      potentialAmount: potential.trim(),
-                      splitHalves: true,
-                    },
-                    "Split 50/50"
-                  );
+        {showDealForecast ? (
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-1.5">
+              <span className="text-[11px] text-gray-500">Deal</span>
+              <select
+                aria-label="Potential deal value"
+                className={`${selectClass} min-w-[7.5rem] tabular-nums`}
+                value={dealSelectValue}
+                disabled={busy}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") {
+                    setCustomDeal(false);
+                    setPotential("");
+                    void patch({ potentialAmount: null }, "Potential cleared");
+                    return;
+                  }
+                  if (v === "custom") {
+                    setCustomDeal(true);
+                    return;
+                  }
+                  applyPotential(Number(v));
                 }}
-                className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-gray-300 hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
               >
-                Split 50/50
-              </button>
+                <option value="">Value…</option>
+                {dealPresets.map((amount) => (
+                  <option key={amount} value={String(amount)}>
+                    {formatUsd(amount)}
+                  </option>
+                ))}
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+            {customDeal || dealSelectValue === "custom" ? (
+              <input
+                aria-label="Custom deal value"
+                className={`${inputClass} w-[5.5rem]`}
+                inputMode="decimal"
+                placeholder={placeholderForOffer ?? "15000"}
+                value={potential}
+                disabled={busy}
+                onChange={(e) => setPotential(e.target.value)}
+                onBlur={() => void savePotential(potential)}
+              />
+            ) : null}
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-gray-500">1st</span>
+              <CscDatePicker
+                value={firstAt}
+                disabled={busy}
+                onChange={(ymd) => {
+                  setFirstAt(ymd);
+                  void patch({ firstPaymentAt: ymd || null }, "First payment date saved");
+                }}
+                onClear={() => {
+                  setFirstAt("");
+                  void patch({ firstPaymentAt: null }, "First payment date cleared");
+                }}
+              />
             </div>
-          ) : (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-gray-500">2nd</span>
+              <CscDatePicker
+                value={secondAt}
+                disabled={busy}
+                onChange={(ymd) => {
+                  setSecondAt(ymd);
+                  void patch({ secondPaymentAt: ymd || null }, "Second payment date saved");
+                }}
+                onClear={() => {
+                  setSecondAt("");
+                  void patch({ secondPaymentAt: null }, "Second payment date cleared");
+                }}
+              />
+            </div>
+
             <button
               type="button"
-              disabled={busy || !potential.trim()}
-              onClick={() => void savePotential(potential, { split: true, note: "Split 50/50" })}
-              className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-gray-300 hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
+              disabled={busy}
+              aria-expanded={cashOpen}
+              onClick={() => setCashOpen((v) => !v)}
+              className={`max-w-[14rem] truncate rounded-md border px-2 py-1.5 text-left text-[11px] transition-colors disabled:opacity-50 ${
+                cashOpen
+                  ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
+                  : "border-white/15 text-gray-300 hover:border-white/30 hover:text-white"
+              }`}
+              title={cashSummary}
             >
-              Split 50/50
+              {cashOpen ? "Hide halves" : cashSummary}
             </button>
-          )}
-
-          <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
-            Expected cash
-          </p>
-          <div className={`grid gap-3 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}>
-            <div className="space-y-2 rounded-lg border border-white/10 p-2.5">
-              <p className="text-[11px] text-gray-400">First payment (deposit / half)</p>
-              <label className="block">
-                <span className="mb-1 block text-[11px] text-gray-500">Amount ($)</span>
-                <input
-                  className={inputClass}
-                  inputMode="decimal"
-                  value={firstAmount}
-                  disabled={busy}
-                  onChange={(e) => setFirstAmount(e.target.value)}
-                  onBlur={() => {
-                    const current = readDealForecast(importMetadata).firstPaymentAmount;
-                    if (firstAmount.trim() === "" && current == null) return;
-                    if (current != null && String(current) === firstAmount.trim()) return;
-                    void patch(
-                      { firstPaymentAmount: firstAmount.trim() === "" ? null : firstAmount },
-                      "First payment amount saved"
-                    );
-                  }}
-                />
-              </label>
-              <div>
-                <span className="mb-1 block text-[11px] text-gray-500">Expected date</span>
-                <CscDatePicker
-                  value={firstAt}
-                  disabled={busy}
-                  onChange={(ymd) => {
-                    setFirstAt(ymd);
-                    void patch({ firstPaymentAt: ymd || null }, "First payment date saved");
-                  }}
-                  onClear={() => {
-                    setFirstAt("");
-                    void patch({ firstPaymentAt: null }, "First payment date cleared");
-                  }}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 rounded-lg border border-white/10 p-2.5">
-              <p className="text-[11px] text-gray-400">Second payment (balance / half)</p>
-              <label className="block">
-                <span className="mb-1 block text-[11px] text-gray-500">Amount ($)</span>
-                <input
-                  className={inputClass}
-                  inputMode="decimal"
-                  value={secondAmount}
-                  disabled={busy}
-                  onChange={(e) => setSecondAmount(e.target.value)}
-                  onBlur={() => {
-                    const current = readDealForecast(importMetadata).secondPaymentAmount;
-                    if (secondAmount.trim() === "" && current == null) return;
-                    if (current != null && String(current) === secondAmount.trim()) return;
-                    void patch(
-                      { secondPaymentAmount: secondAmount.trim() === "" ? null : secondAmount },
-                      "Second payment amount saved"
-                    );
-                  }}
-                />
-              </label>
-              <div>
-                <span className="mb-1 block text-[11px] text-gray-500">Expected date</span>
-                <CscDatePicker
-                  value={secondAt}
-                  disabled={busy}
-                  onChange={(ymd) => {
-                    setSecondAt(ymd);
-                    void patch({ secondPaymentAt: ymd || null }, "Second payment date saved");
-                  }}
-                  onClear={() => {
-                    setSecondAt("");
-                    void patch({ secondPaymentAt: null }, "Second payment date cleared");
-                  }}
-                />
-              </div>
-            </div>
           </div>
-          {forecast.potentialAmount != null ? (
-            <p className="text-[11px] text-gray-500">
-              {formatUsd(forecast.potentialAmount)} potential
-              {forecast.firstPaymentAmount != null || forecast.secondPaymentAmount != null
-                ? ` · ${formatUsd(forecast.firstPaymentAmount)} then ${formatUsd(forecast.secondPaymentAmount)}`
-                : ""}
-              {forecast.firstPaymentAt || forecast.secondPaymentAt
-                ? ` · ${forecast.firstPaymentAt ?? "—"} / ${forecast.secondPaymentAt ?? "—"}`
-                : ""}
-            </p>
-          ) : null}
+        ) : null}
+      </div>
+
+      {showDealForecast && cashOpen ? (
+        <div className="flex flex-wrap items-end justify-end gap-2 border-t border-[var(--csc-row-divider)] pt-2">
+          <label className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">1st $</span>
+            <input
+              className={`${inputClass} w-[5.5rem]`}
+              inputMode="decimal"
+              value={firstAmount}
+              disabled={busy}
+              onChange={(e) => setFirstAmount(e.target.value)}
+              onBlur={() => {
+                const current = readDealForecast(importMetadata).firstPaymentAmount;
+                if (firstAmount.trim() === "" && current == null) return;
+                if (current != null && String(current) === firstAmount.trim()) return;
+                void patch(
+                  { firstPaymentAmount: firstAmount.trim() === "" ? null : firstAmount },
+                  "First payment amount saved"
+                );
+              }}
+            />
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">2nd $</span>
+            <input
+              className={`${inputClass} w-[5.5rem]`}
+              inputMode="decimal"
+              value={secondAmount}
+              disabled={busy}
+              onChange={(e) => setSecondAmount(e.target.value)}
+              onBlur={() => {
+                const current = readDealForecast(importMetadata).secondPaymentAmount;
+                if (secondAmount.trim() === "" && current == null) return;
+                if (current != null && String(current) === secondAmount.trim()) return;
+                void patch(
+                  { secondPaymentAmount: secondAmount.trim() === "" ? null : secondAmount },
+                  "Second payment amount saved"
+                );
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !potential.trim()}
+            onClick={() => {
+              const n = Number(potential.replace(/[$,\s]/g, ""));
+              if (!Number.isFinite(n) || n <= 0) return;
+              const halves = splitPotentialHalves(n);
+              setFirstAmount(String(halves.first));
+              setSecondAmount(String(halves.second));
+              void patch({ potentialAmount: potential.trim(), splitHalves: true }, "Split 50/50");
+            }}
+            className="rounded-md border border-white/15 px-2 py-1.5 text-[11px] text-gray-300 hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
+          >
+            Split 50/50
+          </button>
         </div>
       ) : null}
 
       {showDealEconomics ? (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
-            Deal economics (signed)
-          </p>
-          <div className={`grid gap-2 ${compact ? "grid-cols-1" : "sm:grid-cols-3"}`}>
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-gray-500">Booked</span>
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                placeholder={placeholderForOffer}
-                value={booked}
-                disabled={busy}
-                onChange={(e) => setBooked(e.target.value)}
-                onBlur={() => {
-                  const current = readDealEconomics(importMetadata).bookedAmount;
-                  if (booked.trim() === "" && current == null) return;
-                  if (current != null && String(current) === booked.trim()) return;
-                  void patch({ bookedAmount: booked.trim() === "" ? null : booked }, "Booked saved");
-                }}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-gray-500">Cash collected</span>
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={cash}
-                disabled={busy}
-                onChange={(e) => setCash(e.target.value)}
-                onBlur={() => {
-                  const current = readDealEconomics(importMetadata).cashCollected;
-                  if (cash.trim() === "" && current == null) return;
-                  if (current != null && String(current) === cash.trim()) return;
-                  void patch({ cashCollected: cash.trim() === "" ? null : cash }, "Cash saved");
-                }}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-gray-500">Earned</span>
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={earned}
-                disabled={busy}
-                onChange={(e) => setEarned(e.target.value)}
-                onBlur={() => {
-                  const current = readDealEconomics(importMetadata).earnedAmount;
-                  if (earned.trim() === "" && current == null) return;
-                  if (current != null && String(current) === earned.trim()) return;
-                  void patch({ earnedAmount: earned.trim() === "" ? null : earned }, "Earned saved");
-                }}
-              />
-            </label>
-          </div>
-          {(economics.bookedAmount != null ||
-            economics.cashCollected != null ||
-            economics.earnedAmount != null) && (
-            <p className="text-[11px] text-gray-500">
-              {formatUsd(economics.bookedAmount)} booked · {formatUsd(economics.cashCollected)} cash ·{" "}
-              {formatUsd(economics.earnedAmount)} earned
-            </p>
-          )}
+        <div className="flex flex-wrap items-end gap-2 border-t border-[var(--csc-row-divider)] pt-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Signed</span>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">Booked</span>
+            <input
+              className={`${inputClass} w-[5.5rem]`}
+              inputMode="decimal"
+              placeholder={placeholderForOffer}
+              value={booked}
+              disabled={busy}
+              onChange={(e) => setBooked(e.target.value)}
+              onBlur={() => {
+                const current = readDealEconomics(importMetadata).bookedAmount;
+                if (booked.trim() === "" && current == null) return;
+                if (current != null && String(current) === booked.trim()) return;
+                void patch({ bookedAmount: booked.trim() === "" ? null : booked }, "Booked saved");
+              }}
+            />
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">Cash</span>
+            <input
+              className={`${inputClass} w-[5.5rem]`}
+              inputMode="decimal"
+              value={cash}
+              disabled={busy}
+              onChange={(e) => setCash(e.target.value)}
+              onBlur={() => {
+                const current = readDealEconomics(importMetadata).cashCollected;
+                if (cash.trim() === "" && current == null) return;
+                if (current != null && String(current) === cash.trim()) return;
+                void patch({ cashCollected: cash.trim() === "" ? null : cash }, "Cash saved");
+              }}
+            />
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">Earned</span>
+            <input
+              className={`${inputClass} w-[5.5rem]`}
+              inputMode="decimal"
+              value={earned}
+              disabled={busy}
+              onChange={(e) => setEarned(e.target.value)}
+              onBlur={() => {
+                const current = readDealEconomics(importMetadata).earnedAmount;
+                if (earned.trim() === "" && current == null) return;
+                if (current != null && String(current) === earned.trim()) return;
+                void patch({ earnedAmount: earned.trim() === "" ? null : earned }, "Earned saved");
+              }}
+            />
+          </label>
         </div>
       ) : null}
 
