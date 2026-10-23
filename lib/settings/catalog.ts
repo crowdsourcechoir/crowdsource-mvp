@@ -110,6 +110,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Connected account email + granted scopes (Gmail + Calendar + Slides)",
           "Pause / Resume Gmail sending",
           "Reply sync now + nudge policy",
+          "Scan Gmail for people at organizations; approve before adding",
           "Calendar sync window + Sync calendar now",
           "Slides reconnect + pitch template file id",
           "Link to Sales calendar view",
