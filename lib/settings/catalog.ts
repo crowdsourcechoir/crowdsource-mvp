@@ -142,6 +142,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         statusLabel: "Manage",
         status: "live",
         controls: [
+          "Revenue playbook: 55/20/15/10 effort mix + booking / operating / scorecard rules",
           "Revenue engines: Premium / Partnership / Owned (labels + defaults)",
           "Flagship offers: Anthem Experience, Crowdsource Partnership, Song Garden",
           "Suggested package amounts (placeholders on Won deal form)",

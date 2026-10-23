@@ -65,7 +65,19 @@ import {
   parseQueueCashWindow,
   type QueueCashWindow,
 } from "@/lib/sales/queue/cash-window";
-import { REVENUE_ENGINES, formatUsd, isRevenueEngineKey } from "@/lib/sales/engines";
+import {
+  QUEUE_WORKSTREAM_OPTIONS,
+  countQueueWorkstreams,
+  matchesQueueWorkstream,
+  parseQueueWorkstream,
+  type QueueWorkstreamFilter,
+} from "@/lib/sales/queue/workstream";
+import {
+  WORKSTREAMS,
+  workstreamPriority,
+  type WorkstreamKey,
+} from "@/lib/sales/strategy/playbook";
+import { formatUsd } from "@/lib/sales/engines";
 import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 import { confirmRareDelete } from "@/lib/confirm-rare-delete";
 
@@ -104,6 +116,7 @@ export default function ApprovalQueueClient() {
   const funnel = parseQueueFunnel(searchParams.get("funnel"));
   const added = parseQueueAdded(searchParams.get("added"));
   const cashWindow = parseQueueCashWindow(searchParams.get("cash"));
+  const workstream = parseQueueWorkstream(searchParams.get("workstream"));
   const deepLinkItem = searchParams.get("item");
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
@@ -198,7 +211,8 @@ export default function ApprovalQueueClient() {
         matchesQueueCategory(item, category) &&
         matchesQueueFunnel(item.relationshipStage, funnel) &&
         matchesQueueAdded(queueItemAddedAt(item), added) &&
-        matchesQueueCashWindow(item, cashWindow)
+        matchesQueueCashWindow(item, cashWindow) &&
+        matchesQueueWorkstream(item, workstream)
     );
     if (added === "new") {
       return [...filtered].sort((a, b) => {
@@ -207,21 +221,29 @@ export default function ApprovalQueueClient() {
         return bT - aT;
       });
     }
-    if (cashWindow === "cash_now") {
-      return [...filtered].sort((a, b) => {
+    // Playbook focus: cash-now + qualified buyers first, then effort-weighted workstream.
+    return [...filtered].sort((a, b) => {
+      const aCash = matchesQueueCashWindow(a, "cash_now") ? 1 : 0;
+      const bCash = matchesQueueCashWindow(b, "cash_now") ? 1 : 0;
+      if (aCash !== bCash) return bCash - aCash;
+      if (a.qualificationScore !== b.qualificationScore) return b.qualificationScore - a.qualificationScore;
+      if (a.followUpDue !== b.followUpDue) return a.followUpDue ? -1 : 1;
+      const aWs = workstreamPriority((a.workstream as WorkstreamKey) || "premium");
+      const bWs = workstreamPriority((b.workstream as WorkstreamKey) || "premium");
+      if (aWs !== bWs) return bWs - aWs;
+      if (cashWindow === "cash_now") {
         const aDate = a.eventDateEstimate ?? "9999-12-31";
         const bDate = b.eventDateEstimate ?? "9999-12-31";
         if (aDate !== bDate) return aDate.localeCompare(bDate);
-        if (a.followUpDue !== b.followUpDue) return a.followUpDue ? -1 : 1;
-        return 0;
-      });
-    }
-    return filtered;
-  }, [sidebar, category, funnel, added, cashWindow]);
+      }
+      return (b.potentialAmount ?? 0) - (a.potentialAmount ?? 0);
+    });
+  }, [sidebar, category, funnel, added, cashWindow, workstream]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
   const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
   const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
   const cashCounts = useMemo(() => countCashNow(sidebar), [sidebar]);
+  const workstreamCounts = useMemo(() => countQueueWorkstreams(sidebar), [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
@@ -711,7 +733,7 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope, funnel, added, cashWindow]);
+  }, [category, scope, funnel, added, cashWindow, workstream]);
 
   function setCategory(next: QueueCategoryFilter) {
     const params = new URLSearchParams(searchParams.toString());
@@ -752,6 +774,14 @@ export default function ApprovalQueueClient() {
     else params.set("cash", "now");
     // Cash-now spans to-send and follow-ups — show the full scoped list.
     if (next === "cash_now" && scope === "to_send") params.set("scope", "all");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setWorkstream(next: QueueWorkstreamFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("workstream");
+    else params.set("workstream", next);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -808,6 +838,26 @@ export default function ApprovalQueueClient() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <QueueFilterSelect
+            label="Work"
+            value={workstream}
+            options={QUEUE_WORKSTREAM_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: workstreamCounts[opt.key],
+            }))}
+            onChange={setWorkstream}
+          />
+          <QueueFilterSelect
+            label="Timing"
+            value={cashWindow}
+            options={QUEUE_CASH_WINDOW_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: cashCounts[opt.key],
+            }))}
+            onChange={setCashWindow}
+          />
+          <QueueFilterSelect
             label="Category"
             value={category}
             options={QUEUE_CATEGORY_CHIPS.map((chip) => ({
@@ -845,16 +895,6 @@ export default function ApprovalQueueClient() {
               label: chip.label,
             }))}
             onChange={setScope}
-          />
-          <QueueFilterSelect
-            label="Timing"
-            value={cashWindow}
-            options={QUEUE_CASH_WINDOW_OPTIONS.map((opt) => ({
-              key: opt.key,
-              label: opt.label,
-              count: cashCounts[opt.key],
-            }))}
-            onChange={setCashWindow}
           />
         </div>
         <button
@@ -962,10 +1002,11 @@ export default function ApprovalQueueClient() {
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
                     {queueCategoryLabel(parseQueueCategory(item.category))}
-                    {item.revenueEngine && isRevenueEngineKey(item.revenueEngine)
-                      ? ` · ${REVENUE_ENGINES[item.revenueEngine].shortLabel}`
+                    {item.workstream && item.workstream in WORKSTREAMS
+                      ? ` · ${WORKSTREAMS[item.workstream as WorkstreamKey].shortLabel}`
                       : ""}
                     {item.potentialAmount != null ? ` · ${formatUsd(item.potentialAmount)}` : ""}
+                    {item.qualificationScore >= 3 ? " · qualified" : item.qualificationScore > 0 ? ` · Q${item.qualificationScore}` : ""}
                     {item.eventDateEstimate ? ` · ${item.eventDateEstimate}` : ""}
                     {item.outreachKind === "replied" ? " · replied" : item.outreachKind === "sent" ? " · sent" : item.outreachKind === "bounced" ? " · bounced" : ""}
                     {item.followUpDue ? " · due" : item.nextFollowUpAt ? ` · ${formatFollowUpDay(item.nextFollowUpAt)}` : ""}

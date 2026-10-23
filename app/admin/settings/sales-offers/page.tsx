@@ -11,7 +11,7 @@ export default function SalesOffersSettingsPage() {
     <SettingsSubpage
       eyebrow="Integrations"
       title={card?.title ?? "Offers & engines"}
-      description="Master controls for Premium / Partnership / Owned engines, flagship offers, and suggested package amounts used when recording booked / cash / earned on Won deals."
+      description="Playbook effort mix, Premium / Partnership / Owned engines, flagship offers, and suggested package amounts for booked / cash / earned on Won deals."
     >
       <SalesOffersSettingsClient />
     </SettingsSubpage>

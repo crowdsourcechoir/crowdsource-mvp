@@ -2,6 +2,7 @@
 // DB rows are snake_case; everything here is camelCase, mapped in lib/sales/db/*.
 
 import type { ContactOutreach, OpportunityOutreachKind } from "./outreach/contact-outreach";
+import type { WorkstreamKey } from "./strategy/playbook";
 
 export type PipelineStage =
   | "normalize"
@@ -426,6 +427,10 @@ export type QueueSidebarItem = {
   flagshipOffer: string | null;
   /** Pipeline potential deal $ from import_metadata.potentialAmount. */
   potentialAmount: number | null;
+  /** Playbook workstream: premium | partnership | sponsor | owned */
+  workstream: WorkstreamKey;
+  /** 0–4: decision-maker, date, potential $, next step */
+  qualificationScore: number;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

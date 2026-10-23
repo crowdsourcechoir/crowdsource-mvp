@@ -4,6 +4,7 @@ import { classifyQueueCategory } from "../queue/category";
 import { resolveQueueRecentlyAddedAt } from "../queue/added";
 import { readSalesInitiative } from "../initiatives";
 import { readDealForecast, resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
+import { classifyWorkstream, qualificationScore } from "../strategy/playbook";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
@@ -361,6 +362,28 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       salesInitiative: readSalesInitiative(organization.import_metadata),
     });
     const nextFollowUpAt = opportunity.next_follow_up_at ?? null;
+    const followUpDue =
+      isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt);
+    const revenueEngine = resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata);
+    const flagshipOffer = resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata);
+    const potentialAmount = readDealForecast(opportunity.import_metadata).potentialAmount;
+    const workstream = classifyWorkstream({
+      revenueEngine,
+      flagshipOffer,
+      salesInitiative: readSalesInitiative(organization.import_metadata),
+      category,
+      organizationTypeKey,
+    });
+    const relationshipStage = (opportunity.relationship_stage as RelationshipStage | null) ?? null;
+    const qual = qualificationScore({
+      hasDecisionMaker:
+        Boolean(opportunity.last_inbound_at) ||
+        relationshipStage === "interest" ||
+        relationshipStage === "purchase",
+      hasEventDate: Boolean(opportunity.event_date_estimate),
+      hasPotentialAmount: potentialAmount != null && potentialAmount > 0,
+      hasNextStep: Boolean(nextFollowUpAt) || followUpDue,
+    });
     sidebar.push({
       queueItem,
       organizationId: organization.id,
@@ -381,12 +404,14 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       }),
       nextFollowUpAt,
       gmailThreadId: opportunity.gmail_thread_id ?? null,
-      followUpDue: isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt),
-      relationshipStage: (opportunity.relationship_stage as RelationshipStage | null) ?? null,
+      followUpDue,
+      relationshipStage,
       eventDateEstimate: opportunity.event_date_estimate ?? null,
-      revenueEngine: resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata),
-      flagshipOffer: resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata),
-      potentialAmount: readDealForecast(opportunity.import_metadata).potentialAmount,
+      revenueEngine,
+      flagshipOffer,
+      potentialAmount,
+      workstream,
+      qualificationScore: qual,
     });
   }
   return sortQueueSidebarItems(sidebar);

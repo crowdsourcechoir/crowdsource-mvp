@@ -17,6 +17,7 @@ import {
   RUN_RATE_TARGETS,
   formatUsd,
 } from "@/lib/sales/engines";
+import { PLAYBOOK, WORKSTREAM_KEYS, WORKSTREAMS } from "@/lib/sales/strategy/playbook";
 
 type OffersSettingsResponse = {
   suggestions: {
@@ -131,6 +132,41 @@ export default function SalesOffersSettingsClient() {
           <Stat label="Operating baseline" value={`${formatUsd(RUN_RATE_TARGETS.baseline)}/mo`} />
           <Stat label="Growth · Dec 2027" value={`${formatUsd(RUN_RATE_TARGETS.growth)}/mo`} />
         </StatGrid>
+      </SettingsPanel>
+
+      <SettingsPanel
+        title="Revenue playbook"
+        description={`${PLAYBOOK.framing}. 90-day effort mix that Sales home and the queue Work filter follow.`}
+      >
+        <ul className="csc-list">
+          {WORKSTREAM_KEYS.map((key) => {
+            const lane = WORKSTREAMS[key];
+            return (
+              <li key={key} className="csc-list-row flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white">
+                    <span className="text-[var(--csc-accent)]">{lane.effortPct}%</span> {lane.label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">{lane.action}</p>
+                  <p className="mt-0.5 text-xs text-gray-600">
+                    {lane.dealMath} · {formatUsd(lane.annualTargetUsd)}/yr
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-3 space-y-1.5 text-xs text-gray-500">
+          <p>
+            <span className="text-gray-400">Booking rule:</span> {PLAYBOOK.bookingRule}
+          </p>
+          <p>
+            <span className="text-gray-400">Operating rule:</span> {PLAYBOOK.operatingRule}
+          </p>
+          <p>
+            <span className="text-gray-400">Weekly scorecard:</span> {PLAYBOOK.weeklyScorecard}
+          </p>
+        </div>
       </SettingsPanel>
 
       <SettingsPanel title="Revenue engines">
