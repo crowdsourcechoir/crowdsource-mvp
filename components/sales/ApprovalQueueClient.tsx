@@ -47,6 +47,7 @@ import {
 } from "@/lib/sales/queue/optimistic";
 import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrganizationForm";
+import ScanBusinessCardModal, { ScanCardButton } from "@/components/sales/ScanBusinessCardModal";
 import AddContactForm from "@/components/sales/AddContactForm";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
@@ -138,6 +139,7 @@ export default function ApprovalQueueClient() {
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [addOrgOpen, setAddOrgOpen] = useState(false);
+  const [scanCardOpen, setScanCardOpen] = useState(false);
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
@@ -819,6 +821,16 @@ export default function ApprovalQueueClient() {
   const addOrgModal = (
     <AddOrganizationForm open={addOrgOpen} onClose={() => setAddOrgOpen(false)} onQueued={() => void load()} />
   );
+  const scanCardModal = (
+    <ScanBusinessCardModal
+      open={scanCardOpen}
+      onClose={() => setScanCardOpen(false)}
+      onSaved={(result) => {
+        if (result.queueItemId) setJumpToQueueItemId(result.queueItemId);
+        void load();
+      }}
+    />
+  );
 
   const pageHeader = (
     <div className="mb-4 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -828,6 +840,7 @@ export default function ApprovalQueueClient() {
       </div>
       <div className="flex items-center gap-2">
         <SalesSearchBox onPick={pickFromSearch} />
+        <ScanCardButton onClick={() => setScanCardOpen(true)} />
         <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
       </div>
     </div>
@@ -919,6 +932,7 @@ export default function ApprovalQueueClient() {
         {pageHeader}
         {filterBar}
         {addOrgModal}
+        {scanCardModal}
         <p className="text-gray-400">Loading queue…</p>
       </div>
     );
@@ -929,6 +943,7 @@ export default function ApprovalQueueClient() {
         {pageHeader}
         {filterBar}
         {addOrgModal}
+        {scanCardModal}
         <div className="rounded-xl border border-red-800 bg-red-950/40 p-6">
           <p className="text-red-300">{loadError}</p>
           <button
@@ -949,6 +964,7 @@ export default function ApprovalQueueClient() {
         {pageHeader}
         {filterBar}
         {addOrgModal}
+        {scanCardModal}
         <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center text-gray-400">
           Queue is empty. Add an organization with +, or use Fill queue to generate leads.
         </div>
@@ -961,6 +977,7 @@ export default function ApprovalQueueClient() {
       {pageHeader}
       {filterBar}
       {addOrgModal}
+        {scanCardModal}
       {actionError && (
         <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
       )}

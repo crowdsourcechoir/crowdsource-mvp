@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SALES_INITIATIVES, type SalesInitiativeKey } from "@/lib/sales/initiatives";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
+import ScanBusinessCardModal, { ScanCardButton } from "@/components/sales/ScanBusinessCardModal";
 
 const INITIATIVE_KEYS = Object.keys(SALES_INITIATIVES) as SalesInitiativeKey[];
 
@@ -206,11 +207,20 @@ export default function AddOrganizationForm({
 
 export function AddOrganizationLauncher({ onQueued }: { onQueued?: (queueItemId: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   return (
     <div className="flex items-center gap-2">
       <SalesSearchBox />
+      <ScanCardButton onClick={() => setScanOpen(true)} />
       <AddOrgPlusButton onClick={() => setOpen(true)} />
       <AddOrganizationForm open={open} onClose={() => setOpen(false)} onQueued={onQueued} />
+      <ScanBusinessCardModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onSaved={(result) => {
+          if (result.queueItemId) onQueued?.(result.queueItemId);
+        }}
+      />
     </div>
   );
 }

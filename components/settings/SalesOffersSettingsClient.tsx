@@ -135,6 +135,16 @@ export default function SalesOffersSettingsClient() {
       </SettingsPanel>
 
       <SettingsPanel
+        title="Business card scan"
+        description="Conference-floor capture on Sales queue (+ card button). Uses OPENAI_API_KEY vision; new contacts default to Interest."
+      >
+        <p className="text-sm text-gray-400">
+          Snap or choose a photo → review fields → Save to Interest. Queues for send when email is deliverable.
+          Default category: Conferences & associations.
+        </p>
+      </SettingsPanel>
+
+      <SettingsPanel
         title="Revenue playbook"
         description={`${PLAYBOOK.framing}. 90-day effort mix that Sales home and the queue Work filter follow.`}
       >

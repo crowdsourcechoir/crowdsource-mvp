@@ -153,6 +153,8 @@ export type UpdateContactInput = {
   roleTitle?: string | null;
   roleCategory?: string | null;
   email?: string | null;
+  phone?: string | null;
+  linkedinUrl?: string | null;
   emailVerificationStatus?: Contact["emailVerificationStatus"];
   importMetadata?: Record<string, unknown> | null;
   duplicateOfContactId?: string | null;
@@ -172,6 +174,8 @@ export async function updateContact(id: string, patch: UpdateContactInput): Prom
     row.email = normalized ? patch.email : null;
     row.normalized_email = normalized;
   }
+  if (patch.phone !== undefined) row.phone = patch.phone;
+  if (patch.linkedinUrl !== undefined) row.linkedin_url = patch.linkedinUrl;
   if (patch.emailVerificationStatus !== undefined) {
     row.email_verification_status = patch.emailVerificationStatus;
   }

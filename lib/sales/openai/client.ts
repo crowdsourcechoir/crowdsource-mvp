@@ -70,3 +70,48 @@ export async function callStructured<T>(input: {
     costUsd: estimateCostUsd(model, tokensInput, tokensOutput),
   };
 }
+
+/**
+ * Structured output with an image (business cards, screenshots).
+ * Defaults to gpt-4o — mini is weaker on OCR for dense print.
+ */
+export async function callStructuredVision<T>(input: {
+  schema: ZodType<T>;
+  schemaName: string;
+  systemPrompt: string;
+  userText: string;
+  imageDataUrl: string;
+  model?: string;
+}): Promise<StructuredCallResult<T>> {
+  const client = getOpenAIClient();
+  const model = input.model ?? "gpt-4o";
+  const completion = await client.chat.completions.parse({
+    model,
+    messages: [
+      { role: "system", content: input.systemPrompt },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: input.userText },
+          { type: "image_url", image_url: { url: input.imageDataUrl, detail: "high" } },
+        ],
+      },
+    ],
+    response_format: zodResponseFormat(input.schema, input.schemaName),
+  });
+  const message = completion.choices[0]?.message;
+  if (!message?.parsed) {
+    throw new Error(
+      `OpenAI vision structured output for "${input.schemaName}" did not parse: ${message?.refusal ?? "no content"}`
+    );
+  }
+  const tokensInput = completion.usage?.prompt_tokens ?? 0;
+  const tokensOutput = completion.usage?.completion_tokens ?? 0;
+  return {
+    parsed: message.parsed,
+    model,
+    tokensInput,
+    tokensOutput,
+    costUsd: estimateCostUsd(model, tokensInput, tokensOutput),
+  };
+}
