@@ -69,7 +69,7 @@ export default function PipelineScheduleCalendar() {
   const [cursorYear, setCursorYear] = useState(() => Number(today.slice(0, 4)));
   const [cursorMonth, setCursorMonth] = useState(() => Number(today.slice(5, 7)) - 1);
   const [weekAnchor, setWeekAnchor] = useState(today);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(today);
 
   const load = useCallback(async () => {
     setLoading(true);

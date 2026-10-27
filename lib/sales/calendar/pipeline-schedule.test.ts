@@ -5,6 +5,7 @@ import {
   queueHrefForPipelineEvent,
   shiftMonth,
   shiftWeek,
+  todayYmd,
   weekGridDays,
   type PipelineScheduleEvent,
 } from "./pipeline-schedule";
@@ -64,6 +65,12 @@ function main() {
   assert.equal(grouped[0].overlap, true);
   assert.equal(grouped[0].events[0].organizationName, "A");
   assert.equal(grouped[1].overlap, false);
+
+  // 2026-10-27 04:11 UTC is still Oct 26 in America/Chicago (and LA).
+  const eveningUtc = new Date("2026-10-27T04:11:00.000Z");
+  assert.equal(todayYmd(eveningUtc, "America/Chicago"), "2026-10-26");
+  assert.equal(todayYmd(eveningUtc, "America/Los_Angeles"), "2026-10-26");
+  assert.equal(todayYmd(eveningUtc, "UTC"), "2026-10-27");
 
   console.log("pipeline-schedule.test.ts: ok");
 }

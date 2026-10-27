@@ -2,6 +2,7 @@ import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { classifyQueueCategory, type QueueCategoryKey } from "@/lib/sales/queue/category";
 import { readSalesInitiative } from "@/lib/sales/initiatives";
 import { readDealForecast } from "@/lib/sales/engines";
+import { SALES_TIME_ZONE, salesTodayParts } from "@/lib/sales/follow-up/calendar";
 import type { RelationshipStage } from "@/lib/sales/types";
 
 export type PipelineScheduleEvent = {
@@ -102,8 +103,14 @@ export function shiftWeek(anchorYmd: string, deltaWeeks: number): string {
   return ymd(date);
 }
 
-export function todayYmd(): string {
-  return ymd(new Date());
+/**
+ * Operator "today" for the pipeline calendar — wall-clock in Sales TZ
+ * (America/Chicago), not UTC. Late evening Pacific must not roll the
+ * highlighted day forward early.
+ */
+export function todayYmd(now: Date = new Date(), timeZone: string = SALES_TIME_ZONE): string {
+  const { year, month, day } = salesTodayParts(now, timeZone);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 export function groupPipelineByDay(events: PipelineScheduleEvent[]): PipelineScheduleDay[] {
