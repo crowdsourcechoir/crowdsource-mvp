@@ -188,9 +188,9 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
     const chunk = oppIds.slice(i, i + 100);
     const { data, error } = await db
       .from("approval_queue_items")
-      .select("id, opportunity_id, status, updated_at")
+      .select("id, opportunity_id, status, created_at")
       .in("opportunity_id", chunk)
-      .order("updated_at", { ascending: false });
+      .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     const pending = new Map<string, string>();
     const any = new Map<string, string>();
