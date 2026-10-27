@@ -158,10 +158,10 @@ export default function SalesOverviewClient() {
           <p className="mt-1 text-3xl font-bold text-white">{buckets ? buckets.pendingCount : "—"}</p>
           <p className="mt-2 text-sm text-gray-400">To send →</p>
         </Link>
-        <Link href="/admin/sales/calendar" className="rounded-xl border border-gray-800 p-5 hover:border-gray-600">
+        <Link href="/admin/sales/calendar?mode=pipeline" className="rounded-xl border border-gray-800 p-5 hover:border-gray-600">
           <p className="text-sm text-gray-500">Calendar</p>
-          <p className="mt-1 text-3xl font-bold text-white">Meet</p>
-          <p className="mt-2 text-sm text-gray-400">Google meetings →</p>
+          <p className="mt-1 text-3xl font-bold text-white">Dates</p>
+          <p className="mt-2 text-sm text-gray-400">Pipeline schedule →</p>
         </Link>
         <Link href="/admin/sales/organizations" className="rounded-xl border border-gray-800 p-5 hover:border-gray-600">
           <p className="text-sm text-gray-500">Organizations</p>

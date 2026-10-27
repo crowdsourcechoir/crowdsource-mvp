@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SettingsButton, StatusPill } from "@/components/settings/ui";
 import type { SyncedCalendarEvent } from "@/lib/sales/calendar/types";
+import PipelineScheduleCalendar from "@/components/sales/PipelineScheduleCalendar";
+
+type CalendarMode = "pipeline" | "meetings";
 
 function dayKey(iso: string): string {
   return iso.slice(0, 10);
@@ -84,6 +87,7 @@ function contactLine(event: SyncedCalendarEvent): string | null {
 }
 
 export default function SalesCalendarClient() {
+  const [mode, setMode] = useState<CalendarMode>("pipeline");
   const [events, setEvents] = useState<SyncedCalendarEvent[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [filter, setFilter] = useState<"matched" | "upcoming" | "all">("matched");
@@ -95,9 +99,12 @@ export default function SalesCalendarClient() {
 
   useEffect(() => {
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const modeQ = params.get("mode");
+    if (modeQ === "meetings" || modeQ === "pipeline") setMode(modeQ);
     const fromQuery = params.get("filter");
     if (fromQuery === "matched" || fromQuery === "upcoming" || fromQuery === "all") {
       setFilter(fromQuery);
+      setMode("meetings");
     }
   }, []);
 
@@ -118,8 +125,8 @@ export default function SalesCalendarClient() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (mode === "meetings") void load();
+  }, [load, mode]);
 
   async function syncNow() {
     setBusy(true);
@@ -179,37 +186,44 @@ export default function SalesCalendarClient() {
             <p className="csc-eyebrow">Prospecting Intelligence</p>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Calendar</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-400">
-              Meetings from your Google Calendar (past 90 days · next 30), plus Blooms synced onto the
-              same calendar. Bloom rows show a flower icon.
+              {mode === "pipeline"
+                ? "Month and week view of potential conference, fundraiser, and event dates — spot overlaps, then open the org in the queue."
+                : "Meetings from your Google Calendar (past 90 days · next 30), plus Blooms. Bloom rows show a flower icon."}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <SettingsButton onClick={() => void syncNow()} disabled={busy}>
-              {busy ? "Syncing…" : "Sync now"}
-            </SettingsButton>
-            <Link
-              href="/admin/settings/gmail"
-              className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
-            >
-              Google settings →
-            </Link>
-          </div>
+          {mode === "meetings" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <SettingsButton onClick={() => void syncNow()} disabled={busy}>
+                {busy ? "Syncing…" : "Sync now"}
+              </SettingsButton>
+              <Link
+                href="/admin/settings/gmail"
+                className="csc-link text-xs font-semibold uppercase tracking-[0.14em]"
+              >
+                Google settings →
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {(
             [
-              ["matched", "Contacts & Blooms"],
-              ["upcoming", "Upcoming"],
-              ["all", "All synced"],
+              ["pipeline", "Pipeline schedule"],
+              ["meetings", "Google meetings"],
             ] as const
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
-              onClick={() => setFilter(id)}
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-                filter === id
+              onClick={() => {
+                setMode(id);
+                const url = new URL(window.location.href);
+                url.searchParams.set("mode", id);
+                window.history.replaceState({}, "", url.toString());
+              }}
+              className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+                mode === id
                   ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
                   : "border-white/20 text-gray-300 hover:border-white/40 hover:text-white"
               }`}
@@ -217,17 +231,47 @@ export default function SalesCalendarClient() {
               {label}
             </button>
           ))}
-          <span className="text-xs text-gray-500">
-            {lastSyncedAt ? `Last sync ${new Date(lastSyncedAt).toLocaleString()}` : "Not synced yet"}
-            {filtered.length > 0 ? ` · ${filtered.length} shown` : ""}
-          </span>
         </div>
 
-        {message ? <p className="text-sm text-[var(--csc-accent)]">{message}</p> : null}
-        {error ? <p className="text-sm text-amber-200">{error}</p> : null}
+        {mode === "pipeline" ? <PipelineScheduleCalendar /> : null}
+
+        {mode === "meetings" ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  ["matched", "Contacts & Blooms"],
+                  ["upcoming", "Upcoming"],
+                  ["all", "All synced"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setFilter(id)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+                    filter === id
+                      ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
+                      : "border-white/20 text-gray-300 hover:border-white/40 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <span className="text-xs text-gray-500">
+                {lastSyncedAt ? `Last sync ${new Date(lastSyncedAt).toLocaleString()}` : "Not synced yet"}
+                {filtered.length > 0 ? ` · ${filtered.length} shown` : ""}
+              </span>
+            </div>
+
+            {message ? <p className="text-sm text-[var(--csc-accent)]">{message}</p> : null}
+            {error ? <p className="text-sm text-amber-200">{error}</p> : null}
+          </>
+        ) : null}
       </div>
 
-      {loading ? (
+      {mode === "meetings" ? (
+      loading ? (
         <p className="text-sm text-gray-500">Loading meetings…</p>
       ) : grouped.length === 0 ? (
         <div className="rounded-xl border border-[var(--csc-row-divider)] p-6">
@@ -446,7 +490,8 @@ export default function SalesCalendarClient() {
             })}
           </ul>
         </div>
-      )}
+      )
+      ) : null}
     </div>
   );
 }
