@@ -9,7 +9,11 @@ export type PipelineScheduleEvent = {
   opportunityId: string;
   organizationId: string;
   organizationName: string;
+  /** Display name for the event (initiative / title). */
   title: string;
+  eventName: string | null;
+  description: string | null;
+  websiteUrl: string | null;
   eventDateEstimate: string;
   eventDateConfidence: "confirmed" | "estimated" | "unknown" | null;
   category: QueueCategoryKey;
@@ -134,7 +138,7 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
   const { data: oppRows, error: oppErr } = await db
     .from("opportunities")
     .select(
-      "id, organization_id, title, event_date_estimate, event_date_confidence, relationship_stage, opportunity_type_id, import_metadata"
+      "id, organization_id, title, description, event_or_initiative_name, event_date_estimate, event_date_confidence, relationship_stage, opportunity_type_id, import_metadata"
     )
     .not("event_date_estimate", "is", null)
     .order("event_date_estimate", { ascending: true });
@@ -151,7 +155,13 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
 
   const orgMetaById = new Map<
     string,
-    { name: string; organization_type_id: string | null; import_metadata: Record<string, unknown> | null }
+    {
+      name: string;
+      website_url: string | null;
+      domain: string | null;
+      organization_type_id: string | null;
+      import_metadata: Record<string, unknown> | null;
+    }
   >();
   const orgTypeKeyById = new Map<string, string>();
   const oppTypeKeyById = new Map<string, string>();
@@ -161,12 +171,14 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
     const chunk = orgIds.slice(i, i + 100);
     const { data, error } = await db
       .from("organizations")
-      .select("id, name, organization_type_id, import_metadata")
+      .select("id, name, website_url, domain, organization_type_id, import_metadata")
       .in("id", chunk);
     if (error) throw new Error(error.message);
     for (const row of data ?? []) {
       orgMetaById.set(String(row.id), {
         name: String(row.name),
+        website_url: (row.website_url as string | null) ?? null,
+        domain: (row.domain as string | null) ?? null,
         organization_type_id: (row.organization_type_id as string | null) ?? null,
         import_metadata: (row.import_metadata as Record<string, unknown> | null) ?? null,
       });
@@ -228,6 +240,20 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
       ? oppTypeKeyById.get(String(row.opportunity_type_id)) ?? null
       : null;
     const title = String(row.title ?? organizationName);
+    const eventName =
+      typeof row.event_or_initiative_name === "string" && row.event_or_initiative_name.trim()
+        ? row.event_or_initiative_name.trim()
+        : title !== organizationName
+          ? title
+          : null;
+    const description =
+      typeof row.description === "string" && row.description.trim() ? row.description.trim() : null;
+    const websiteRaw = org?.website_url?.trim() || (org?.domain ? `https://${org.domain}` : null);
+    const websiteUrl = websiteRaw
+      ? /^https?:\/\//i.test(websiteRaw)
+        ? websiteRaw
+        : `https://${websiteRaw.replace(/^\/+/, "")}`
+      : null;
     const category = classifyQueueCategory({
       organizationName,
       opportunityTitle: title,
@@ -247,6 +273,9 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
       organizationId,
       organizationName,
       title,
+      eventName,
+      description,
+      websiteUrl,
       eventDateEstimate,
       eventDateConfidence,
       category,

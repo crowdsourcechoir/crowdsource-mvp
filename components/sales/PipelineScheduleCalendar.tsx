@@ -51,12 +51,153 @@ function formatListDay(ymd: string): string {
   });
 }
 
+function formatFullDay(ymd: string): string {
+  return new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function stageLabel(stage: PipelineScheduleEvent["relationshipStage"]): string {
   if (stage === "interest") return "Interest";
   if (stage === "awareness") return "Awareness";
   if (stage === "purchase") return "Won";
   if (stage === "lost") return "Lost";
   return "Unstaged";
+}
+
+function displayEventName(event: PipelineScheduleEvent): string {
+  return event.eventName?.trim() || event.title || event.organizationName;
+}
+
+function shortDescription(event: PipelineScheduleEvent): string | null {
+  const raw = event.description?.trim();
+  if (!raw) return null;
+  if (raw.length <= 220) return raw;
+  return `${raw.slice(0, 217).trimEnd()}…`;
+}
+
+function websiteHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  }
+}
+
+function EventDetailPopup({
+  event,
+  onClose,
+}: {
+  event: PipelineScheduleEvent;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const blurb = shortDescription(event);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pipeline-event-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-2xl border border-gray-700 bg-black p-5 sm:rounded-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="csc-eyebrow">{pipelineCategoryLabel(event.category)}</p>
+            <h2 id="pipeline-event-title" className="mt-1 text-lg font-semibold text-white">
+              {displayEventName(event)}
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-400">{event.organizationName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-2 py-1 text-sm text-gray-400 hover:bg-white/5 hover:text-white"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <dl className="mt-4 space-y-3 text-sm">
+          <div>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Date</dt>
+            <dd className="mt-0.5 text-gray-200">
+              {formatFullDay(event.eventDateEstimate)}
+              {event.eventDateConfidence ? (
+                <span className="ml-2 text-xs text-gray-500">{event.eventDateConfidence}</span>
+              ) : null}
+            </dd>
+          </div>
+          {blurb ? (
+            <div>
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Description
+              </dt>
+              <dd className="mt-0.5 text-gray-300">{blurb}</dd>
+            </div>
+          ) : null}
+          {event.websiteUrl ? (
+            <div>
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Website
+              </dt>
+              <dd className="mt-0.5">
+                <a
+                  href={event.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="csc-link break-all text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {websiteHost(event.websiteUrl)}
+                </a>
+              </dd>
+            </div>
+          ) : null}
+          <div>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Pipeline</dt>
+            <dd className="mt-0.5 text-gray-400">
+              {stageLabel(event.relationshipStage)}
+              {event.potentialAmount != null ? ` · ${formatUsd(event.potentialAmount)}` : ""}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-200 hover:bg-white/5"
+          >
+            Close
+          </button>
+          <Link
+            href={event.href}
+            className="rounded-lg bg-[var(--csc-accent)] px-4 py-2 text-sm font-medium text-black no-underline"
+          >
+            {event.queueItemId ? "Open in queue →" : "Open organization →"}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function PipelineScheduleCalendar() {
@@ -70,6 +211,7 @@ export default function PipelineScheduleCalendar() {
   const [cursorMonth, setCursorMonth] = useState(() => Number(today.slice(5, 7)) - 1);
   const [weekAnchor, setWeekAnchor] = useState(today);
   const [selectedDay, setSelectedDay] = useState<string | null>(today);
+  const [detailEvent, setDetailEvent] = useState<PipelineScheduleEvent | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +282,11 @@ export default function PipelineScheduleCalendar() {
     }
   }
 
+  function openEvent(event: PipelineScheduleEvent, day?: string) {
+    if (day) setSelectedDay(day);
+    setDetailEvent(event);
+  }
+
   const headerTitle =
     view === "week"
       ? `${formatListDay(gridDays[0])} – ${formatListDay(gridDays[6])}`
@@ -153,7 +300,7 @@ export default function PipelineScheduleCalendar() {
           <h2 className="mt-1 text-xl font-semibold text-white sm:text-2xl">{headerTitle}</h2>
           <p className="mt-1 text-sm text-gray-400">
             Potential conferences, fundraisers, and events from estimated dates. Overlap days are
-            marked so you can spot conflicts. Click an event to open it in the queue.
+            marked so you can spot conflicts. Click an event for details, then open the queue.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -224,13 +371,12 @@ export default function PipelineScheduleCalendar() {
       </p>
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      <div
-        className={`grid gap-px overflow-hidden rounded-xl border border-[var(--csc-row-divider)] bg-[var(--csc-row-divider)] ${
-          view === "week" ? "grid-cols-7" : "grid-cols-7"
-        }`}
-      >
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-[var(--csc-row-divider)] bg-[var(--csc-row-divider)]">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="bg-black px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          <div
+            key={d}
+            className="bg-black px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-500"
+          >
             {d}
           </div>
         ))}
@@ -257,9 +403,7 @@ export default function PipelineScheduleCalendar() {
               <div className="mb-1 flex items-center justify-between gap-1">
                 <span
                   className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    isToday
-                      ? "bg-[var(--csc-accent)] font-semibold text-black"
-                      : "text-gray-300"
+                    isToday ? "bg-[var(--csc-accent)] font-semibold text-black" : "text-gray-300"
                   }`}
                 >
                   {dayNumber(ymd)}
@@ -273,15 +417,28 @@ export default function PipelineScheduleCalendar() {
               <ul className="space-y-0.5">
                 {show.map((event) => (
                   <li key={event.opportunityId}>
-                    <Link
-                      href={event.href}
-                      onClick={(e) => e.stopPropagation()}
-                      className="block truncate rounded border border-white/10 bg-white/[0.04] px-1 py-0.5 text-[10px] leading-tight text-gray-200 no-underline hover:border-[var(--csc-accent)] hover:text-white"
-                      title={`${event.organizationName} — open in queue`}
+                    <span
+                      role="link"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEvent(event, ymd);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openEvent(event, ymd);
+                        }
+                      }}
+                      className="block cursor-pointer truncate rounded border border-white/10 bg-white/[0.04] px-1 py-0.5 text-[10px] leading-tight text-gray-200 hover:border-[var(--csc-accent)] hover:text-white"
+                      title={displayEventName(event)}
                     >
-                      <span className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${CATEGORY_DOT[event.category]}`} />
+                      <span
+                        className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${CATEGORY_DOT[event.category]}`}
+                      />
                       {event.organizationName}
-                    </Link>
+                    </span>
                   </li>
                 ))}
                 {more > 0 ? (
@@ -312,16 +469,19 @@ export default function PipelineScheduleCalendar() {
           <ul className="csc-list">
             {selectedEvents.map((event) => (
               <li key={event.opportunityId}>
-                <Link
-                  href={event.href}
-                  className="csc-list-row flex items-start justify-between gap-3 no-underline hover:bg-white/[0.03]"
+                <button
+                  type="button"
+                  onClick={() => openEvent(event)}
+                  className="csc-list-row flex w-full items-start justify-between gap-3 text-left hover:bg-white/[0.03]"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white">
-                      <span className={`mr-2 inline-block h-2 w-2 rounded-full ${CATEGORY_DOT[event.category]}`} />
-                      {event.organizationName}
+                      <span
+                        className={`mr-2 inline-block h-2 w-2 rounded-full ${CATEGORY_DOT[event.category]}`}
+                      />
+                      {displayEventName(event)}
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-gray-500">{event.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-gray-500">{event.organizationName}</p>
                     <p className="mt-0.5 text-[11px] uppercase tracking-wide text-gray-600">
                       {pipelineCategoryLabel(event.category)}
                       {" · "}
@@ -330,15 +490,17 @@ export default function PipelineScheduleCalendar() {
                       {event.potentialAmount != null ? ` · ${formatUsd(event.potentialAmount)}` : ""}
                     </p>
                   </div>
-                  <span className="csc-link shrink-0 text-xs">
-                    {event.queueItemId ? "Open in queue →" : "Open org →"}
-                  </span>
-                </Link>
+                  <span className="csc-link shrink-0 text-xs">Details →</span>
+                </button>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {detailEvent ? (
+        <EventDetailPopup event={detailEvent} onClose={() => setDetailEvent(null)} />
+      ) : null}
     </div>
   );
 }
