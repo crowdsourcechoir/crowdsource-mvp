@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getContact, updateContactVerification } from "@/lib/sales/db/contacts";
+import { operatorVouchedEmail } from "@/lib/sales/dedupe";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ co
     if (!contact.email) {
       return NextResponse.json({ error: "Contact has no email to verify." }, { status: 400 });
     }
-    if (contact.emailVerificationStatus === "invalid") {
+    if (contact.emailVerificationStatus === "invalid" && !operatorVouchedEmail(contact)) {
       return NextResponse.json(
         { error: "This address bounced — pick another contact instead of forcing verify." },
         { status: 409 }

@@ -39,6 +39,8 @@ Chrome-only preferences (Design system, sidebar) stay in `localStorage`.
 
 Settings card `gmail` is titled **Google connections** (`/admin/settings/gmail`). One OAuth grant covers Gmail send/read and `calendar.readonly`. Calendar meetings sync into Storage (`google-calendar/events-v1.json`) and surface at `/admin/sales/calendar`. After adding Calendar scope, reconnect Google once and allow Calendar.
 
+Gmail contact suggestions (people who look like they belong to an existing organization) live in Storage at `gmail-contact-suggestions/v1.json`. Scan from this page, the organization, or the sales queue. Approving adds the person; dismissing leaves them off. The Gmail cron also scans when the last scan is older than 20 hours.
+
 ## Card statuses
 
 | Status | Meaning |

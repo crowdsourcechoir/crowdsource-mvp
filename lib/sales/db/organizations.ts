@@ -196,3 +196,38 @@ export async function updateOrganization(id: string, patch: Partial<CreateOrgani
   if (error) throw new Error(error.message);
   return rowToOrganization(data);
 }
+
+export type OrganizationMatchRow = {
+  id: string;
+  name: string;
+  domains: string[];
+  duplicateOfOrganizationId: string | null;
+};
+
+/** Every organization, paged, with the domains used to match inbox addresses. */
+export async function listOrganizationMatchRows(): Promise<OrganizationMatchRow[]> {
+  const db = requireSupabaseAdmin();
+  const rows: OrganizationMatchRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db
+      .from("organizations")
+      .select("id, name, domain, website_url, duplicate_of_organization_id")
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      const domains = [row.domain, extractDomain(row.website_url as string | null)]
+        .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
+        .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+      rows.push({
+        id: row.id as string,
+        name: row.name as string,
+        domains,
+        duplicateOfOrganizationId: (row.duplicate_of_organization_id as string | null) ?? null,
+      });
+    }
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}

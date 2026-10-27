@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { AgentRun, Contact, Opportunity, Organization, PipelineRun, ResearchFinding } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
+import GmailOrgContactSuggestions from "@/components/sales/GmailOrgContactSuggestions";
 
 type PipelineRunWithStages = PipelineRun & { agentRuns: AgentRun[] };
 type FindingWithUrl = ResearchFinding & { sourceUrl: string };
@@ -188,6 +189,14 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           </ul>
         )}
       </section>
+
+      <GmailOrgContactSuggestions
+        organizationId={orgId}
+        onApproved={(message) => {
+          setContactMessage(message);
+          void load();
+        }}
+      />
 
       <section className="rounded-xl border border-gray-800 p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Contacts ({contacts.length})</h2>
