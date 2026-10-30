@@ -6,6 +6,7 @@ import { SEATTLE_FUNDRAISERS_2027_SEEDS } from "@/lib/sales/seed/seattle-fundrai
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
+import { RESEND_FORWARD_SEED, seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
 import {
   SEAHAWKS_SEED,
@@ -20,7 +21,8 @@ export const maxDuration = 300;
  * Upsert org + contacts (verified-format emails) and run pipeline into the approval queue.
  *
  * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
- * `{ preset: "elevate-vibe-create" }`, or `{ preset: "seattle-fundraisers-2027" }`.
+ * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
+ * `{ preset: "ballard-fc" }`, or `{ preset: "resend-forward" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -71,6 +73,16 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "resend-forward") {
+      const result = await seedResendForward({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "resend-forward",
+        seedCount: 1,
+        seed: RESEND_FORWARD_SEED.name,
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -93,7 +105,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );

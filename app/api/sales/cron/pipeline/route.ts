@@ -5,6 +5,7 @@ import { runPipelineBatch } from "@/lib/sales/pipeline/run-pipeline-batch";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
+import { seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,15 @@ export async function GET(request: Request) {
       };
     }
 
+    let resendForwardSeed = null;
+    try {
+      resendForwardSeed = await seedResendForward();
+    } catch (err) {
+      resendForwardSeed = {
+        error: err instanceof Error ? err.message : "Resend Forward seed failed",
+      };
+    }
+
     const limit = Number(process.env.SALES_PIPELINE_BATCH_SIZE) || undefined;
     const summary = await runPipelineBatch(limit);
     // Best-effort: never fail the pipeline cron if digest ensure errors (email/provider issues).
@@ -85,6 +95,7 @@ export async function GET(request: Request) {
       elevateVibeCreateSeed,
       ballardFcSeed,
       seattleFundraisersSeed,
+      resendForwardSeed,
       summary,
       digest,
       continuation,

@@ -37,6 +37,14 @@
       "schedule": "20 3 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-resend-forward",
+      "schedule": "25 1 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-resend-forward",
+      "schedule": "25 2 * * *"
+    },
+    {
       "path": "/api/marketing/cron/send",
       "schedule": "20 12 * * *"
     },
