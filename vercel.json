@@ -38,18 +38,6 @@
     },
     {
       "path": "/api/sales/cron/seed-resend-forward",
-      "schedule": "55 14 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-resend-forward",
-      "schedule": "10 15 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-resend-forward",
-      "schedule": "25 15 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-resend-forward",
       "schedule": "25 1 * * *"
     },
     {
