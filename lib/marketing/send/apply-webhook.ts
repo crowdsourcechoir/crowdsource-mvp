@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { marketingDb } from "../db/client";
 import { raiseDb } from "../db/errors";
 import { suppressComplaint, suppressHardBounce } from "./effects";
+import { refreshSendStats } from "./stats";
 import { forwardStatus, mapResendWebhook } from "./webhook";
 
 type DeliveryRow = {
@@ -123,5 +124,6 @@ export async function receiveResendWebhook(
   }
   if (mapped.suppress === "complaint") await suppressComplaint(delivery.person_id);
   if (mapped.suppress === "hard_bounce") await suppressHardBounce(delivery.person_id);
+  await refreshSendStats(delivery.campaign_send_id);
   return { status: 200, body: { ok: true, linked: true } };
 }

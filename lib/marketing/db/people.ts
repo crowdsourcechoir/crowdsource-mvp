@@ -103,6 +103,9 @@ export function rowToMarketingPerson(row: PersonRow): MarketingPerson {
         : null,
     tags: asArray(row.person_tags).map((tag) => tag.tag),
     mailchimpId: typeof attributes.mailchimp_id === "string" ? attributes.mailchimp_id : null,
+    suppressionReasons: (["hard_bounce", "complaint", "manual", "unsubscribe"] as SuppressionReason[]).filter((reason) =>
+      snapshot?.activeReasons.includes(reason)
+    ),
     suppressedAt: status === "subscribed" ? null : suppressedAt,
     bounceClass: snapshot?.activeReasons.includes("hard_bounce") ? "hard" : null,
     createdAt: row.created_at,
@@ -160,6 +163,7 @@ export type UpsertPersonInput = {
   tags?: string[];
   mailchimpId?: string | null;
   externalId?: string | null;
+  confirmedAt?: string | null;
   respectSuppression?: boolean;
 };
 
@@ -191,6 +195,7 @@ export async function upsertPerson(input: UpsertPersonInput): Promise<UpsertPers
   const previousAttributes = existing?.attributes ?? {};
   const attributes: Record<string, unknown> = { ...previousAttributes };
   if (input.mailchimpId) attributes.mailchimp_id = input.mailchimpId;
+  if (input.confirmedAt) attributes.mailchimp_confirm_time = input.confirmedAt;
   if (input.consentSource) attributes.consent_source = input.consentSource;
   if (input.externalId) attributes.external_id = input.externalId;
   if (input.acquisitionDetail) {
@@ -261,8 +266,14 @@ export async function upsertPerson(input: UpsertPersonInput): Promise<UpsertPers
     (created || previousStatus !== plan.status || plan.liftUnsubscribe || missingSuppressions.length > 0);
   if (statusChanged) {
     const subscription = existing ? marketingSubscription(existing) : null;
+    const confirmedAt =
+      input.confirmedAt && !Number.isNaN(new Date(input.confirmedAt).getTime())
+        ? new Date(input.confirmedAt).toISOString()
+        : null;
     const consentedAt =
-      plan.status === "subscribed" ? subscription?.consented_at ?? now : subscription?.consented_at ?? null;
+      plan.status === "subscribed"
+        ? subscription?.consented_at ?? confirmedAt ?? now
+        : subscription?.consented_at ?? null;
     const unsubscribedAt = plan.status === "unsubscribed" ? now : subscription?.unsubscribed_at ?? null;
     const { data: savedSub, error: subError } = await db
       .from("communication_subscriptions")
@@ -298,6 +309,7 @@ export async function upsertPerson(input: UpsertPersonInput): Promise<UpsertPers
       metadata: {
         consentSource: input.consentSource ?? null,
         requested: requestedStatus(input),
+        confirmTime: input.confirmedAt ?? null,
       },
     });
     raiseDb(eventError);
@@ -370,6 +382,22 @@ export async function listPeople(opts?: {
   return rows.slice(0, opts?.limit ?? 500);
 }
 
+export async function countExistingEmails(emails: string[]): Promise<number> {
+  const normalized = Array.from(
+    new Set(emails.map((email) => normalizeMarketingEmail(email)).filter((email): email is string => Boolean(email)))
+  );
+  if (!normalized.length) return 0;
+  const db = marketingDb();
+  let found = 0;
+  for (let index = 0; index < normalized.length; index += 200) {
+    const slice = normalized.slice(index, index + 200);
+    const { data, error } = await db.from("people").select("normalized_email").in("normalized_email", slice);
+    raiseDb(error);
+    found += data?.length ?? 0;
+  }
+  return found;
+}
+
 export async function audienceTotals(): Promise<{
   all: number;
   subscribed: number;
@@ -386,6 +414,24 @@ export async function audienceTotals(): Promise<{
     unsubscribed: totals.unsubscribed ?? 0,
     cleaned: totals.cleaned ?? 0,
   };
+}
+
+export async function setPersonTags(personId: string, tags: string[]): Promise<void> {
+  const next = Array.from(new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean)));
+  const db = marketingDb();
+  const { data, error } = await db.from("person_tags").select("tag").eq("person_id", personId);
+  raiseDb(error);
+  const current = new Set(((data ?? []) as { tag: string }[]).map((row) => row.tag));
+  const remove = Array.from(current).filter((tag) => !next.includes(tag));
+  const add = next.filter((tag) => !current.has(tag));
+  if (remove.length) {
+    const { error: deleteError } = await db.from("person_tags").delete().eq("person_id", personId).in("tag", remove);
+    raiseDb(deleteError);
+  }
+  if (add.length) {
+    const { error: insertError } = await db.from("person_tags").insert(add.map((tag) => ({ person_id: personId, tag })));
+    raiseDb(insertError);
+  }
 }
 
 export async function getPerson(id: string): Promise<MarketingPerson | null> {

@@ -1,3 +1,5 @@
+import type { SuppressionReason } from "./consent";
+
 /** Marketing v1 — Octo-owned audience, segments, campaigns, and email sends. */
 
 export type MarketingStatus = "subscribed" | "unsubscribed" | "cleaned" | "pending";
@@ -27,6 +29,7 @@ export type MarketingPerson = {
   acquisitionDetail: Record<string, unknown> | null;
   tags: string[];
   mailchimpId: string | null;
+  suppressionReasons: SuppressionReason[];
   suppressedAt: string | null;
   bounceClass: string | null;
   createdAt: string;

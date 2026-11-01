@@ -5,7 +5,8 @@ import { decideConsent, isMarketingEligible, presentationStatus } from "./consen
 import { legacyBlocksToDocument, documentToLegacyBlocks, migrateEmailDocument } from "./document/migrate";
 import { compileSegmentDefinition } from "./segments/compile";
 import { definitionToRules, rulesToDefinition } from "./segments/rules";
-import { parseMailchimpCsv } from "./ingest/mailchimp";
+import { inspectMailchimpCsv, parseMailchimpCsv, parseMailchimpTags } from "./ingest/mailchimp";
+import { engagementStats } from "./send/engagement";
 import type { EmailBlock } from "./types";
 
 const blocks: EmailBlock[] = [
@@ -108,6 +109,41 @@ const rows = parseMailchimpCsv(`Email,Status,City,Tags
 one@example.com,subscribed,Seattle,newsletter
 two@example.com,unsubscribed,Seattle,newsletter`);
 assert.equal(rows[1]?.status, "unsubscribed");
+
+const inspected = inspectMailchimpCsv(`Email Address,First Name,Last Name,Status,Tags,State,Country,Interests,CONFIRM_TIME,group:Volunteers
+"ada@example.com",Ada,Lovelace,subscribed,newsletter,,,,,,,
+"ada@example.com",Ada,Lovelace,subscribed,"newsletter, vip",WA,USA,"shows, choir",2020-01-02 03:04:05,stage
+,No,Email,subscribed,,,,,,,
+"not-an-email",Bad,Row,subscribed,,,,,,,
+"grace@example.com",Grace,Hopper,cleaned,,,,,"",
+`);
+assert.equal(inspected.summary.parsed, 2);
+assert.equal(inspected.summary.duplicateEmails, 1);
+assert.equal(inspected.summary.missingEmail, 1);
+assert.equal(inspected.summary.invalidEmail, 1);
+assert.equal(inspected.summary.subscribed, 1);
+assert.equal(inspected.summary.cleaned, 1);
+assert.equal(inspected.summary.withRegion, 1);
+assert.equal(inspected.summary.withCountry, 1);
+assert.equal(inspected.summary.withGroups, 1);
+assert.equal(inspected.summary.withConfirmTime, 1);
+const ada = inspected.rows.filter((row) => row.email === "ada@example.com").at(-1);
+assert.equal(ada?.displayName, "Ada Lovelace");
+assert.equal(ada?.region, "WA");
+assert.ok(parseMailchimpTags(ada?.tags).includes("group:shows"));
+assert.ok(parseMailchimpTags(ada?.tags).includes("group:volunteers:stage"));
+assert.equal(ada?.confirmedAt, "2020-01-02T03:04:05.000Z");
+
+const engagement = engagementStats(
+  [
+    { status: "delivered", recordedOpenCount: 1, clickCount: 0 },
+    { status: "bounced", recordedOpenCount: 0, clickCount: 0 },
+    { status: "complained", recordedOpenCount: 2, clickCount: 1 },
+    { status: "sent", recordedOpenCount: 0, clickCount: 0 },
+  ],
+  1
+);
+assert.deepEqual(engagement, { delivered: 2, bounced: 1, complained: 1, opened: 2, clicked: 1, unsubscribed: 2 });
 
 assert.equal(decideRootAuth({ passwordConfigured: true, token: undefined, expected: "abc" }), "unauthorized");
 assert.equal(decideRootAuth({ passwordConfigured: false, token: undefined, expected: null }), "allow");

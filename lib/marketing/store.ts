@@ -77,6 +77,12 @@ function normalizePerson(raw: unknown): MarketingPerson | null {
         : null,
     tags: asTags(row.tags),
     mailchimpId: asString(row.mailchimpId),
+    suppressionReasons: Array.isArray(row.suppressionReasons)
+      ? row.suppressionReasons.filter(
+          (reason): reason is MarketingPerson["suppressionReasons"][number] =>
+            reason === "unsubscribe" || reason === "hard_bounce" || reason === "complaint" || reason === "manual"
+        )
+      : [],
     suppressedAt: asString(row.suppressedAt),
     bounceClass: asString(row.bounceClass),
     createdAt: asString(row.createdAt) ?? new Date().toISOString(),

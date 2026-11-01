@@ -20,6 +20,7 @@ const basePerson: MarketingPerson = {
   acquisitionDetail: null,
   tags: ["newsletter"],
   mailchimpId: null,
+  suppressionReasons: [],
   suppressedAt: null,
   bounceClass: null,
   createdAt: new Date().toISOString(),

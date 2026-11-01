@@ -6,6 +6,7 @@ import type { MailSender } from "../providers/types";
 import { resendSender } from "../providers/resend";
 import { siteUrl } from "../../site-url";
 import { liveUnsubscribeLink, messageForRecipient } from "./deliver";
+import { refreshSendStats } from "./stats";
 import type { PreparedSend } from "./prepare";
 
 const BATCH = 100;
@@ -255,6 +256,7 @@ async function finishSend(sendId: string): Promise<WorkerResult> {
     })
     .eq("id", sendId);
   raiseDb(error);
+  await refreshSendStats(sendId);
   return { claimed: 0, sent: snapshot.sent, failed: snapshot.failed, remaining: snapshot.remaining };
 }
 
