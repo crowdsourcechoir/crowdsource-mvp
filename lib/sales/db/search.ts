@@ -25,11 +25,22 @@ export async function searchSalesDatabase(rawQuery: string): Promise<SalesSearch
   const db = requireSupabaseAdmin();
   const normalized = normalizeOrgName(term) || term.toLowerCase();
 
+  const orgTextFilter = orIlike(
+    ["name", "normalized_name", "domain", "website_url", "location_city", "location_region"],
+    term
+  );
+  // jsonb text paths so "wfea" / "other" hit WFEA directory tags + operator notes.
+  const orgMetaFilter = [
+    `import_metadata->>operatorNotes.ilike."%${term}%"`,
+    `import_metadata->>searchHaystack.ilike."%${term}%"`,
+    `import_metadata->>salesInitiative.ilike."%${term}%"`,
+  ].join(",");
+
   const [orgsRes, contactsRes, oppsRes, draftsRes, findingsRes] = await Promise.all([
     db
       .from("organizations")
-      .select("id, name, website_url, domain, location_city, location_region")
-      .or(orIlike(["name", "normalized_name", "domain", "website_url", "location_city", "location_region"], term))
+      .select("id, name, website_url, domain, location_city, location_region, import_metadata")
+      .or(`${orgTextFilter},${orgMetaFilter}`)
       .limit(TABLE_LIMIT),
     db
       .from("contacts")
@@ -64,6 +75,7 @@ export async function searchSalesDatabase(rawQuery: string): Promise<SalesSearch
     domain: string | null;
     location_city: string | null;
     location_region: string | null;
+    import_metadata?: Record<string, unknown> | null;
   }[];
   const contactRows = (contactsRes.data ?? []) as {
     organization_id: string;
@@ -96,17 +108,31 @@ export async function searchSalesDatabase(rawQuery: string): Promise<SalesSearch
   const matches: SearchMatch[] = [];
 
   for (const row of orgRows) {
-    const hay = [row.name, row.domain, row.website_url, row.location_city, row.location_region]
+    const meta = row.import_metadata ?? null;
+    const metaHay = [
+      typeof meta?.operatorNotes === "string" ? meta.operatorNotes : "",
+      typeof meta?.searchHaystack === "string" ? meta.searchHaystack : "",
+      typeof meta?.salesInitiative === "string" ? meta.salesInitiative : "",
+      Array.isArray(meta?.searchTags) ? meta.searchTags.join(" ") : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const hay = [row.name, row.domain, row.website_url, row.location_city, row.location_region, metaHay]
       .filter(Boolean)
       .join(" ");
     const loc = [row.location_city, row.location_region].filter(Boolean).join(", ");
-    const label = row.name.toLowerCase().includes(term.toLowerCase())
+    const termLower = term.toLowerCase();
+    const label = row.name.toLowerCase().includes(termLower)
       ? "Organization"
-      : loc.toLowerCase().includes(term.toLowerCase())
-        ? `Location · ${loc}`
-        : row.domain?.toLowerCase().includes(term.toLowerCase())
-          ? `Domain · ${row.domain}`
-          : "Organization";
+      : metaHay.toLowerCase().includes(termLower)
+        ? metaHay.toLowerCase().includes("wfea")
+          ? "WFEA / other"
+          : "Notes"
+        : loc.toLowerCase().includes(termLower)
+          ? `Location · ${loc}`
+          : row.domain?.toLowerCase().includes(termLower)
+            ? `Domain · ${row.domain}`
+            : "Organization";
     matches.push({
       organizationId: row.id,
       organizationName: row.name,

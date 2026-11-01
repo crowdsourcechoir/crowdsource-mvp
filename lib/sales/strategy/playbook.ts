@@ -85,6 +85,7 @@ const INITIATIVE_TO_WORKSTREAM: Partial<Record<SalesInitiativeKey, WorkstreamKey
   arts_culture: "owned",
   entertainment_media: "owned",
   tech_conferences: "premium",
+  wfea_network: "sponsor",
 };
 
 const CATEGORY_TO_WORKSTREAM: Record<QueueCategoryKey, WorkstreamKey> = {
@@ -94,6 +95,7 @@ const CATEGORY_TO_WORKSTREAM: Record<QueueCategoryKey, WorkstreamKey> = {
   arts: "owned",
   entertainment: "owned",
   tech: "premium",
+  other: "sponsor",
 };
 
 export type WorkstreamClassifyInput = {

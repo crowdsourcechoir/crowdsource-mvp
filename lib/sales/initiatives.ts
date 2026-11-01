@@ -55,6 +55,15 @@ export const SALES_INITIATIVES = {
     opportunityTypeKeys: ["annual_conference"] as const,
     industrySegmentKey: null,
   },
+  wfea_network: {
+    key: "wfea_network",
+    label: "WFEA / other",
+    description:
+      "Western Festival & Event Association member directory — festivals, chambers, vendors, and producers. Searchable as WFEA or Other.",
+    organizationTypeKeys: ["other", "festival", "association", "nonprofit"] as const,
+    opportunityTypeKeys: ["other", "community_festival", "annual_conference"] as const,
+    industrySegmentKey: null,
+  },
 } as const;
 
 export type SalesInitiativeKey = keyof typeof SALES_INITIATIVES;

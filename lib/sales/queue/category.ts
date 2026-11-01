@@ -13,6 +13,7 @@ export const QUEUE_CATEGORY_KEYS = [
   "arts",
   "entertainment",
   "tech",
+  "other",
 ] as const;
 
 export type QueueCategoryKey = (typeof QUEUE_CATEGORY_KEYS)[number];
@@ -26,6 +27,7 @@ export const QUEUE_CATEGORY_CHIPS: { key: QueueCategoryFilter; label: string }[]
   { key: "arts", label: "Arts" },
   { key: "entertainment", label: "Entertainment" },
   { key: "tech", label: "Tech" },
+  { key: "other", label: "Other" },
 ];
 
 const INITIATIVE_TO_CATEGORY: Record<string, QueueCategoryKey> = {
@@ -35,6 +37,7 @@ const INITIATIVE_TO_CATEGORY: Record<string, QueueCategoryKey> = {
   arts_culture: "arts",
   entertainment_media: "entertainment",
   tech_conferences: "tech",
+  wfea_network: "other",
 };
 
 export type QueueCategoryInput = {
@@ -114,6 +117,10 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
     return "conferences";
   }
 
+  if (orgType === "other" || /\bwfea\b|western festival|festival association/.test(text)) {
+    return "other";
+  }
+
   return "conferences";
 }
 
@@ -139,6 +146,7 @@ export function countQueueCategories<T extends QueueCategoryInput>(
     arts: 0,
     entertainment: 0,
     tech: 0,
+    other: 0,
   };
   for (const item of items) {
     counts[classifyQueueCategory(item)] += 1;

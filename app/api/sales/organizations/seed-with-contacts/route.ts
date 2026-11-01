@@ -8,6 +8,8 @@ import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversat
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import { RESEND_FORWARD_SEED, seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
+import { WFEA_MEMBERS } from "@/lib/sales/seed/wfea-members";
+import { seedWfeaMembers } from "@/lib/sales/seed/seed-wfea-members";
 import {
   SEAHAWKS_SEED,
   seedOrgWithContacts,
@@ -22,7 +24,7 @@ export const maxDuration = 300;
  *
  * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
  * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
- * `{ preset: "ballard-fc" }`, or `{ preset: "resend-forward" }`.
+ * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, or `{ preset: "wfea-members" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -83,6 +85,15 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "wfea-members") {
+      const result = await seedWfeaMembers({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "wfea-members",
+        seedCount: WFEA_MEMBERS.length,
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -105,7 +116,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );

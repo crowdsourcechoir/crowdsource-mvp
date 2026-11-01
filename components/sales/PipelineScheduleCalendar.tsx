@@ -28,6 +28,7 @@ const CATEGORY_DOT: Record<QueueCategoryKey, string> = {
   tech: "bg-violet-400",
   arts: "bg-amber-400",
   entertainment: "bg-emerald-400",
+  other: "bg-gray-400",
 };
 
 function monthTitle(year: number, monthIndex0: number): string {

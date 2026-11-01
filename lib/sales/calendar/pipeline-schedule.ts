@@ -38,6 +38,7 @@ const CATEGORY_LABEL: Record<QueueCategoryKey, string> = {
   arts: "Arts",
   entertainment: "Entertainment",
   tech: "Tech",
+  other: "Other",
 };
 
 export function pipelineCategoryLabel(key: QueueCategoryKey): string {
