@@ -46,6 +46,34 @@
     },
     {
       "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "20 19 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "40 19 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "10 20 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "40 20 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "10 21 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "40 21 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
+      "schedule": "10 22 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-members",
       "schedule": "30 1 * * *"
     },
     {
