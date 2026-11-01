@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { withMarketingAuth } from "@/lib/marketing/auth";
 import { createCampaign, listCampaignsWithEmails } from "@/lib/marketing/db/campaigns";
+import { refreshSendStatsFor } from "@/lib/marketing/send/stats";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(request: Request) {
   return withMarketingAuth(async () => {
     const payload = await listCampaignsWithEmails();
-    return NextResponse.json(payload);
+    if (new URL(request.url).searchParams.get("refreshStats") !== "1") return NextResponse.json(payload);
+    const ids = payload.emails
+      .filter((email) => email.status === "sent" || email.status === "sending")
+      .map((email) => email.id);
+    await refreshSendStatsFor(ids);
+    return NextResponse.json(await listCampaignsWithEmails());
   });
 }
 

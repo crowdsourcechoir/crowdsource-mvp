@@ -9,7 +9,7 @@ export default function MarketingAnalyticsClient() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/marketing/campaigns", { cache: "no-store" })
+        fetch("/api/marketing/campaigns?refreshStats=1", { cache: "no-store" })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to load");
@@ -35,13 +35,13 @@ export default function MarketingAnalyticsClient() {
       <SettingsPanel
         eyebrow="Analytics"
         title="Send results"
-        description="Delivery stats from Resend webhooks. Journey attribution (click → garden → contribute) comes in a later phase."
+        description="Counts come from each recipient after Resend reports delivery, bounce, a recorded open, or a click."
       >
         <StatGrid>
           <Stat label="Sent" value={totals.sent} />
           <Stat label="Delivered" value={totals.delivered} />
           <Stat label="Bounced" value={totals.bounced} />
-          <Stat label="Opened" value={totals.opened} hint="Best-effort / privacy-limited" />
+          <Stat label="Recorded opens" value={totals.opened} hint="A privacy-limited signal, not proof the inbox showed the message" />
           <Stat label="Clicked" value={totals.clicked} />
           <Stat label="Unsubscribed" value={totals.unsubscribed} />
         </StatGrid>
@@ -71,7 +71,7 @@ export default function MarketingAnalyticsClient() {
                 <StatusPill tone="neutral">Sent {email.stats.sent}</StatusPill>
                 <StatusPill tone="neutral">Delivered {email.stats.delivered}</StatusPill>
                 <StatusPill tone="off">Bounced {email.stats.bounced}</StatusPill>
-                <StatusPill tone="neutral">Opened {email.stats.opened}</StatusPill>
+                <StatusPill tone="neutral">Recorded opens {email.stats.opened}</StatusPill>
                 <StatusPill tone="neutral">Clicked {email.stats.clicked}</StatusPill>
               </div>
             </div>

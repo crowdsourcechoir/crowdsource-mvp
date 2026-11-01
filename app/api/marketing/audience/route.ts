@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { withMarketingAuth } from "@/lib/marketing/auth";
-import { audienceTotals, getPerson, listPeople, upsertPerson } from "@/lib/marketing/db/people";
+import { audienceTotals, getPerson, listPeople, setPersonTags, upsertPerson } from "@/lib/marketing/db/people";
 import type { MarketingStatus } from "@/lib/marketing/types";
 
 export const dynamic = "force-dynamic";
@@ -51,12 +51,20 @@ export async function PATCH(request: Request) {
       email: existing.email,
       displayName: typeof body.displayName === "string" ? body.displayName : existing.displayName,
       city: typeof body.city === "string" ? body.city : existing.city,
+      region: typeof body.region === "string" ? body.region : existing.region,
+      country: typeof body.country === "string" ? body.country : existing.country,
       status: typeof body.status === "string" ? (body.status as MarketingStatus) : existing.status,
       marketingConsent: typeof body.marketingConsent === "boolean" ? body.marketingConsent : existing.marketingConsent,
-      tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === "string") : existing.tags,
       respectSuppression: false,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
-    return NextResponse.json({ person: result.person, skippedReason: result.skippedReason });
+    if (Array.isArray(body.tags)) {
+      await setPersonTags(
+        existing.id,
+        body.tags.filter((tag): tag is string => typeof tag === "string")
+      );
+    }
+    const person = await getPerson(existing.id);
+    return NextResponse.json({ person: person ?? result.person, skippedReason: result.skippedReason });
   });
 }

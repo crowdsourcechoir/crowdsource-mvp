@@ -1,5 +1,6 @@
 import { marketingDb } from "../db/client";
 import { raiseDb } from "../db/errors";
+import { refreshSendStats } from "./stats";
 
 type SuppressionReason = "unsubscribe" | "hard_bounce" | "complaint" | "manual";
 type SuppressionSource = "octo" | "resend" | "mailchimp";
@@ -76,7 +77,34 @@ export async function unsubscribePerson(personId: string, subscriptionId: string
     reason: "unsubscribe",
     source: "octo",
   });
+  await recordUnsubscribeOnLatestSend(personId);
   return true;
+}
+
+async function recordUnsubscribeOnLatestSend(personId: string): Promise<void> {
+  const db = marketingDb();
+  const { data, error } = await db
+    .from("email_deliveries")
+    .select("id, campaign_send_id")
+    .eq("person_id", personId)
+    .in("status", ["sent", "delivered", "delayed", "bounced", "complained"])
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  raiseDb(error);
+  const delivery = data as { id: string; campaign_send_id: string } | null;
+  if (!delivery) return;
+  const { error: insertError } = await db.from("email_events").insert({
+    delivery_id: delivery.id,
+    campaign_send_id: delivery.campaign_send_id,
+    provider: "octo",
+    provider_event_id: `unsubscribe:${personId}:${delivery.id}`,
+    event_type: "unsubscribed",
+    occurred_at: new Date().toISOString(),
+    payload: { source: "unsubscribe_link" },
+  });
+  if (insertError && insertError.code !== "23505") raiseDb(insertError);
+  await refreshSendStats(delivery.campaign_send_id);
 }
 
 export async function suppressComplaint(personId: string): Promise<void> {

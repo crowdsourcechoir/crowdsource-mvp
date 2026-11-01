@@ -24,6 +24,7 @@ export default function MarketingSegmentsClient() {
   const [segments, setSegments] = useState<SegmentRow[]>([]);
   const [name, setName] = useState("");
   const [city, setCity] = useState("Seattle");
+  const [tag, setTag] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +113,27 @@ export default function MarketingSegmentsClient() {
               Create city segment
             </SettingsButton>
           </div>
+        </div>
+        <div className="mt-3 flex min-w-[14rem] flex-1 items-end gap-2">
+          <div className="flex-1">
+            <FieldLabel hint="Use a Mailchimp tag or a group: tag from import">Tag segment</FieldLabel>
+            <TextField value={tag} onChange={setTag} placeholder="newsletter" />
+          </div>
+          <SettingsButton
+            disabled={busy || !tag.trim()}
+            onClick={() =>
+              createSegment(
+                [
+                  { field: "status", op: "eq", value: "subscribed" },
+                  { field: "marketingConsent", op: "eq", value: true },
+                  { field: "tag", op: "eq", value: tag.trim() },
+                ],
+                name.trim() || `${tag.trim()} subscribers`
+              )
+            }
+          >
+            Create tag segment
+          </SettingsButton>
         </div>
         <div className="mt-3 max-w-md">
           <FieldLabel hint="Optional custom name for the next create action">Name override</FieldLabel>
