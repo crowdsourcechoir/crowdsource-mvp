@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { OpportunityPageDetail, ScoreComponentKey } from "@/lib/sales/types";
+import type { OpportunityPageDetail, RelationshipStage, ScoreComponentKey } from "@/lib/sales/types";
 import { SCORE_COMPONENT_LABELS } from "@/lib/sales/scoring/model";
 import GmailThreadLink from "@/components/sales/GmailThreadLink";
 import FollowUpControls from "@/components/sales/FollowUpControls";
@@ -11,8 +11,9 @@ import OpportunityPitchesStrip from "@/components/sales/OpportunityPitchesStrip"
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { looksLikeHtml, sanitizeEmailHtml, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
-import { funnelStageLabel } from "@/lib/sales/funnel-labels";
+import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
+import { publicErrorMessage } from "@/lib/sales/http-error";
 
 const FINDING_LABELS: Record<string, string> = {
   audience_size: "Audience",
@@ -52,6 +53,8 @@ function ScoreBadge({ score }: { score: number }) {
 export default function OpportunityDetailClient({ opportunityId }: { opportunityId: string }) {
   const [detail, setDetail] = useState<OpportunityPageDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [stageBusy, setStageBusy] = useState(false);
   const [showScoreDetails, setShowScoreDetails] = useState(false);
   const [showEmailBody, setShowEmailBody] = useState(false);
   const [showFindings, setShowFindings] = useState(false);
@@ -71,6 +74,41 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   useEffect(() => {
     load();
   }, [load]);
+
+  const moveFunnel = useCallback(
+    (stage: RelationshipStage) => {
+      if (!detail || stageBusy) return;
+      if (detail.opportunity.relationshipStage === stage) return;
+      const previous = detail.opportunity.relationshipStage;
+      setStageBusy(true);
+      setStageError(null);
+      setDetail({
+        ...detail,
+        opportunity: { ...detail.opportunity, relationshipStage: stage },
+      });
+      void (async () => {
+        try {
+          const res = await fetch(`/api/sales/opportunities/${detail.opportunity.id}/stage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ stage }),
+          });
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          if (!res.ok) throw new Error(data.error ?? "Could not move funnel");
+        } catch (err) {
+          setDetail((current) =>
+            current
+              ? { ...current, opportunity: { ...current.opportunity, relationshipStage: previous } }
+              : current
+          );
+          setStageError(publicErrorMessage(err, "Could not move funnel"));
+        } finally {
+          setStageBusy(false);
+        }
+      })();
+    },
+    [detail, stageBusy]
+  );
 
   const findingsByType = useMemo(() => {
     if (!detail) return [];
@@ -111,7 +149,28 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
         </p>
         <h1 className="mt-1 text-2xl font-bold text-white">{opportunity.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-md border border-gray-700 px-2 py-0.5 text-gray-300">{funnelStageLabel(opportunity.relationshipStage)}</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Funnel</span>
+            {FUNNEL_STAGES.map((s) => {
+              const active = opportunity.relationshipStage === s.key;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  disabled={stageBusy}
+                  aria-pressed={active}
+                  onClick={() => moveFunnel(s.key)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[var(--csc-accent)] text-black"
+                      : "border border-white/15 bg-transparent text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
           {detail.opportunityTypeLabel && (
             <span className="rounded-md border border-gray-800 px-2 py-0.5 text-gray-400">{detail.opportunityTypeLabel}</span>
           )}
@@ -128,6 +187,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
             </span>
           )}
         </div>
+        {stageError ? <p className="mt-2 text-sm text-red-400">{stageError}</p> : null}
         {detail.latestReplySnippet ? (
           <p className="mt-3 line-clamp-4 rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-sm text-gray-300">
             {detail.latestReplySnippet}
