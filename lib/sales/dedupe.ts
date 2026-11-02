@@ -96,20 +96,47 @@ export function hasVerifiedEmail(contact: Contact | null | undefined): boolean {
 }
 
 /**
+ * Joel typed or approved this address, or an earlier manual add was hidden after Hunter
+ * called it a bounce. Those rows stay on the org and in the send list.
+ * Seeded / pasted / Hunter-search rows are not treated as a voucher unless they set the flag.
+ */
+export function operatorVouchedEmail(
+  contact: Pick<Contact, "source" | "emailVerificationStatus" | "importMetadata"> | null | undefined
+): boolean {
+  if (!contact) return false;
+  const meta = contact.importMetadata ?? {};
+  if (meta.operatorConfirmedEmail === true) return true;
+  return (
+    contact.source === "manual" &&
+    contact.emailVerificationStatus === "invalid" &&
+    meta.seededManually !== true &&
+    meta.pastedContact !== true &&
+    meta.hunterDomainSearch !== true
+  );
+}
+
+export function withOperatorConfirmedEmail(
+  metadata: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  return { ...(metadata ?? {}), operatorConfirmedEmail: true };
+}
+
+/**
  * Shown in the queue contact grid: named people with an email, or a general inbox.
- * Invalid / duplicate rows stay hidden.
+ * Hunter-invalid rows stay hidden unless Joel already vouched for the address.
  */
 export function isSelectableContact(contact: Contact | null | undefined): boolean {
   if (!contact?.email || !isPlausibleEmail(contact.email)) return false;
   if (contact.duplicateOfContactId) return false;
-  if (contact.emailVerificationStatus === "invalid") return false;
+  if (contact.emailVerificationStatus === "invalid" && !operatorVouchedEmail(contact)) return false;
   return looksLikePersonName(contact.fullName) || isGenericMailboxEmail(contact.email);
 }
 
 /**
  * Ready to enqueue / draft / send: selectable contact that is not a known bounce.
  * Hunter `accept_all` / risky / unverified named people are allowed — Joel rejects
- * in the queue. Hard block remains `invalid` (+ outbound blocklist at call sites).
+ * in the queue. Hard block remains `invalid` (+ outbound blocklist at call sites),
+ * unless Joel typed or approved the address.
  */
 export function isSendableContact(contact: Contact | null | undefined): boolean {
   return isSelectableContact(contact);

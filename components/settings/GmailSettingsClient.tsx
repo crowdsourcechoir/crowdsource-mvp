@@ -13,6 +13,7 @@ import {
   TextField,
   ToggleRow,
 } from "@/components/settings/ui";
+import GmailOrgContactSuggestions from "@/components/sales/GmailOrgContactSuggestions";
 
 type GmailStatus = {
   connected: boolean;
@@ -471,6 +472,14 @@ export default function GmailSettingsClient({
             emergency stop.
           </li>
         </ul>
+      </SettingsPanel>
+
+      <SettingsPanel
+        eyebrow="Inbox"
+        title="People at organizations"
+        description="Scan Gmail for people who look like they belong to an organization you already track. You approve each one before they are added."
+      >
+        <GmailOrgContactSuggestions />
       </SettingsPanel>
 
       <SettingsPanel

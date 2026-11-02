@@ -5,7 +5,7 @@ import { getOrganization } from "@/lib/sales/db/organizations";
 import { getContact } from "@/lib/sales/db/contacts";
 import { listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { ensureContactDrafts } from "@/lib/sales/seed/enqueue-manual";
-import { isGenericMailboxEmail, isSendableContact, looksLikePersonName } from "@/lib/sales/dedupe";
+import { isGenericMailboxEmail, isSendableContact, looksLikePersonName, operatorVouchedEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     if (!contact.email) {
       return NextResponse.json({ error: "Contact needs an email" }, { status: 400 });
     }
-    if (contact.emailVerificationStatus === "invalid") {
+    if (contact.emailVerificationStatus === "invalid" && !operatorVouchedEmail(contact)) {
       return NextResponse.json({ error: "That address failed verification — it will bounce." }, { status: 400 });
     }
     if (!isSendableContact(contact)) {

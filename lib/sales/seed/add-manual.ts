@@ -8,7 +8,7 @@ import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
 import { createOrUpdateQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
-import { extractDomain, isGenericMailboxEmail, isPlausibleEmail, isSendableContact, looksLikeGenericRoleName, looksLikePersonName, genericMailboxLabel, normalizeEmail } from "@/lib/sales/dedupe";
+import { extractDomain, isGenericMailboxEmail, isPlausibleEmail, isSendableContact, looksLikeGenericRoleName, looksLikePersonName, genericMailboxLabel, normalizeEmail, withOperatorConfirmedEmail } from "@/lib/sales/dedupe";
 import { enrichContactEmail } from "@/lib/sales/enrichment";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
 import {
@@ -85,17 +85,21 @@ async function upsertNamedContact(input: {
   organizationId: string;
   fullName: string;
   email: string;
-  roleTitle: string | null;
+  roleTitle?: string | null;
   emailVerificationStatus?: Contact["emailVerificationStatus"];
+  importMetadata?: Record<string, unknown> | null;
 }): Promise<{ contact: Contact; created: boolean }> {
   const status = input.emailVerificationStatus ?? "unverified";
   const existing = await findExistingContact(input.organizationId, input.email, input.fullName);
   if (existing) {
     const contact = await updateContact(existing.id, {
       fullName: input.fullName,
-      roleTitle: input.roleTitle ?? existing.roleTitle,
+      roleTitle: input.roleTitle === undefined ? existing.roleTitle : input.roleTitle,
       email: input.email,
       emailVerificationStatus: status,
+      importMetadata: input.importMetadata
+        ? { ...(existing.importMetadata ?? {}), ...input.importMetadata }
+        : existing.importMetadata,
     });
     return { contact, created: false };
   }
@@ -106,8 +110,45 @@ async function upsertNamedContact(input: {
     email: input.email,
     source: "manual",
     emailVerificationStatus: status,
+    importMetadata: input.importMetadata ?? null,
   });
   return { contact, created: true };
+}
+
+/**
+ * Save a person Joel asked for. An address he typed or approved is stored as-is.
+ * Hunter is not allowed to reject that add or hide the row as a bounce.
+ */
+export async function saveOperatorContact(input: {
+  organizationId: string;
+  fullName: string;
+  email: string;
+  roleTitle?: string | null;
+  trustEmail: boolean;
+  extraMetadata?: Record<string, unknown> | null;
+}): Promise<Contact> {
+  let status: Contact["emailVerificationStatus"] = "valid_format";
+  let metadata: Record<string, unknown> = { ...(input.extraMetadata ?? {}) };
+  if (input.trustEmail) {
+    metadata = withOperatorConfirmedEmail(metadata);
+  } else {
+    const verified = await verifyEmailAddress(input.email);
+    if (verified.hunterStatus) metadata.hunterVerifier = verified.hunterStatus;
+    if (verified.status === "invalid" || verified.status === "unverified") {
+      status = "valid_format";
+    } else {
+      status = verified.status;
+    }
+  }
+  const { contact } = await upsertNamedContact({
+    organizationId: input.organizationId,
+    fullName: input.fullName,
+    email: input.email,
+    roleTitle: input.roleTitle === undefined ? undefined : input.roleTitle?.trim() || null,
+    emailVerificationStatus: status,
+    importMetadata: metadata,
+  });
+  return contact;
 }
 
 export type AddOrgQuickInput = {
@@ -153,6 +194,7 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
 
   const parsed = parseManualContactInput(input.contactFullName ?? "", input.contactEmail ?? null);
   const contactName = parsed.displayName ?? "";
+  const typedEmail = Boolean(parsed.email);
   let email = parsed.email ?? "";
   let hunter = { attempted: false, found: false, error: null as string | null };
 
@@ -169,20 +211,13 @@ export async function addOrganizationQuick(input: AddOrgQuickInput): Promise<Add
 
   let contact: Contact | null = null;
   if (email && isPlausibleEmail(email) && (parsed.isGenericMailbox || looksLikePersonName(contactName))) {
-    const verified = await verifyEmailAddress(email);
-    if (verified.status === "invalid") {
-      hunter.error = `Hunter says ${email} will bounce.`;
-      email = "";
-    } else {
-      const upserted = await upsertNamedContact({
-        organizationId: organization.id,
-        fullName: contactName || genericMailboxLabel(email),
-        email,
-        roleTitle: input.contactRoleTitle?.trim() || (parsed.isGenericMailbox ? "General inbox" : null),
-        emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
-      });
-      contact = upserted.contact;
-    }
+    contact = await saveOperatorContact({
+      organizationId: organization.id,
+      fullName: contactName || genericMailboxLabel(email),
+      email,
+      roleTitle: input.contactRoleTitle?.trim() || (parsed.isGenericMailbox ? "General inbox" : null),
+      trustEmail: typedEmail,
+    });
   } else if (contactName && !email) {
     // Persist the named person even without email so Joel can fill it later.
     if (looksLikePersonName(contactName)) {
@@ -274,6 +309,7 @@ export async function addContactToQueueItem(input: {
     throw new Error("Use a first and last name, or a general inbox like info@ or events@.");
   }
   const fullName = parsed.displayName ?? "";
+  const typedEmail = Boolean(parsed.email);
   let email = parsed.email ?? "";
   let hunter = { attempted: false, found: false, error: null as string | null };
   if (!email && looksLikePersonName(fullName) && !parsed.isGenericMailbox) {
@@ -304,35 +340,15 @@ export async function addContactToQueueItem(input: {
     };
   }
 
-  const verified = await verifyEmailAddress(email);
-  if (verified.status === "invalid") {
-    const contact = await createContact({
-      organizationId: organization.id,
-      fullName,
-      roleTitle: input.roleTitle?.trim() || null,
-      email,
-      source: "manual",
-      emailVerificationStatus: "invalid",
-    });
-    return {
-      contact,
-      hunter,
-      selected: false,
-      detail: await assembleQueueItemDetailFromQueueItem(item),
-      message: `Saved ${fullName} but Hunter says ${email} will bounce — not added to the send list.`,
-    };
-  }
-
-  const { contact } = await upsertNamedContact({
+  const contact = await saveOperatorContact({
     organizationId: organization.id,
     fullName: fullName || genericMailboxLabel(email),
     email,
     roleTitle: input.roleTitle?.trim() || (parsed.isGenericMailbox ? "General inbox" : null),
-    emailVerificationStatus: verified.status === "unverified" ? "valid_format" : verified.status,
+    trustEmail: typedEmail,
   });
 
-  // Queue for send even when Hunter returns accept_all / risky — Joel decides in the queue.
-  // Hard bounces already returned above.
+  // A typed address is kept even when Hunter would call it a bounce. Joel already decided.
   const created = await ensureContactDrafts({
     organization,
     opportunityId: opportunity.id,
@@ -356,11 +372,9 @@ export async function addContactToQueueItem(input: {
   const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : null;
 
   const hunterNote =
-    !parsed.isGenericMailbox && verified.status === "risky"
-      ? ` Hunter flagged ${email} as ${verified.hunterStatus ?? "risky"} (catch-all) — send if you trust it.`
-      : !parsed.isGenericMailbox && verified.status !== "verified_deliverable"
-        ? ` Hunter status: ${verified.hunterStatus ?? verified.status}.`
-        : "";
+    !typedEmail && contact.emailVerificationStatus === "risky"
+      ? ` Hunter flagged ${email} as catch-all — send if you trust it.`
+      : "";
 
   return {
     contact,
