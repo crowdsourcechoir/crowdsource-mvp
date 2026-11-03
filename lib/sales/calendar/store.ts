@@ -9,7 +9,7 @@ import type { CalendarSyncStore, SyncedCalendarEvent } from "./types";
 
 /**
  * Meeting store — JSON object in Supabase Storage (same pattern as workspace settings).
- * Good for a single operator's past-7 / next-30 day window without a schema migration.
+ * Good for a single operator's recent / next-90 day window without a schema migration.
  * Falls back to `.data/google-calendar-events.json` when Supabase is not configured (local).
  */
 

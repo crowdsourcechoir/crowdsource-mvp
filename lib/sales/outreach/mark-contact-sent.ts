@@ -18,6 +18,7 @@ import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { pickNextRemainingInitialDraft } from "@/lib/sales/outreach/send-guard";
 import { EXTERNAL_SENT_BODY, EXTERNAL_SENT_SUBJECT } from "@/lib/sales/outreach/external-sent";
 import { soonestFollowUpIso } from "@/lib/sales/outreach/nudge-due";
+import { coerceFollowUpIso } from "@/lib/sales/follow-up/meeting-reminder";
 import type { OutreachDraft } from "@/lib/sales/types";
 
 function isOpenDraft(draft: OutreachDraft): boolean {
@@ -153,7 +154,11 @@ export async function markContactSent(input: {
   }
 
   const candidateFollowUp = addDaysIso(now, NUDGE_DUE_AFTER_DAYS);
-  const nextFollowUpAt = soonestFollowUpIso(opportunity.nextFollowUpAt, candidateFollowUp);
+  const nextFollowUpAt =
+    coerceFollowUpIso({
+      proposedIso: soonestFollowUpIso(opportunity.nextFollowUpAt, candidateFollowUp),
+      importMetadata: opportunity.importMetadata,
+    }) ?? candidateFollowUp;
   writes.push(
     updateOpportunityTouchTimestamps(opportunity.id, {
       lastOutboundAt: now,

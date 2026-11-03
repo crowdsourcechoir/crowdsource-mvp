@@ -5,6 +5,8 @@ import { getGmailConnection } from "../db/gmail";
 import { getOpportunity, updateOpportunityRelationshipStage, updateOpportunityTouchTimestamps } from "../db/opportunities";
 import { classifyInbound, extractEmailAddresses, failedRecipientsFromBounce } from "../outreach/inbound-kind";
 import { parseFromHeader, resolveCorrespondent } from "../outreach/reply-correspondent";
+import { coerceFollowUpIso } from "../follow-up/meeting-reminder";
+import { backfillMeetingReminders, maybeScheduleMeetingReminder } from "../calendar/meeting-reminder";
 import { getGmailClient, persistHistoryId } from "./client";
 import { GMAIL_OWNER_KEY, NUDGE_DUE_AFTER_DAYS, addDaysIso } from "./constants";
 
@@ -15,10 +17,11 @@ export type GmailSyncResult = {
   autoRepliesRecorded: number;
   outboundsRecorded: number;
   bouncesRecorded: number;
+  meetingRemindersScheduled: number;
   errors: string[];
 };
 
-type ProcessResult = { reply: boolean; auto: boolean; bounce: boolean; outbound: boolean };
+type ProcessResult = { reply: boolean; auto: boolean; bounce: boolean; outbound: boolean; meeting: boolean };
 
 function headerValue(
   headers: { name?: string | null; value?: string | null }[] | undefined,
@@ -123,12 +126,12 @@ async function recordReply(input: {
   subject: string | null;
   internalDate: string | null;
   replyKind: "live" | "auto";
-}): Promise<boolean> {
+}): Promise<{ recorded: boolean; meeting: boolean }> {
   const existing = await findActivityByGmailMessageId(input.gmailMessageId);
-  if (existing) return false;
+  if (existing) return { recorded: false, meeting: false };
 
   const opportunity = await getOpportunity(input.opportunityId);
-  if (!opportunity) return false;
+  if (!opportunity) return { recorded: false, meeting: false };
 
   const contactId = await resolveContactId(
     input.opportunityId,
@@ -140,7 +143,7 @@ async function recordReply(input: {
     ? new Date(Number(input.internalDate)).toISOString()
     : new Date().toISOString();
 
-  await createOutreachActivity({
+  const activity = await createOutreachActivity({
     opportunityId: input.opportunityId,
     contactId,
     activityType: "replied",
@@ -156,10 +159,29 @@ async function recordReply(input: {
     },
   });
 
+  let meeting = false;
+  let importMetadata = opportunity.importMetadata;
   if (input.replyKind === "live") {
+    try {
+      const scheduled = await maybeScheduleMeetingReminder({
+        opportunityId: input.opportunityId,
+        activityId: activity.id,
+        gmailMessageId: input.gmailMessageId,
+        gmailThreadId: input.gmailThreadId,
+        contactId,
+        subject: input.subject,
+        snippet: input.snippet,
+        occurredAt,
+        fetchBody: true,
+      });
+      meeting = scheduled.scheduled;
+      if (scheduled.importMetadata) importMetadata = scheduled.importMetadata;
+    } catch (err) {
+      console.warn("[gmail-sync] meeting reminder skipped:", err instanceof Error ? err.message : err);
+    }
     await updateOpportunityTouchTimestamps(input.opportunityId, {
       lastInboundAt: occurredAt,
-      nextFollowUpAt: occurredAt,
+      nextFollowUpAt: coerceFollowUpIso({ proposedIso: occurredAt, importMetadata }),
       gmailThreadId: input.gmailThreadId,
     });
     if (opportunity.relationshipStage === "awareness") {
@@ -167,7 +189,7 @@ async function recordReply(input: {
     }
   }
 
-  return true;
+  return { recorded: true, meeting };
 }
 
 async function recordBounce(input: {
@@ -225,12 +247,12 @@ async function recordOutbound(input: {
   snippet: string | null;
   subject: string | null;
   internalDate: string | null;
-}): Promise<boolean> {
+}): Promise<{ recorded: boolean; meeting: boolean }> {
   const existing = await findActivityByGmailMessageId(input.gmailMessageId);
-  if (existing) return false;
+  if (existing) return { recorded: false, meeting: false };
 
   const opportunity = await getOpportunity(input.opportunityId);
-  if (!opportunity) return false;
+  if (!opportunity) return { recorded: false, meeting: false };
 
   let contactId: string | null = null;
   for (const email of input.toEmails) {
@@ -242,7 +264,7 @@ async function recordOutbound(input: {
     ? new Date(Number(input.internalDate)).toISOString()
     : new Date().toISOString();
 
-  await createOutreachActivity({
+  const activity = await createOutreachActivity({
     opportunityId: input.opportunityId,
     contactId,
     activityType: "sent",
@@ -257,12 +279,35 @@ async function recordOutbound(input: {
     },
   });
 
+  let meeting = false;
+  let importMetadata = opportunity.importMetadata;
+  try {
+    const scheduled = await maybeScheduleMeetingReminder({
+      opportunityId: input.opportunityId,
+      activityId: activity.id,
+      gmailMessageId: input.gmailMessageId,
+      gmailThreadId: input.gmailThreadId,
+      contactId,
+      subject: input.subject,
+      snippet: input.snippet,
+      occurredAt,
+      fetchBody: true,
+    });
+    meeting = scheduled.scheduled;
+    if (scheduled.importMetadata) importMetadata = scheduled.importMetadata;
+  } catch (err) {
+    console.warn("[gmail-sync] meeting reminder skipped:", err instanceof Error ? err.message : err);
+  }
+
   await updateOpportunityTouchTimestamps(input.opportunityId, {
     lastOutboundAt: occurredAt,
-    nextFollowUpAt: addDaysIso(occurredAt, NUDGE_DUE_AFTER_DAYS),
+    nextFollowUpAt: coerceFollowUpIso({
+      proposedIso: addDaysIso(occurredAt, NUDGE_DUE_AFTER_DAYS),
+      importMetadata,
+    }),
     gmailThreadId: input.gmailThreadId,
   });
-  return true;
+  return { recorded: true, meeting };
 }
 
 async function processInboundMessage(
@@ -270,7 +315,7 @@ async function processInboundMessage(
   messageId: string,
   ourEmail: string
 ): Promise<ProcessResult> {
-  const empty: ProcessResult = { reply: false, auto: false, bounce: false, outbound: false };
+  const empty: ProcessResult = { reply: false, auto: false, bounce: false, outbound: false, meeting: false };
   if (!gmail) return empty;
   const res = await gmail.gmail.users.messages.get({
     userId: "me",
@@ -310,7 +355,7 @@ async function processInboundMessage(
       subject,
       internalDate: res.data.internalDate ?? null,
     });
-    return { reply: false, auto: false, bounce: false, outbound: recorded };
+    return { reply: false, auto: false, bounce: false, outbound: recorded.recorded, meeting: recorded.meeting };
   }
 
   const kind = classifyInbound({
@@ -358,7 +403,7 @@ async function processInboundMessage(
       subject,
       internalDate: res.data.internalDate ?? null,
     });
-    return { reply: false, auto: false, bounce: recorded, outbound: false };
+    return { reply: false, auto: false, bounce: recorded, outbound: false, meeting: false };
   }
 
   let opportunityId = await findOpportunityIdByGmailThreadId(threadId);
@@ -382,8 +427,8 @@ async function processInboundMessage(
     internalDate: res.data.internalDate ?? null,
     replyKind: kind,
   });
-  if (!recorded) return empty;
-  return { reply: kind === "live", auto: kind === "auto", bounce: false, outbound: false };
+  if (!recorded.recorded) return empty;
+  return { reply: kind === "live", auto: kind === "auto", bounce: false, outbound: false, meeting: recorded.meeting };
 }
 
 /**
@@ -398,6 +443,7 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
     autoRepliesRecorded: 0,
     outboundsRecorded: 0,
     bouncesRecorded: 0,
+    meetingRemindersScheduled: 0,
     errors,
   };
   const bundle = await getGmailClient(ownerKey);
@@ -489,6 +535,7 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
   let autoRepliesRecorded = 0;
   let outboundsRecorded = 0;
   let bouncesRecorded = 0;
+  let meetingRemindersScheduled = 0;
   for (const messageId of Array.from(candidateMessageIds)) {
     try {
       const recorded = await processInboundMessage(bundle, messageId, bundle.email);
@@ -496,9 +543,18 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
       if (recorded.auto) autoRepliesRecorded += 1;
       if (recorded.outbound) outboundsRecorded += 1;
       if (recorded.bounce) bouncesRecorded += 1;
+      if (recorded.meeting) meetingRemindersScheduled += 1;
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  try {
+    const backfill = await backfillMeetingReminders({ maxBodyFetches: 12 });
+    meetingRemindersScheduled += backfill.scheduled;
+    for (const message of backfill.errors) errors.push(message);
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : String(err));
   }
 
   return {
@@ -508,6 +564,7 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
     autoRepliesRecorded,
     outboundsRecorded,
     bouncesRecorded,
+    meetingRemindersScheduled,
     errors,
   };
 }
