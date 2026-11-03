@@ -20,6 +20,7 @@ import {
   type RevenueEngineKey,
 } from "@/lib/sales/engines";
 import { apiErrorFromBody, publicErrorMessage } from "@/lib/sales/http-error";
+import { compareQuoteToSuggested, readAnthemPricing } from "@/lib/sales/pricing/metadata";
 
 type Suggestions = Record<FlagshipOfferKey, number>;
 
@@ -63,6 +64,8 @@ export default function OpportunityPortfolioPanel({
   const [offer, setOffer] = useState<FlagshipOfferKey | "">(readFlagshipOffer(importMetadata) ?? "");
   const economics = readDealEconomics(importMetadata);
   const forecast = readDealForecast(importMetadata);
+  const anthemPricing = readAnthemPricing(importMetadata);
+  const quoteGap = compareQuoteToSuggested(importMetadata);
   const [booked, setBooked] = useState(moneyDraft(economics.bookedAmount));
   const [cash, setCash] = useState(moneyDraft(economics.cashCollected));
   const [earned, setEarned] = useState(moneyDraft(economics.earnedAmount));
@@ -255,6 +258,42 @@ export default function OpportunityPortfolioPanel({
             ))}
           </select>
         </div>
+
+        {anthemPricing.pricingCategory || anthemPricing.suggestedAnthemFee != null ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-gray-400">
+            <span className="font-semibold uppercase tracking-[0.14em] text-gray-500">Suggested</span>
+            <span className="rounded-md border border-white/10 px-2 py-1 text-gray-200">
+              {anthemPricing.suggestedAnthemFee != null
+                ? formatUsd(anthemPricing.suggestedAnthemFee)
+                : "Needs review"}
+            </span>
+            {anthemPricing.pricingCategory ? (
+              <span className="text-gray-500 capitalize">{anthemPricing.pricingCategory}</span>
+            ) : null}
+            {anthemPricing.pricingConfidence ? (
+              <span className="text-gray-600">{anthemPricing.pricingConfidence} confidence</span>
+            ) : null}
+            {quoteGap.materialDifference ? (
+              <span className="text-amber-400/90">Differs from quote/potential</span>
+            ) : null}
+            {showDealForecast && anthemPricing.suggestedAnthemFee != null ? (
+              <button
+                type="button"
+                disabled={busy}
+                title="Copy suggested fee into pipeline potential — does not change booked/signed amounts"
+                onClick={() => applyPotential(anthemPricing.suggestedAnthemFee!)}
+                className="rounded-md border border-white/15 px-2 py-1 text-gray-300 hover:border-[var(--csc-accent)] hover:text-white disabled:opacity-50"
+              >
+                Use as potential
+              </button>
+            ) : null}
+            {anthemPricing.pricingRationale ? (
+              <span className="max-w-[28rem] truncate text-gray-500" title={anthemPricing.pricingRationale}>
+                {anthemPricing.pricingRationale}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {showDealForecast ? (
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">

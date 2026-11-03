@@ -49,6 +49,42 @@
       "schedule": "30 1 * * *"
     },
     {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "25 19 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "40 19 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "55 19 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "10 20 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "25 20 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "40 20 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "55 20 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "10 21 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "35 2 * * *"
+    },
+    {
       "path": "/api/marketing/cron/send",
       "schedule": "20 12 * * *"
     },
