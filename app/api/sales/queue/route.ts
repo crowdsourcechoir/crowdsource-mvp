@@ -3,7 +3,7 @@ import { loadSalesDashboardBuckets } from "@/lib/sales/db/dashboard";
 import { listQueueSidebarByFunnelStage, listQueueSidebarByScope } from "@/lib/sales/db/queue";
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { publicErrorMessage } from "@/lib/sales/http-error";
-import { parseQueueFunnel } from "@/lib/sales/queue/funnel";
+import { matchesQueueFunnel, parseQueueFunnel } from "@/lib/sales/queue/funnel";
 import { parseQueueScope } from "@/lib/sales/queue/scope";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +18,14 @@ export async function GET(request: Request) {
       loadSalesDashboardBuckets(),
       getGmailConnectionStatus(),
     ]);
-    const items =
-      funnel === "all"
+    const scoped =
+      scope === "due" || funnel === "all"
         ? await listQueueSidebarByScope(scope)
         : await listQueueSidebarByFunnelStage(funnel);
+    const items =
+      scope === "due" && funnel !== "all"
+        ? scoped.filter((item) => matchesQueueFunnel(item.relationshipStage, funnel))
+        : scoped;
     return NextResponse.json(
       {
         items,
