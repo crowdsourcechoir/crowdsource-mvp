@@ -58,6 +58,14 @@
       "schedule": "35 2 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-boost-conference",
+      "schedule": "15 21 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-boost-conference",
+      "schedule": "45 22 * * *"
+    },
+    {
       "path": "/api/marketing/cron/send",
       "schedule": "20 12 * * *"
     },
