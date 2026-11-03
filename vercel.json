@@ -54,6 +54,14 @@
       "schedule": "30 1 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-becu",
+      "schedule": "20 21 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-becu",
+      "schedule": "50 22 * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "35 2 * * *"
     },

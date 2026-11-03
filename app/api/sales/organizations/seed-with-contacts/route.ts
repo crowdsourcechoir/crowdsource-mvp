@@ -6,6 +6,7 @@ import { SEATTLE_FUNDRAISERS_2027_SEEDS } from "@/lib/sales/seed/seattle-fundrai
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
+import { BECU_SEED, seedBecu } from "@/lib/sales/seed/becu";
 import { RESEND_FORWARD_SEED, seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
 import { WFEA_MEMBERS } from "@/lib/sales/seed/wfea-members";
@@ -24,7 +25,8 @@ export const maxDuration = 300;
  *
  * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
  * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
- * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, or `{ preset: "wfea-members" }`.
+ * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, `{ preset: "becu" }`,
+ * or `{ preset: "wfea-members" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -85,6 +87,16 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "becu") {
+      const result = await seedBecu({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "becu",
+        seedCount: 1,
+        seed: BECU_SEED.name,
+        ...result,
+      });
+    }
+
     if (body?.preset === "wfea-members") {
       const result = await seedWfeaMembers({ force: Boolean(body.force) });
       return NextResponse.json({
@@ -116,7 +128,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'becu' }, { preset: 'wfea-members' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );
