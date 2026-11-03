@@ -1,5 +1,5 @@
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
-import { getOrganization } from "@/lib/sales/db/organizations";
+import { listOrganizationsByIds } from "@/lib/sales/db/organizations";
 import { updateOpportunityImportMetadata } from "@/lib/sales/db/opportunities";
 import { readSalesInitiative } from "@/lib/sales/initiatives";
 import {
@@ -232,6 +232,8 @@ export async function evaluateAnthemPricing(options?: {
     ? await listOpportunityPage(offset, limit)
     : await listUnevaluatedOpportunities(limit);
   const { opportunityTypes, organizationTypes } = await loadTypeKeys();
+  const organizations = await listOrganizationsByIds(rows.map((r) => r.organization_id));
+  const orgById = new Map(organizations.map((o) => [o.id, o]));
 
   for (const row of rows) {
     try {
@@ -245,7 +247,7 @@ export async function evaluateAnthemPricing(options?: {
         continue;
       }
 
-      const organization = await getOrganization(row.organization_id);
+      const organization = orgById.get(row.organization_id);
       if (!organization) {
         summary.errors.push({ opportunityId: row.id, error: "Organization missing" });
         continue;
