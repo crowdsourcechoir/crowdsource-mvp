@@ -6,6 +6,7 @@ import { readSalesInitiative } from "../initiatives";
 import { readDealForecast, resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
 import { classifyWorkstream, qualificationScore } from "../strategy/playbook";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
+import { mergeFollowUpQueueItems } from "../queue/follow-up-scope";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
 import { loadSalesTodayTasks } from "./follow-ups";
@@ -164,7 +165,10 @@ export async function hasPendingNudgeForContact(opportunityId: string, contactId
   return (drafts ?? []).some((row) => row.contact_id === contactId);
 }
 
-export async function listQueueItems(status?: ApprovalQueueItemStatus | "all"): Promise<ApprovalQueueItem[]> {
+export async function listQueueItems(
+  status?: ApprovalQueueItemStatus | "all",
+  kind?: ApprovalQueueItemKind
+): Promise<ApprovalQueueItem[]> {
   const db = requireSupabaseAdmin();
   // PostgREST silently caps unpaged selects at 1000. Pending used to take that path ordered
   // oldest-first, which dropped recently seeded Elevate/Amplify rows from "To send" / Last 7 days.
@@ -175,6 +179,9 @@ export async function listQueueItems(status?: ApprovalQueueItemStatus | "all"): 
     let query = db.from("approval_queue_items").select("*").order("created_at", { ascending: true });
     if (status !== "all") {
       query = query.eq("status", status ?? "pending");
+    }
+    if (kind) {
+      query = query.eq("kind", kind);
     }
     const { data, error } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
@@ -197,11 +204,13 @@ export async function listQueueSidebarItems(status?: ApprovalQueueItemStatus): P
 
 export async function listQueueSidebarByScope(scope: QueueScope): Promise<QueueSidebarItem[]> {
   if (scope === "due") {
-    const today = await loadSalesTodayTasks();
+    // Scheduled reply follow-ups and every pending nudge — same Follow-ups filter.
+    const [today, nudges] = await Promise.all([loadSalesTodayTasks(), listQueueItems("pending", "nudge")]);
     const ids = today.tasks.map((task) => task.queueItemId).filter((id): id is string => Boolean(id));
-    if (ids.length === 0) return [];
-    const items = (await Promise.all(ids.map((id) => getQueueItem(id)))).filter((row): row is ApprovalQueueItem => Boolean(row));
-    return assembleQueueSidebar(items);
+    const followUps = (await Promise.all(ids.map((id) => getQueueItem(id)))).filter(
+      (row): row is ApprovalQueueItem => Boolean(row)
+    );
+    return assembleQueueSidebar(mergeFollowUpQueueItems(followUps, nudges));
   }
   const items = await listQueueItems(scope === "all" ? "all" : "pending");
   const sidebar = await assembleQueueSidebar(items);
@@ -363,7 +372,9 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
     });
     const nextFollowUpAt = opportunity.next_follow_up_at ?? null;
     const followUpDue =
-      isFollowUpDueOnOrBeforeToday(nextFollowUpAt) || Boolean(opportunity.last_inbound_at && !nextFollowUpAt);
+      queueItem.kind === "nudge" ||
+      isFollowUpDueOnOrBeforeToday(nextFollowUpAt) ||
+      Boolean(opportunity.last_inbound_at && !nextFollowUpAt);
     const revenueEngine = resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata);
     const flagshipOffer = resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata);
     const potentialAmount = readDealForecast(opportunity.import_metadata).potentialAmount;
