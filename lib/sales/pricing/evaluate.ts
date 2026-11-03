@@ -91,19 +91,49 @@ async function listOpportunityPage(offset: number, limit: number): Promise<OppRo
 /** Prefer rows not yet stamped with this framework version (cron-friendly). */
 async function listUnevaluatedOpportunities(limit: number): Promise<OppRow[]> {
   const db = requireSupabaseAdmin();
-  // Server-side filter so we do not re-scan already-priced rows every tick.
-  const { data, error } = await db
+  // Prefer a jsonb filter (quoted version string — hyphens break unquoted PostgREST values).
+  const filtered = await db
     .from("opportunities")
     .select(
       "id, organization_id, title, event_or_initiative_name, description, opportunity_type_id, import_metadata, relationship_stage"
     )
     .or(
-      `import_metadata->>pricingFrameworkVersion.is.null,import_metadata->>pricingFrameworkVersion.neq.${PRICING_FRAMEWORK_VERSION}`
+      `import_metadata->>pricingFrameworkVersion.is.null,import_metadata->>pricingFrameworkVersion.neq."${PRICING_FRAMEWORK_VERSION}"`
     )
     .order("created_at", { ascending: true })
     .limit(limit);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as OppRow[];
+  if (!filtered.error && (filtered.data?.length ?? 0) > 0) {
+    return filtered.data as OppRow[];
+  }
+
+  // Fallback: page in created_at order and skip already-stamped rows in memory.
+  // Evaluation itself walks oldest-first, so after N priced rows the remainder cluster later.
+  const out: OppRow[] = [];
+  let offset = 0;
+  const pageSize = Math.max(limit * 2, 200);
+  for (let guard = 0; guard < 40 && out.length < limit; guard += 1) {
+    const { data, error } = await db
+      .from("opportunities")
+      .select(
+        "id, organization_id, title, event_or_initiative_name, description, opportunity_type_id, import_metadata, relationship_stage"
+      )
+      .order("created_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as OppRow[];
+    if (rows.length === 0) break;
+    for (const row of rows) {
+      const pricing = readAnthemPricing(row.import_metadata);
+      if (pricing.pricingFrameworkVersion === PRICING_FRAMEWORK_VERSION && pricing.pricingEvaluatedAt) {
+        continue;
+      }
+      out.push(row);
+      if (out.length >= limit) break;
+    }
+    offset += rows.length;
+    if (rows.length < pageSize) break;
+  }
+  return out;
 }
 
 async function loadTypeKeys(): Promise<{
@@ -423,7 +453,9 @@ export async function drainAnthemPricing(options?: {
     scanned += result.scanned;
     errors += result.summary.errors.length;
     lastSummary = result.summary;
-    if (result.scanned === 0 || result.summary.totalEvaluated === 0) {
+    // Only stop when the unevaluated query returns nothing. A batch that
+    // scanned rows but wrote zero (filter/race) must not mark the CRM drained.
+    if (result.scanned === 0) {
       return {
         batches,
         totalEvaluated,
@@ -432,6 +464,10 @@ export async function drainAnthemPricing(options?: {
         exhausted: true,
         summary: lastSummary,
       };
+    }
+    if (result.summary.totalEvaluated === 0) {
+      // Avoid a tight spin if the filter keeps returning already-priced rows.
+      break;
     }
   }
 
