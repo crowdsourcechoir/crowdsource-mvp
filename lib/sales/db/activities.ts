@@ -41,6 +41,18 @@ export async function createOutreachActivity(input: {
   return rowToActivity(data);
 }
 
+export async function mergeOutreachActivityMetadata(id: string, patch: Record<string, unknown>): Promise<void> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db.from("outreach_activities").select("metadata").eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  const prev = (data?.metadata as Record<string, unknown> | null) ?? {};
+  const { error: updateError } = await db
+    .from("outreach_activities")
+    .update({ metadata: { ...prev, ...patch } })
+    .eq("id", id);
+  if (updateError) throw new Error(updateError.message);
+}
+
 export async function findActivityByGmailMessageId(gmailMessageId: string): Promise<OutreachActivity | null> {
   const db = requireSupabaseAdmin();
   const { data, error } = await db

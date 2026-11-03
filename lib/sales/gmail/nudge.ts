@@ -12,6 +12,8 @@ import { getLatestBriefForOpportunity } from "../db/pipeline";
 import { contactGreetingName } from "../dedupe";
 import { MAX_NUDGES_PER_OPPORTUNITY, NUDGE_DUE_AFTER_DAYS } from "./constants";
 import { contactIdsDueForNudge, nextPendingFollowUpIso } from "../outreach/nudge-due";
+import { followUpFromDateInput } from "../follow-up/calendar";
+import { shouldHoldNudgeForMeetingReminder, soonestFutureReminderYmd } from "../follow-up/meeting-reminder";
 import { draftToPlainText, coalesceDraftBody } from "../outreach/email-body-format";
 import type { Contact, Opportunity, Organization, OutreachDraft } from "../types";
 
@@ -193,6 +195,16 @@ export async function generateDueNudgeDrafts(): Promise<NudgeRunResult> {
 
   for (const opportunity of dueOpps) {
     try {
+      if (shouldHoldNudgeForMeetingReminder(opportunity.importMetadata)) {
+        skipped.push({ opportunityId: opportunity.id, reason: "calendar meeting reminder" });
+        const hold = soonestFutureReminderYmd(opportunity.importMetadata);
+        const nextFollowUpAt = hold ? followUpFromDateInput(hold) : null;
+        if (nextFollowUpAt && nextFollowUpAt !== opportunity.nextFollowUpAt) {
+          await updateOpportunityTouchTimestamps(opportunity.id, { nextFollowUpAt });
+        }
+        continue;
+      }
+
       const activities = await listActivitiesForOpportunity(opportunity.id);
       const dueContactIds = contactIdsDueForNudge(activities, nowMs, NUDGE_DUE_AFTER_DAYS);
       if (dueContactIds.length === 0) {
