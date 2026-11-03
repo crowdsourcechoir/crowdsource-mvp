@@ -1,6 +1,5 @@
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { getOrganization } from "@/lib/sales/db/organizations";
-import { listFindingsForOrganization } from "@/lib/sales/db/research";
 import { updateOpportunityImportMetadata } from "@/lib/sales/db/opportunities";
 import { readSalesInitiative } from "@/lib/sales/initiatives";
 import {
@@ -92,32 +91,19 @@ async function listOpportunityPage(offset: number, limit: number): Promise<OppRo
 /** Prefer rows not yet stamped with this framework version (cron-friendly). */
 async function listUnevaluatedOpportunities(limit: number): Promise<OppRow[]> {
   const db = requireSupabaseAdmin();
-  const pageSize = Math.max(limit * 3, 60);
-  const out: OppRow[] = [];
-  let offset = 0;
-  for (let guard = 0; guard < 30 && out.length < limit; guard += 1) {
-    const { data, error } = await db
-      .from("opportunities")
-      .select(
-        "id, organization_id, title, event_or_initiative_name, description, opportunity_type_id, import_metadata, relationship_stage"
-      )
-      .order("created_at", { ascending: true })
-      .range(offset, offset + pageSize - 1);
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as OppRow[];
-    if (rows.length === 0) break;
-    for (const row of rows) {
-      const pricing = readAnthemPricing(row.import_metadata);
-      if (pricing.pricingFrameworkVersion === PRICING_FRAMEWORK_VERSION && pricing.pricingEvaluatedAt) {
-        continue;
-      }
-      out.push(row);
-      if (out.length >= limit) break;
-    }
-    offset += rows.length;
-    if (rows.length < pageSize) break;
-  }
-  return out;
+  // Server-side filter so we do not re-scan already-priced rows every tick.
+  const { data, error } = await db
+    .from("opportunities")
+    .select(
+      "id, organization_id, title, event_or_initiative_name, description, opportunity_type_id, import_metadata, relationship_stage"
+    )
+    .or(
+      `import_metadata->>pricingFrameworkVersion.is.null,import_metadata->>pricingFrameworkVersion.neq.${PRICING_FRAMEWORK_VERSION}`
+    )
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as OppRow[];
 }
 
 async function loadTypeKeys(): Promise<{
@@ -265,12 +251,8 @@ export async function evaluateAnthemPricing(options?: {
         continue;
       }
 
-      const findings = await listFindingsForOrganization(organization.id);
-      const findingsText = findings
-        .map((f) => `${f.claimType}: ${f.claimText}`)
-        .filter(Boolean)
-        .slice(0, 20);
-
+      // Use CRM fields only (title/description/types/notes). Skipping research_findings
+      // keeps batch throughput high enough for a full CRM pass under cron time limits.
       const orgMeta = (organization.importMetadata ?? {}) as Record<string, unknown>;
       const operatorNotes =
         typeof orgMeta.operatorNotes === "string"
@@ -294,7 +276,7 @@ export async function evaluateAnthemPricing(options?: {
           eventOrInitiativeName: row.event_or_initiative_name,
           description: row.description,
         },
-        findingsText,
+        findingsText: [],
       });
 
       const recommendation = recommendAnthemPricing(signals);
