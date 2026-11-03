@@ -235,7 +235,7 @@ export async function evaluateAnthemPricing(options?: {
   scanned: number;
 }> {
   const force = Boolean(options?.force);
-  const limit = Math.min(Math.max(options?.limit ?? 40, 1), 80);
+  const limit = Math.min(Math.max(options?.limit ?? 80, 1), 100);
   const offset = Math.max(options?.offset ?? 0, 0);
   const evaluatedAt = new Date().toISOString();
   const summary = emptySummary(evaluatedAt);
@@ -332,11 +332,7 @@ export async function evaluateAnthemPricing(options?: {
           pricingTier: recommendation.pricingTier,
         });
       }
-      if (
-        recommendation.suggestedAnthemFee == null ||
-        recommendation.pricingTier === "review" ||
-        recommendation.pricingQuestions.length > 0
-      ) {
+      if (recommendation.suggestedAnthemFee == null || recommendation.pricingTier === "review") {
         summary.needsReview += 1;
         summary.needingQualification.push({
           organizationName: organization.name,
@@ -435,11 +431,7 @@ export async function getAnthemPricingStatus(): Promise<{
           pricingTier: pricing.pricingTier ?? "review",
         });
       }
-      if (
-        pricing.suggestedAnthemFee == null ||
-        pricing.pricingTier === "review" ||
-        pricing.pricingQuestions.length > 0
-      ) {
+      if (pricing.suggestedAnthemFee == null || pricing.pricingTier === "review") {
         needsReview += 1;
       }
       if (compareQuoteToSuggested(row.import_metadata).materialDifference) materialQuoteGaps += 1;

@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import {
@@ -7,6 +8,11 @@ import {
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+function cronBaseUrl(request: Request): string {
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return new URL(request.url).origin;
+}
 
 /**
  * Batch Anthem Experience fee recommendations onto opportunities.import_metadata.
@@ -78,8 +84,32 @@ async function runEvaluate(request: Request) {
     }
 
     const result = await evaluateAnthemPricing({ force, offset, limit });
+    const continueDepth = Number(url.searchParams.get("continue") ?? "0") || 0;
+    // Keep chaining while this page did real work and we have not looped too deep.
+    if (!force && result.summary.totalEvaluated > 0 && continueDepth < 20) {
+      const next = new URL("/api/sales/cron/anthem-pricing", cronBaseUrl(request));
+      next.searchParams.set("continue", String(continueDepth + 1));
+      const secret = cronSecret;
+      const run = async () => {
+        try {
+          await fetch(next.toString(), {
+            method: "GET",
+            headers: { Authorization: `Bearer ${secret}` },
+          }).then((r) => r.text());
+        } catch (err) {
+          console.error("[anthem-pricing] continuation failed:", err);
+        }
+      };
+      try {
+        waitUntil(run());
+      } catch {
+        void run();
+      }
+    }
+
     return NextResponse.json({
       ok: result.summary.errors.length === 0,
+      continueDepth,
       ...result,
     });
   } catch (err) {
