@@ -2,6 +2,7 @@ import { waitUntil } from "@vercel/functions";
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import {
+  drainAnthemPricing,
   evaluateAnthemPricing,
   getAnthemPricingStatus,
 } from "@/lib/sales/pricing/evaluate";
@@ -19,7 +20,7 @@ function cronBaseUrl(request: Request): string {
  * Never overwrites bookedAmount / potentialAmount.
  *
  * GET ?status=1 — progress summary (no secret).
- * GET/POST with Bearer CRON_SECRET — evaluate next page (offset/limit/force).
+ * GET/POST with Bearer CRON_SECRET — drain unevaluated rows for ~4 minutes, then chain.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -71,7 +72,7 @@ async function runEvaluate(request: Request) {
     const url = new URL(request.url);
     let force = url.searchParams.get("force") === "1";
     let offset = Number(url.searchParams.get("offset") ?? "0") || 0;
-    let limit = Number(url.searchParams.get("limit") ?? "40") || 40;
+    let limit = Number(url.searchParams.get("limit") ?? "100") || 100;
     if (request.method === "POST") {
       const body = (await request.json().catch(() => ({}))) as {
         force?: boolean;
@@ -80,13 +81,23 @@ async function runEvaluate(request: Request) {
       };
       if (body.force != null) force = Boolean(body.force);
       if (body.offset != null) offset = Number(body.offset) || 0;
-      if (body.limit != null) limit = Number(body.limit) || 40;
+      if (body.limit != null) limit = Number(body.limit) || 100;
     }
 
-    const result = await evaluateAnthemPricing({ force, offset, limit });
+    // Forced re-page keeps the old single-batch path; normal cron drains hard.
+    if (force) {
+      const result = await evaluateAnthemPricing({ force, offset, limit });
+      return NextResponse.json({
+        ok: result.summary.errors.length === 0,
+        mode: "force-page",
+        ...result,
+      });
+    }
+
+    const drained = await drainAnthemPricing({ limit, budgetMs: 250_000 });
     const continueDepth = Number(url.searchParams.get("continue") ?? "0") || 0;
-    // Keep chaining while this page did real work and we have not looped too deep.
-    if (!force && result.summary.totalEvaluated > 0 && continueDepth < 20) {
+
+    if (!drained.exhausted && continueDepth < 30) {
       const next = new URL("/api/sales/cron/anthem-pricing", cronBaseUrl(request));
       next.searchParams.set("continue", String(continueDepth + 1));
       const secret = cronSecret;
@@ -108,9 +119,10 @@ async function runEvaluate(request: Request) {
     }
 
     return NextResponse.json({
-      ok: result.summary.errors.length === 0,
+      ok: drained.errors === 0,
+      mode: "drain",
       continueDepth,
-      ...result,
+      ...drained,
     });
   } catch (err) {
     return NextResponse.json(

@@ -221,7 +221,7 @@ export async function evaluateAnthemPricing(options?: {
   scanned: number;
 }> {
   const force = Boolean(options?.force);
-  const limit = Math.min(Math.max(options?.limit ?? 80, 1), 100);
+  const limit = Math.min(Math.max(options?.limit ?? 100, 1), 150);
   const offset = Math.max(options?.offset ?? 0, 0);
   const evaluatedAt = new Date().toISOString();
   const summary = emptySummary(evaluatedAt);
@@ -234,6 +234,15 @@ export async function evaluateAnthemPricing(options?: {
   const { opportunityTypes, organizationTypes } = await loadTypeKeys();
   const organizations = await listOrganizationsByIds(rows.map((r) => r.organization_id));
   const orgById = new Map(organizations.map((o) => [o.id, o]));
+
+  type PendingWrite = {
+    row: OppRow;
+    organizationName: string;
+    organizationId: string;
+    recommendation: PricingRecommendation;
+    nextMeta: Record<string, unknown>;
+  };
+  const pending: PendingWrite[] = [];
 
   for (const row of rows) {
     try {
@@ -283,21 +292,59 @@ export async function evaluateAnthemPricing(options?: {
 
       const recommendation = recommendAnthemPricing(signals);
       const nextMeta = withAnthemPricing(row.import_metadata, recommendation, evaluatedAt);
-      await updateOpportunityImportMetadata(row.id, nextMeta);
-
-      const quote = compareQuoteToSuggested(nextMeta);
-      const evaluated: EvaluatedProspect = {
-        opportunityId: row.id,
-        organizationId: organization.id,
+      pending.push({
+        row,
         organizationName: organization.name,
-        title: row.title,
+        organizationId: organization.id,
+        recommendation,
+        nextMeta,
+      });
+    } catch (err) {
+      summary.errors.push({
+        opportunityId: row.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Parallel writes — sequential awaits were capping cron at ~40 rows / tick.
+  const WRITE_CONCURRENCY = 20;
+  for (let i = 0; i < pending.length; i += WRITE_CONCURRENCY) {
+    const chunk = pending.slice(i, i + WRITE_CONCURRENCY);
+    const settled = await Promise.all(
+      chunk.map(async (item) => {
+        try {
+          await updateOpportunityImportMetadata(item.row.id, item.nextMeta);
+          return { ok: true as const, item };
+        } catch (err) {
+          return {
+            ok: false as const,
+            item,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      })
+    );
+
+    for (const outcome of settled) {
+      if (!outcome.ok) {
+        summary.errors.push({ opportunityId: outcome.item.row.id, error: outcome.error });
+        continue;
+      }
+      const { item } = outcome;
+      const quote = compareQuoteToSuggested(item.nextMeta);
+      const recommendation = item.recommendation;
+      results.push({
+        opportunityId: item.row.id,
+        organizationId: item.organizationId,
+        organizationName: item.organizationName,
+        title: item.row.title,
         recommendation,
         bookedAmount: quote.bookedAmount,
         potentialAmount: quote.potentialAmount,
         materialQuoteDifference: quote.materialDifference,
         skippedAlreadyEvaluated: false,
-      };
-      results.push(evaluated);
+      });
       summary.totalEvaluated += 1;
 
       summary.byCategory[recommendation.pricingCategory] =
@@ -309,9 +356,9 @@ export async function evaluateAnthemPricing(options?: {
         summary.withSuggestedFee += 1;
         summary.unweightedPipelineUsd += recommendation.suggestedAnthemFee;
         summary.highestFees.push({
-          organizationName: organization.name,
-          title: row.title,
-          opportunityId: row.id,
+          organizationName: item.organizationName,
+          title: item.row.title,
+          opportunityId: item.row.id,
           suggestedAnthemFee: recommendation.suggestedAnthemFee,
           pricingTier: recommendation.pricingTier,
         });
@@ -319,28 +366,23 @@ export async function evaluateAnthemPricing(options?: {
       if (recommendation.suggestedAnthemFee == null || recommendation.pricingTier === "review") {
         summary.needsReview += 1;
         summary.needingQualification.push({
-          organizationName: organization.name,
-          title: row.title,
-          opportunityId: row.id,
+          organizationName: item.organizationName,
+          title: item.row.title,
+          opportunityId: item.row.id,
           pricingQuestions: recommendation.pricingQuestions,
         });
       }
       if (quote.materialDifference) {
         summary.materialQuoteGaps.push({
-          organizationName: organization.name,
-          title: row.title,
-          opportunityId: row.id,
+          organizationName: item.organizationName,
+          title: item.row.title,
+          opportunityId: item.row.id,
           potentialAmount: quote.potentialAmount,
           bookedAmount: quote.bookedAmount,
           suggestedAnthemFee: quote.suggestedAnthemFee,
           differenceUsd: quote.differenceUsd,
         });
       }
-    } catch (err) {
-      summary.errors.push({
-        opportunityId: row.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
   }
 
@@ -351,6 +393,56 @@ export async function evaluateAnthemPricing(options?: {
 
   const nextOffset = force ? (rows.length < limit ? null : offset + rows.length) : null;
   return { summary, results, nextOffset, scanned: rows.length };
+}
+
+/** Keep evaluating unevaluated opportunities until empty or time budget. */
+export async function drainAnthemPricing(options?: {
+  limit?: number;
+  budgetMs?: number;
+}): Promise<{
+  batches: number;
+  totalEvaluated: number;
+  scanned: number;
+  errors: number;
+  exhausted: boolean;
+  summary: PricingEvaluationSummary;
+}> {
+  const started = Date.now();
+  const budgetMs = options?.budgetMs ?? 240_000;
+  const limit = options?.limit ?? 100;
+  let batches = 0;
+  let totalEvaluated = 0;
+  let scanned = 0;
+  let errors = 0;
+  let lastSummary = emptySummary(new Date().toISOString());
+
+  while (Date.now() - started < budgetMs) {
+    const result = await evaluateAnthemPricing({ limit });
+    batches += 1;
+    totalEvaluated += result.summary.totalEvaluated;
+    scanned += result.scanned;
+    errors += result.summary.errors.length;
+    lastSummary = result.summary;
+    if (result.scanned === 0 || result.summary.totalEvaluated === 0) {
+      return {
+        batches,
+        totalEvaluated,
+        scanned,
+        errors,
+        exhausted: true,
+        summary: lastSummary,
+      };
+    }
+  }
+
+  return {
+    batches,
+    totalEvaluated,
+    scanned,
+    errors,
+    exhausted: false,
+    summary: lastSummary,
+  };
 }
 
 /** Aggregate status across opportunities (read-only). */
