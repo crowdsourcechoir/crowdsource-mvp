@@ -54,8 +54,16 @@
       "schedule": "30 1 * * *"
     },
     {
-      "path": "/api/sales/cron/anthem-pricing",
+      "path": "/api/sales/cron/seed-booking-agents",
+      "schedule": "35 1 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-booking-agents",
       "schedule": "35 2 * * *"
+    },
+    {
+      "path": "/api/sales/cron/anthem-pricing",
+      "schedule": "40 2 * * *"
     },
     {
       "path": "/api/marketing/cron/send",

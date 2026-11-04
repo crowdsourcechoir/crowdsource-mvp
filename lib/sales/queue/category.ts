@@ -13,6 +13,7 @@ export const QUEUE_CATEGORY_KEYS = [
   "arts",
   "entertainment",
   "tech",
+  "booking_agents",
   "other",
 ] as const;
 
@@ -27,6 +28,7 @@ export const QUEUE_CATEGORY_CHIPS: { key: QueueCategoryFilter; label: string }[]
   { key: "arts", label: "Arts" },
   { key: "entertainment", label: "Entertainment" },
   { key: "tech", label: "Tech" },
+  { key: "booking_agents", label: "Booking agents" },
   { key: "other", label: "Other" },
 ];
 
@@ -37,6 +39,7 @@ const INITIATIVE_TO_CATEGORY: Record<string, QueueCategoryKey> = {
   arts_culture: "arts",
   entertainment_media: "entertainment",
   tech_conferences: "tech",
+  booking_agents: "booking_agents",
   wfea_network: "other",
 };
 
@@ -113,6 +116,14 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
     return "arts";
   }
 
+  if (
+    /\bspeakers? bureau\b|\bbooking agent\b|\btalent (agency|bureau)\b|\bkeynote (agency|bureau)\b|\bhunter walker\b|\bbigspeak\b|\bkeppler\b|\bspeakinc\b|\bgotham artists\b|\beagles talent\b|\bleading authorities\b|\bpremiere speakers\b|\baae speakers\b|\bapb speakers\b|\bchartwell speakers\b|\bexecutive speakers\b/.test(
+      text
+    )
+  ) {
+    return "booking_agents";
+  }
+
   if (opp === "annual_conference" || opp === "association_convention" || orgType === "conference" || orgType === "association") {
     return "conferences";
   }
@@ -146,6 +157,7 @@ export function countQueueCategories<T extends QueueCategoryInput>(
     arts: 0,
     entertainment: 0,
     tech: 0,
+    booking_agents: 0,
     other: 0,
   };
   for (const item of items) {

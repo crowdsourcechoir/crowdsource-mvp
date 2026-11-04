@@ -55,6 +55,15 @@ export const SALES_INITIATIVES = {
     opportunityTypeKeys: ["annual_conference"] as const,
     industrySegmentKey: null,
   },
+  booking_agents: {
+    key: "booking_agents",
+    label: "Booking agents",
+    description:
+      "Speaker bureaus and talent agencies that place keynotes and entertainment into corporate / association premium events — pitch Crowdsource as bookable participatory talent.",
+    organizationTypeKeys: ["event_agency"] as const,
+    opportunityTypeKeys: ["other"] as const,
+    industrySegmentKey: "sports_entertainment",
+  },
   wfea_network: {
     key: "wfea_network",
     label: "WFEA / other",

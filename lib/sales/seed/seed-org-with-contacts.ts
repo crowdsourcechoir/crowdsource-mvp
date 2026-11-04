@@ -54,7 +54,7 @@ export type SeedOrgWithContactsInput = {
   eventDateConfidence?: "confirmed" | "estimated" | "unknown" | null;
   /** Opportunity type for manual enqueue (default fan_engagement_initiative). */
   opportunityTypeKey?: string;
-  /** Tag for queue filters: sports_fan_culture, conferences_associations, fundraising_galas, arts_culture, entertainment_media, tech_conferences. */
+  /** Tag for queue filters: sports_fan_culture, conferences_associations, fundraising_galas, arts_culture, entertainment_media, tech_conferences, booking_agents, wfea_network. */
   salesInitiative?: string;
 };
 

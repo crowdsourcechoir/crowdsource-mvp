@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { AMPLIFY_CONFERENCES_2027_SEEDS } from "@/lib/sales/seed/amplify-conferences-2027";
+import { BOOKING_AGENTS_SEEDS } from "@/lib/sales/seed/booking-agents";
 import { ELEVATE_VIBE_CREATE_PROSPECTS } from "@/lib/sales/seed/elevate-vibe-create-prospects";
 import { SEATTLE_FUNDRAISERS_2027_SEEDS } from "@/lib/sales/seed/seattle-fundraisers-2027";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
+import { seedBookingAgents } from "@/lib/sales/seed/seed-booking-agents";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import { RESEND_FORWARD_SEED, seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
@@ -24,7 +26,8 @@ export const maxDuration = 300;
  *
  * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
  * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
- * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, or `{ preset: "wfea-members" }`.
+ * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, `{ preset: "wfea-members" }`,
+ * or `{ preset: "booking-agents" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -94,6 +97,15 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "booking-agents") {
+      const result = await seedBookingAgents({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "booking-agents",
+        seedCount: BOOKING_AGENTS_SEEDS.length,
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -116,7 +128,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );

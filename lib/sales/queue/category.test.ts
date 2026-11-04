@@ -22,13 +22,24 @@ function main() {
     "other"
   );
 
+  assert.equal(
+    classifyQueueCategory({ salesInitiative: "booking_agents", organizationName: "WSB" }),
+    "booking_agents"
+  );
+  assert.equal(
+    classifyQueueCategory({ organizationName: "Premiere Speakers Bureau" }),
+    "booking_agents"
+  );
+
   const counts = countQueueCategories([
     { salesInitiative: "wfea_network", organizationName: "A" },
     { salesInitiative: "sports_fan_culture", organizationName: "B" },
+    { salesInitiative: "booking_agents", organizationName: "C" },
   ]);
   assert.equal(counts.other, 1);
   assert.equal(counts.sports, 1);
-  assert.equal(counts.all, 2);
+  assert.equal(counts.booking_agents, 1);
+  assert.equal(counts.all, 3);
 
   console.log("queue/category tests passed");
 }

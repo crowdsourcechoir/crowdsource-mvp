@@ -20,9 +20,9 @@ export const WORKSTREAMS = {
     engine: "premium" as RevenueEngineKey,
     annualTargetUsd: 300_000,
     dealMath: "20 × $15K or 15 × $20K",
-    buyers: "Conferences, association meetings, corporate summits, galas",
+    buyers: "Conferences, association meetings, corporate summits, galas, speaker bureaus",
     action: "Pitch event owners + producers; proposals, 50% deposits",
-    targets: ["NAIS follow-on", "APA NPC", "SHRM", "NAFSA", "nonprofit fundraisers"],
+    targets: ["NAIS follow-on", "APA NPC", "SHRM", "NAFSA", "nonprofit fundraisers", "booking agents"],
   },
   partnership: {
     key: "partnership",
@@ -85,6 +85,7 @@ const INITIATIVE_TO_WORKSTREAM: Partial<Record<SalesInitiativeKey, WorkstreamKey
   arts_culture: "owned",
   entertainment_media: "owned",
   tech_conferences: "premium",
+  booking_agents: "premium",
   wfea_network: "sponsor",
 };
 
@@ -95,6 +96,7 @@ const CATEGORY_TO_WORKSTREAM: Record<QueueCategoryKey, WorkstreamKey> = {
   arts: "owned",
   entertainment: "owned",
   tech: "premium",
+  booking_agents: "premium",
   other: "sponsor",
 };
 
@@ -117,9 +119,8 @@ export function classifyWorkstream(input: WorkstreamClassifyInput): WorkstreamKe
   if (offer === "crowdsource_partnership") return "partnership";
   if (offer === "song_garden") return "owned";
 
-  const orgType = (input.organizationTypeKey ?? "").toLowerCase();
-  if (orgType === "event_agency" || orgType === "agency") return "sponsor";
-
+  // Tagged initiatives win over generic org-type heuristics (booking agents are
+  // event_agency rows but sell into the premium pipeline).
   const initiative = input.salesInitiative as SalesInitiativeKey | null | undefined;
   if (initiative && INITIATIVE_TO_WORKSTREAM[initiative]) {
     return INITIATIVE_TO_WORKSTREAM[initiative]!;
@@ -129,6 +130,9 @@ export function classifyWorkstream(input: WorkstreamClassifyInput): WorkstreamKe
   if (category && category in CATEGORY_TO_WORKSTREAM) {
     return CATEGORY_TO_WORKSTREAM[category];
   }
+
+  const orgType = (input.organizationTypeKey ?? "").toLowerCase();
+  if (orgType === "event_agency" || orgType === "agency") return "sponsor";
 
   return "premium";
 }

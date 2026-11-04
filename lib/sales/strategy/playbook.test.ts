@@ -11,6 +11,14 @@ function main() {
   assert.equal(classifyWorkstream({ salesInitiative: "sports_fan_culture" }), "partnership");
   assert.equal(classifyWorkstream({ category: "conferences" }), "premium");
   assert.equal(classifyWorkstream({ organizationTypeKey: "event_agency" }), "sponsor");
+  assert.equal(
+    classifyWorkstream({
+      salesInitiative: "booking_agents",
+      organizationTypeKey: "event_agency",
+    }),
+    "premium"
+  );
+  assert.equal(classifyWorkstream({ category: "booking_agents" }), "premium");
   assert.equal(classifyWorkstream({}), "premium");
 
   assert.ok(workstreamPriority("premium") > workstreamPriority("owned"));
