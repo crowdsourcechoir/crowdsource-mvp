@@ -67,19 +67,7 @@
     },
     {
       "path": "/api/sales/cron/fix-neste-live-contacts",
-      "schedule": "20 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/fix-neste-live-contacts",
-      "schedule": "35 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/fix-neste-live-contacts",
-      "schedule": "50 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/fix-neste-live-contacts",
-      "schedule": "5 23 * * *"
+      "schedule": "55 1 * * *"
     },
     {
       "path": "/api/sales/cron/anthem-pricing",
