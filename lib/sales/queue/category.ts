@@ -117,7 +117,7 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
   }
 
   if (
-    /\bspeakers? bureau\b|\bbooking agent\b|\btalent (agency|bureau)\b|\bkeynote (agency|bureau)\b|\bhunter walker\b|\bbigspeak\b|\bkeppler\b|\bspeakinc\b|\bgotham artists\b|\beagles talent\b|\bleading authorities\b|\bpremiere speakers\b|\baae speakers\b|\bapb speakers\b|\bchartwell speakers\b|\bexecutive speakers\b/.test(
+    /\bspeakers? bureau\b|\bbooking agent\b|\btalent (agency|bureau|group)\b|\bkeynote (agency|bureau)\b|\bcorporate entertainment\b|\bentertainment (booking|agency|consultants?)\b|\bhunter walker\b|\bbigspeak\b|\bkeppler\b|\bspeakinc\b|\bgotham artists\b|\beagles talent\b|\bleading authorities\b|\bpremiere speakers\b|\baae speakers\b|\bapb speakers\b|\bchartwell speakers\b|\bexecutive speakers\b|\beastcoast entertainment\b|\bgulf coast entertainment\b|\bgreen light booking\b|\bneste live\b|\bopus agency\b|\bjack morton\b|\bgeorge p\.? johnson\b|\bgpj\b|\bcelebrity direct\b|\bproducers inc\b|\bartistic talent\b/.test(
       text
     )
   ) {
