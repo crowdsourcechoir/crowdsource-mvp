@@ -38,6 +38,7 @@ const CATEGORY_LABEL: Record<QueueCategoryKey, string> = {
   arts: "Arts",
   entertainment: "Entertainment",
   tech: "Tech",
+  booking_agents: "Booking agents",
   other: "Other",
 };
 
