@@ -63,19 +63,7 @@
     },
     {
       "path": "/api/sales/cron/seed-entertainment-booking-agencies",
-      "schedule": "15 6 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-entertainment-booking-agencies",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-entertainment-booking-agencies",
-      "schedule": "45 6 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-entertainment-booking-agencies",
-      "schedule": "0 7 * * *"
+      "schedule": "45 1 * * *"
     },
     {
       "path": "/api/sales/cron/anthem-pricing",
