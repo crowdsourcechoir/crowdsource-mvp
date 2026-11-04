@@ -601,11 +601,12 @@ export default function ApprovalQueueClient() {
   }, [current, busy, nudging, showCopyStatus, searchParams, router, pathname, funnel, scope, load]);
 
   const markContactVerified = useCallback(
-    (contactId: string) => {
+    (contactId: string, options?: { force?: boolean }) => {
       if (!current || busy) return;
       setActionError(null);
       const itemId = current.queueItem.id;
       const snapshot = current;
+      const force = Boolean(options?.force);
       const patchContact = <T extends { id: string; emailVerificationStatus: string }>(c: T): T =>
         c.id === contactId ? { ...c, emailVerificationStatus: "verified_deliverable" } : c;
       replaceDetail(itemId, {
@@ -615,7 +616,11 @@ export default function ApprovalQueueClient() {
       });
       void (async () => {
         try {
-          const res = await fetch(`/api/sales/contacts/${contactId}/verify`, { method: "POST" });
+          const res = await fetch(`/api/sales/contacts/${contactId}/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(force ? { force: true } : {}),
+          });
           const data = await readApiJson(res);
           if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not verify contact"));
           const updated = (data as { contact?: typeof current.contact }).contact;
@@ -627,13 +632,14 @@ export default function ApprovalQueueClient() {
                 snapshot.contact?.id === contactId ? { ...snapshot.contact, ...updated } : snapshot.contact,
             });
           }
+          if (force) showCopyStatus("Bounce overridden — address marked verified. You can send.");
         } catch (err) {
           replaceDetail(itemId, snapshot);
           setActionError(publicErrorMessage(err, "Could not verify contact"));
         }
       })();
     },
-    [current, busy, replaceDetail]
+    [current, busy, replaceDetail, showCopyStatus]
   );
 
   const moveFunnel = useCallback(
@@ -979,7 +985,19 @@ export default function ApprovalQueueClient() {
       {addOrgModal}
         {scanCardModal}
       {actionError && (
-        <p className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">{actionError}</p>
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+          <p className="min-w-0 flex-1">{actionError}</p>
+          {current?.contact?.id && /will bounce/i.test(actionError) ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => markContactVerified(current.contact!.id, { force: true })}
+              className="shrink-0 rounded-lg border border-red-700/80 bg-black/40 px-3 py-1.5 text-xs font-semibold text-red-100 hover:border-red-500 hover:text-white disabled:opacity-50"
+            >
+              Override bounce
+            </button>
+          ) : null}
+        </div>
       )}
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
       <div className={`rounded-xl border border-gray-800 ${mobileDetailOpen ? "hidden lg:block" : "block"}`}>
@@ -1249,7 +1267,7 @@ export default function ApprovalQueueClient() {
                             </span>
                             <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
                           </button>
-                          {c.email && c.emailVerificationStatus !== "invalid" ? (
+                          {c.email ? (
                             c.emailVerificationStatus === "verified_deliverable" ? (
                               <span
                                 title="Verified"
@@ -1264,6 +1282,20 @@ export default function ApprovalQueueClient() {
                                   />
                                 </svg>
                               </span>
+                            ) : c.emailVerificationStatus === "invalid" ? (
+                              <button
+                                type="button"
+                                title="Override bounce — mark verified and allow send"
+                                aria-label={`Override bounce for ${c.fullName ?? "contact"}`}
+                                disabled={busy}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markContactVerified(c.id, { force: true });
+                                }}
+                                className="mt-0.5 shrink-0 rounded-full border border-red-700/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300 hover:border-red-500 hover:text-red-100 disabled:opacity-50"
+                              >
+                                Override
+                              </button>
                             ) : (
                               <button
                                 type="button"
