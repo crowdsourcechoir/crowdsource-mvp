@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { withMarketingAuth } from "@/lib/marketing/auth";
-import { assignHomeCities } from "@/lib/marketing/db/home-cities";
 import { createSegment, deleteSegment, listSegmentsWithCounts, updateSegment } from "@/lib/marketing/db/segments";
 import type { SegmentRule } from "@/lib/marketing/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 export async function GET() {
   return withMarketingAuth(async () => {
-    const homeCities = await assignHomeCities();
     const segments = await listSegmentsWithCounts();
-    return NextResponse.json({ segments, homeCities });
+    return NextResponse.json({ segments });
   });
 }
 
