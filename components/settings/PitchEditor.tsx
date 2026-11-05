@@ -219,25 +219,28 @@ export default function PitchEditor({ id }: { id: string }) {
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
 
-      <label className="block border-b border-[var(--csc-row-divider)] py-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Internal name</span>
-        <input
-          value={name}
-          aria-label="Internal name"
-          onChange={(event) => setName(event.target.value)}
-          className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
-        />
-      </label>
-      <label className="block border-b border-[var(--csc-row-divider)] py-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Prompt</span>
-        <textarea
-          value={prompt}
-          rows={4}
-          aria-label="Prompt"
-          onChange={(event) => setPrompt(event.target.value)}
-          className="mt-1 w-full resize-y bg-transparent text-sm leading-relaxed text-white focus:outline-none"
-        />
-      </label>
+      <details className="border-b border-[var(--csc-row-divider)]">
+        <summary className="cursor-pointer py-3 text-sm text-white">Brief</summary>
+        <label className="block border-b border-[var(--csc-row-divider)] py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Internal name</span>
+          <input
+            value={name}
+            aria-label="Internal name"
+            onChange={(event) => setName(event.target.value)}
+            className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
+          />
+        </label>
+        <label className="block py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Prompt</span>
+          <textarea
+            value={prompt}
+            rows={3}
+            aria-label="Prompt"
+            onChange={(event) => setPrompt(event.target.value)}
+            className="mt-1 w-full resize-y bg-transparent text-sm leading-relaxed text-white focus:outline-none"
+          />
+        </label>
+      </details>
 
       {showPassword ? (
         <form
@@ -338,6 +341,7 @@ export default function PitchEditor({ id }: { id: string }) {
                 type="button"
                 onClick={() => jump(item.id)}
                 className="csc-list-row w-full text-left"
+                aria-current={selected ? "true" : undefined}
                 style={selected ? { outlineColor: "var(--csc-accent)" } : undefined}
               >
                 <span className="w-5 shrink-0 text-xs text-white/50">{index + 1}</span>

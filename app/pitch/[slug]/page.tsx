@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Bebas_Neue, Space_Mono } from "next/font/google";
-import PitchDeck from "@/app/sobeca-song-garden/PitchDeck";
+import PitchSlideshow from "@/components/pitch/PitchSlideshow";
 import PitchPasswordGate from "@/components/pitch/PitchPasswordGate";
 import PitchUnavailable from "@/components/pitch/PitchUnavailable";
 import { pitchGateCookie } from "@/lib/pitches/gate";
@@ -48,14 +48,9 @@ export default async function PitchPage({ params }: PageProps) {
 
   return (
     <>
-      <PitchDeck
-        slides={pitch.slides}
-        displayClass={display.className}
-        monoClass={mono.className}
-        anchorId="pitch-top"
-      />
+      <PitchSlideshow slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />
       {!pitch.live ? (
-        <p className="fixed bottom-4 left-4 z-20 border border-[#CFFF81] bg-black/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#CFFF81]">
+        <p className="fixed bottom-16 left-1/2 z-30 -translate-x-1/2 border border-[#CFFF81] bg-black/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#CFFF81]">
           Not live. Only you can see this.
         </p>
       ) : null}
