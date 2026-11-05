@@ -131,10 +131,12 @@ export default function PitchDeck({
   slides,
   displayClass,
   monoClass,
+  anchorId = "sobeca-top",
 }: {
   slides: PitchSlide[];
   displayClass: string;
   monoClass: string;
+  anchorId?: string;
 }) {
   const rootRef = useRef<HTMLElement>(null);
 
@@ -173,7 +175,7 @@ export default function PitchDeck({
   }, []);
 
   return (
-    <main id="sobeca-top" ref={rootRef} className={`${monoClass} bg-black text-white`}>
+    <main id={anchorId} ref={rootRef} className={`${monoClass} bg-black text-white`}>
       <style>{`
         @keyframes pitch-rise {
           from { opacity: 0; transform: translateY(18px); }
@@ -187,6 +189,7 @@ export default function PitchDeck({
       `}</style>
       {slides.map((slide, index) => {
         const tint = OVERLAYS[index % OVERLAYS.length];
+        const tintOpacity = typeof slide.wash === "number" ? slide.wash : slide.id === "invitation" ? 0.38 : 0.72;
         const closing = slide.id === "title" ? null : closingProse(slide.blocks);
         return (
           <section key={slide.id} className="relative min-h-[100dvh] w-full overflow-hidden">
@@ -198,7 +201,7 @@ export default function PitchDeck({
             />
             <div
               className="absolute inset-0 mix-blend-multiply"
-              style={{ backgroundColor: tint, opacity: slide.id === "invitation" ? 0.38 : 0.72 }}
+              style={{ backgroundColor: tint, opacity: tintOpacity }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/55 to-black/35" />
             <div
@@ -209,7 +212,7 @@ export default function PitchDeck({
             >
               <div>
                 <a
-                  href="#sobeca-top"
+                  href={`#${anchorId}`}
                   aria-label="Back to top"
                   className="pitch-rise mb-10 inline-block"
                   onClick={(event) => {

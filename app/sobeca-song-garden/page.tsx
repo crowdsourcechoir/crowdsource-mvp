@@ -5,6 +5,9 @@ import PitchDeck from "./PitchDeck";
 import PitchPasswordGate from "./PitchPasswordGate";
 import { PITCH_AUTH_COOKIE, pitchAuthToken, readPitchPasswordHash } from "@/lib/sobeca-pitch/access";
 import { resolveSongGardenPitch } from "@/lib/sobeca-pitch/copy";
+import PitchUnavailable from "@/components/pitch/PitchUnavailable";
+import { loadPitch } from "@/lib/pitches/service";
+import { signedInOwner } from "@/lib/operators/current";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +21,11 @@ export const metadata: Metadata = {
 };
 
 export default async function SobecaSongGardenPage() {
+  const listing = await loadPitch("sobeca-song-garden");
+  const live = listing?.live !== false;
+  const owner = live ? false : await signedInOwner();
+  if (!live && !owner) return <PitchUnavailable title="SoBECA Song Garden" />;
+
   const passwordHash = await readPitchPasswordHash();
   if (passwordHash) {
     const token = (await cookies()).get(PITCH_AUTH_COOKIE)?.value;
@@ -26,5 +34,14 @@ export default async function SobecaSongGardenPage() {
     }
   }
   const pitch = await resolveSongGardenPitch();
-  return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
+  return (
+    <>
+      <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />
+      {!live ? (
+        <p className="fixed bottom-4 left-4 z-20 border border-[#CFFF81] bg-black/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#CFFF81]">
+          Not live. Only you can see this.
+        </p>
+      ) : null}
+    </>
+  );
 }

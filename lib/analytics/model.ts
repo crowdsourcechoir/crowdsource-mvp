@@ -131,7 +131,13 @@ export function classifyVisit(pathname: string, host: string): { segment: Segmen
   const adminGarden = path.match(/^\/admin\/gardens\/([^/]+)/);
   if (adminGarden && adminGarden[1] !== "new") return { segment: "garden", entity: decodePart(adminGarden[1]), path };
 
-  if (path.startsWith("/admin/settings/song-garden-pitch")) {
+  const pitchPage = path.match(/^\/pitch\/([^/]+)\/?$/);
+  if (pitchPage) return { segment: "other", entity: decodePart(pitchPage[1]), path };
+
+  if (
+    path.startsWith("/admin/settings/song-garden-pitch") ||
+    path.startsWith("/admin/settings/pitches/sobeca-song-garden")
+  ) {
     return { segment: "sobeca", entity: "sobeca-song-garden", path };
   }
   if (path.startsWith("/admin")) return { segment: "admin", entity: "admin", path };

@@ -5,6 +5,17 @@ import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { SettingsButton } from "@/components/settings/ui";
 
+type PitchPayload = {
+  id: string;
+  name: string;
+  prompt: string;
+  live: boolean;
+  protected: boolean;
+  href: string;
+  builtin: boolean;
+  slides: PitchSlide[];
+};
+
 function slideLabel(slide: PitchSlide): string {
   const titled = slide.blocks.find((block) => block.type === "title" || block.type === "heading");
   return titled && "text" in titled ? titled.text : slide.id;
@@ -57,7 +68,10 @@ function FitText({
   );
 }
 
-export default function SongGardenPitchEditor() {
+export default function PitchEditor({ id }: { id: string }) {
+  const [pitch, setPitch] = useState<PitchPayload | null>(null);
+  const [name, setName] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [slides, setSlides] = useState<PitchSlide[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -66,39 +80,65 @@ export default function SongGardenPitchEditor() {
   const [pagePassword, setPagePassword] = useState("");
   const [passwordOn, setPasswordOn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [live, setLive] = useState(true);
 
   useEffect(() => {
-    fetch("/api/sobeca-song-garden/access", { cache: "no-store" })
+    fetch(`/api/pitches/${id}`, { cache: "no-store" })
       .then(async (res) => {
         const data = await res.json();
-        if (res.ok) setPasswordOn(Boolean(data.protected));
+        if (!res.ok) throw new Error(data.error ?? "Could not load the pitch");
+        const next = data.pitch as PitchPayload;
+        setPitch(next);
+        setName(next.name);
+        setPrompt(next.prompt);
+        setSlides(next.slides);
+        setLive(next.live);
+        setPasswordOn(next.protected);
+        setActiveId(next.slides?.[0]?.id ?? null);
       })
-      .catch(() => undefined);
-    fetch("/api/sobeca-song-garden/copy", { cache: "no-store" })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not load copy");
-        setSlides(data.slides);
-        setActiveId((current) => current ?? data.slides?.[0]?.id ?? null);
-      })
-      .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load copy"));
-  }, []);
+      .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load the pitch"));
+  }, [id]);
 
-  async function save(next: PitchSlide[] | null) {
+  async function save(reset: boolean) {
     setSaving(true);
     setStatus(null);
     try {
-      const res = await fetch("/api/sobeca-song-garden/copy", {
+      const res = await fetch(`/api/pitches/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next ? { slides: next } : { reset: true }),
+        body: JSON.stringify(reset ? { reset: true, name, prompt } : { slides, name, prompt }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
-      setSlides(data.slides);
-      setStatus(next ? "Saved." : "Reset to the file.");
+      const next = data.pitch as PitchPayload;
+      setPitch(next);
+      setName(next.name);
+      setPrompt(next.prompt);
+      setSlides(next.slides);
+      setLive(next.live);
+      setStatus(reset ? "Reset." : "Saved.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleLive() {
+    setSaving(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`/api/pitches/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ live: !live }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not update the page");
+      setLive(Boolean(data.pitch?.live));
+      setStatus(data.pitch?.live ? "This pitch is live." : "This pitch is hidden.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Could not update the page");
     } finally {
       setSaving(false);
     }
@@ -108,7 +148,7 @@ export default function SongGardenPitchEditor() {
     setUploadingId(slide.id);
     setStatus(null);
     try {
-      const prepared = await fetch("/api/sobeca-song-garden/background", {
+      const prepared = await fetch(`/api/pitches/${id}/background`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slideId: slide.id, name: file.name, contentType: file.type, size: file.size }),
@@ -125,7 +165,15 @@ export default function SongGardenPitchEditor() {
         item.id === slide.id ? { ...item, image: prep.upload.publicUrl as string } : item
       );
       setSlides(next);
-      await save(next);
+      const res = await fetch(`/api/pitches/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slides: next, name, prompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setSlides((data.pitch as PitchPayload).slides);
+      setStatus("Saved.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -133,36 +181,63 @@ export default function SongGardenPitchEditor() {
     }
   }
 
-  if (!slides) {
-    return <p className="text-sm text-white/70">{status ?? "Loading copy…"}</p>;
+  if (!slides || !pitch) {
+    return <p className="text-sm text-white/70">{status ?? "Loading pitch…"}</p>;
   }
 
-  function jump(id: string) {
-    setActiveId(id);
-    document.getElementById(`pitch-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  function jump(sectionId: string) {
+    setActiveId(sectionId);
+    document.getElementById(`pitch-${sectionId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function patchSlide(id: string, recipe: (slide: PitchSlide) => PitchSlide) {
-    setSlides((current) => current?.map((item) => (item.id === id ? recipe(item) : item)) ?? current);
+  function patchSlide(sectionId: string, recipe: (slide: PitchSlide) => PitchSlide) {
+    setSlides((current) => current?.map((item) => (item.id === sectionId ? recipe(item) : item)) ?? current);
   }
 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--csc-row-divider)] pb-3">
-        <SettingsButton variant="primary" disabled={saving} onClick={() => save(slides)}>
+        <SettingsButton variant="primary" disabled={saving} onClick={() => save(false)}>
           Save
         </SettingsButton>
-        <SettingsButton disabled={saving} onClick={() => save(null)}>
+        <SettingsButton
+          disabled={saving}
+          title={pitch.builtin ? "Return to the original deck" : "Rebuild the sections from the prompt"}
+          onClick={() => save(true)}
+        >
           Reset
         </SettingsButton>
-        <SettingsButton href="/sobeca-song-garden" target="_blank">
+        <SettingsButton href={pitch.href} target="_blank">
           View
+        </SettingsButton>
+        <SettingsButton variant={live ? "primary" : "ghost"} disabled={saving} onClick={() => void toggleLive()}>
+          {live ? "Live" : "Hidden"}
         </SettingsButton>
         <SettingsButton onClick={() => setShowPassword((open) => !open)}>
           {passwordOn ? "Password on" : "Password"}
         </SettingsButton>
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
+
+      <label className="block border-b border-[var(--csc-row-divider)] py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Internal name</span>
+        <input
+          value={name}
+          aria-label="Internal name"
+          onChange={(event) => setName(event.target.value)}
+          className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
+        />
+      </label>
+      <label className="block border-b border-[var(--csc-row-divider)] py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Prompt</span>
+        <textarea
+          value={prompt}
+          rows={4}
+          aria-label="Prompt"
+          onChange={(event) => setPrompt(event.target.value)}
+          className="mt-1 w-full resize-y bg-transparent text-sm leading-relaxed text-white focus:outline-none"
+        />
+      </label>
 
       {showPassword ? (
         <form
@@ -172,7 +247,7 @@ export default function SongGardenPitchEditor() {
             setSaving(true);
             setStatus(null);
             try {
-              const res = await fetch("/api/sobeca-song-garden/access", {
+              const res = await fetch(`/api/pitches/${id}/access`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ password: pagePassword }),
@@ -209,7 +284,7 @@ export default function SongGardenPitchEditor() {
                 setSaving(true);
                 setStatus(null);
                 try {
-                  const res = await fetch("/api/sobeca-song-garden/access", {
+                  const res = await fetch(`/api/pitches/${id}/access`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ clear: true }),
@@ -243,9 +318,7 @@ export default function SongGardenPitchEditor() {
                 type="button"
                 onClick={() => jump(item.id)}
                 className={`shrink-0 border px-3 py-1.5 text-xs ${
-                  selected
-                    ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
-                    : "border-white/15 text-white"
+                  selected ? "border-[var(--csc-accent)] text-[var(--csc-accent)]" : "border-white/15 text-white"
                 }`}
               >
                 {index + 1}. {slideLabel(item)}
@@ -386,11 +459,7 @@ export default function SongGardenPitchEditor() {
               </div>
 
               {index < slides.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => jump(slides[index + 1].id)}
-                  className="csc-link mt-3 text-sm"
-                >
+                <button type="button" onClick={() => jump(slides[index + 1].id)} className="csc-link mt-3 text-sm">
                   Next: {slideLabel(slides[index + 1])}
                 </button>
               ) : null}

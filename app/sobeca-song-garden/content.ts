@@ -15,6 +15,11 @@ export type PitchSlide = {
   blocks: CopyBlock[];
   /** Body copy color for this section. Labels and headers stay lime. */
   copyColor?: string;
+  /**
+   * Multiply-tint strength for this section, 0–0.85.
+   * Omitted sections keep the SoBECA Song Garden wash.
+   */
+  wash?: number;
 };
 
 export const slides: PitchSlide[] = [

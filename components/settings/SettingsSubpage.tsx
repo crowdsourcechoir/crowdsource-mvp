@@ -7,6 +7,8 @@ type SettingsSubpageProps = {
   title: string;
   description?: string;
   children: ReactNode;
+  backHref?: string;
+  backLabel?: string;
 };
 
 /**
@@ -18,12 +20,14 @@ export default function SettingsSubpage({
   title,
   description,
   children,
+  backHref = "/admin/settings",
+  backLabel = "← Settings",
 }: SettingsSubpageProps) {
   return (
     <div className="w-full space-y-6 text-white">
       <div>
-        <Link href="/admin/settings" className="csc-link text-sm font-medium">
-          ← Settings
+        <Link href={backHref} className="csc-link text-sm font-medium">
+          {backLabel}
         </Link>
         <p className="csc-eyebrow mt-4">{eyebrow}</p>
         <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{title}</h1>
