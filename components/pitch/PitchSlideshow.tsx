@@ -231,8 +231,22 @@ export default function PitchSlideshow({
   }, [go]);
 
   useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtml = html.style.overflow;
+    const previousBody = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = previousHtml;
+      body.style.overflow = previousBody;
+    };
+  }, []);
+
+  useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    let wheelLock = false;
     const onTouchMove = (event: TouchEvent) => {
       const start = startRef.current;
       const touch = event.touches[0];
@@ -241,9 +255,29 @@ export default function PitchSlideshow({
       const dy = touch.clientY - start.y;
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) event.preventDefault();
     };
+    const onWheel = (event: WheelEvent) => {
+      const copy = (event.target as HTMLElement | null)?.closest("[data-slide-copy]");
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (copy instanceof HTMLElement && copy.scrollHeight > copy.clientHeight + 4) {
+        const atStart = copy.scrollTop <= 2;
+        const atEnd = copy.scrollTop + copy.clientHeight >= copy.scrollHeight - 2;
+        if ((delta > 0 && !atEnd) || (delta < 0 && !atStart)) return;
+      }
+      event.preventDefault();
+      if (wheelLock || Math.abs(delta) < 24) return;
+      wheelLock = true;
+      go(delta > 0 ? "next" : "prev");
+      window.setTimeout(() => {
+        wheelLock = false;
+      }, 650);
+    };
     root.addEventListener("touchmove", onTouchMove, { passive: false });
-    return () => root.removeEventListener("touchmove", onTouchMove);
-  }, []);
+    root.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      root.removeEventListener("touchmove", onTouchMove);
+      root.removeEventListener("wheel", onWheel);
+    };
+  }, [go]);
 
   const slide = slides[index];
   if (!slide) return null;
@@ -353,7 +387,12 @@ export default function PitchSlideshow({
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <p className="text-[11px] uppercase tracking-[0.28em] text-white/80">{label}</p>
         </div>
-        <div key={slide.id} className="min-h-0 flex-1 overflow-y-auto pr-1" style={{ color: slide.copyColor || "#FFFFFF" }}>
+        <div
+          key={slide.id}
+          data-slide-copy
+          className="min-h-0 flex-1 overflow-y-auto pr-1"
+          style={{ color: slide.copyColor || "#FFFFFF" }}
+        >
           <SlideCopy slide={slide} display={displayClass} />
         </div>
       </div>
@@ -377,6 +416,9 @@ export default function PitchSlideshow({
         ›
       </button>
 
+      <p className="pointer-events-none absolute bottom-12 left-0 right-0 z-20 text-center text-[11px] uppercase tracking-[0.28em] text-[#CFFF81]">
+        Click or swipe
+      </p>
       <div className="absolute bottom-6 left-0 right-0 z-20 flex items-center justify-center gap-2">
         {slides.map((item, dot) => (
           <button
