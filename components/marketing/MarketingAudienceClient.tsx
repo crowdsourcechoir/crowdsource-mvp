@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import {
-  FieldLabel,
-  SettingsButton,
-  SettingsPanel,
-  StatusPill,
-  TextField,
-} from "@/components/settings/ui";
+import { SettingsButton, StatusPill, TextField } from "@/components/settings/ui";
 import { dedupeMailchimpRows, inspectMailchimpCsv, type MailchimpCsvSummary } from "@/lib/marketing/ingest/mailchimp-csv";
 import type { MarketingPerson } from "@/lib/marketing/types";
 
 const IMPORT_BATCH = 25;
 const MATCH_BATCH = 500;
+const PAGE_SIZES = ["100", "500", "1000", "all"] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
 
 export default function MarketingAudienceClient() {
   const [people, setPeople] = useState<MarketingPerson[]>([]);
@@ -21,6 +17,9 @@ export default function MarketingAudienceClient() {
     null
   );
   const [q, setQ] = useState("");
+  const [pageSize, setPageSize] = useState<PageSize>("100");
+  const [matched, setMatched] = useState(0);
+  const [showImport, setShowImport] = useState(false);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [city, setCity] = useState("");
@@ -33,16 +32,40 @@ export default function MarketingAudienceClient() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/marketing/audience?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+    const res = await fetch(`/api/marketing/audience?q=${encodeURIComponent(q)}&limit=${pageSize}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load audience");
     setPeople(data.people ?? []);
     setTotals(data.totals ?? null);
-  }, [q]);
+    setMatched(typeof data.matched === "number" ? data.matched : (data.people ?? []).length);
+  }, [q, pageSize]);
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
   }, [load]);
+
+  async function exportList() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/marketing/audience?format=csv&q=${encodeURIComponent(q)}`, { cache: "no-store" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Export failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "audience.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function addPerson() {
     setBusy(true);
@@ -144,53 +167,58 @@ export default function MarketingAudienceClient() {
   }
 
   return (
-    <div className="space-y-6">
-      <SettingsPanel
-        eyebrow="Audience"
-        title="People"
-        description="Marketing audience only. Unsubscribed and cleaned imports stay suppressed. New people can join at /subscribe. Garden email capture is not auto-subscribed."
-        actions={
-          <>
-            <StatusPill tone="ok">{totals?.subscribed ?? 0} subscribed</StatusPill>
-            <StatusPill tone="off">{totals?.unsubscribed ?? 0} unsub</StatusPill>
-            <StatusPill tone="neutral">{totals?.cleaned ?? 0} cleaned</StatusPill>
-          </>
-        }
-      >
-        <div className="flex flex-wrap gap-2">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill tone="ok">{totals?.subscribed ?? 0} subscribed</StatusPill>
+        <StatusPill tone="off">{totals?.unsubscribed ?? 0} unsub</StatusPill>
+        <StatusPill tone="neutral">{totals?.cleaned ?? 0} cleaned</StatusPill>
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          {PAGE_SIZES.map((size) => (
+            <SettingsButton key={size} variant={pageSize === size ? "primary" : "ghost"} disabled={busy} onClick={() => setPageSize(size)}>
+              {size === "all" ? "All" : size}
+            </SettingsButton>
+          ))}
+          <SettingsButton disabled={busy} title="Download every match, including rows not on this page" onClick={exportList}>
+            Export
+          </SettingsButton>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[12rem] flex-1">
           <TextField value={q} onChange={setQ} placeholder="Search email, name, city, tag" />
-          <SettingsButton onClick={() => load()} disabled={busy}>
-            Refresh
-          </SettingsButton>
         </div>
-      </SettingsPanel>
+        <SettingsButton onClick={() => load()} disabled={busy}>
+          Refresh
+        </SettingsButton>
+        <p className="text-xs text-gray-500">
+          Showing {people.length.toLocaleString()} of {matched.toLocaleString()}
+        </p>
+      </div>
 
-      <SettingsPanel title="Add person">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <FieldLabel>Email</FieldLabel>
-            <TextField value={email} onChange={setEmail} placeholder="name@example.com" />
-          </div>
-          <div>
-            <FieldLabel>Name</FieldLabel>
-            <TextField value={displayName} onChange={setDisplayName} placeholder="Optional" />
-          </div>
-          <div>
-            <FieldLabel>City</FieldLabel>
-            <TextField value={city} onChange={setCity} placeholder="Seattle" />
-          </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[12rem] flex-1">
+          <TextField value={email} onChange={setEmail} placeholder="Email" />
         </div>
-        <div className="mt-3">
-          <SettingsButton variant="primary" onClick={addPerson} disabled={busy || !email.trim()}>
-            Add subscribed
-          </SettingsButton>
+        <div className="min-w-[8rem] flex-1">
+          <TextField value={displayName} onChange={setDisplayName} placeholder="Name" />
         </div>
-      </SettingsPanel>
+        <div className="w-28">
+          <TextField value={city} onChange={setCity} placeholder="City" />
+        </div>
+        <SettingsButton variant="primary" onClick={addPerson} disabled={busy || !email.trim()}>
+          Add
+        </SettingsButton>
+        <SettingsButton variant={showImport ? "primary" : "ghost"} disabled={busy} onClick={() => setShowImport((open) => !open)}>
+          CSV
+        </SettingsButton>
+      </div>
 
-      <SettingsPanel
-        title="Mailchimp CSV import"
-        description="Choose the audience export. The check counts subscribed, unsubscribed, cleaned, and duplicates before anything is written. Tags, interests, state, country, and confirm time are kept. Imports run in small batches."
-      >
+      {showImport ? (
+        <div className="space-y-2 rounded-xl border border-[var(--csc-row-divider)] p-3">
+          <p className="text-xs text-gray-500">
+            Mailchimp export. Check counts first. Unsubscribed and cleaned rows stay suppressed.
+          </p>
         <input
           type="file"
           accept=".csv,text/csv"
@@ -209,11 +237,11 @@ export default function MarketingAudienceClient() {
             setSummary(null);
             setExisting(null);
           }}
-          rows={5}
-          className="mt-3 w-full rounded-lg border border-[var(--csc-row-divider)] bg-black px-3 py-2 text-sm text-white"
+          rows={2}
+          className="w-full rounded-lg border border-[var(--csc-row-divider)] bg-black px-3 py-1.5 text-sm text-white"
           placeholder={"Email Address,First Name,Last Name,Status,Tags,State,Country\nperson@example.com,Ada,Lovelace,subscribed,newsletter,WA,USA"}
         />
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           <SettingsButton disabled={busy || !csv.trim()} onClick={() => stageCsv(csv)}>
             Check file
           </SettingsButton>
@@ -222,7 +250,7 @@ export default function MarketingAudienceClient() {
           </SettingsButton>
         </div>
         {summary ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             <StatusPill tone="neutral">{summary.parsed} people</StatusPill>
             <StatusPill tone="ok">{summary.subscribed} subscribed</StatusPill>
             <StatusPill tone="off">{summary.unsubscribed} unsubscribed</StatusPill>
@@ -233,8 +261,9 @@ export default function MarketingAudienceClient() {
             {existing !== null ? <StatusPill tone="neutral">{existing} already in Octo</StatusPill> : null}
           </div>
         ) : null}
-        {progress ? <p className="mt-3 text-sm text-gray-300">{progress}</p> : null}
-      </SettingsPanel>
+        {progress ? <p className="text-sm text-gray-300">{progress}</p> : null}
+        </div>
+      ) : null}
 
       {message ? <p className="text-sm text-[var(--csc-accent)]">{message}</p> : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
@@ -243,30 +272,29 @@ export default function MarketingAudienceClient() {
         <table className="w-full text-left text-sm">
           <thead className="bg-white/[0.03] text-[11px] uppercase tracking-[0.14em] text-gray-500">
             <tr>
-              <th className="px-4 py-3 font-semibold">Person</th>
-              <th className="px-4 py-3 font-semibold">City</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Source</th>
+              <th className="px-3 py-1.5 font-semibold">Person</th>
+              <th className="px-3 py-1.5 font-semibold">City</th>
+              <th className="px-3 py-1.5 font-semibold">Status</th>
+              <th className="px-3 py-1.5 font-semibold">Source</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--csc-row-divider)]">
             {people.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-gray-500">
+                <td colSpan={4} className="px-3 py-3 text-gray-500">
                   No people yet.
                 </td>
               </tr>
             ) : (
               people.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-1">
                     <Link href={`/admin/marketing/audience/${p.id}`} className="csc-link text-white">
-                      {p.displayName || p.email}
+                      {p.displayName ? `${p.displayName} · ${p.email}` : p.email}
                     </Link>
-                    {p.displayName ? <div className="text-xs text-gray-500">{p.email}</div> : null}
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{p.city || "—"}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-1 text-gray-300">{p.city || "—"}</td>
+                  <td className="px-3 py-1">
                     <StatusPill
                       tone={
                         p.status === "subscribed" ? "ok" : p.status === "unsubscribed" ? "off" : "neutral"
@@ -275,7 +303,7 @@ export default function MarketingAudienceClient() {
                       {p.status}
                     </StatusPill>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">{p.acquisitionSource}</td>
+                  <td className="px-3 py-1 text-gray-400">{p.acquisitionSource}</td>
                 </tr>
               ))
             )}
