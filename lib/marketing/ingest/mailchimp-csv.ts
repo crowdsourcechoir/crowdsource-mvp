@@ -62,8 +62,34 @@ function cell(cols: string[], index: number): string {
   return cols[index]?.trim() ?? "";
 }
 
+function textField(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/** Mailchimp often stores the postal address as one JSON cell, or as a comma-separated line. */
 function parseAddress(raw: string): { city: string | null; region: string | null; country: string | null } {
-  const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
+  const trimmed = raw.trim();
+  if (!trimmed) return { city: null, region: null, country: null };
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      return {
+        city: textField(parsed, ["city", "locality"]),
+        region: textField(parsed, ["state", "region", "province"]),
+        country: textField(parsed, ["country"]),
+      };
+    } catch {
+      const city = trimmed.match(/"city"\s*:\s*"([^"]*)"/i)?.[1]?.trim() || null;
+      const region = trimmed.match(/"(?:state|region)"\s*:\s*"([^"]*)"/i)?.[1]?.trim() || null;
+      const country = trimmed.match(/"country"\s*:\s*"([^"]*)"/i)?.[1]?.trim() || null;
+      if (city || region || country) return { city, region, country };
+    }
+  }
+  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
   if (parts.length >= 6) {
     return { city: parts[2] || null, region: parts[3] || null, country: parts[5] || null };
   }
