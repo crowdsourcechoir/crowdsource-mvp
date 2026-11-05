@@ -46,6 +46,6 @@ export function isDisplayableSubmission(
 ): boolean {
   if (sub.hidden) return false;
   if (!sub.media_type || !sub.media_url) return false;
-  if (displayMode === "approve_first") return sub.approved;
+  if (displayMode === "approve_first") return sub.approved === true;
   return true;
 }
