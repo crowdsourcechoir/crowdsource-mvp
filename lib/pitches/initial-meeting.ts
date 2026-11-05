@@ -8,12 +8,13 @@ export const INITIAL_MEETING_PROMPT =
 
 const photo = {
   concert: "/pitch/initial-meeting/concert.jpg",
-  hall: "/pitch/initial-meeting/hall.jpg",
-  skyline: "/pitch/initial-meeting/skyline.jpg",
-  street: "/pitch/initial-meeting/street.jpg",
-  pianoFog: "/pitch/initial-meeting/piano-fog.jpg",
-  piano: "/pitch/initial-meeting/piano.jpg",
-  studio: "/pitch/initial-meeting/studio.jpg",
+  audience: "/pitch/initial-meeting/audience.jpg",
+  instruments: "/pitch/initial-meeting/instruments.jpg",
+  participation: "/pitch/initial-meeting/participation.jpg",
+  lasts: "/pitch/initial-meeting/lasts.jpg",
+  withYou: "/pitch/initial-meeting/with-you.jpg",
+  places: "/pitch/initial-meeting/places.jpg",
+  show: "/pitch/initial-meeting/show.jpg",
 } as const;
 
 /** Full-bleed sections in the same shape as the SoBECA Song Garden page. */
@@ -35,8 +36,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "audience",
-    image: photo.hall,
-    imageAlt: "A crowd gathered in a hall of plants, light, and projection",
+    image: photo.audience,
+    imageAlt: "A concert crowd singing, faces lit by stage light",
     wash: 0.4,
     blocks: [
       { type: "heading", text: "Your audience is your greatest untapped creative resource." },
@@ -54,8 +55,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "instruments",
-    image: photo.piano,
-    imageAlt: "An upright piano surrounded by ferns against a topographic wall",
+    image: photo.instruments,
+    imageAlt: "People singing together with their hands in the air",
     wash: 0.34,
     blocks: [
       { type: "heading", text: "We are the instruments." },
@@ -69,8 +70,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "participation",
-    image: photo.pianoFog,
-    imageAlt: "A piano in colored fog, ringed with houseplants",
+    image: photo.participation,
+    imageAlt: "Friends singing arm in arm in front of a lit stage",
     wash: 0.4,
     blocks: [
       { type: "heading", text: "Participation changes the equation." },
@@ -100,8 +101,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "arc",
-    image: photo.skyline,
-    imageAlt: "A downtown skyline and river under a magenta sky",
+    image: photo.lasts,
+    imageAlt: "People still together under the lights after the peak of the show",
     wash: 0.36,
     blocks: [
       { type: "heading", text: "The experience begins long before the music—and lasts long after." },
@@ -127,8 +128,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "with-you",
-    image: photo.studio,
-    imageAlt: "A screen of voices, pictures, and waveforms being composed together",
+    image: photo.withYou,
+    imageAlt: "A facilitator and a group singing together on stage",
     wash: 0.58,
     blocks: [
       { type: "heading", text: "Not an off-the-shelf performance." },
@@ -152,8 +153,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "places",
-    image: photo.street,
-    imageAlt: "A city street at night under magenta and teal light",
+    image: photo.places,
+    imageAlt: "A gala crowd on their feet in front of a lit stage",
     wash: 0.4,
     blocks: [
       { type: "heading", text: "Designed to move people. Built to advance your goals." },
@@ -179,8 +180,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "investment",
-    image: photo.concert,
-    imageAlt: "Hands in the air at a collective performance",
+    image: photo.show,
+    imageAlt: "A packed house singing under gold and magenta spotlights",
     wash: 0.48,
     blocks: [
       { type: "heading", text: "More than a performance." },
@@ -205,8 +206,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "invitation",
-    image: photo.hall,
-    imageAlt: "People standing together in a glowing hall",
+    image: photo.concert,
+    imageAlt: "A concert crowd with hands raised toward a band and neon screens",
     wash: 0.32,
     blocks: [
       { type: "heading", text: "What could we create together?" },
