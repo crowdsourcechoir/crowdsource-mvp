@@ -26,14 +26,17 @@ export function extractDomain(urlOrDomain: string | null | undefined): string | 
 
 export function normalizeEmail(email: string | null | undefined): string | null {
   if (!email) return null;
-  const trimmed = email.trim().toLowerCase();
+  let trimmed = email.trim().toLowerCase();
+  // Operators often leave trailing punctuation from typing mid-sentence or paste.
+  trimmed = trimmed.replace(/[.,;:>\])}'"`]+$/g, "");
   if (trimmed === "null" || trimmed === "n/a" || trimmed === "none") return null; // guard against a model emitting the literal word instead of an actual null
   return trimmed.length > 0 && trimmed.includes("@") ? trimmed : null;
 }
 
 export function isPlausibleEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  return /^[^\s@]+@[^\s@]+\.[A-Za-z0-9-]{2,}$/.test(normalized);
 }
 
 const GENERIC_MAILBOX_LOCAL_PARTS =

@@ -170,8 +170,9 @@ export async function updateContact(id: string, patch: UpdateContactInput): Prom
   }
   if (patch.roleCategory !== undefined) row.role_category = patch.roleCategory;
   if (patch.email !== undefined) {
+    // Always persist the normalized form so trailing punctuation / casing typos don't stick.
     const normalized = normalizeEmail(patch.email);
-    row.email = normalized ? patch.email : null;
+    row.email = normalized;
     row.normalized_email = normalized;
   }
   if (patch.phone !== undefined) row.phone = patch.phone;

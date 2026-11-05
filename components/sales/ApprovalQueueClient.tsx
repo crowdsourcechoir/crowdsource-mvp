@@ -49,6 +49,7 @@ import EmailLaunchLink from "@/components/sales/EmailLaunchLink";
 import AddOrganizationForm, { AddOrgPlusButton } from "@/components/sales/AddOrganizationForm";
 import ScanBusinessCardModal, { ScanCardButton } from "@/components/sales/ScanBusinessCardModal";
 import AddContactForm from "@/components/sales/AddContactForm";
+import EditContactForm from "@/components/sales/EditContactForm";
 import SalesSearchBox from "@/components/sales/SalesSearchBox";
 import FindMoreContactsForm from "@/components/sales/FindMoreContactsForm";
 import QueueOrgWorkspace, { QueueOpportunityNotes } from "@/components/sales/QueueOrgWorkspace";
@@ -143,6 +144,7 @@ export default function ApprovalQueueClient() {
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
   const [findContactsOpen, setFindContactsOpen] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [deletingOrg, setDeletingOrg] = useState(false);
   const [nudging, setNudging] = useState(false);
   const [funnelByStage, setFunnelByStage] = useState<Record<RelationshipStage, number>>({
@@ -193,6 +195,7 @@ export default function ApprovalQueueClient() {
       setLoadError(null);
       setActionError(null);
       setDetailError(null);
+      setEditingContactId(null);
       setSelectedIndex(0);
       setMobileDetailOpen(false);
       if (deepLinkItem) setJumpToQueueItemId(deepLinkItem);
@@ -355,11 +358,13 @@ export default function ApprovalQueueClient() {
   useEffect(() => {
     setSendConfirmOpen(false);
     setFindContactsOpen(false);
-  }, [current?.queueItem.id, current?.draft?.id]);
+    setEditingContactId(null);
+  }, [current?.queueItem.id]);
 
   const selectItem = useCallback((index: number) => {
     setSendConfirmOpen(false);
     setFindContactsOpen(false);
+    setEditingContactId(null);
     setSelectedIndex(index);
     setMobileDetailOpen(true);
   }, []);
@@ -1230,6 +1235,34 @@ export default function ApprovalQueueClient() {
                   );
                   const blurb = contactRoleDescription(c) ?? fallbackRoleDescription(c.roleTitle, c.email);
                   const source = findingForContact(current.findings ?? [], c);
+                  if (editingContactId === c.id) {
+                    return (
+                      <li key={c.id} className="relative md:col-span-2 xl:col-span-3">
+                        <EditContactForm
+                          contact={c}
+                          queueItemId={current.queueItem.id}
+                          onCancel={() => setEditingContactId(null)}
+                          onSaved={(detail, message) => {
+                            setEditingContactId(null);
+                            if (detail) {
+                              draftIdentityRef.current = "";
+                              replaceDetail(current.queueItem.id, detail);
+                              const d = detail.draft;
+                              if (d) {
+                                setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
+                                setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+                              }
+                              if (detail.queueItem.id !== current.queueItem.id) {
+                                setJumpToQueueItemId(detail.queueItem.id);
+                                if (scope !== "all" && scope !== "to_send") setScope("to_send");
+                              }
+                            }
+                            showCopyStatus(message);
+                          }}
+                        />
+                      </li>
+                    );
+                  }
                   return (
                     <li key={c.id} className="relative">
                       <div
@@ -1276,57 +1309,72 @@ export default function ApprovalQueueClient() {
                             </span>
                             <span className="mt-0.5 block text-xs text-gray-400">{c.roleTitle ?? "unknown role"}</span>
                           </button>
-                          {c.email ? (
-                            c.emailVerificationStatus === "verified_deliverable" ? (
-                              <span
-                                title="Verified"
-                                aria-label="Verified"
-                                className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center text-[var(--csc-accent)]"
-                              >
-                                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </span>
-                            ) : c.emailVerificationStatus === "invalid" ? (
-                              <button
-                                type="button"
-                                title="Override bounce — mark verified and allow send"
-                                aria-label={`Override bounce for ${c.fullName ?? "contact"}`}
-                                disabled={busy}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markContactVerified(c.id, { force: true });
-                                }}
-                                className="mt-0.5 shrink-0 rounded-full border border-red-700/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300 hover:border-red-500 hover:text-red-100 disabled:opacity-50"
-                              >
-                                Override
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                title="Mark verified"
-                                aria-label={`Mark ${c.fullName ?? "contact"} verified`}
-                                disabled={busy}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markContactVerified(c.id);
-                                }}
-                                className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-gray-500 transition-colors hover:border-[var(--csc-accent)]/50 hover:text-[var(--csc-accent)] disabled:opacity-50"
-                              >
-                                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </button>
-                            )
-                          ) : null}
+                          <div className="flex shrink-0 items-start gap-1">
+                            <button
+                              type="button"
+                              title="Edit contact"
+                              aria-label={`Edit ${c.fullName ?? "contact"}`}
+                              disabled={busy}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingContactId(c.id);
+                              }}
+                              className="mt-0.5 rounded-md border border-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 transition-colors hover:border-[var(--csc-accent)]/50 hover:text-[var(--csc-accent)] disabled:opacity-50"
+                            >
+                              Edit
+                            </button>
+                            {c.email ? (
+                              c.emailVerificationStatus === "verified_deliverable" ? (
+                                <span
+                                  title="Verified"
+                                  aria-label="Verified"
+                                  className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center text-[var(--csc-accent)]"
+                                >
+                                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </span>
+                              ) : c.emailVerificationStatus === "invalid" ? (
+                                <button
+                                  type="button"
+                                  title="Override bounce — mark verified and allow send"
+                                  aria-label={`Override bounce for ${c.fullName ?? "contact"}`}
+                                  disabled={busy}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markContactVerified(c.id, { force: true });
+                                  }}
+                                  className="mt-0.5 shrink-0 rounded-full border border-red-700/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300 hover:border-red-500 hover:text-red-100 disabled:opacity-50"
+                                >
+                                  Override
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  title="Mark verified"
+                                  aria-label={`Mark ${c.fullName ?? "contact"} verified`}
+                                  disabled={busy}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markContactVerified(c.id);
+                                  }}
+                                  className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-gray-500 transition-colors hover:border-[var(--csc-accent)]/50 hover:text-[var(--csc-accent)] disabled:opacity-50"
+                                >
+                                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </button>
+                              )
+                            ) : null}
+                          </div>
                         </div>
                         <button
                           type="button"
