@@ -1,0 +1,641 @@
+.choir-site {
+  --choir-lime: hsl(83 100% 75%);
+  --choir-purple: hsl(263 96% 49%);
+  --choir-magenta: hsl(296 100% 50%);
+  --choir-ink: #111111;
+  min-height: 100dvh;
+  background: #fff;
+  color: var(--choir-ink);
+  font-family: var(--font-choir-mono), ui-monospace, monospace;
+}
+
+.choir-display {
+  font-family: var(--font-choir-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 0.88;
+  text-transform: uppercase;
+}
+
+.choir-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: var(--choir-lime);
+  color: #111;
+  padding: 0.55rem 2.5rem;
+  text-align: center;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.choir-banner a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.choir-banner button {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.choir-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #fff;
+  color: #111;
+}
+
+.choir-header.is-home {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: transparent;
+  color: #fff;
+}
+
+.choir-header.is-home .choir-nav a,
+.choir-header.is-home .choir-icon-link {
+  color: #fff;
+}
+
+.choir-logo {
+  display: block;
+  height: 72px;
+  width: auto;
+}
+
+.choir-nav {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.choir-nav a,
+.choir-icon-link {
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.choir-nav a[aria-current="page"] {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+.choir-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.choir-social {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.choir-icon-link {
+  min-width: 44px;
+  justify-content: center;
+  letter-spacing: 0;
+}
+
+.choir-cart-count {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.choir-menu-btn {
+  display: none;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.choir-drawer {
+  display: none;
+}
+
+.choir-hero {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  background: var(--choir-magenta);
+  color: var(--choir-lime);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.choir-hero-photo,
+.choir-hero-figure {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.choir-hero-figure {
+  object-fit: contain;
+  object-position: center bottom;
+  height: 78%;
+  top: auto;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.choir-hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, hsl(296 100% 40% / 0.25), hsl(296 100% 42% / 0.55));
+  z-index: 1;
+}
+
+.choir-kicker {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  margin-top: 7.5rem;
+}
+
+.choir-marquee {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.choir-marquee-track {
+  display: inline-block;
+  animation: choir-marquee 18s linear infinite;
+  font-size: clamp(5.5rem, 18vw, 13rem);
+}
+
+@keyframes choir-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.choir-hero-copy {
+  position: relative;
+  z-index: 3;
+  max-width: 40rem;
+  margin: 0 auto 2.5rem;
+  padding: 0 1.25rem;
+  text-align: center;
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.choir-band {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 2.5rem;
+  align-items: center;
+  padding: 4.5rem 6vw;
+}
+
+.choir-band.is-flip {
+  grid-template-columns: 0.9fr 1.1fr;
+}
+
+.choir-band.is-flip .choir-band-copy {
+  order: 2;
+}
+
+.choir-band h2 {
+  font-size: clamp(3rem, 7vw, 6.5rem);
+  margin: 0.2rem 0 1rem;
+}
+
+.choir-band p {
+  margin: 0 0 0.9rem;
+  max-width: 38rem;
+  line-height: 1.55;
+}
+
+.choir-eyebrow {
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.choir-band img,
+.choir-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+
+.choir-theme-ink { background: #0b0b0b; color: #fff; }
+.choir-theme-magenta { background: var(--choir-magenta); color: var(--choir-lime); }
+.choir-theme-purple { background: var(--choir-purple); color: #fff; }
+.choir-theme-lime { background: var(--choir-lime); color: #111; }
+.choir-theme-paper { background: #fff; color: #111; }
+
+.choir-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0.7rem 1.3rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.choir-btn:hover {
+  background: var(--choir-lime);
+  color: #111;
+  border-color: var(--choir-lime);
+}
+
+.choir-theme-lime .choir-btn:hover,
+.choir-btn.on-lime:hover {
+  background: #111;
+  color: var(--choir-lime);
+  border-color: #111;
+}
+
+.choir-invite {
+  padding: 5rem 1.5rem 4.5rem;
+  text-align: center;
+}
+
+.choir-invite h2 {
+  font-size: clamp(3.2rem, 8vw, 7rem);
+  margin: 0;
+}
+
+.choir-page-hero {
+  min-height: 58vh;
+  display: grid;
+  place-items: end start;
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+  padding: 7rem 6vw 3rem;
+}
+
+.choir-page-hero h1 {
+  font-size: clamp(4rem, 10vw, 8rem);
+  margin: 0;
+  color: var(--choir-lime);
+}
+
+.choir-section {
+  padding: 4rem 6vw;
+}
+
+.choir-section h2 {
+  font-size: clamp(2.6rem, 6vw, 5rem);
+  margin: 0 0 1rem;
+}
+
+.choir-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  align-items: center;
+}
+
+.choir-logos {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1.5rem 6vw 0.5rem;
+  background: #fff;
+}
+
+.choir-logos img {
+  width: 100%;
+  height: 72px;
+  object-fit: contain;
+}
+
+.choir-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.choir-card {
+  background: #fff;
+  color: #111;
+  padding: 1rem 1rem 1.4rem;
+}
+
+.choir-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  margin-bottom: 0.8rem;
+}
+
+.choir-card h3 {
+  font-size: 2.2rem;
+  margin: 0 0 0.4rem;
+}
+
+.choir-quote {
+  font-size: clamp(1.4rem, 3vw, 2.1rem);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.choir-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.choir-product {
+  color: inherit;
+  text-decoration: none;
+}
+
+.choir-product-photo {
+  background: #f3f3f3;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+
+.choir-product-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 160ms ease;
+}
+
+.choir-product-photo img.alt {
+  display: none;
+}
+
+.choir-product:hover img.primary { display: none; }
+.choir-product:hover img.alt { display: block; }
+
+.choir-product h2 {
+  font-family: inherit;
+  font-size: 0.95rem;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.35;
+  margin: 0.7rem 0 0.2rem;
+}
+
+.choir-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.choir-field input,
+.choir-field select,
+.choir-field textarea {
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 1rem;
+  border: 1px solid #111;
+  background: #fff;
+  color: #111;
+  padding: 0.75rem 0.8rem;
+  min-height: 48px;
+  width: 100%;
+}
+
+.choir-checks input {
+  width: 1.15rem;
+  min-width: 1.15rem;
+  min-height: 1.15rem;
+  padding: 0;
+}
+
+.choir-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.choir-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+.choir-checks {
+  display: grid;
+  gap: 0.45rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.95rem;
+}
+
+.choir-checks label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 44px;
+}
+
+.choir-qty {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid currentColor;
+}
+
+.choir-qty button,
+.choir-qty input {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+.choir-gallery {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.choir-gallery img {
+  width: 100%;
+  background: #f4f4f4;
+}
+
+.choir-thumbs {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.choir-thumbs button {
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.choir-thumbs button[aria-current="true"] {
+  border-color: #111;
+}
+
+.choir-thumbs img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.choir-footer {
+  background: #0b0b0b;
+  color: #fff;
+  padding: 3.5rem 6vw 2rem;
+}
+
+.choir-footer a { color: inherit; }
+
+.choir-press {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem 1.6rem;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.choir-press img {
+  height: 42px;
+  width: auto;
+  background: #fff;
+  padding: 0.25rem 0.4rem;
+}
+
+.choir-footer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.choir-videos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.choir-videos iframe {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: 0;
+  background: #000;
+}
+
+.choir-ig {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.choir-ig img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.choir-fine {
+  margin-top: 2rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.choir-honeypot {
+  position: absolute;
+  left: -9999px;
+  height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .choir-nav, .choir-social { display: none; }
+  .choir-menu-btn { display: inline-flex; align-items: center; }
+  .choir-header { grid-template-columns: 1fr auto; }
+  .choir-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 1.25rem 1.25rem;
+    background: var(--choir-magenta);
+    color: var(--choir-lime);
+  }
+  .choir-drawer a {
+    color: inherit;
+    text-decoration: none;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+  .choir-band,
+  .choir-band.is-flip,
+  .choir-split,
+  .choir-modes,
+  .choir-grid,
+  .choir-footer-grid,
+  .choir-form-row,
+  .choir-logos {
+    grid-template-columns: 1fr;
+  }
+  .choir-band.is-flip .choir-band-copy { order: 0; }
+  .choir-grid { grid-template-columns: 1fr 1fr; }
+  .choir-ig { grid-template-columns: 1fr 1fr; }
+  .choir-videos { grid-template-columns: 1fr; }
+  .choir-logo { height: 56px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choir-marquee-track { animation: none; }
+}
