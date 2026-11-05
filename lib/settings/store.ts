@@ -1,4 +1,5 @@
 import { measurementIdFrom } from "@/lib/analytics/model";
+import { normalizeWebPitches, type WebPitchesState } from "@/lib/pitches/model";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 /**
@@ -32,6 +33,8 @@ export type WorkspaceSettings = {
   digest: DigestSettingsOverrides;
   /** Public SoBECA Song Garden copy override. Null uses the copy in code. */
   songGarden: unknown;
+  /** Web pitch decks: SoBECA and Initial Meeting overrides, plus pitches created in Settings. */
+  webPitches: WebPitchesState;
   /** GA4 measurement id. Null means first-party analytics only. */
   gaMeasurementId: string | null;
   salesOffers: SalesOffersSettingsOverrides;
@@ -41,6 +44,7 @@ export type WorkspaceSettings = {
 export const EMPTY_WORKSPACE_SETTINGS: WorkspaceSettings = {
   digest: { enabled: null, minScore: null, targetCount: null, recipient: null },
   songGarden: null,
+  webPitches: { overrides: {}, custom: [] },
   gaMeasurementId: null,
   salesOffers: {
     anthemExperienceAmount: null,
@@ -123,6 +127,7 @@ export function normalizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
       recipient: coerceEmail(digest.recipient),
     },
     songGarden: source.songGarden === undefined ? null : source.songGarden,
+    webPitches: normalizeWebPitches(source.webPitches),
     gaMeasurementId: measurementIdFrom(source.gaMeasurementId),
     salesOffers: {
       anthemExperienceAmount: coerceNumber(salesOffers.anthemExperienceAmount, 0, 1_000_000),
@@ -175,6 +180,7 @@ export async function writeWorkspaceSettings(
     songGarden: unknown;
     gaMeasurementId: string | null;
     salesOffers: Partial<SalesOffersSettingsOverrides>;
+    webPitches: WebPitchesState;
   }>
 ): Promise<WorkspaceSettingsRead> {
   if (!supabaseAdmin) {
@@ -192,6 +198,9 @@ export async function writeWorkspaceSettings(
     songGarden: Object.prototype.hasOwnProperty.call(patch, "songGarden")
       ? patch.songGarden
       : current.settings.songGarden,
+    webPitches: Object.prototype.hasOwnProperty.call(patch, "webPitches")
+      ? patch.webPitches
+      : current.settings.webPitches,
     gaMeasurementId: Object.prototype.hasOwnProperty.call(patch, "gaMeasurementId")
       ? measurementIdFrom(patch.gaMeasurementId)
       : current.settings.gaMeasurementId,

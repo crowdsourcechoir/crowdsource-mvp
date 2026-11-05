@@ -24,6 +24,7 @@ function visit(patch: Partial<VisitEvent> & Pick<VisitEvent, "id" | "path" | "se
 
 const checks: Array<[string, boolean]> = [
   ["sobeca path", classifyVisit("/sobeca-song-garden", "app.crowdsourcechoir.com").segment === "sobeca"],
+  ["pitch page", classifyVisit("/pitch/initial-meeting", "app.crowdsourcechoir.com").entity === "initial-meeting"],
   ["song garden art host", classifyVisit("/", "songgarden.art").segment === "sobeca"],
   ["bloom slug", classifyVisit("/e/csc-oct2/interview", "app.crowdsourcechoir.com").entity === "csc-oct2" && classifyVisit("/e/csc-oct2", "app.crowdsourcechoir.com").segment === "bloom"],
   ["song garden under bloom", classifyVisit("/e/csc-oct2/songgarden", "app.crowdsourcechoir.com").segment === "song-garden"],
