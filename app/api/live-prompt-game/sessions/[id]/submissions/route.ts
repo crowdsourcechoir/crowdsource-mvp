@@ -1,28 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-
-function rowToSubmission(row: Record<string, unknown>) {
-  return {
-    id: row.id,
-    session_id: row.session_id,
-    round_id: row.round_id,
-    device_id: row.device_id,
-    raw_text: row.raw_text,
-    created_at: row.created_at,
-    hidden: row.hidden === true,
-    locked: row.locked === true,
-  };
-}
+import { rowToSubmission } from "@/lib/live-prompt-game/rows";
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Database not configured." },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
   }
   const { id: sessionId } = await context.params;
   const { searchParams } = new URL(request.url);
@@ -37,7 +22,7 @@ export async function GET(
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json((data ?? []).map(rowToSubmission));
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
@@ -47,10 +32,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Database not configured." },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
   }
   const { id: sessionId } = await context.params;
   try {
@@ -72,7 +54,7 @@ export async function POST(
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json(rowToSubmission(data));
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

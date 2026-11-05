@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import {
   getSession,
   updateSessionState,
+  updateSessionDisplayMode,
   endSession,
   createRound,
   closeRound,
@@ -14,11 +15,13 @@ import {
   getPhraseCards,
   setSubmissionHidden,
   setSubmissionLocked,
+  setSubmissionApproved,
   joinUrl,
   displayUrl,
   exportRawCsvUrl,
   generateSongPack,
   getSongPack,
+  sessionDisplayMode,
   type PromptGameSession,
   type PromptGameRound,
   type PromptGameSubmission,
@@ -26,9 +29,17 @@ import {
   type ResponseType,
 } from "@/data/livePromptGame";
 import { compositionBriefAdminUrl } from "@/data/compositionClient";
-import { DEFAULT_SIGNAL_HARMONIC_BLOCK, parsePromptBlock } from "@/data/signalPromptBlock";
+import {
+  DEFAULT_SIGNAL_HARMONIC_BLOCK,
+  DEFAULT_SELFIE_MEDIA_BLOCK,
+  DEFAULT_SNAP_MEDIA_BLOCK,
+  isMediaPromptBlock,
+  parsePromptBlock,
+} from "@/data/signalPromptBlock";
+import { isDisplayableSubmission } from "@/lib/live-prompt-game/rows";
 
 const POLL_MS = 2500;
+const MEDIA_POLL_MS = 1000;
 const VOTING_SECONDS_PER_ROUND = 10;
 
 type PrepopCategoryId = "genre" | "mood" | "tempo" | "energy" | "style" | "theme";
@@ -110,17 +121,24 @@ export default function HostControlRoomPage({
     }
   }, []);
 
+  const currentMediaBlock = useMemo(() => {
+    const current = rounds.find((r) => r.id === session?.current_round_id) ?? null;
+    const block = current ? parsePromptBlock(current.prompt_block) : null;
+    return isMediaPromptBlock(block) ? block : null;
+  }, [rounds, session?.current_round_id]);
+
   useEffect(() => {
     let id: string | null = null;
     resolveParams().then((resolved) => {
       id = resolved;
       refresh(resolved);
     });
+    const pollMs = currentMediaBlock ? MEDIA_POLL_MS : POLL_MS;
     const interval = setInterval(() => {
       if (id) refresh(id);
-    }, POLL_MS);
+    }, pollMs);
     return () => clearInterval(interval);
-  }, [resolveParams, refresh]);
+  }, [resolveParams, refresh, currentMediaBlock]);
 
   const handleSendPrompt = async () => {
     if (!sessionId || !promptText.trim()) return;
@@ -166,6 +184,69 @@ export default function HostControlRoomPage({
       console.error(e);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleStartMediaMoment = async (kind: "photo" | "sound") => {
+    if (!sessionId) return;
+    setSending(true);
+    try {
+      const block = kind === "photo" ? DEFAULT_SELFIE_MEDIA_BLOCK : DEFAULT_SNAP_MEDIA_BLOCK;
+      const round = await createRound(sessionId, {
+        prompt_text:
+          kind === "photo"
+            ? "Take a selfie — show us your face in the room."
+            : "Make one snap — fingers, clap, or a short hit.",
+        response_type: "short_phrase",
+        character_limit: 40,
+        timer_seconds: null,
+        prompt_block: block,
+      });
+      setRounds((prev) => [...prev, round]);
+      setSession((prev) =>
+        prev ? { ...prev, state: "RESPONDING", current_round_id: round.id } : null
+      );
+      await updateSessionState(sessionId, "RESPONDING", round.id);
+      await refresh(sessionId);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleToggleDisplayMode = async () => {
+    if (!sessionId || !session) return;
+    const next = sessionDisplayMode(session) === "auto" ? "approve_first" : "auto";
+    try {
+      const updated = await updateSessionDisplayMode(sessionId, next);
+      setSession(updated);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleApproveSubmission = async (submissionId: string, approved: boolean) => {
+    if (!sessionId) return;
+    try {
+      await setSubmissionApproved(sessionId, submissionId, approved);
+      setSubmissions((prev) =>
+        prev.map((s) => (s.id === submissionId ? { ...s, approved } : s))
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleHideMedia = async (submissionId: string, hidden: boolean) => {
+    if (!sessionId) return;
+    try {
+      await setSubmissionHidden(sessionId, submissionId, hidden);
+      setSubmissions((prev) =>
+        prev.map((s) => (s.id === submissionId ? { ...s, hidden } : s))
+      );
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -548,6 +629,21 @@ export default function HostControlRoomPage({
               >
                 Copy link
               </button>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-500">Stage media:</span>
+                <button
+                  type="button"
+                  onClick={() => void handleToggleDisplayMode()}
+                  className="rounded border border-gray-600 bg-gray-800 px-2.5 py-1 text-xs text-gray-200 hover:bg-gray-700"
+                >
+                  {sessionDisplayMode(session) === "auto" ? "Auto-show (tap → approve-first)" : "Approve-first (tap → auto-show)"}
+                </button>
+              </div>
+              {!session.linked_event_id && (
+                <p className="mt-2 text-xs text-amber-400/90">
+                  Link a Bloom when launching Live so selfies/snaps land in Garden / Composer.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -614,6 +710,32 @@ export default function HostControlRoomPage({
                   )}
                 </div>
               )}
+
+              <div className="mt-4 rounded-xl border border-[var(--csc-accent,#CFFF81)]/25 bg-black/40 p-4">
+                <h3 className="text-sm font-semibold text-[var(--csc-accent,#CFFF81)]">Room journey moments</h3>
+                <p className="mt-1 text-xs text-gray-400">
+                  Cue a selfie wall or snap round. Phones open the pad; Display shows arrivals. Media lands in the linked Bloom.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void handleStartMediaMoment("photo")}
+                    className="rounded-lg bg-[var(--csc-accent,#CFFF81)] px-4 py-2 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-40"
+                  >
+                    {sending ? "Starting…" : "Start selfie moment"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void handleStartMediaMoment("sound")}
+                    className="rounded-lg border border-[var(--csc-accent,#CFFF81)]/50 px-4 py-2 text-sm font-semibold text-[var(--csc-accent,#CFFF81)] hover:bg-[var(--csc-accent,#CFFF81)]/10 disabled:opacity-40"
+                  >
+                    {sending ? "Starting…" : "Start snap moment"}
+                  </button>
+                </div>
+              </div>
+
               <textarea
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
@@ -847,8 +969,81 @@ export default function HostControlRoomPage({
         </section>
       )}
 
-      {/* Raw submissions (RESPONDING) */}
-      {session.state === "RESPONDING" && submissions.length > 0 && (
+      {/* Media inbox (RESPONDING media rounds) */}
+      {session.state === "RESPONDING" && currentMediaBlock && (
+        <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Media inbox ({submissions.filter((s) => s.media_type).length})
+            </h2>
+            <p className="text-xs text-gray-500">
+              On stage:{" "}
+              {
+                submissions.filter((s) =>
+                  isDisplayableSubmission(s, sessionDisplayMode(session))
+                ).length
+              }
+            </p>
+          </div>
+          {submissions.filter((s) => s.media_type).length === 0 ? (
+            <p className="mt-3 text-sm text-gray-500">Waiting for phones…</p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              {submissions
+                .filter((s) => s.media_type)
+                .map((s) => (
+                  <div
+                    key={s.id}
+                    className={`overflow-hidden rounded-xl border ${
+                      s.hidden
+                        ? "border-red-900/50 opacity-50"
+                        : s.approved || sessionDisplayMode(session) === "auto"
+                          ? "border-[var(--csc-accent,#CFFF81)]/40"
+                          : "border-gray-700"
+                    } bg-[#1f1f1f]`}
+                  >
+                    {s.media_type === "photo" && s.media_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.media_url} alt="" className="aspect-square w-full object-cover" />
+                    ) : (
+                      <div className="flex aspect-square items-center justify-center text-xs text-gray-400">
+                        {s.media_type === "sound" ? (
+                          <audio controls src={s.media_url ?? undefined} className="w-full px-2" />
+                        ) : (
+                          s.raw_text
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 p-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => void handleHideMedia(s.id, !s.hidden)}
+                        className="text-gray-400 hover:text-red-300"
+                      >
+                        {s.hidden ? "Unhide" : "Hide"}
+                      </button>
+                      {sessionDisplayMode(session) === "approve_first" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleApproveSubmission(s.id, !s.approved)}
+                          className="text-gray-400 hover:text-[var(--csc-accent,#CFFF81)]"
+                        >
+                          {s.approved ? "Unapprove" : "Approve"}
+                        </button>
+                      )}
+                      {s.garden_clip_id ? (
+                        <span className="text-gray-600">Garden</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Raw submissions (RESPONDING text rounds) */}
+      {session.state === "RESPONDING" && !currentMediaBlock && submissions.length > 0 && (
         <section className="mb-6 rounded-2xl border border-gray-700/60 bg-transparent p-4 sm:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
             Raw submissions ({submissions.length})

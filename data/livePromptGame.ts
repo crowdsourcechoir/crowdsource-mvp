@@ -3,9 +3,12 @@
  */
 
 import type { PromptBlock } from "@/data/signalPromptBlock";
+import { putToSignedUpload } from "@/lib/songgarden/direct-upload-client";
 
 export type PromptGameSessionState = "WAITING" | "RESPONDING" | "VOTING";
 export type ResponseType = "one_word" | "short_phrase" | "sentence";
+export type LiveDisplayMode = "auto" | "approve_first";
+export type LiveMediaType = "photo" | "sound" | "video";
 
 export type PromptGameSession = {
   id: string;
@@ -14,6 +17,8 @@ export type PromptGameSession = {
   state: PromptGameSessionState;
   current_round_id: string | null;
   linked_event_id: string | null;
+  /** Stage policy for media moments. Missing on old rows → treat as auto. */
+  display_mode?: LiveDisplayMode;
   created_at: string;
   ended_at: string | null;
 };
@@ -27,7 +32,7 @@ export type PromptGameRound = {
   timer_seconds: number | null;
   created_at: string;
   closed_at: string | null;
-  /** Structured block (Signal: choices + stub trigger IDs). From `prompt_game_rounds.prompt_block`. */
+  /** Structured block (Signal / Live media). From `prompt_game_rounds.prompt_block`. */
   prompt_block?: PromptBlock | null;
 };
 
@@ -40,6 +45,13 @@ export type PromptGameSubmission = {
   created_at: string;
   hidden: boolean;
   locked: boolean;
+  media_type?: LiveMediaType | null;
+  media_url?: string | null;
+  media_path?: string | null;
+  media_mime?: string | null;
+  media_duration_ms?: number | null;
+  approved?: boolean;
+  garden_clip_id?: string | null;
 };
 
 export type PhraseCard = {
@@ -108,6 +120,16 @@ export async function updateSessionState(
   return api<PromptGameSession>(`/api/live-prompt-game/sessions/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ state, current_round_id }),
+  });
+}
+
+export async function updateSessionDisplayMode(
+  id: string,
+  display_mode: LiveDisplayMode
+): Promise<PromptGameSession> {
+  return api<PromptGameSession>(`/api/live-prompt-game/sessions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ display_mode }),
   });
 }
 
@@ -212,6 +234,68 @@ export async function setSubmissionLocked(sessionId: string, submissionId: strin
     method: "PATCH",
     body: JSON.stringify({ locked }),
   });
+}
+
+export async function setSubmissionApproved(
+  sessionId: string,
+  submissionId: string,
+  approved: boolean
+): Promise<void> {
+  await api(`/api/live-prompt-game/sessions/${sessionId}/submissions/${submissionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ approved }),
+  });
+}
+
+export async function submitLiveMedia(args: {
+  sessionId: string;
+  roundId: string;
+  deviceId: string;
+  mediaType: LiveMediaType;
+  blob: Blob;
+  mimeType: string;
+  ext: string;
+  durationMs?: number | null;
+  consentAccepted: boolean;
+}): Promise<PromptGameSubmission> {
+  const prepareRes = await fetch(`/api/live-prompt-game/sessions/${args.sessionId}/media/prepare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      round_id: args.roundId,
+      device_id: args.deviceId,
+      media_type: args.mediaType,
+      byte_size: args.blob.size,
+      content_type: args.mimeType,
+      ext: args.ext,
+    }),
+  });
+  if (!prepareRes.ok) {
+    const err = await prepareRes.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || "Could not prepare upload");
+  }
+  const prepared = (await prepareRes.json()) as {
+    upload: { signedUrl: string; path: string; publicUrl: string };
+    contentType: string;
+  };
+  await putToSignedUpload(prepared.upload.signedUrl, args.blob, args.mimeType || prepared.contentType);
+
+  return api<PromptGameSubmission>(`/api/live-prompt-game/sessions/${args.sessionId}/media/confirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      round_id: args.roundId,
+      device_id: args.deviceId,
+      media_type: args.mediaType,
+      media_path: prepared.upload.path,
+      media_mime: args.mimeType,
+      media_duration_ms: args.durationMs ?? null,
+      consent_accepted: args.consentAccepted,
+    }),
+  });
+}
+
+export function sessionDisplayMode(session: PromptGameSession | null | undefined): LiveDisplayMode {
+  return session?.display_mode === "approve_first" ? "approve_first" : "auto";
 }
 
 export function exportRawCsvUrl(sessionId: string): string {

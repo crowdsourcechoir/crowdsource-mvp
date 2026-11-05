@@ -6,10 +6,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string; submissionId: string }> }
 ) {
   if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Database not configured." },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
   }
   const { id: sessionId, submissionId } = await context.params;
   try {
@@ -17,17 +14,29 @@ export async function PATCH(
     const updates: Record<string, unknown> = {};
     if (typeof body.hidden === "boolean") updates.hidden = body.hidden;
     if (typeof body.locked === "boolean") updates.locked = body.locked;
+    if (typeof body.approved === "boolean") updates.approved = body.approved;
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "hidden or locked required." }, { status: 400 });
+      return NextResponse.json({ error: "hidden, locked, or approved required." }, { status: 400 });
     }
     const { error } = await supabaseAdmin
       .from("prompt_game_submissions")
       .update(updates)
       .eq("id", submissionId)
       .eq("session_id", sessionId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      if (typeof body.approved === "boolean" && /approved/i.test(error.message)) {
+        return NextResponse.json(
+          {
+            error:
+              "Approve needs the live-media-moments SQL migration. Run supabase/live-media-moments.sql in Supabase.",
+          },
+          { status: 503 }
+        );
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
