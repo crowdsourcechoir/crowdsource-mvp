@@ -6,8 +6,10 @@ import {
 } from "@/lib/sales/db/organizations";
 import { findOrganizationTypeByKey } from "@/lib/sales/db/lookups";
 import { assembleQueueItemDetailFromQueueItem } from "@/lib/sales/db/assemble";
+import { createOutreachDraft } from "@/lib/sales/db/outreach";
 import { createOrUpdateQueueItem, getQueueItem, setQueueItemOutreachDraft } from "@/lib/sales/db/queue";
 import { getOpportunity, updateOpportunityStatus } from "@/lib/sales/db/opportunities";
+import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { extractDomain, isGenericMailboxEmail, isPlausibleEmail, isSendableContact, looksLikeGenericRoleName, looksLikePersonName, genericMailboxLabel, normalizeEmail } from "@/lib/sales/dedupe";
 import { enrichContactEmail } from "@/lib/sales/enrichment";
 import { verifyEmailAddress } from "@/lib/sales/enrichment/verify-email";
@@ -17,8 +19,25 @@ import {
   withSalesInitiative,
   type SalesInitiativeKey,
 } from "@/lib/sales/initiatives";
-import { enqueueOrgManually, ensureContactDrafts, type ManualEnqueueResult } from "@/lib/sales/seed/enqueue-manual";
+import {
+  draftCopyForContact,
+  enqueueOrgManually,
+  ensureContactDrafts,
+  type ManualEnqueueResult,
+} from "@/lib/sales/seed/enqueue-manual";
 import type { Contact, Organization, QueueItemDetail } from "@/lib/sales/types";
+
+async function opportunityTypeKeyFor(opportunityTypeId: string | null | undefined): Promise<string | null> {
+  if (!opportunityTypeId) return null;
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("opportunity_types")
+    .select("key")
+    .eq("id", opportunityTypeId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return typeof data?.key === "string" ? data.key : null;
+}
 
 export function splitPersonName(fullName: string): { firstName: string; lastName: string } | null {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -300,7 +319,9 @@ export async function addContactToQueueItem(input: {
       hunter,
       selected: false,
       detail: await assembleQueueItemDetailFromQueueItem(item),
-      message: hunter.error ?? "Contact saved without an email — add one to draft outreach.",
+      message:
+        hunter.error ??
+        `Saved ${fullName} as a contact card — add their email on the card (or re-add with an email) to draft outreach.`,
     };
   }
 
@@ -319,7 +340,7 @@ export async function addContactToQueueItem(input: {
       hunter,
       selected: false,
       detail: await assembleQueueItemDetailFromQueueItem(item),
-      message: `Saved ${fullName} but Hunter says ${email} will bounce — not added to the send list.`,
+      message: `Saved ${fullName} as a contact card, but Hunter says ${email} will bounce — Override bounce or fix the email before sending.`,
     };
   }
 
@@ -333,14 +354,46 @@ export async function addContactToQueueItem(input: {
 
   // Queue for send even when Hunter returns accept_all / risky — Joel decides in the queue.
   // Hard bounces already returned above.
+  const opportunityTypeKey = await opportunityTypeKeyFor(opportunity.opportunityTypeId);
   const created = await ensureContactDrafts({
     organization,
     opportunityId: opportunity.id,
     pipelineRunId: null,
+    opportunityTypeKey,
+    eventName: opportunity.eventOrInitiativeName,
   });
-  const draft = created.drafts.find((d) => d.contactId === contact.id) ?? created.primaryDraft;
+  let draft = created.drafts.find((d) => d.contactId === contact.id) ?? null;
+  // Belt-and-suspenders: always mint an open draft for THIS new contact so a card appears
+  // even if ensureContactDrafts skipped them (e.g. race / alreadyHandled edge).
+  if (!draft || draft.contactId !== contact.id || (draft.status !== "draft" && draft.status !== "qa_flagged")) {
+    if (!isSendableContact(contact)) {
+      return {
+        contact,
+        hunter,
+        selected: false,
+        detail: await assembleQueueItemDetailFromQueueItem(item),
+        message: `Saved ${contact.fullName} but could not open a send draft yet.`,
+      };
+    }
+    const copy = draftCopyForContact(organization.name, contact, {
+      opportunityTypeKey,
+      eventName: opportunity.eventOrInitiativeName,
+    });
+    draft = await createOutreachDraft({
+      opportunityId: opportunity.id,
+      contactId: contact.id,
+      pipelineRunId: null,
+      kind: "initial",
+      status: "draft",
+      confidenceScore: 0.55,
+      aiSubject: copy.subject,
+      aiBody: copy.body,
+    });
+  }
+
+  let queueRow = item;
   if (wasDecided) {
-    await createOrUpdateQueueItem({
+    queueRow = await createOrUpdateQueueItem({
       opportunityId: opportunity.id,
       outreachDraftId: draft.id,
       prospectScoreId: item.prospectScoreId,
@@ -350,10 +403,9 @@ export async function addContactToQueueItem(input: {
       await updateOpportunityStatus(opportunity.id, "ready_for_review");
     }
   } else {
-    await setQueueItemOutreachDraft(item.id, draft.id);
+    queueRow = await setQueueItemOutreachDraft(item.id, draft.id);
   }
-  const refreshed = await getQueueItem(item.id);
-  const detail = refreshed ? await assembleQueueItemDetailFromQueueItem(refreshed) : null;
+  const detail = await assembleQueueItemDetailFromQueueItem(queueRow);
 
   const hunterNote =
     !parsed.isGenericMailbox && verified.status === "risky"
@@ -369,6 +421,6 @@ export async function addContactToQueueItem(input: {
     detail,
     message: hunter.found
       ? `Added ${contact.fullName} — Hunter found ${contact.email}.${hunterNote}${wasDecided ? " Reopened in To send." : ""}`
-      : `Added ${contact.fullName}.${hunterNote}${wasDecided ? " Reopened in To send." : ""}`,
+      : `Added ${contact.fullName} with a new draft card.${hunterNote}${wasDecided ? " Reopened in To send." : ""}`,
   };
 }

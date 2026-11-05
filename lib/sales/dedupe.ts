@@ -97,13 +97,27 @@ export function hasVerifiedEmail(contact: Contact | null | undefined): boolean {
 
 /**
  * Shown in the queue contact grid: named people with an email, or a general inbox.
- * Invalid / duplicate rows stay hidden.
+ * Invalid / duplicate rows stay hidden from *selection for send* — see isQueueListedContact
+ * for the wider grid (includes needs-email + bounce rows so Add contact always yields a card).
  */
 export function isSelectableContact(contact: Contact | null | undefined): boolean {
   if (!contact?.email || !isPlausibleEmail(contact.email)) return false;
   if (contact.duplicateOfContactId) return false;
   if (contact.emailVerificationStatus === "invalid") return false;
   return looksLikePersonName(contact.fullName) || isGenericMailboxEmail(contact.email);
+}
+
+/**
+ * Queue Contacts grid: every doorway Joel just added should appear as a card.
+ * Includes named people still missing an email, and bounce-flagged addresses
+ * (so Override is reachable). Duplicates stay hidden.
+ */
+export function isQueueListedContact(contact: Contact | null | undefined): boolean {
+  if (!contact || contact.duplicateOfContactId) return false;
+  if (contact.email && isPlausibleEmail(contact.email)) {
+    return looksLikePersonName(contact.fullName) || isGenericMailboxEmail(contact.email);
+  }
+  return looksLikePersonName(contact.fullName);
 }
 
 /**

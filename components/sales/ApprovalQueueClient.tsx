@@ -1242,8 +1242,15 @@ export default function ApprovalQueueClient() {
                         <div className="flex items-start justify-between gap-2">
                           <button
                             type="button"
-                            disabled={busy || selected}
+                            disabled={busy || selected || !c.email || c.emailVerificationStatus === "invalid"}
                             onClick={() => void selectContact(c.id)}
+                            title={
+                              !c.email
+                                ? "Add an email before selecting this contact"
+                                : c.emailVerificationStatus === "invalid"
+                                  ? "Override bounce before selecting"
+                                  : undefined
+                            }
                             className="min-w-0 flex-1 text-left touch-manipulation disabled:opacity-100"
                           >
                             <span className="font-medium">
@@ -1257,6 +1264,8 @@ export default function ApprovalQueueClient() {
                               ) : null}
                               {c.emailVerificationStatus === "invalid" ? (
                                 <span className="ml-2 text-xs font-medium text-red-400">bounce</span>
+                              ) : !c.email ? (
+                                <span className="ml-2 text-xs font-medium text-amber-400">needs email</span>
                               ) : c.emailVerificationStatus === "risky" ? (
                                 <span className="ml-2 text-xs font-medium text-amber-400" title="Hunter catch-all / accept_all — you decide">
                                   catch-all
@@ -1321,7 +1330,7 @@ export default function ApprovalQueueClient() {
                         </div>
                         <button
                           type="button"
-                          disabled={busy || selected}
+                          disabled={busy || selected || !c.email || c.emailVerificationStatus === "invalid"}
                           onClick={() => void selectContact(c.id)}
                           className="mt-1 w-full text-left text-xs leading-snug text-gray-500 disabled:opacity-100"
                         >
@@ -1367,11 +1376,18 @@ export default function ApprovalQueueClient() {
                   itemId={current.queueItem.id}
                   onAdded={(detail, message) => {
                     if (detail) {
+                      // Remount editor so the new contact's draft loads (same as after send-advance).
+                      draftIdentityRef.current = "";
                       replaceDetail(current.queueItem.id, detail);
                       const d = detail.draft;
                       if (d) {
                         setEditedSubject(coalesceDraftSubject(d.editedSubject, d.aiSubject));
                         setEditedBody(stripEmailSignature(coalesceDraftBody(d.editedBody, d.aiBody)));
+                      }
+                      // If reopen landed on a different queue row id, jump to it.
+                      if (detail.queueItem.id !== current.queueItem.id) {
+                        setJumpToQueueItemId(detail.queueItem.id);
+                        if (scope !== "all" && scope !== "to_send") setScope("to_send");
                       }
                     }
                     showCopyStatus(message);

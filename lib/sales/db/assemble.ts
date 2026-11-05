@@ -9,7 +9,7 @@ import { getLatestBriefForOpportunity } from "./pipeline";
 import { listActivitiesForOpportunity, listRepliedActivitiesForOpportunities } from "./activities";
 import { contactOutreachById } from "../outreach/contact-outreach";
 import { latestLiveCorrespondent } from "../outreach/reply-correspondent";
-import { hasVerifiedEmail, isSelectableContact } from "../dedupe";
+import { hasVerifiedEmail, isQueueListedContact, isSelectableContact } from "../dedupe";
 import { classifyQueueCategory } from "../queue/category";
 import type { ApprovalQueueItem, Contact, FunnelItemDetail, OpportunityPageDetail, ProspectScore, QueueItemDetail } from "../types";
 import { decodeHtmlEntities } from "../outreach/email-body-format";
@@ -170,16 +170,18 @@ async function buildDetail(opportunityId: string, queueItem: ApprovalQueueItem |
 
   const contactsList = orgContacts ?? [];
   const draftsList = allDrafts ?? [];
-  const contacts = contactsList.filter((c) => isSelectableContact(c));
+  // Wider than isSelectableContact so Add contact always yields a visible card
+  // (needs-email / bounce rows still appear; send/select stay gated separately).
+  const contacts = contactsList.filter((c) => isQueueListedContact(c));
   // Queue multi-send advances outreachDraftId to the next person — selection must follow
   // that draft, not a prior reply correspondent on the opportunity.
   const contact = pickQueueActiveContact(contactsList, draft?.contactId);
 
   const latestByContact = new Map<string, (typeof draftsList)[number]>();
-  const selectableIds = new Set(contacts.map((c) => c.id));
+  const listedIds = new Set(contacts.map((c) => c.id));
   for (const d of draftsList) {
     if (d.kind !== "initial" || !d.contactId) continue;
-    if (!selectableIds.has(d.contactId)) continue;
+    if (!listedIds.has(d.contactId)) continue;
     const prev = latestByContact.get(d.contactId);
     if (!prev || new Date(d.createdAt).getTime() >= new Date(prev.createdAt).getTime()) {
       latestByContact.set(d.contactId, d);
