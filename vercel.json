@@ -78,6 +78,26 @@
       "schedule": "20 12 * * *"
     },
     {
+      "path": "/api/marketing/cron/assign-home-cities",
+      "schedule": "5 18 * * *"
+    },
+    {
+      "path": "/api/marketing/cron/assign-home-cities",
+      "schedule": "25 18 * * *"
+    },
+    {
+      "path": "/api/marketing/cron/assign-home-cities",
+      "schedule": "50 18 * * *"
+    },
+    {
+      "path": "/api/marketing/cron/assign-home-cities",
+      "schedule": "20 19 * * *"
+    },
+    {
+      "path": "/api/marketing/cron/assign-home-cities",
+      "schedule": "20 20 * * *"
+    },
+    {
       "path": "/api/sales/cron/pipeline",
       "schedule": "5 9 * * *"
     },

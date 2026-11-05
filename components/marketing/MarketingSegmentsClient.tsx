@@ -12,6 +12,16 @@ import type { MarketingSegment, SegmentRule, SegmentRuleField } from "@/lib/mark
 
 type SegmentRow = MarketingSegment & { counts: { matched: number; sendable: number } };
 
+type HomeCities = {
+  applied: boolean;
+  already: boolean;
+  spokane: number;
+  boise: number;
+  seattle: number;
+  cities: { value: string; count: number }[];
+  tags: { value: string; count: number }[];
+};
+
 const FIELDS: { value: SegmentRuleField; label: string }[] = [
   { value: "status", label: "Status" },
   { value: "marketingConsent", label: "Marketing consent" },
@@ -22,6 +32,7 @@ const FIELDS: { value: SegmentRuleField; label: string }[] = [
 
 export default function MarketingSegmentsClient() {
   const [segments, setSegments] = useState<SegmentRow[]>([]);
+  const [homeCities, setHomeCities] = useState<HomeCities | null>(null);
   const [name, setName] = useState("");
   const [city, setCity] = useState("Seattle");
   const [tag, setTag] = useState("");
@@ -33,6 +44,7 @@ export default function MarketingSegmentsClient() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load segments");
     setSegments(data.segments ?? []);
+    setHomeCities(data.homeCities ?? null);
   }, []);
 
   useEffect(() => {
@@ -145,6 +157,19 @@ export default function MarketingSegmentsClient() {
       </SettingsPanel>
 
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {homeCities?.applied && !homeCities.already ? (
+        <p className="text-sm text-gray-300">
+          Labeled {homeCities.spokane.toLocaleString()} Spokane, {homeCities.boise.toLocaleString()} Boise, and{" "}
+          {homeCities.seattle.toLocaleString()} Seattle.
+        </p>
+      ) : null}
+      {homeCities && !homeCities.applied ? (
+        <p className="text-sm text-gray-300">
+          Found {homeCities.spokane.toLocaleString()} Spokane and {homeCities.boise.toLocaleString()} Boise, so nobody was moved to Seattle. Cities on file:{" "}
+          {homeCities.cities.map((item) => `${item.value || "blank"} ${item.count.toLocaleString()}`).join(", ") || "none"}.
+          Tags: {homeCities.tags.map((item) => `${item.value} ${item.count.toLocaleString()}`).join(", ") || "none"}.
+        </p>
+      ) : null}
 
       <div className="space-y-3">
         {segments.length === 0 ? (

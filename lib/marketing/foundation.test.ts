@@ -134,6 +134,13 @@ assert.ok(parseMailchimpTags(ada?.tags).includes("group:shows"));
 assert.ok(parseMailchimpTags(ada?.tags).includes("group:volunteers:stage"));
 assert.equal(ada?.confirmedAt, "2020-01-02T03:04:05.000Z");
 
+const addressed = inspectMailchimpCsv(
+  `Email Address,Address\nada@example.com,"{""addr1"":""1 Main"",""addr2"":"""",""city"":""Spokane"",""state"":""WA"",""zip"":""99201"",""country"":""US""}"\n`
+);
+assert.equal(addressed.rows[0]?.city, "Spokane");
+assert.equal(addressed.rows[0]?.region, "WA");
+assert.equal(addressed.rows[0]?.country, "US");
+
 const engagement = engagementStats(
   [
     { status: "delivered", recordedOpenCount: 1, clickCount: 0 },
