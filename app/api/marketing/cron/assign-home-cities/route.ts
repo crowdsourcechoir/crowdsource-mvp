@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { assignHomeCities } from "@/lib/marketing/db/home-cities";
-import { MarketingDbError } from "@/lib/marketing/db/errors";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** One-shot: label the Mailchimp audience Seattle, Spokane, or Boise and save those segments. */
+/** Retired. City lists are uploaded from Segments. */
 async function handle(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -15,15 +13,7 @@ async function handle(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const result = await assignHomeCities();
-    return NextResponse.json(result);
-  } catch (err) {
-    if (err instanceof MarketingDbError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });
-  }
+  return NextResponse.json({ applied: false, disabled: true });
 }
 
 export async function GET(request: Request) {

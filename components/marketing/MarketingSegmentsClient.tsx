@@ -8,19 +8,12 @@ import {
   StatusPill,
   TextField,
 } from "@/components/settings/ui";
+import { parseEmailList } from "@/lib/marketing/ingest/email-list";
 import type { MarketingSegment, SegmentRule, SegmentRuleField } from "@/lib/marketing/types";
 
 type SegmentRow = MarketingSegment & { counts: { matched: number; sendable: number } };
 
-type HomeCities = {
-  applied: boolean;
-  already: boolean;
-  spokane: number;
-  boise: number;
-  seattle: number;
-  cities: { value: string; count: number }[];
-  tags: { value: string; count: number }[];
-};
+type ListStats = { unique: number; duplicateRows: number; existing: number };
 
 const FIELDS: { value: SegmentRuleField; label: string }[] = [
   { value: "status", label: "Status" },
@@ -32,10 +25,13 @@ const FIELDS: { value: SegmentRuleField; label: string }[] = [
 
 export default function MarketingSegmentsClient() {
   const [segments, setSegments] = useState<SegmentRow[]>([]);
-  const [homeCities, setHomeCities] = useState<HomeCities | null>(null);
   const [name, setName] = useState("");
   const [city, setCity] = useState("Seattle");
   const [tag, setTag] = useState("");
+  const [listCity, setListCity] = useState("Spokane");
+  const [listEmails, setListEmails] = useState<string[]>([]);
+  const [listStats, setListStats] = useState<ListStats | null>(null);
+  const [listMessage, setListMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +40,6 @@ export default function MarketingSegmentsClient() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load segments");
     setSegments(data.segments ?? []);
-    setHomeCities(data.homeCities ?? null);
   }, []);
 
   useEffect(() => {
@@ -71,6 +66,77 @@ export default function MarketingSegmentsClient() {
     }
   }
 
+  async function checkList(text: string) {
+    const parsed = parseEmailList(text);
+    setListEmails(parsed.emails);
+    setListMessage(null);
+    setError(null);
+    if (!parsed.emails.length) {
+      setListStats(null);
+      setError("No email addresses in that file.");
+      return;
+    }
+    setBusy(true);
+    try {
+      let existing = 0;
+      for (let index = 0; index < parsed.emails.length; index += 400) {
+        const res = await fetch("/api/marketing/segments/city-list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dryRun: true,
+            city: listCity.trim() || "Spokane",
+            emails: parsed.emails.slice(index, index + 400),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not compare that list");
+        existing += Number(data.existing ?? 0);
+      }
+      setListStats({ unique: parsed.emails.length, duplicateRows: parsed.duplicateRows, existing });
+    } catch (err) {
+      setListStats(null);
+      setError(err instanceof Error ? err.message : "Could not compare that list");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveList() {
+    const cityName = listCity.trim();
+    if (!cityName || !listEmails.length) return;
+    setBusy(true);
+    setError(null);
+    let matched = 0;
+    let created = 0;
+    let skipped = 0;
+    try {
+      for (let index = 0; index < listEmails.length; index += 25) {
+        setListMessage(`Saving ${Math.min(index + 25, listEmails.length).toLocaleString()} of ${listEmails.length.toLocaleString()}`);
+        const res = await fetch("/api/marketing/segments/city-list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ city: cityName, emails: listEmails.slice(index, index + 25) }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Save failed");
+        matched += Number(data.matched ?? 0);
+        created += Number(data.created ?? 0);
+        skipped += Number(data.skipped ?? 0);
+      }
+      const duplicates = listStats?.duplicateRows ? `, ${listStats.duplicateRows.toLocaleString()} duplicate rows ignored` : "";
+      const skippedNote = skipped ? `, ${skipped.toLocaleString()} left off because they are suppressed` : "";
+      setListMessage(
+        `${cityName}: ${matched.toLocaleString()} already in the audience, ${created.toLocaleString()} added${duplicates}${skippedNote}. Segment saved.`
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeSegment(id: string) {
     setBusy(true);
     try {
@@ -83,6 +149,40 @@ export default function MarketingSegmentsClient() {
 
   return (
     <div className="space-y-6">
+      <SettingsPanel
+        eyebrow="City list"
+        title="Upload a segment export"
+        description="In Mailchimp, export the Spokane audience as a CSV. People already here are matched by email and not added twice."
+      >
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-40">
+            <FieldLabel>City</FieldLabel>
+            <TextField value={listCity} onChange={setListCity} placeholder="Spokane" />
+          </div>
+          <SettingsButton variant="primary" disabled={busy || !listStats || !listCity.trim()} onClick={saveList}>
+            Save segment
+          </SettingsButton>
+        </div>
+        <input
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          className="mt-3 block text-sm text-gray-300 file:mr-3 file:rounded-full file:border file:border-[var(--csc-row-divider)] file:bg-transparent file:px-3 file:py-1 file:text-xs file:font-semibold file:uppercase file:tracking-[0.14em] file:text-white"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            file.text().then((text) => checkList(text)).catch(() => setError("Could not read that file"));
+          }}
+        />
+        {listStats ? (
+          <p className="mt-3 text-sm text-gray-300">
+            {listStats.unique.toLocaleString()} unique emails. {listStats.duplicateRows.toLocaleString()} duplicates in the file.{" "}
+            {listStats.existing.toLocaleString()} already in the audience.{" "}
+            {(listStats.unique - listStats.existing).toLocaleString()} not here yet.
+          </p>
+        ) : null}
+        {listMessage ? <p className="mt-2 text-sm text-gray-300">{listMessage}</p> : null}
+      </SettingsPanel>
+
       <SettingsPanel
         eyebrow="Segments"
         title="Targeting"
@@ -157,19 +257,6 @@ export default function MarketingSegmentsClient() {
       </SettingsPanel>
 
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
-      {homeCities?.applied && !homeCities.already ? (
-        <p className="text-sm text-gray-300">
-          Labeled {homeCities.spokane.toLocaleString()} Spokane, {homeCities.boise.toLocaleString()} Boise, and{" "}
-          {homeCities.seattle.toLocaleString()} Seattle.
-        </p>
-      ) : null}
-      {homeCities && !homeCities.applied ? (
-        <p className="text-sm text-gray-300">
-          Found {homeCities.spokane.toLocaleString()} Spokane and {homeCities.boise.toLocaleString()} Boise, so nobody was moved to Seattle. Cities on file:{" "}
-          {homeCities.cities.map((item) => `${item.value || "blank"} ${item.count.toLocaleString()}`).join(", ") || "none"}.
-          Tags: {homeCities.tags.map((item) => `${item.value} ${item.count.toLocaleString()}`).join(", ") || "none"}.
-        </p>
-      ) : null}
 
       <div className="space-y-3">
         {segments.length === 0 ? (
