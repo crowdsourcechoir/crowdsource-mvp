@@ -1,20 +1,40 @@
 import { NextResponse } from "next/server";
+import { audienceToCsv } from "@/lib/marketing/audience-csv";
 import { withMarketingAuth } from "@/lib/marketing/auth";
 import { audienceTotals, getPerson, listPeople, setPersonTags, upsertPerson } from "@/lib/marketing/db/people";
 import type { MarketingStatus } from "@/lib/marketing/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+function parseLimit(raw: string | null): number | null {
+  if (raw === "all") return null;
+  if (raw === "100" || raw === "500" || raw === "1000") return Number(raw);
+  return 100;
+}
 
 export async function GET(request: Request) {
   return withMarketingAuth(async () => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") ?? undefined;
     const status = (searchParams.get("status") as MarketingStatus | null) ?? undefined;
-    const [people, totals] = await Promise.all([
-      listPeople({ q, status: status || undefined, limit: 500 }),
-      audienceTotals(),
-    ]);
-    return NextResponse.json({ people, totals });
+    const csv = searchParams.get("format") === "csv";
+    const listed = await listPeople({
+      q,
+      status: status || undefined,
+      limit: csv ? null : parseLimit(searchParams.get("limit")),
+    });
+    if (csv) {
+      return new NextResponse(audienceToCsv(listed.people), {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="audience.csv"',
+        },
+      });
+    }
+    const totals = await audienceTotals();
+    const matched = q?.trim() || status ? listed.matched : totals.all;
+    return NextResponse.json({ people: listed.people, totals, matched });
   });
 }
 

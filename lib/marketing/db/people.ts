@@ -359,19 +359,42 @@ export async function upsertPerson(input: UpsertPersonInput): Promise<UpsertPers
   };
 }
 
+const PEOPLE_PAGE = 1000;
+
+async function loadPersonRows(max: number | null): Promise<PersonRow[]> {
+  const db = marketingDb();
+  const rows: PersonRow[] = [];
+  for (let from = 0; ; from += PEOPLE_PAGE) {
+    const remaining = max == null ? PEOPLE_PAGE : max - rows.length;
+    if (remaining <= 0) break;
+    const take = Math.min(PEOPLE_PAGE, remaining);
+    const { data, error } = await db
+      .from("people")
+      .select(PERSON_SELECT)
+      .order("created_at", { ascending: false })
+      .range(from, from + take - 1);
+    raiseDb(error);
+    const page = (data ?? []) as PersonRow[];
+    rows.push(...page);
+    if (page.length < take) break;
+  }
+  return rows;
+}
+
 export async function listPeople(opts?: {
   q?: string;
   status?: MarketingStatus;
-  limit?: number;
-}): Promise<MarketingPerson[]> {
-  const db = marketingDb();
-  const { data, error } = await db.from("people").select(PERSON_SELECT).order("created_at", { ascending: false }).limit(5000);
-  raiseDb(error);
-  let rows = ((data ?? []) as PersonRow[]).map(rowToMarketingPerson);
-  if (opts?.status) rows = rows.filter((person) => person.status === opts.status);
+  /** Null lists every match. Omitted means 500. */
+  limit?: number | null;
+}): Promise<{ people: MarketingPerson[]; matched: number }> {
+  const needsScan = Boolean(opts?.q?.trim() || opts?.status);
+  const cap = opts && "limit" in opts ? opts.limit : 500;
+  const rows = await loadPersonRows(needsScan ? null : cap ?? null);
+  let people = rows.map(rowToMarketingPerson);
+  if (opts?.status) people = people.filter((person) => person.status === opts.status);
   if (opts?.q?.trim()) {
     const q = opts.q.trim().toLowerCase();
-    rows = rows.filter(
+    people = people.filter(
       (person) =>
         person.email.toLowerCase().includes(q) ||
         (person.displayName ?? "").toLowerCase().includes(q) ||
@@ -379,7 +402,9 @@ export async function listPeople(opts?: {
         person.tags.some((tag) => tag.toLowerCase().includes(q))
     );
   }
-  return rows.slice(0, opts?.limit ?? 500);
+  const matched = people.length;
+  if (typeof cap === "number") people = people.slice(0, cap);
+  return { people, matched };
 }
 
 export async function countExistingEmails(emails: string[]): Promise<number> {
