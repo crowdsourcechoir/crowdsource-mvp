@@ -1,4 +1,64 @@
+import type { CopyBlock } from "@/app/sobeca-song-garden/content";
+
 export type SlideGesture = "next" | "prev" | "none";
+
+export type DeckStep = { index: number; revealed: boolean };
+
+const TEXT_STYLES = new Set(["kicker", "title", "heading", "paragraph", "line"]);
+
+export function splitLastSentence(text: string): { before: string; last: string } {
+  const trimmed = text.trim();
+  const parts = trimmed.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ?? [];
+  if (parts.length <= 1) return { before: "", last: trimmed };
+  const last = parts[parts.length - 1];
+  const before = trimmed.slice(0, trimmed.length - last.length).trim();
+  return { before, last };
+}
+
+/** The line held for a second click. A line block wins. Otherwise the last sentence. */
+export function punchCopy(blocks: CopyBlock[]): { index: number; before: string; text: string } | null {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (block.type === "line" && block.text.trim()) return { index, before: "", text: block.text.trim() };
+  }
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (block.type === "image") continue;
+    if (block.type !== "paragraph") return null;
+    const { before, last } = splitLastSentence(block.text);
+    if (!last) return null;
+    return { index, before, text: last };
+  }
+  return null;
+}
+
+export function isTextStyle(type: string): boolean {
+  return TEXT_STYLES.has(type);
+}
+
+/**
+ * A forward gesture reveals the bottom line before it advances.
+ * A back gesture hides that line before it leaves the slide.
+ */
+export function nextDeckStep(
+  state: DeckStep,
+  count: number,
+  direction: SlideGesture,
+  hasPunch: boolean,
+  previousHasPunch: boolean,
+): DeckStep {
+  if (direction === "none" || count <= 0) return state;
+  if (direction === "next") {
+    if (!state.revealed && hasPunch) return { index: state.index, revealed: true };
+    const index = Math.min(count - 1, state.index + 1);
+    if (index === state.index) return state;
+    return { index, revealed: false };
+  }
+  if (state.revealed) return { index: state.index, revealed: false };
+  const index = Math.max(0, state.index - 1);
+  if (index === state.index) return state;
+  return { index, revealed: previousHasPunch };
+}
 
 /** Decide whether a pointer gesture moves the deck. */
 export function slideGesture(input: {

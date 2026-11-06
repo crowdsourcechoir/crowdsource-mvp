@@ -2,30 +2,60 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
-import { slideGesture, stepSlide, type SlideGesture } from "@/lib/pitches/slideshow";
+import { nextDeckStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 
-function splitLastSentence(text: string): { before: string; last: string } {
-  const trimmed = text.trim();
-  const parts = trimmed.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ?? [];
-  if (parts.length <= 1) return { before: "", last: trimmed };
-  const last = parts[parts.length - 1];
-  const before = trimmed.slice(0, trimmed.length - last.length).trim();
-  return { before, last };
+// Injected as HTML so the browser's CSS parser cannot hydrate-mismatch the text node.
+const DECK_CSS = `
+@keyframes photo-in-next {
+  from { opacity: 0.35; transform: scale(1.18) translate3d(4%, 1%, 0); }
+  to { opacity: 1; transform: scale(1.05) translate3d(0, 0, 0); }
 }
-
-function closingProse(blocks: CopyBlock[]): { index: number; before: string; last: string } | null {
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (block.type === "image") continue;
-    if (block.type !== "paragraph" && block.type !== "line") return null;
-    const { before, last } = splitLastSentence(block.text);
-    if (!last) return null;
-    return { index, before, last };
-  }
-  return null;
+@keyframes photo-in-prev {
+  from { opacity: 0.35; transform: scale(1.18) translate3d(-4%, 1%, 0); }
+  to { opacity: 1; transform: scale(1.05) translate3d(0, 0, 0); }
 }
+@keyframes copy-in {
+  from { opacity: 0; transform: translate3d(0, 42px, 0); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes photo-out-next {
+  to { opacity: 0; transform: scale(1.02) translate3d(-6%, 0, 0); }
+}
+@keyframes photo-out-prev {
+  to { opacity: 0; transform: scale(1.02) translate3d(6%, 0, 0); }
+}
+@keyframes wash-in {
+  from { opacity: 0; }
+  to { opacity: var(--wash); }
+}
+@keyframes rule-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.slide-photo { animation: photo-in-next 1.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.slide-out { animation: photo-out-next 0.8s cubic-bezier(0.4, 0, 0.2, 1) both; }
+[data-direction="prev"] .slide-out { animation-name: photo-out-prev; }
+[data-direction="prev"] .slide-photo { animation-name: photo-in-prev; }
+.slide-wash { animation: wash-in 0.9s ease both; }
+.slide-line { animation: copy-in 0.95s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.slide-rule { transform-origin: left center; animation: rule-in 0.8s 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes punch-in {
+  from { opacity: 0; transform: translate3d(0, 36px, 0); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.punch-in { animation: punch-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.deck-still .punch-in { animation: none; }
+.deck-still .slide-photo,
+.deck-still .slide-out,
+.deck-still .slide-wash,
+.deck-still .slide-line,
+.deck-still .slide-rule { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .slide-photo, .slide-out, .slide-wash, .slide-line, .slide-rule, .punch-in { animation: none; }
+}
+`;
 
 function Block({
   block,
@@ -38,14 +68,14 @@ function Block({
 }) {
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-5xl text-5xl uppercase leading-[0.88] tracking-wide sm:text-7xl lg:text-8xl`}>
+      <h1 className={`${display} max-w-5xl text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl`}>
         {block.text}
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-4xl text-4xl uppercase leading-[0.9] tracking-wide sm:text-6xl`}>
+      <h2 className={`${display} max-w-5xl text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl`}>
         {block.text}
       </h2>
     );
@@ -116,14 +146,6 @@ function Block({
   );
 }
 
-function ClosingLine({ text, display }: { text: string; display: string }) {
-  return (
-    <p className={`${display} mt-8 max-w-4xl text-4xl uppercase leading-[0.9] text-[#CFFF81] sm:text-6xl`}>
-      {text}
-    </p>
-  );
-}
-
 function SlideCopy({
   slide,
   display,
@@ -131,35 +153,24 @@ function SlideCopy({
   slide: PitchSlide;
   display: string;
 }) {
-  const closing = slide.id === "title" ? null : closingProse(slide.blocks);
-  const top = slide.id === "title" ? slide.blocks.filter((block) => block.type === "title" || block.type === "kicker") : slide.blocks;
-  const foot = slide.id === "title" ? slide.blocks.filter((block) => block.type === "line" || block.type === "paragraph") : [];
-
+  const punch = punchCopy(slide.blocks);
   return (
-    <div className={`flex h-full flex-col ${slide.id === "title" ? "justify-between" : ""}`}>
-      <div>
-        {top.map((block, blockIndex) => (
-          <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-            {closing && blockIndex === closing.index ? (
-              <>
-                {closing.before ? <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{closing.before}</p> : null}
-                <ClosingLine text={closing.last} display={display} />
-              </>
-            ) : (
-              <Block block={block} display={display} />
-            )}
-          </div>
-        ))}
-      </div>
-      {foot.length > 0 ? (
-        <div className="max-w-3xl pb-16">
-          {foot.map((block, blockIndex) => (
-            <div key={`${slide.id}-foot-${blockIndex}`} className="slide-line" style={{ animationDelay: `${320 + blockIndex * 90}ms` }}>
-              <Block block={block} display={display} footer />
+    <div>
+      {slide.blocks.map((block, blockIndex) => {
+        if (punch && blockIndex === punch.index) {
+          if (!punch.before) return null;
+          return (
+            <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
+              <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{punch.before}</p>
             </div>
-          ))}
-        </div>
-      ) : null}
+          );
+        }
+        return (
+          <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
+            <Block block={block} display={display} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -176,22 +187,34 @@ export default function PitchSlideshow({
   const rootRef = useRef<HTMLElement>(null);
   const startRef = useRef<{ x: number; y: number; interactive: boolean } | null>(null);
   const [index, setIndex] = useState(0);
+  const [revealed, setRevealed] = useState(false);
   const [outgoing, setOutgoing] = useState<number | null>(null);
   const [direction, setDirection] = useState<Exclude<SlideGesture, "none">>("next");
   const [motion, setMotion] = useState(true);
   const shown = useRef(0);
+  const indexRef = useRef(0);
+  const revealedRef = useRef(false);
+  const slidesRef = useRef(slides);
+  slidesRef.current = slides;
 
-  const go = useCallback(
-    (gesture: SlideGesture) => {
-      if (gesture === "none") return;
-      setIndex((current) => {
-        const next = stepSlide(current, slides.length, gesture);
-        if (next !== current) setDirection(gesture);
-        return next;
-      });
-    },
-    [slides.length],
-  );
+  const go = useCallback((gesture: SlideGesture) => {
+    const deck = slidesRef.current;
+    const current = indexRef.current;
+    const slide = deck[current];
+    const previous = deck[Math.max(0, current - 1)];
+    const next = nextDeckStep(
+      { index: current, revealed: revealedRef.current },
+      deck.length,
+      gesture,
+      Boolean(slide && punchCopy(slide.blocks)),
+      Boolean(previous && punchCopy(previous.blocks)),
+    );
+    if (next.index !== current && gesture !== "none") setDirection(gesture === "prev" ? "prev" : "next");
+    indexRef.current = next.index;
+    revealedRef.current = next.revealed;
+    setIndex(next.index);
+    setRevealed(next.revealed);
+  }, []);
 
   useEffect(() => {
     if (shown.current === index) return;
@@ -322,49 +345,7 @@ export default function PitchSlideshow({
         startRef.current = null;
       }}
     >
-      <style>{`
-        @keyframes photo-in-next {
-          from { opacity: 0.35; transform: scale(1.18) translate3d(4%, 1%, 0); }
-          to { opacity: 1; transform: scale(1.05) translate3d(0, 0, 0); }
-        }
-        @keyframes photo-in-prev {
-          from { opacity: 0.35; transform: scale(1.18) translate3d(-4%, 1%, 0); }
-          to { opacity: 1; transform: scale(1.05) translate3d(0, 0, 0); }
-        }
-        @keyframes copy-in {
-          from { opacity: 0; transform: translate3d(0, 42px, 0); filter: blur(8px); }
-          to { opacity: 1; transform: none; filter: none; }
-        }
-        @keyframes photo-out-next {
-          to { opacity: 0; transform: scale(1.02) translate3d(-6%, 0, 0); }
-        }
-        @keyframes photo-out-prev {
-          to { opacity: 0; transform: scale(1.02) translate3d(6%, 0, 0); }
-        }
-        @keyframes wash-in {
-          from { opacity: 0; }
-          to { opacity: var(--wash); }
-        }
-        @keyframes rule-in {
-          from { transform: scaleX(0); }
-          to { transform: scaleX(1); }
-        }
-        .slide-photo { animation: photo-in-next 1.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
-        .slide-out { animation: photo-out-next 0.8s cubic-bezier(0.4, 0, 0.2, 1) both; }
-        [data-direction="prev"] .slide-out { animation-name: photo-out-prev; }
-        [data-direction="prev"] .slide-photo { animation-name: photo-in-prev; }
-        .slide-wash { animation: wash-in 0.9s ease both; }
-        .slide-line { animation: copy-in 0.95s cubic-bezier(0.16, 1, 0.3, 1) both; }
-        .slide-rule { transform-origin: left center; animation: rule-in 0.8s 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
-        .deck-still .slide-photo,
-        .deck-still .slide-out,
-        .deck-still .slide-wash,
-        .deck-still .slide-line,
-        .deck-still .slide-rule { animation: none; }
-        @media (prefers-reduced-motion: reduce) {
-          .slide-photo, .slide-out, .slide-wash, .slide-line, .slide-rule { animation: none; }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
 
       <img key={`${slide.id}-photo`} src={slide.image} alt={slide.imageAlt} className="slide-photo absolute inset-0 h-full w-full object-cover" />
       {outgoing !== null && slides[outgoing] ? (
@@ -379,7 +360,8 @@ export default function PitchSlideshow({
         className="slide-wash absolute inset-0 mix-blend-multiply"
         style={{ backgroundColor: tint, ["--wash" as string]: wash, opacity: wash }}
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/55 to-black/30" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/35 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
       <div className="relative z-10 flex h-full flex-col px-6 pb-24 pt-8 sm:px-24 sm:pb-28 sm:pt-10">
@@ -400,25 +382,34 @@ export default function PitchSlideshow({
       <button
         type="button"
         aria-label="Previous slide"
-        className="absolute bottom-5 left-3 z-20 grid h-11 w-11 place-items-center rounded-full border border-[#CFFF81]/70 bg-black/35 text-2xl text-[#CFFF81] backdrop-blur-sm transition duration-300 hover:scale-105 hover:bg-black/60 sm:bottom-auto sm:left-5 sm:top-1/2 sm:-translate-y-1/2"
+        className="absolute bottom-5 left-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#CFFF81]/70 bg-black/35 text-[#CFFF81] backdrop-blur-sm transition duration-300 hover:scale-105 hover:bg-black/60 sm:bottom-auto sm:left-5 sm:top-1/2 sm:-translate-y-1/2"
         onPointerDown={(event) => event.stopPropagation()}
         onClick={() => go("prev")}
       >
-        ‹
+        <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+          <path d="M15.25 5.5 L8.75 12 l6.5 6.5" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       <button
         type="button"
         aria-label="Next slide"
-        className="absolute bottom-5 right-3 z-20 grid h-11 w-11 place-items-center rounded-full border border-[#CFFF81]/70 bg-black/35 text-2xl text-[#CFFF81] backdrop-blur-sm transition duration-300 hover:scale-105 hover:bg-black/60 sm:bottom-auto sm:right-5 sm:top-1/2 sm:-translate-y-1/2"
+        className="absolute bottom-5 right-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#CFFF81]/70 bg-black/35 text-[#CFFF81] backdrop-blur-sm transition duration-300 hover:scale-105 hover:bg-black/60 sm:bottom-auto sm:right-5 sm:top-1/2 sm:-translate-y-1/2"
         onPointerDown={(event) => event.stopPropagation()}
         onClick={() => go("next")}
       >
-        ›
+        <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+          <path d="M8.75 5.5 L15.25 12 l-6.5 6.5" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
 
-      <p className="pointer-events-none absolute bottom-12 left-0 right-0 z-20 text-center text-[11px] uppercase tracking-[0.28em] text-[#CFFF81]">
-        Click or swipe
-      </p>
+      {revealed && slide && punchCopy(slide.blocks) ? (
+        <p
+          key={`${slide.id}-punch`}
+          className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-16 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
+        >
+          {punchCopy(slide.blocks)?.text}
+        </p>
+      ) : null}
       <div className="absolute bottom-6 left-0 right-0 z-20 flex items-center justify-center gap-2">
         {slides.map((item, dot) => (
           <button
@@ -430,6 +421,9 @@ export default function PitchSlideshow({
             onPointerDown={(event) => event.stopPropagation()}
             onClick={() => {
               setDirection(dot > index ? "next" : "prev");
+              indexRef.current = dot;
+              revealedRef.current = false;
+              setRevealed(false);
               setIndex(dot);
             }}
           />

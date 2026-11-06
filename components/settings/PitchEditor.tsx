@@ -35,14 +35,20 @@ const BLOCK_LABEL: Record<string, string> = {
   paragraph: "Paragraph",
 };
 
+const TEXT_STYLES = ["title", "heading", "kicker", "line", "paragraph"] as const;
+
 function FitText({
   value,
   onChange,
   label,
+  styleName,
+  onStyle,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
+  styleName?: string;
+  onStyle?: (style: (typeof TEXT_STYLES)[number]) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -55,7 +61,26 @@ function FitText({
 
   return (
     <label className="block border-b border-[var(--csc-row-divider)] py-2">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">{label}</span>
+      <span className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">{label}</span>
+        {onStyle && styleName ? (
+          <select
+            aria-label={`${label} font style`}
+            value={styleName}
+            onChange={(event) => {
+              const next = event.target.value;
+              if ((TEXT_STYLES as readonly string[]).includes(next)) onStyle(next as (typeof TEXT_STYLES)[number]);
+            }}
+            className="bg-black text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--csc-accent)] focus:outline-none"
+          >
+            <option value="title">Title</option>
+            <option value="heading">Heading</option>
+            <option value="kicker">Kicker</option>
+            <option value="line">Line</option>
+            <option value="paragraph">Paragraph</option>
+          </select>
+        ) : null}
+      </span>
       <textarea
         ref={ref}
         rows={1}
@@ -449,7 +474,15 @@ export default function PitchEditor({ id }: { id: string }) {
                     <FitText
                       key={blockIndex}
                       label={BLOCK_LABEL[block.type] ?? block.type}
+                      styleName={block.type}
                       value={block.text}
+                      onStyle={(style) =>
+                        patchSlide(slide.id, (current) => {
+                          const existing = current.blocks[blockIndex];
+                          if (!existing || !("text" in existing)) return current;
+                          return updateBlock(current, blockIndex, { type: style, text: existing.text });
+                        })
+                      }
                       onChange={(value) =>
                         patchSlide(slide.id, (current) => {
                           const existing = current.blocks[blockIndex];
