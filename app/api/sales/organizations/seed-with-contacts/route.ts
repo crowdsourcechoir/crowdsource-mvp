@@ -3,12 +3,14 @@ import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { AMPLIFY_CONFERENCES_2027_SEEDS } from "@/lib/sales/seed/amplify-conferences-2027";
 import { BOOKING_AGENTS_SEEDS } from "@/lib/sales/seed/booking-agents";
 import { ENTERTAINMENT_BOOKING_AGENCIES_SEEDS } from "@/lib/sales/seed/entertainment-booking-agencies";
+import { EXPERIENTIAL_AGENCIES_SEEDS } from "@/lib/sales/seed/experiential-agencies";
 import { ELEVATE_VIBE_CREATE_PROSPECTS } from "@/lib/sales/seed/elevate-vibe-create-prospects";
 import { SEATTLE_FUNDRAISERS_2027_SEEDS } from "@/lib/sales/seed/seattle-fundraisers-2027";
 import { seedAmplifyConferences2027 } from "@/lib/sales/seed/seed-amplify-conferences-2027";
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 import { seedBookingAgents } from "@/lib/sales/seed/seed-booking-agents";
 import { seedEntertainmentBookingAgencies } from "@/lib/sales/seed/seed-entertainment-booking-agencies";
+import { seedExperientialAgencies } from "@/lib/sales/seed/seed-experiential-agencies";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import { RESEND_FORWARD_SEED, seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
@@ -29,7 +31,8 @@ export const maxDuration = 300;
  * Body: full SeedOrgWithContactsInput, `{ preset: "seahawks" }`, `{ preset: "amplify-2027" }`,
  * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
  * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, `{ preset: "wfea-members" }`,
- * `{ preset: "booking-agents" }`, or `{ preset: "entertainment-booking-agencies" }`.
+ * `{ preset: "booking-agents" }`, `{ preset: "entertainment-booking-agencies" }`,
+ * or `{ preset: "experiential-agencies" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -117,6 +120,15 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "experiential-agencies") {
+      const result = await seedExperientialAgencies({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "experiential-agencies",
+        seedCount: EXPERIENTIAL_AGENCIES_SEEDS.length,
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -139,7 +151,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, { preset: 'entertainment-booking-agencies' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, { preset: 'entertainment-booking-agencies' }, { preset: 'experiential-agencies' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );
