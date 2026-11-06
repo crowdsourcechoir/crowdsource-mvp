@@ -175,6 +175,33 @@ function SlideCopy({
   );
 }
 
+function currentFullscreen(): Element | null {
+  const doc = document as Document & { webkitFullscreenElement?: Element | null };
+  return document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+}
+
+async function requestDeckFullscreen(root: HTMLElement) {
+  const vendor = root as HTMLElement & { webkitRequestFullscreen?: () => void };
+  if (typeof root.requestFullscreen === "function") {
+    await root.requestFullscreen({ navigationUI: "hide" });
+    return;
+  }
+  if (typeof vendor.webkitRequestFullscreen === "function") {
+    vendor.webkitRequestFullscreen();
+    return;
+  }
+  throw new Error("Fullscreen is not available in this browser.");
+}
+
+async function exitFullscreen() {
+  const doc = document as Document & { webkitExitFullscreen?: () => void };
+  if (typeof document.exitFullscreen === "function") {
+    await document.exitFullscreen();
+    return;
+  }
+  doc.webkitExitFullscreen?.();
+}
+
 export default function PitchSlideshow({
   slides,
   displayClass,
@@ -191,6 +218,8 @@ export default function PitchSlideshow({
   const [outgoing, setOutgoing] = useState<number | null>(null);
   const [direction, setDirection] = useState<Exclude<SlideGesture, "none">>("next");
   const [motion, setMotion] = useState(true);
+  const [presenting, setPresenting] = useState(false);
+  const [playNote, setPlayNote] = useState<string | null>(null);
   const shown = useRef(0);
   const indexRef = useRef(0);
   const revealedRef = useRef(false);
@@ -247,11 +276,24 @@ export default function PitchSlideshow({
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
         go("prev");
+      } else if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        void play();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [go]);
+
+  useEffect(() => {
+    const sync = () => setPresenting(currentFullscreen() === rootRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -307,6 +349,23 @@ export default function PitchSlideshow({
   const tint = OVERLAYS[index % OVERLAYS.length];
   const wash = typeof slide.wash === "number" ? slide.wash : 0.45;
   const label = `${String(index + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
+
+  async function play() {
+    const root = rootRef.current;
+    if (!root) return;
+    setPlayNote(null);
+    try {
+      if (currentFullscreen() === root) {
+        await exitFullscreen();
+        return;
+      }
+      setPresenting(true);
+      await requestDeckFullscreen(root);
+    } catch {
+      setPresenting(false);
+      setPlayNote("This browser kept the address bar. Press F11, then share the window.");
+    }
+  }
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -367,7 +426,27 @@ export default function PitchSlideshow({
       <div className="relative z-10 flex h-full flex-col px-6 pb-24 pt-8 sm:px-24 sm:pb-28 sm:pt-10">
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
-          <p className="text-[11px] uppercase tracking-[0.28em] text-white/80">{label}</p>
+          <div className="flex items-center gap-4">
+            {presenting ? null : (
+              <button
+                type="button"
+                className="border border-[#CFFF81]/80 bg-black/80 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[#CFFF81]"
+                aria-label="Play presentation"
+                title="Hides the address bar and tabs. Press Esc to leave."
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void play();
+                }}
+              >
+                Play
+                <span className="mt-0.5 block font-normal normal-case tracking-normal text-white/70">
+                  Hides the address bar and tabs
+                </span>
+              </button>
+            )}
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/80">{label}</p>
+          </div>
         </div>
         <div
           key={slide.id}
@@ -386,6 +465,9 @@ export default function PitchSlideshow({
         >
           {punchCopy(slide.blocks)?.text}
         </p>
+      ) : null}
+      {playNote ? (
+        <p className="absolute right-6 top-24 z-30 max-w-xs bg-black/80 px-3 py-2 text-xs text-[#CFFF81]">{playNote}</p>
       ) : null}
       <div className="absolute bottom-6 left-0 right-0 z-20 flex items-center justify-center gap-2">
         {slides.map((item, dot) => (
