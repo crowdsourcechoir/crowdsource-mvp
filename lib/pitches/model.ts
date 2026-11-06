@@ -1,4 +1,11 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import {
+  isPitchPoint,
+  isTextStyle,
+  overlayListItem,
+  packTextBlock,
+  type TextStyle,
+} from "@/lib/pitches/copy-format";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
@@ -102,7 +109,7 @@ export function pitchTitle(slides: PitchSlide[], fallback: string): string {
 export function pitchDescription(slides: PitchSlide[], fallback: string): string {
   for (const slide of slides) {
     for (const block of slide.blocks) {
-      if ((block.type === "paragraph" || block.type === "line") && block.text.trim()) {
+      if ((block.type === "paragraph" || block.type === "large" || block.type === "line") && block.text.trim()) {
         return block.text.trim().slice(0, 180);
       }
     }
@@ -151,11 +158,17 @@ function washFrom(value: unknown, fallback?: number): number | undefined {
   return Math.round(value * 100) / 100;
 }
 
+function isListItem(item: unknown): boolean {
+  if (typeof item === "string") return item.length <= MAX_TEXT;
+  if (!isPitchPoint(item)) return false;
+  return item.label.length <= 200 && item.detail.length <= MAX_TEXT;
+}
+
 function isBlock(value: unknown): value is CopyBlock {
   if (!value || typeof value !== "object") return false;
   const block = value as CopyBlock;
   if (block.type === "list") {
-    return Array.isArray(block.items) && block.items.every((item) => typeof item === "string" && item.length <= MAX_TEXT);
+    return Array.isArray(block.items) && block.items.every(isListItem);
   }
   if (block.type === "table") {
     return (
@@ -196,32 +209,55 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
     image: safeImage(slide.image, SEED_PHOTO),
     wash: washFrom(slide.wash),
     copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
-    blocks: slide.blocks.map((block) => ({ ...block })),
+    blocks: slide.blocks.map((block) => sanitizeBlock(block)),
   }));
   return slides.length === value.length ? slides : null;
 }
 
-const TEXT_STYLES = new Set(["kicker", "title", "heading", "paragraph", "line"]);
+function sanitizeBlock(block: CopyBlock): CopyBlock {
+  if (isTextStyle(block.type) && "text" in block) {
+    return packTextBlock(block.type, block.text.slice(0, MAX_TEXT), block);
+  }
+  if (block.type === "list") {
+    return {
+      type: "list",
+      items: block.items.map((item) =>
+        typeof item === "string"
+          ? item.slice(0, MAX_TEXT)
+          : { label: item.label.slice(0, 200), detail: item.detail.slice(0, MAX_TEXT) }
+      ),
+    };
+  }
+  if (block.type === "table") {
+    return {
+      type: "table",
+      headers: block.headers.map((header) => header.slice(0, 200)),
+      rows: block.rows.map((row) => row.map((cell) => cell.slice(0, MAX_TEXT))),
+    };
+  }
+  return { ...block };
+}
 
 function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   if (!incoming || typeof incoming !== "object") return base;
   const next = incoming as CopyBlock;
   if (
-    TEXT_STYLES.has(base.type) &&
-    TEXT_STYLES.has(next.type) &&
+    isTextStyle(base.type) &&
+    isTextStyle(next.type) &&
+    "text" in base &&
     "text" in next &&
     typeof next.text === "string"
   ) {
-    return { type: next.type, text: next.text.slice(0, MAX_TEXT) } as CopyBlock;
+    const text = next.text.slice(0, MAX_TEXT);
+    const same = text === base.text;
+    return packTextBlock(next.type as TextStyle, text, next, same ? { underline: base.underline, bold: base.bold } : undefined);
   }
   if (next.type !== base.type) return base;
 
   if (base.type === "list" && next.type === "list" && Array.isArray(next.items) && next.items.length === base.items.length) {
     return {
       ...base,
-      items: base.items.map((item, index) =>
-        typeof next.items[index] === "string" ? next.items[index].slice(0, MAX_TEXT) : item
-      ),
+      items: base.items.map((item, index) => overlayListItem(item, next.items[index], MAX_TEXT)),
     };
   }
 
@@ -309,10 +345,10 @@ function cloneSlides(slides: PitchSlide[]): PitchSlide[] {
     ...slide,
     blocks: slide.blocks.map((block) =>
       block.type === "list"
-        ? { ...block, items: block.items.slice() }
+        ? { ...block, items: block.items.map((item) => (typeof item === "string" ? item : { ...item })) }
         : block.type === "table"
           ? { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) }
-          : { ...block }
+          : { ...block, ...("bold" in block && block.bold ? { bold: block.bold.slice() } : {}) }
     ),
   }));
 }

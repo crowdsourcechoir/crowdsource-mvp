@@ -4,7 +4,15 @@ export type SlideGesture = "next" | "prev" | "none";
 
 export type DeckStep = { index: number; revealed: boolean };
 
-const TEXT_STYLES = new Set(["kicker", "title", "heading", "paragraph", "line"]);
+export type PunchCopy = {
+  index: number;
+  before: string;
+  text: string;
+  bold?: string[];
+  underline?: true | string | false;
+};
+
+export { isTextStyle } from "./copy-format";
 
 export function splitLastSentence(text: string): { before: string; last: string } {
   const trimmed = text.trim();
@@ -16,24 +24,22 @@ export function splitLastSentence(text: string): { before: string; last: string 
 }
 
 /** The line held for a second click. A line block wins. Otherwise the last sentence. */
-export function punchCopy(blocks: CopyBlock[]): { index: number; before: string; text: string } | null {
+export function punchCopy(blocks: CopyBlock[]): PunchCopy | null {
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
-    if (block.type === "line" && block.text.trim()) return { index, before: "", text: block.text.trim() };
+    if (block.type === "line" && block.text.trim()) {
+      return { index, before: "", text: block.text.trim(), bold: block.bold, underline: block.underline };
+    }
   }
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
     if (block.type === "image") continue;
-    if (block.type !== "paragraph") return null;
+    if (block.type !== "paragraph" && block.type !== "large") return null;
     const { before, last } = splitLastSentence(block.text);
     if (!last) return null;
-    return { index, before, text: last };
+    return { index, before, text: last, bold: block.bold, underline: block.underline };
   }
   return null;
-}
-
-export function isTextStyle(type: string): boolean {
-  return TEXT_STYLES.has(type);
 }
 
 /**

@@ -1,12 +1,27 @@
+/** A list entry with a short point and the smaller description under it. */
+export type PitchPoint = { label: string; detail: string };
+
+/**
+ * Optional emphasis on a text block.
+ * `underline: true` draws the brush under the whole block.
+ * `underline: "phrase"` draws it under that phrase.
+ * `underline: false` turns it off, including a default from the deck.
+ */
+export type CopyMarks = {
+  underline?: true | string | false;
+  bold?: string[];
+};
+
 export type CopyBlock =
-  | { type: "kicker"; text: string }
-  | { type: "title"; text: string }
-  | { type: "heading"; text: string }
-  | { type: "paragraph"; text: string }
-  | { type: "line"; text: string }
+  | ({ type: "kicker"; text: string } & CopyMarks)
+  | ({ type: "title"; text: string } & CopyMarks)
+  | ({ type: "heading"; text: string } & CopyMarks)
+  | ({ type: "paragraph"; text: string } & CopyMarks)
+  | ({ type: "large"; text: string } & CopyMarks)
+  | ({ type: "line"; text: string } & CopyMarks)
   | { type: "image"; src: string; alt: string }
   | { type: "table"; headers: string[]; rows: string[][] }
-  | { type: "list"; items: string[] };
+  | { type: "list"; items: Array<string | PitchPoint> };
 
 export type PitchSlide = {
   id: string;

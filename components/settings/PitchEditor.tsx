@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import type { CopyBlock, PitchPoint, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
+import {
+  nextUnderline,
+  pitchPoint,
+  TEXT_STYLES,
+  toggleBoldPhrase,
+  toggleInlineMark,
+  type TextStyle,
+} from "@/lib/pitches/copy-format";
 import { SettingsButton } from "@/components/settings/ui";
 
 type PitchPayload = {
@@ -32,10 +40,23 @@ const BLOCK_LABEL: Record<string, string> = {
   kicker: "Kicker",
   heading: "Heading",
   line: "Line",
+  large: "Large paragraph",
   paragraph: "Paragraph",
 };
 
-const TEXT_STYLES = ["title", "heading", "kicker", "line", "paragraph"] as const;
+type TextBlock = Extract<CopyBlock, { text: string }>;
+
+function writeText(block: TextBlock, patch: { type?: TextStyle; text?: string; underline?: true | string | false; bold?: string[] }): CopyBlock {
+  const next: TextBlock = {
+    type: patch.type ?? block.type,
+    text: patch.text ?? block.text,
+  };
+  const underline = patch.underline !== undefined ? patch.underline : block.underline;
+  const bold = patch.bold !== undefined ? patch.bold : block.bold;
+  if (underline !== undefined) next.underline = underline;
+  if (bold !== undefined) next.bold = bold;
+  return next;
+}
 
 function FitText({
   value,
@@ -43,12 +64,16 @@ function FitText({
   label,
   styleName,
   onStyle,
+  marks,
+  onMarks,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   styleName?: string;
-  onStyle?: (style: (typeof TEXT_STYLES)[number]) => void;
+  onStyle?: (style: TextStyle) => void;
+  marks?: { bold?: string[]; underline?: true | string | false };
+  onMarks?: (marks: { bold?: string[]; underline?: true | string | false }) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -59,27 +84,78 @@ function FitText({
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
 
+  function range() {
+    const el = ref.current;
+    if (!el) return { start: 0, end: 0, selected: "" };
+    return {
+      start: el.selectionStart ?? 0,
+      end: el.selectionEnd ?? 0,
+      selected: value.slice(el.selectionStart ?? 0, el.selectionEnd ?? 0),
+    };
+  }
+
+  function bold() {
+    const { start, end, selected } = range();
+    if (onMarks) {
+      onMarks({ underline: marks?.underline, bold: toggleBoldPhrase(marks?.bold, selected.trim() || value.trim()) });
+      return;
+    }
+    onChange(toggleInlineMark(value, start, end, "**", "**"));
+  }
+
+  function underline() {
+    const { start, end, selected } = range();
+    if (onMarks) {
+      onMarks({ bold: marks?.bold, underline: nextUnderline(marks?.underline, selected) });
+      return;
+    }
+    onChange(toggleInlineMark(value, start, end, "{{", "}}"));
+  }
+
+  const underlineOn = onMarks ? Boolean(marks?.underline) : value.includes("{{");
+  const markButton = "text-[10px] font-semibold uppercase tracking-[0.16em]";
+
   return (
-    <label className="block border-b border-[var(--csc-row-divider)] py-2">
-      <span className="flex items-center justify-between gap-3">
+    <div className="block border-b border-[var(--csc-row-divider)] py-2">
+      <span className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">{label}</span>
-        {onStyle && styleName ? (
-          <select
-            aria-label={`${label} font style`}
-            value={styleName}
-            onChange={(event) => {
-              const next = event.target.value;
-              if ((TEXT_STYLES as readonly string[]).includes(next)) onStyle(next as (typeof TEXT_STYLES)[number]);
-            }}
-            className="bg-black text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--csc-accent)] focus:outline-none"
+        <span className="flex items-center gap-3">
+          <button
+            type="button"
+            title="Bold the selected words. With nothing selected, bold the whole line."
+            className={`${markButton} ${marks?.bold?.length || value.includes("**") ? "text-[var(--csc-accent)]" : "text-white/45"}`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={bold}
           >
-            <option value="title">Title</option>
-            <option value="heading">Heading</option>
-            <option value="kicker">Kicker</option>
-            <option value="line">Line</option>
-            <option value="paragraph">Paragraph</option>
-          </select>
-        ) : null}
+            Bold
+          </button>
+          <button
+            type="button"
+            title="Underline the selected words in the site brush. With nothing selected, underline the whole block."
+            className={`${markButton} ${underlineOn ? "text-[var(--csc-accent)]" : "text-white/45"}`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={underline}
+          >
+            Underline
+          </button>
+          {onStyle && styleName ? (
+            <select
+              aria-label={`${label} font style`}
+              value={styleName}
+              onChange={(event) => {
+                const next = event.target.value;
+                if ((TEXT_STYLES as readonly string[]).includes(next)) onStyle(next as TextStyle);
+              }}
+              className="bg-black text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--csc-accent)] focus:outline-none"
+            >
+              {TEXT_STYLES.map((style) => (
+                <option key={style} value={style}>
+                  {BLOCK_LABEL[style]}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </span>
       </span>
       <textarea
         ref={ref}
@@ -89,7 +165,11 @@ function FitText({
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 w-full resize-none bg-transparent text-sm leading-snug text-white focus:outline-none"
       />
-    </label>
+      {marks?.underline === true ? <span className="text-[10px] uppercase tracking-[0.14em] text-white/40">Brush under this block</span> : null}
+      {typeof marks?.underline === "string" ? (
+        <span className="text-[10px] uppercase tracking-[0.14em] text-white/40">Brush under “{marks.underline}”        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -422,22 +502,53 @@ export default function PitchEditor({ id }: { id: string }) {
                   if (block.type === "list") {
                     return (
                       <div key={blockIndex}>
-                        {block.items.map((item, itemIndex) => (
-                          <FitText
-                            key={itemIndex}
-                            label={`Item ${itemIndex + 1}`}
-                            value={item}
-                            onChange={(value) =>
-                              patchSlide(slide.id, (current) => {
-                                const existing = current.blocks[blockIndex];
-                                if (existing?.type !== "list") return current;
-                                const items = existing.items.slice();
-                                items[itemIndex] = value;
-                                return updateBlock(current, blockIndex, { ...existing, items });
-                              })
-                            }
-                          />
-                        ))}
+                        {block.items.map((item, itemIndex) => {
+                          const point = typeof item === "object" ? { label: item.label, detail: item.detail } : pitchPoint(item);
+                          const writeItem = (next: string | PitchPoint) =>
+                            patchSlide(slide.id, (current) => {
+                              const existing = current.blocks[blockIndex];
+                              if (existing?.type !== "list") return current;
+                              const items = existing.items.slice();
+                              items[itemIndex] = next;
+                              return updateBlock(current, blockIndex, { ...existing, items });
+                            });
+                          if (point) {
+                            return (
+                              <div key={itemIndex} className="mt-2">
+                                <FitText
+                                  label={`Point ${itemIndex + 1}`}
+                                  value={point.label}
+                                  onChange={(value) => writeItem({ label: value, detail: point.detail })}
+                                />
+                                <FitText
+                                  label="Description"
+                                  value={point.detail}
+                                  onChange={(value) => writeItem({ label: point.label, detail: value })}
+                                />
+                                <button
+                                  type="button"
+                                  className="csc-link mt-1 text-xs"
+                                  onClick={() => writeItem(`${point.label}${point.detail ? ` ${point.detail}` : ""}`.trim())}
+                                >
+                                  One line
+                                </button>
+                              </div>
+                            );
+                          }
+                          const text = typeof item === "string" ? item : "";
+                          return (
+                            <div key={itemIndex}>
+                              <FitText label={`Item ${itemIndex + 1}`} value={text} onChange={writeItem} />
+                              <button
+                                type="button"
+                                className="csc-link mt-1 text-xs"
+                                onClick={() => writeItem({ label: text, detail: "" })}
+                              >
+                                Add description
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   }
@@ -476,18 +587,31 @@ export default function PitchEditor({ id }: { id: string }) {
                       label={BLOCK_LABEL[block.type] ?? block.type}
                       styleName={block.type}
                       value={block.text}
+                      marks={{ bold: block.bold, underline: block.underline }}
+                      onMarks={(marks) =>
+                        patchSlide(slide.id, (current) => {
+                          const existing = current.blocks[blockIndex];
+                          if (!existing || !("text" in existing)) return current;
+                          return updateBlock(current, blockIndex, writeText(existing, marks));
+                        })
+                      }
                       onStyle={(style) =>
                         patchSlide(slide.id, (current) => {
                           const existing = current.blocks[blockIndex];
                           if (!existing || !("text" in existing)) return current;
-                          return updateBlock(current, blockIndex, { type: style, text: existing.text });
+                          return updateBlock(current, blockIndex, writeText(existing, { type: style }));
                         })
                       }
                       onChange={(value) =>
                         patchSlide(slide.id, (current) => {
                           const existing = current.blocks[blockIndex];
                           if (!existing || !("text" in existing)) return current;
-                          return updateBlock(current, blockIndex, { ...existing, text: value });
+                          const patch: { text: string; underline?: true | string | false; bold?: string[] } = { text: value };
+                          if (typeof existing.underline === "string" && !value.includes(existing.underline)) patch.underline = false;
+                          if (existing.bold?.some((phrase) => !value.includes(phrase))) {
+                            patch.bold = existing.bold.filter((phrase) => value.includes(phrase));
+                          }
+                          return updateBlock(current, blockIndex, writeText(existing, patch));
                         })
                       }
                     />

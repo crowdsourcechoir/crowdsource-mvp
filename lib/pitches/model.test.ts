@@ -89,6 +89,48 @@ assert.ok(!("error" in reset));
 if ("error" in reset) throw new Error("reset failed");
 assert.equal(reset.state.overrides[INITIAL_MEETING_ID]?.slides, null);
 assert.equal(findLoadedPitch(reset.state, INITIAL_MEETING_ID, sobeca)?.slides[0]?.blocks[0] && "text" in (findLoadedPitch(reset.state, INITIAL_MEETING_ID, sobeca)?.slides[0]?.blocks[0] ?? {}) ? (findLoadedPitch(reset.state, INITIAL_MEETING_ID, sobeca)?.slides[0]?.blocks[0] as { text: string }).text : "", "Make the moment undeniable.");
+assert.equal(
+  findLoadedPitch(reset.state, INITIAL_MEETING_ID, sobeca)?.slides[0]?.blocks[0] && "underline" in (findLoadedPitch(reset.state, INITIAL_MEETING_ID, sobeca)?.slides[0]?.blocks[0] ?? {})
+    ? (findLoadedPitch(reset.state, INITIAL_MEETING_ID, sobeca)?.slides[0]?.blocks[0] as { underline?: unknown }).underline
+    : undefined,
+  "undeniable"
+);
+
+const marked = mergeSlides(meeting.slides, [
+  { id: "title", blocks: [{ type: "large", text: "Make the moment undeniable.", bold: ["moment"], underline: false }] },
+]);
+const markedTitle = marked[0]?.blocks[0];
+assert.equal(markedTitle?.type, "large");
+assert.equal(markedTitle && "bold" in markedTitle ? markedTitle.bold?.[0] : "", "moment");
+assert.equal(markedTitle && "underline" in markedTitle ? markedTitle.underline : undefined, false);
+
+const kept = mergeSlides(meeting.slides, [{ id: "title", blocks: [{ type: "title", text: "Make the moment undeniable." }] }]);
+assert.equal(kept[0]?.blocks[0] && "underline" in kept[0].blocks[0] ? kept[0].blocks[0].underline : undefined, "undeniable");
+
+const withYou = meeting.slides.find((slide) => slide.id === "with-you");
+const legacyPoints = mergeSlides(meeting.slides, [
+  {
+    id: "with-you",
+    blocks: [
+      { type: "heading", text: "Not an off-the-shelf performance." },
+      { type: "paragraph", text: "Created with you, for your people." },
+      { type: "paragraph", text: "Every Anthem Experience includes a collaborative creative process:" },
+      {
+        type: "list",
+        items: [
+          "Participation design: A saved description.",
+          "Creative discovery: Explore your purpose, audience, theme, and desired outcomes.",
+          "Original composition: Transform participant contributions into an original anthem.",
+          "Experience design: Shape the musical and participatory moments around your event.",
+          "Live activation: Lead your audience in an accessible, high-energy collective performance.",
+        ],
+      },
+    ],
+  },
+]);
+const savedList = legacyPoints.find((slide) => slide.id === "with-you")?.blocks.find((block) => block.type === "list");
+assert.equal(withYou?.blocks.some((block) => block.type === "list"), true);
+assert.equal(savedList && savedList.type === "list" && typeof savedList.items[0] === "object" ? savedList.items[0].detail : "", "A saved description.");
 
 const copy = duplicatePitch(reset.state, meeting, { id: "pitch_copy1", now: "2026-11-05T03:00:00.000Z" });
 assert.ok(!("error" in copy));
