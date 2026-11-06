@@ -74,6 +74,10 @@
       "schedule": "55 1 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-world-health-expo",
+      "schedule": "15 4 * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "50 2 * * *"
     },
