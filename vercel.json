@@ -67,22 +67,6 @@
     },
     {
       "path": "/api/sales/cron/seed-experiential-agencies",
-      "schedule": "27 21 6 11 *"
-    },
-    {
-      "path": "/api/sales/cron/seed-experiential-agencies",
-      "schedule": "31 21 6 11 *"
-    },
-    {
-      "path": "/api/sales/cron/seed-experiential-agencies",
-      "schedule": "35 21 6 11 *"
-    },
-    {
-      "path": "/api/sales/cron/seed-experiential-agencies",
-      "schedule": "41 21 6 11 *"
-    },
-    {
-      "path": "/api/sales/cron/seed-experiential-agencies",
       "schedule": "50 1 * * *"
     },
     {
