@@ -379,33 +379,10 @@ export default function PitchSlideshow({
         </div>
       </div>
 
-      <button
-        type="button"
-        aria-label="Previous slide"
-        className="absolute bottom-5 left-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#CFFF81]/70 bg-black/35 text-[#CFFF81] backdrop-blur-sm transition duration-300 hover:scale-105 hover:bg-black/60 sm:bottom-auto sm:left-5 sm:top-1/2 sm:-translate-y-1/2"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => go("prev")}
-      >
-        <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-          <path d="M15.25 5.5 L8.75 12 l6.5 6.5" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        aria-label="Next slide"
-        className="absolute bottom-5 right-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#CFFF81]/70 bg-black/35 text-[#CFFF81] backdrop-blur-sm transition duration-300 hover:scale-105 hover:bg-black/60 sm:bottom-auto sm:right-5 sm:top-1/2 sm:-translate-y-1/2"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => go("next")}
-      >
-        <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-          <path d="M8.75 5.5 L15.25 12 l-6.5 6.5" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-
       {revealed && slide && punchCopy(slide.blocks) ? (
         <p
           key={`${slide.id}-punch`}
-          className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-16 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
+          className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
         >
           {punchCopy(slide.blocks)?.text}
         </p>
