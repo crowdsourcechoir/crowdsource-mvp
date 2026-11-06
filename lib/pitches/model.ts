@@ -201,9 +201,19 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
   return slides.length === value.length ? slides : null;
 }
 
+const TEXT_STYLES = new Set(["kicker", "title", "heading", "paragraph", "line"]);
+
 function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   if (!incoming || typeof incoming !== "object") return base;
   const next = incoming as CopyBlock;
+  if (
+    TEXT_STYLES.has(base.type) &&
+    TEXT_STYLES.has(next.type) &&
+    "text" in next &&
+    typeof next.text === "string"
+  ) {
+    return { type: next.type, text: next.text.slice(0, MAX_TEXT) } as CopyBlock;
+  }
   if (next.type !== base.type) return base;
 
   if (base.type === "list" && next.type === "list" && Array.isArray(next.items) && next.items.length === base.items.length) {

@@ -72,6 +72,10 @@ if (!meeting) throw new Error("missing meeting");
 const edited = mergeSlides(meeting.slides, [{ id: "title", blocks: [{ type: "title", text: "Changed headline" }] }]);
 assert.equal(edited[0]?.blocks[0] && "text" in edited[0].blocks[0] ? edited[0].blocks[0].text : "", "Changed headline");
 assert.equal(edited[0]?.image, initialMeetingSlides[0]?.image);
+const styled = mergeSlides(meeting.slides, [{ id: "audience", blocks: [{ type: "title", text: "Bigger headline" }] }]);
+const audience = styled.find((slide) => slide.id === "audience");
+assert.equal(audience?.blocks[0]?.type, "title");
+assert.equal(audience?.blocks[0] && "text" in audience.blocks[0] ? audience.blocks[0].text : "", "Bigger headline");
 
 const patched = applyPitchPatch(empty, meeting, { slides: edited, prompt: "A tighter brief." }, "2026-11-05T01:00:00.000Z");
 assert.ok(!("error" in patched));
