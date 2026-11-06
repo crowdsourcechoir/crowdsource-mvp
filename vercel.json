@@ -75,14 +75,6 @@
     },
     {
       "path": "/api/sales/cron/seed-world-health-expo",
-      "schedule": "55 21 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-world-health-expo",
-      "schedule": "10 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-world-health-expo",
       "schedule": "15 4 * * *"
     },
     {
