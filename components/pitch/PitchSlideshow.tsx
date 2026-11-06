@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import { PitchPointList, PitchRichText } from "@/components/pitch/PitchRichText";
 import { nextDeckStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
@@ -47,13 +48,22 @@ const DECK_CSS = `
 }
 .punch-in { animation: punch-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .deck-still .punch-in { animation: none; }
+@keyframes pitch-brush-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.pitch-brush {
+  stroke-dasharray: 1;
+  animation: pitch-brush-draw 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .deck-still .slide-photo,
 .deck-still .slide-out,
 .deck-still .slide-wash,
 .deck-still .slide-line,
-.deck-still .slide-rule { animation: none; }
+.deck-still .slide-rule,
+.deck-still .pitch-brush { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-  .slide-photo, .slide-out, .slide-wash, .slide-line, .slide-rule, .punch-in { animation: none; }
+  .slide-photo, .slide-out, .slide-wash, .slide-line, .slide-rule, .punch-in, .pitch-brush { animation: none; }
 }
 `;
 
@@ -69,35 +79,42 @@ function Block({
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-5xl text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl`}>
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
       <h2 className={`${display} max-w-5xl text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl`}>
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </h2>
     );
   }
   if (block.type === "kicker") {
     return (
       <p className="mt-6 text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81] sm:text-sm">
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </p>
     );
   }
   if (block.type === "line") {
     return (
       <p className={`${display} mt-8 max-w-3xl text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl`}>
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
+      </p>
+    );
+  }
+  if (block.type === "large") {
+    return (
+      <p className={`max-w-3xl text-xl leading-snug sm:text-2xl ${footer ? "text-white/85" : "mt-5"}`}>
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </p>
     );
   }
   if (block.type === "paragraph") {
     return (
       <p className={`max-w-3xl text-base leading-relaxed sm:text-lg ${footer ? "text-white/85" : "mt-5"}`}>
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </p>
     );
   }
@@ -105,15 +122,7 @@ function Block({
     return <img src={block.src} alt={block.alt} className="mt-8 w-full max-w-4xl" />;
   }
   if (block.type === "list") {
-    return (
-      <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed sm:text-lg">
-        {block.items.map((item, index) => (
-          <li key={`${index}-${item}`} className="border-l-2 border-[#CFFF81] pl-4">
-            {item}
-          </li>
-        ))}
-      </ul>
-    );
+    return <PitchPointList items={block.items} />;
   }
   return (
     <div className="mt-6 max-w-5xl overflow-x-auto">
@@ -135,7 +144,7 @@ function Block({
                   key={`${rowIndex}-${index}`}
                   className={`border-b border-white/15 py-3 pr-6 leading-relaxed ${index === 0 ? "text-[#CFFF81]" : ""}`}
                 >
-                  {cell}
+                  <PitchRichText text={cell} />
                 </td>
               ))}
             </tr>
@@ -161,7 +170,9 @@ function SlideCopy({
           if (!punch.before) return null;
           return (
             <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-              <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{punch.before}</p>
+              <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">
+                <PitchRichText text={punch.before} bold={punch.bold} underline={punch.underline} />
+              </p>
             </div>
           );
         }
@@ -384,7 +395,11 @@ export default function PitchSlideshow({
           key={`${slide.id}-punch`}
           className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
         >
-          {punchCopy(slide.blocks)?.text}
+          <PitchRichText
+            text={punchCopy(slide.blocks)?.text ?? ""}
+            bold={punchCopy(slide.blocks)?.bold}
+            underline={punchCopy(slide.blocks)?.underline}
+          />
         </p>
       ) : null}
       <div className="absolute bottom-6 left-0 right-0 z-20 flex items-center justify-center gap-2">

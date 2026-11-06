@@ -25,7 +25,7 @@ export const initialMeetingSlides: PitchSlide[] = [
     imageAlt: "A conductor with arms raised as a room of people sings",
     wash: 0.22,
     blocks: [
-      { type: "title", text: "Make the moment undeniable." },
+      { type: "title", text: "Make the moment undeniable.", underline: "undeniable" },
       { type: "kicker", text: "Anthem Experience" },
       {
         type: "paragraph",
@@ -141,11 +141,26 @@ export const initialMeetingSlides: PitchSlide[] = [
       {
         type: "list",
         items: [
-          "Participation design: Develop a custom-branded Song Garden and engagement strategy with your team.",
-          "Creative discovery: Explore your purpose, audience, theme, and desired outcomes.",
-          "Original composition: Transform participant contributions into an original anthem.",
-          "Experience design: Shape the musical and participatory moments around your event.",
-          "Live activation: Lead your audience in an accessible, high-energy collective performance.",
+          {
+            label: "Participation design",
+            detail: "Develop a custom-branded Song Garden and engagement strategy with your team.",
+          },
+          {
+            label: "Creative discovery",
+            detail: "Explore your purpose, audience, theme, and desired outcomes.",
+          },
+          {
+            label: "Original composition",
+            detail: "Transform participant contributions into an original anthem.",
+          },
+          {
+            label: "Experience design",
+            detail: "Shape the musical and participatory moments around your event.",
+          },
+          {
+            label: "Live activation",
+            detail: "Lead your audience in an accessible, high-energy collective performance.",
+          },
         ],
       },
       { type: "line", text: "The live moment is the culmination of the creative work." },
@@ -215,7 +230,7 @@ export const initialMeetingSlides: PitchSlide[] = [
       { type: "paragraph", text: "Every audience has a voice worth hearing." },
       { type: "paragraph", text: "Let's create an experience that brings them together." },
       { type: "kicker", text: "Crowdsource Choir" },
-      { type: "line", text: "Make the moment undeniable." },
+      { type: "line", text: "Make the moment undeniable.", underline: "undeniable" },
     ],
   },
 ];

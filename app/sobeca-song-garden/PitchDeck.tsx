@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { CopyBlock, PitchSlide } from "./content";
+import { PitchPointList, PitchRichText } from "@/components/pitch/PitchRichText";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 const CLOSING_COLOR = "#CFFF81";
@@ -20,7 +21,7 @@ function closingProse(blocks: CopyBlock[]): { index: number; before: string; las
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
     if (block.type === "image") continue;
-    if (block.type !== "paragraph" && block.type !== "line") return null;
+    if (block.type !== "paragraph" && block.type !== "line" && block.type !== "large") return null;
     const { before, last } = splitLastSentence(block.text);
     if (!last) return null;
     return { index, before, last };
@@ -28,13 +29,23 @@ function closingProse(blocks: CopyBlock[]): { index: number; before: string; las
   return null;
 }
 
-function ClosingLine({ text, display }: { text: string; display: string }) {
+function ClosingLine({
+  text,
+  display,
+  bold,
+  underline,
+}: {
+  text: string;
+  display: string;
+  bold?: string[];
+  underline?: true | string | false;
+}) {
   return (
     <p
       className={`${display} mt-8 max-w-5xl text-3xl leading-tight tracking-wide sm:text-5xl`}
       style={{ color: CLOSING_COLOR }}
     >
-      {text}
+      <PitchRichText text={text} bold={bold} underline={underline} />
     </p>
   );
 }
@@ -43,21 +54,21 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-6xl text-6xl leading-[0.9] tracking-wide sm:text-8xl`}>
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
       <h2 className={`${display} max-w-5xl text-5xl leading-[0.92] tracking-wide sm:text-7xl`}>
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </h2>
     );
   }
   if (block.type === "kicker") {
     return (
       <p className="mt-4 text-xs font-bold uppercase tracking-[0.28em] text-[#CFFF81] sm:text-sm">
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </p>
     );
   }
@@ -73,12 +84,23 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
               : "max-w-5xl text-3xl leading-tight tracking-wide sm:text-5xl"
         }`}
       >
-        {block.text}
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
+      </p>
+    );
+  }
+  if (block.type === "large") {
+    return (
+      <p className="mt-5 max-w-3xl text-xl leading-snug sm:text-2xl">
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
       </p>
     );
   }
   if (block.type === "paragraph") {
-    return <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{block.text}</p>;
+    return (
+      <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">
+        <PitchRichText text={block.text} bold={block.bold} underline={block.underline} />
+      </p>
+    );
   }
   if (block.type === "image") {
     return (
@@ -86,15 +108,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
     );
   }
   if (block.type === "list") {
-    return (
-      <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed sm:text-lg">
-        {block.items.map((item) => (
-          <li key={item} className="border-l-2 border-[#CFFF81] pl-4">
-            {item}
-          </li>
-        ))}
-      </ul>
-    );
+    return <PitchPointList items={block.items} />;
   }
   return (
     <div className="mt-8 max-w-5xl overflow-x-auto">
@@ -116,7 +130,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
                   key={cell}
                   className={`border-b border-white/15 py-4 pr-6 leading-relaxed ${index === 0 ? "text-[#CFFF81]" : ""}`}
                 >
-                  {cell}
+                  {cell ? <PitchRichText text={cell} /> : null}
                 </td>
               ))}
             </tr>
@@ -181,9 +195,17 @@ export default function PitchDeck({
           from { opacity: 0; transform: translateY(18px); }
           to { opacity: 1; transform: none; }
         }
+        @keyframes pitch-brush-draw {
+          from { stroke-dashoffset: 1; }
+          to { stroke-dashoffset: 0; }
+        }
         .pitch-rise { animation: pitch-rise 0.9s ease both; }
+        .pitch-brush {
+          stroke-dasharray: 1;
+          animation: pitch-brush-draw 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
         @media (prefers-reduced-motion: reduce) {
-          .pitch-rise { animation: none; }
+          .pitch-rise, .pitch-brush { animation: none; }
           [data-parallax] { transform: none !important; }
         }
       `}</style>
@@ -225,12 +247,19 @@ export default function PitchDeck({
                 {(slide.id === "title" ? slide.blocks.filter((block) => block.type === "title" || block.type === "kicker") : slide.blocks).map(
                   (block, blockIndex) => (
                     <div key={`${slide.id}-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${blockIndex * 70}ms` }}>
-                      {closing && blockIndex === closing.index ? (
+                      {closing && blockIndex === closing.index && "text" in block ? (
                         <>
                           {closing.before ? (
-                            <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{closing.before}</p>
+                            <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">
+                              <PitchRichText text={closing.before} bold={block.bold} underline={block.underline} />
+                            </p>
                           ) : null}
-                          <ClosingLine text={closing.last} display={displayClass} />
+                          <ClosingLine
+                            text={closing.last}
+                            display={displayClass}
+                            bold={block.bold}
+                            underline={block.underline}
+                          />
                         </>
                       ) : (
                         <Block block={block} display={displayClass} />
@@ -242,7 +271,7 @@ export default function PitchDeck({
               {slide.id === "title" ? (
                 <div className="max-w-3xl pb-4">
                   {slide.blocks
-                    .filter((block) => block.type === "line" || block.type === "paragraph")
+                    .filter((block) => block.type === "line" || block.type === "paragraph" || block.type === "large")
                     .map((block, blockIndex) => (
                       <div key={`${slide.id}-foot-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${200 + blockIndex * 80}ms` }}>
                         <Block block={block} display={displayClass} footer />

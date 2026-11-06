@@ -1,5 +1,6 @@
 import { slides, type CopyBlock, type PitchSlide } from "@/app/sobeca-song-garden/content";
 import { readWorkspaceSettings } from "@/lib/settings/store";
+import { isTextStyle, overlayListItem, packTextBlock, type TextStyle } from "@/lib/pitches/copy-format";
 
 export const DEFAULT_COPY_COLOR = "#FFFFFF";
 
@@ -30,12 +31,22 @@ export function safeCopyColor(value: unknown): string {
 function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   if (!incoming || typeof incoming !== "object") return base;
   const next = incoming as CopyBlock;
+  if (
+    isTextStyle(base.type) &&
+    isTextStyle(next.type) &&
+    "text" in base &&
+    "text" in next &&
+    typeof next.text === "string"
+  ) {
+    const same = next.text === base.text;
+    return packTextBlock(next.type as TextStyle, next.text, next, same ? { underline: base.underline, bold: base.bold } : undefined);
+  }
   if (next.type !== base.type) return base;
 
   if (base.type === "list" && next.type === "list" && Array.isArray(next.items) && next.items.length === base.items.length) {
     return {
       ...base,
-      items: base.items.map((item, index) => (typeof next.items[index] === "string" ? next.items[index] : item)),
+      items: base.items.map((item, index) => overlayListItem(item, next.items[index], 8000)),
     };
   }
 
