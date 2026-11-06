@@ -151,6 +151,9 @@ export function isPublicPath(pathname: string, method: string, searchParams: URL
     pathname.startsWith("/api/marketing/webhooks") ||
     pathname.startsWith("/api/marketing/unsubscribe") ||
     pathname === "/api/marketing/subscribe" ||
+    pathname === "/api/choir/subscribe" ||
+    pathname === "/api/choir/inquiry" ||
+    pathname === "/api/choir/order" ||
     pathname.startsWith("/api/marketing/ingest") ||
     pathname.startsWith("/api/p/")
   ) {
