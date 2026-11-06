@@ -21,6 +21,7 @@ import {
   seedOrgWithContacts,
   type SeedOrgWithContactsInput,
 } from "@/lib/sales/seed/seed-org-with-contacts";
+import { seedWorldHealthExpoContacts } from "@/lib/sales/seed/seed-world-health-expo-contacts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -32,7 +33,7 @@ export const maxDuration = 300;
  * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
  * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, `{ preset: "wfea-members" }`,
  * `{ preset: "booking-agents" }`, `{ preset: "entertainment-booking-agencies" }`,
- * or `{ preset: "experiential-agencies" }`.
+ * `{ preset: "experiential-agencies" }`, or `{ preset: "world-health-expo" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -129,6 +130,14 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "world-health-expo") {
+      const result = await seedWorldHealthExpoContacts({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "world-health-expo",
+        ...result,
+      });
+    }
+
     const input: SeedOrgWithContactsInput =
       body?.preset === "seahawks"
         ? {
@@ -151,7 +160,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, { preset: 'entertainment-booking-agencies' }, { preset: 'experiential-agencies' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, { preset: 'entertainment-booking-agencies' }, { preset: 'experiential-agencies' }, { preset: 'world-health-expo' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );

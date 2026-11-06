@@ -53,10 +53,17 @@ export function emailLocalPart(email: string | null | undefined): string | null 
   return withoutPlus || null;
 }
 
+/**
+ * Brand-suffixed departmental inboxes that are not a person's first.last address.
+ * congress.whx@informa.com is the published WHX Dubai congress team inbox.
+ */
+const BRAND_DEPARTMENT_LOCAL_PARTS = /^(congress\.whx)$/i;
+
 /** Shared departmental inboxes (info@, events@, …) — sendable without a named person. */
 export function isGenericMailboxEmail(email: string | null | undefined): boolean {
   const local = emailLocalPart(email);
-  return Boolean(local && GENERIC_MAILBOX_LOCAL_PARTS.test(local));
+  if (!local) return false;
+  return GENERIC_MAILBOX_LOCAL_PARTS.test(local) || BRAND_DEPARTMENT_LOCAL_PARTS.test(local);
 }
 
 export function looksLikeGenericRoleName(name: string | null | undefined): boolean {

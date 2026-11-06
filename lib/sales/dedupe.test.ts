@@ -44,6 +44,9 @@ async function main() {
   assert.equal(isGenericMailboxEmail("info@org.org"), true);
   assert.equal(isGenericMailboxEmail("EVENTS+gala@FredHutch.org"), true);
   assert.equal(isGenericMailboxEmail("tsheehan@fredhutch.org"), false);
+  assert.equal(isGenericMailboxEmail("congress.whx@informa.com"), true);
+  assert.equal(isGenericMailboxEmail("sales.whxdubai@informa.com"), false);
+  assert.equal(isGenericMailboxEmail("rubina.dsouza@informa.com"), false);
   assert.equal(genericMailboxLabel("events@fredhutch.org"), "Events inbox");
 
   const events = contact({
@@ -89,6 +92,26 @@ async function main() {
   assert.equal(hasVerifiedEmail(thomasVerified), true);
 
   assert.equal(contactGreetingName(events), "there");
+  assert.equal(
+    contactGreetingName(
+      contact({
+        fullName: "WHX Dubai conference team",
+        email: "congress.whx@informa.com",
+        emailVerificationStatus: "valid_format",
+      })
+    ),
+    "there"
+  );
+  assert.equal(
+    contactGreetingName(
+      contact({
+        fullName: "Ross Williams",
+        email: "sales.whxdubai@informa.com",
+        emailVerificationStatus: "valid_format",
+      })
+    ),
+    "Ross"
+  );
   assert.equal(contactGreetingName(thomasVerified), "Thomas");
   assert.equal(thanksSignOff("there"), "Thanks!");
   assert.equal(thanksSignOff("Thomas"), "Thanks, Thomas!");
