@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
+import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
 import { SettingsButton } from "@/components/settings/ui";
 
 type PitchPayload = {
@@ -401,7 +402,7 @@ export default function PitchEditor({ id }: { id: string }) {
               <div className="relative mt-3">
                 <img src={slide.image} alt="" className="h-28 w-full object-cover" />
                 <label className="csc-link absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs">
-                  {uploadingId === slide.id ? "Uploading…" : "Replace photo"}
+                  {uploadingId === slide.id ? "Uploading…" : "Upload photo"}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
@@ -414,6 +415,31 @@ export default function PitchEditor({ id }: { id: string }) {
                     }}
                   />
                 </label>
+              </div>
+              <p className="csc-eyebrow mt-3">Library</p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {PHOTO_LIBRARY.map((photo) => {
+                  const selected = slide.image === photo.src;
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      aria-label={`Use ${photo.alt}`}
+                      aria-pressed={selected}
+                      className="h-16 w-24 shrink-0 overflow-hidden border-2"
+                      style={{ borderColor: selected ? "var(--csc-accent)" : "transparent" }}
+                      onClick={() =>
+                        patchSlide(slide.id, (current) => ({
+                          ...current,
+                          image: photo.src,
+                          imageAlt: photo.alt,
+                        }))
+                      }
+                    >
+                      <img src={photo.src} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="mt-2">
