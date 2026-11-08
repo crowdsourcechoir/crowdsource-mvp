@@ -1,4 +1,5 @@
 import type { PitchSlide } from "@/app/sobeca-song-garden/content";
+import { libraryPhoto } from "@/lib/pitches/photo-library";
 
 /** Internal name for the Anthem Experience meeting deck. */
 export const INITIAL_MEETING_NAME = "Initial Meeting Deck";
@@ -7,22 +8,23 @@ export const INITIAL_MEETING_PROMPT =
   "Initial meeting deck. Make the moment undeniable: participatory entertainment that turns audiences into the show. Walk a partner from the idea through before, during, and after, what an Anthem Experience includes, where it fits, and a starting investment of $15,000.";
 
 const photo = {
-  title: "/pitch/initial-meeting/live-title.jpg",
-  audience: "/pitch/initial-meeting/live-audience.jpg",
-  instruments: "/pitch/initial-meeting/live-instruments.jpg",
-  participation: "/pitch/initial-meeting/live-participation.jpg",
-  lasts: "/pitch/initial-meeting/live-lasts.jpg",
-  withYou: "/pitch/initial-meeting/live-with-you.jpg",
-  places: "/pitch/initial-meeting/live-places.jpg",
-  show: "/pitch/initial-meeting/live-show.jpg",
+  title: libraryPhoto("conductor"),
+  audience: libraryPhoto("audience"),
+  instruments: libraryPhoto("leaders-side"),
+  participation: libraryPhoto("hands"),
+  lasts: libraryPhoto("wide-crowd"),
+  withYou: libraryPhoto("drums"),
+  places: libraryPhoto("circle"),
+  show: libraryPhoto("arms-wide"),
+  invitation: libraryPhoto("anthem"),
 } as const;
 
 /** Full-bleed sections in the same shape as the SoBECA Song Garden page. */
 export const initialMeetingSlides: PitchSlide[] = [
   {
     id: "title",
-    image: photo.title,
-    imageAlt: "A conductor with arms raised as a room of people sings",
+    image: photo.title.src,
+    imageAlt: photo.title.alt,
     wash: 0.22,
     blocks: [
       { type: "title", text: "Make the moment undeniable." },
@@ -36,8 +38,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "audience",
-    image: photo.audience,
-    imageAlt: "A crowd singing with their hands up",
+    image: photo.audience.src,
+    imageAlt: photo.audience.alt,
     wash: 0.4,
     blocks: [
       { type: "heading", text: "Your audience is your greatest untapped creative resource." },
@@ -55,8 +57,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "instruments",
-    image: photo.instruments,
-    imageAlt: "Two leaders facing a room of people singing",
+    image: photo.instruments.src,
+    imageAlt: photo.instruments.alt,
     wash: 0.34,
     blocks: [
       { type: "heading", text: "We are the instruments." },
@@ -70,8 +72,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "participation",
-    image: photo.participation,
-    imageAlt: "People with their hands up around a singer",
+    image: photo.participation.src,
+    imageAlt: photo.participation.alt,
     wash: 0.4,
     blocks: [
       { type: "heading", text: "Participation changes the equation." },
@@ -101,9 +103,9 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "arc",
-    image: photo.lasts,
-    imageAlt: "A full room and a band still on stage",
-    wash: 0.36,
+    image: photo.lasts.src,
+    imageAlt: photo.lasts.alt,
+    wash: 0.34,
     blocks: [
       { type: "heading", text: "The experience begins long before the music—and lasts long after." },
       {
@@ -128,9 +130,9 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "with-you",
-    image: photo.withYou,
-    imageAlt: "A band performing on a small stage",
-    wash: 0.28,
+    image: photo.withYou.src,
+    imageAlt: photo.withYou.alt,
+    wash: 0.22,
     blocks: [
       { type: "heading", text: "Not an off-the-shelf performance." },
       { type: "paragraph", text: "Created with you, for your people." },
@@ -153,8 +155,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "places",
-    image: photo.places,
-    imageAlt: "People gathered in a circle around musicians",
+    image: photo.places.src,
+    imageAlt: photo.places.alt,
     wash: 0.4,
     blocks: [
       { type: "heading", text: "Designed to move people. Built to advance your goals." },
@@ -180,8 +182,8 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "investment",
-    image: photo.show,
-    imageAlt: "A leader with arms wide in a room washed in blue and green light",
+    image: photo.show.src,
+    imageAlt: photo.show.alt,
     wash: 0.34,
     blocks: [
       { type: "heading", text: "More than a performance." },
@@ -206,9 +208,9 @@ export const initialMeetingSlides: PitchSlide[] = [
   },
   {
     id: "invitation",
-    image: photo.title,
-    imageAlt: "A conductor with arms raised as a room of people sings",
-    wash: 0.32,
+    image: photo.invitation.src,
+    imageAlt: photo.invitation.alt,
+    wash: 0.24,
     blocks: [
       { type: "heading", text: "What could we create together?" },
       { type: "paragraph", text: "Every gathering has a message worth sharing." },
