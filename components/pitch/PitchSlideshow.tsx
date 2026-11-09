@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import {
+  exitDeckFullscreen,
+  fullscreenAvailable,
+  isDeckFullscreen,
+  nudgeMobileChrome,
+  prefersImmersiveFallback,
+  presentFallback,
+  requestDeckFullscreen,
+  type PresentMode,
+} from "@/lib/pitches/present";
 import { nextDeckStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
@@ -175,33 +185,6 @@ function SlideCopy({
   );
 }
 
-function currentFullscreen(): Element | null {
-  const doc = document as Document & { webkitFullscreenElement?: Element | null };
-  return document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
-}
-
-async function requestDeckFullscreen(root: HTMLElement) {
-  const vendor = root as HTMLElement & { webkitRequestFullscreen?: () => void };
-  if (typeof root.requestFullscreen === "function") {
-    await root.requestFullscreen({ navigationUI: "hide" });
-    return;
-  }
-  if (typeof vendor.webkitRequestFullscreen === "function") {
-    vendor.webkitRequestFullscreen();
-    return;
-  }
-  throw new Error("Fullscreen is not available in this browser.");
-}
-
-async function exitFullscreen() {
-  const doc = document as Document & { webkitExitFullscreen?: () => void };
-  if (typeof document.exitFullscreen === "function") {
-    await document.exitFullscreen();
-    return;
-  }
-  doc.webkitExitFullscreen?.();
-}
-
 export default function PitchSlideshow({
   slides,
   displayClass,
@@ -218,13 +201,20 @@ export default function PitchSlideshow({
   const [outgoing, setOutgoing] = useState<number | null>(null);
   const [direction, setDirection] = useState<Exclude<SlideGesture, "none">>("next");
   const [motion, setMotion] = useState(true);
-  const [presenting, setPresenting] = useState(false);
+  const [presentMode, setPresentMode] = useState<PresentMode>("off");
   const [playNote, setPlayNote] = useState<string | null>(null);
+  const presentModeRef = useRef<PresentMode>("off");
   const shown = useRef(0);
   const indexRef = useRef(0);
   const revealedRef = useRef(false);
   const slidesRef = useRef(slides);
   slidesRef.current = slides;
+  const presenting = presentMode !== "off";
+
+  const setPresent = useCallback((mode: PresentMode) => {
+    presentModeRef.current = mode;
+    setPresentMode(mode);
+  }, []);
 
   const go = useCallback((gesture: SlideGesture) => {
     const deck = slidesRef.current;
@@ -279,21 +269,37 @@ export default function PitchSlideshow({
       } else if (event.key === "f" || event.key === "F") {
         event.preventDefault();
         void play();
+      } else if (event.key === "Escape" && presentModeRef.current === "immersive") {
+        event.preventDefault();
+        setPresent("off");
+        setPlayNote(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go]);
+  }, [go, setPresent]);
 
   useEffect(() => {
-    const sync = () => setPresenting(currentFullscreen() === rootRef.current);
+    const sync = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      if (isDeckFullscreen(root)) {
+        setPresent("fullscreen");
+        return;
+      }
+      // Leaving browser fullscreen ends presentation. Soft immersive stays until Exit.
+      if (presentModeRef.current === "fullscreen") {
+        setPresent("off");
+        setPlayNote(null);
+      }
+    };
     document.addEventListener("fullscreenchange", sync);
     document.addEventListener("webkitfullscreenchange", sync);
     return () => {
       document.removeEventListener("fullscreenchange", sync);
       document.removeEventListener("webkitfullscreenchange", sync);
     };
-  }, []);
+  }, [setPresent]);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -307,6 +313,12 @@ export default function PitchSlideshow({
       body.style.overflow = previousBody;
     };
   }, []);
+
+  useEffect(() => {
+    if (!playNote) return;
+    const timer = window.setTimeout(() => setPlayNote(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [playNote]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -350,20 +362,51 @@ export default function PitchSlideshow({
   const wash = typeof slide.wash === "number" ? slide.wash : 0.45;
   const label = `${String(index + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
 
+  async function stopPresenting() {
+    const root = rootRef.current;
+    setPlayNote(null);
+    if (root && isDeckFullscreen(root)) {
+      try {
+        await exitDeckFullscreen();
+      } catch {
+        /* soft exit still clears presentation */
+      }
+    }
+    setPresent("off");
+  }
+
   async function play() {
     const root = rootRef.current;
     if (!root) return;
     setPlayNote(null);
+    if (presentModeRef.current !== "off") {
+      await stopPresenting();
+      return;
+    }
+
+    const coarse = prefersImmersiveFallback();
+    // Phones often reject or lack element fullscreen — go immersive immediately.
+    if (coarse && !fullscreenAvailable(root)) {
+      const fallback = presentFallback({ coarsePointer: true });
+      setPresent(fallback.mode);
+      setPlayNote(fallback.note);
+      nudgeMobileChrome();
+      return;
+    }
+
     try {
-      if (currentFullscreen() === root) {
-        await exitFullscreen();
+      await requestDeckFullscreen(root);
+      if (isDeckFullscreen(root)) {
+        setPresent("fullscreen");
         return;
       }
-      setPresenting(true);
-      await requestDeckFullscreen(root);
+      // Some browsers resolve without actually entering fullscreen.
+      throw new Error("Fullscreen did not stick.");
     } catch {
-      setPresenting(false);
-      setPlayNote("This browser kept the address bar. Press F11, then share the window.");
+      const fallback = presentFallback({ coarsePointer: coarse });
+      setPresent(fallback.mode);
+      setPlayNote(fallback.note);
+      if (coarse) nudgeMobileChrome();
     }
   }
 
@@ -427,12 +470,28 @@ export default function PitchSlideshow({
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <div className="flex items-center gap-4">
-            {presenting ? null : (
+            {presenting ? (
+              presentMode === "immersive" ? (
+                <button
+                  type="button"
+                  className="border border-white/40 bg-black/80 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white"
+                  aria-label="Exit presentation"
+                  title="Leave presentation"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void stopPresenting();
+                  }}
+                >
+                  Exit
+                </button>
+              ) : null
+            ) : (
               <button
                 type="button"
                 className="border border-[#CFFF81]/80 bg-black/80 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[#CFFF81]"
                 aria-label="Play presentation"
-                title="Hides the address bar and tabs. Press Esc to leave."
+                title="Hides the address bar and tabs when the browser allows it. Press Esc to leave."
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -467,7 +526,9 @@ export default function PitchSlideshow({
         </p>
       ) : null}
       {playNote ? (
-        <p className="absolute right-6 top-24 z-30 max-w-xs bg-black/80 px-3 py-2 text-xs text-[#CFFF81]">{playNote}</p>
+        <p className="absolute bottom-14 left-1/2 z-30 w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 bg-black/85 px-3 py-2 text-center text-xs text-[#CFFF81]">
+          {playNote}
+        </p>
       ) : null}
       <div className="absolute bottom-6 left-0 right-0 z-20 flex items-center justify-center gap-2">
         {slides.map((item, dot) => (
