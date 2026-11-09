@@ -8,8 +8,8 @@ import {
   isDeckFullscreen,
   nudgeMobileChrome,
   prefersImmersiveFallback,
-  presentFallback,
   requestDeckFullscreen,
+  startWindowedPresent,
   type PresentMode,
 } from "@/lib/pitches/present";
 import { nextDeckStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
@@ -268,7 +268,8 @@ export default function PitchSlideshow({
         go("prev");
       } else if (event.key === "f" || event.key === "F") {
         event.preventDefault();
-        void play();
+        if (presentModeRef.current === "off") play();
+        else void toggleMonitorFullscreen();
       } else if (event.key === "Escape" && presentModeRef.current === "immersive") {
         event.preventDefault();
         setPresent("off");
@@ -285,11 +286,12 @@ export default function PitchSlideshow({
       if (!root) return;
       if (isDeckFullscreen(root)) {
         setPresent("fullscreen");
+        setPlayNote(null);
         return;
       }
-      // Leaving browser fullscreen ends presentation. Soft immersive stays until Exit.
+      // Leaving monitor fullscreen returns to windowed present, not a full stop.
       if (presentModeRef.current === "fullscreen") {
-        setPresent("off");
+        setPresent("immersive");
         setPlayNote(null);
       }
     };
@@ -375,38 +377,45 @@ export default function PitchSlideshow({
     setPresent("off");
   }
 
-  async function play() {
+  /** Play stays in the browser window so Meet/Zoom window-share still shows other apps. */
+  function play() {
+    if (presentModeRef.current !== "off") {
+      void stopPresenting();
+      return;
+    }
+    const coarse = prefersImmersiveFallback();
+    const started = startWindowedPresent({ coarsePointer: coarse });
+    setPresent(started.mode);
+    setPlayNote(started.note);
+    if (coarse) nudgeMobileChrome();
+  }
+
+  async function toggleMonitorFullscreen() {
     const root = rootRef.current;
     if (!root) return;
     setPlayNote(null);
-    if (presentModeRef.current !== "off") {
-      await stopPresenting();
+    if (isDeckFullscreen(root) || presentModeRef.current === "fullscreen") {
+      try {
+        await exitDeckFullscreen();
+      } catch {
+        setPresent("immersive");
+      }
       return;
     }
-
-    const coarse = prefersImmersiveFallback();
-    // Phones often reject or lack element fullscreen — go immersive immediately.
-    if (coarse && !fullscreenAvailable(root)) {
-      const fallback = presentFallback({ coarsePointer: true });
-      setPresent(fallback.mode);
-      setPlayNote(fallback.note);
-      nudgeMobileChrome();
+    if (!fullscreenAvailable(root)) {
+      setPlayNote("This browser cannot take the whole screen. Stay in the window, or press F11.");
       return;
     }
-
     try {
       await requestDeckFullscreen(root);
       if (isDeckFullscreen(root)) {
         setPresent("fullscreen");
         return;
       }
-      // Some browsers resolve without actually entering fullscreen.
       throw new Error("Fullscreen did not stick.");
     } catch {
-      const fallback = presentFallback({ coarsePointer: coarse });
-      setPresent(fallback.mode);
-      setPlayNote(fallback.note);
-      if (coarse) nudgeMobileChrome();
+      setPresent("immersive");
+      setPlayNote("Could not take the whole screen. Presenting in this window instead.");
     }
   }
 
@@ -469,9 +478,48 @@ export default function PitchSlideshow({
       <div className="relative z-10 flex h-full flex-col px-6 pb-24 pt-8 sm:px-24 sm:pb-28 sm:pt-10">
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-1 sm:gap-2">
             {presenting ? (
-              presentMode === "immersive" ? (
+              <>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 items-center justify-center text-[#CFFF81] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] transition-opacity hover:opacity-90"
+                  aria-label={presentMode === "fullscreen" ? "Stay in this window" : "Fill the whole screen"}
+                  title={
+                    presentMode === "fullscreen"
+                      ? "Back to this browser window"
+                      : "Fill the whole screen (hides the address bar and tabs)"
+                  }
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void toggleMonitorFullscreen();
+                  }}
+                >
+                  {presentMode === "fullscreen" ? (
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                      <path
+                        d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                      <path
+                        d="M3 9V5a2 2 0 0 1 2-2h4M21 9V5a2 2 0 0 0-2-2h-4M3 15v4a2 2 0 0 0 2 2h4M21 15v4a2 2 0 0 1-2 2h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
                 <button
                   type="button"
                   className="flex h-10 w-10 items-center justify-center text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] transition-colors hover:text-white"
@@ -493,17 +541,17 @@ export default function PitchSlideshow({
                     />
                   </svg>
                 </button>
-              ) : null
+              </>
             ) : (
               <button
                 type="button"
                 className="flex h-10 w-10 items-center justify-center text-[#CFFF81] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] transition-opacity hover:opacity-90"
-                aria-label="Play presentation"
-                title="Present without the address bar and tabs"
+                aria-label="Play presentation in this window"
+                title="Present in this window. Expand later for the whole screen."
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
-                  void play();
+                  play();
                 }}
               >
                 <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -511,7 +559,7 @@ export default function PitchSlideshow({
                 </svg>
               </button>
             )}
-            <p className="text-[11px] uppercase tracking-[0.28em] text-white/80">{label}</p>
+            <p className="ml-1 text-[11px] uppercase tracking-[0.28em] text-white/80 sm:ml-2">{label}</p>
           </div>
         </div>
         <div
