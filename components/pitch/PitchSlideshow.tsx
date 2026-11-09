@@ -469,12 +469,12 @@ export default function PitchSlideshow({
       <div className="relative z-10 flex h-full flex-col px-6 pb-24 pt-8 sm:px-24 sm:pb-28 sm:pt-10">
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {presenting ? (
               presentMode === "immersive" ? (
                 <button
                   type="button"
-                  className="border border-white/40 bg-black/80 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white"
+                  className="flex h-10 w-10 items-center justify-center text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] transition-colors hover:text-white"
                   aria-label="Exit presentation"
                   title="Leave presentation"
                   onPointerDown={(event) => event.stopPropagation()}
@@ -483,25 +483,32 @@ export default function PitchSlideshow({
                     void stopPresenting();
                   }}
                 >
-                  Exit
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                    <path
+                      d="M6 6l12 12M18 6L6 18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
               ) : null
             ) : (
               <button
                 type="button"
-                className="border border-[#CFFF81]/80 bg-black/80 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[#CFFF81]"
+                className="flex h-10 w-10 items-center justify-center text-[#CFFF81] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] transition-opacity hover:opacity-90"
                 aria-label="Play presentation"
-                title="Hides the address bar and tabs when the browser allows it. Press Esc to leave."
+                title="Present without the address bar and tabs"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
                   void play();
                 }}
               >
-                Play
-                <span className="mt-0.5 block font-normal normal-case tracking-normal text-white/70">
-                  Hides the address bar and tabs
-                </span>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                  <path d="M8 5.2v13.6l12-6.8L8 5.2z" fill="currentColor" />
+                </svg>
               </button>
             )}
             <p className="text-[11px] uppercase tracking-[0.28em] text-white/80">{label}</p>
