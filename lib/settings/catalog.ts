@@ -328,6 +328,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         status: "live",
         controls: [
           "Find pitches, including SoBECA Song Garden and Initial Meeting Deck",
+          "Edit each pitch URL",
           "Duplicate a pitch",
           "Create a pitch from a prompt",
           "Add, reorder, and delete slides",

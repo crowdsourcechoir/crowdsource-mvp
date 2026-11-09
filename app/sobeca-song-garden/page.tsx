@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Bebas_Neue, Space_Mono } from "next/font/google";
 import PitchDeck from "./PitchDeck";
 import PitchPasswordGate from "./PitchPasswordGate";
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
 
 export default async function SobecaSongGardenPage() {
   const listing = await loadPitch("sobeca-song-garden");
+  if (listing && listing.href !== "/sobeca-song-garden") redirect(listing.href);
   const live = listing?.live !== false;
   const owner = live ? false : await signedInOwner();
   if (!live && !owner) return <PitchUnavailable title="SoBECA Song Garden" />;

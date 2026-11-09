@@ -26,6 +26,8 @@ export default function PitchesLibrary() {
   const [prompt, setPrompt] = useState("");
   const [password, setPassword] = useState("");
   const [live, setLive] = useState(true);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [savingUrl, setSavingUrl] = useState<string | null>(null);
 
   async function reload() {
     const res = await fetch("/api/pitches", { cache: "no-store" });
@@ -55,6 +57,33 @@ export default function PitchesLibrary() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Could not create the pitch");
       setBusy(false);
+    }
+  }
+
+  async function saveUrl(pitch: PitchRow) {
+    const next = (urls[pitch.id] ?? pitch.href).trim();
+    if (!next || next === pitch.href) return;
+    setSavingUrl(pitch.id);
+    setStatus(null);
+    try {
+      const res = await fetch(`/api/pitches/${pitch.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not save that address");
+      setUrls((current) => {
+        const copy = { ...current };
+        delete copy[pitch.id];
+        return copy;
+      });
+      await reload();
+      setStatus(`Address saved. The page is now ${data.pitch?.href ?? next}.`);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Could not save that address");
+    } finally {
+      setSavingUrl(null);
     }
   }
 
@@ -126,23 +155,44 @@ export default function PitchesLibrary() {
         <div className="csc-list mt-2">
           {pitches.map((pitch) => (
             <div key={pitch.id} className="csc-list-row">
-              <Link href={`/admin/settings/pitches/${pitch.id}`} className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-white">{pitch.name}</span>
-                {pitch.title !== pitch.name ? (
-                  <span className="mt-1 block truncate text-sm text-gray-400">{pitch.title}</span>
-                ) : null}
-                <span className="mt-1 block truncate text-sm text-gray-500">{pitch.prompt}</span>
-                <span className="mt-2 flex flex-wrap items-center gap-2">
-                  <StatusPill tone={pitch.live ? "ok" : "neutral"}>{pitch.live ? "Live" : "Hidden"}</StatusPill>
-                  <StatusPill tone={pitch.protected ? "warn" : "neutral"}>
-                    {pitch.protected ? "Password" : "Public"}
-                  </StatusPill>
-                  <span className="text-xs text-gray-500">{pitch.href}</span>
-                  {pitch.organizationName ? (
-                    <span className="text-xs text-[var(--csc-accent)]">{pitch.organizationName}</span>
+              <div className="min-w-0 flex-1">
+                <Link href={`/admin/settings/pitches/${pitch.id}`} className="block min-w-0">
+                  <span className="block truncate text-sm font-semibold text-white">{pitch.name}</span>
+                  {pitch.title !== pitch.name ? (
+                    <span className="mt-1 block truncate text-sm text-gray-400">{pitch.title}</span>
                   ) : null}
-                </span>
-              </Link>
+                  <span className="mt-1 block truncate text-sm text-gray-500">{pitch.prompt}</span>
+                  <span className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusPill tone={pitch.live ? "ok" : "neutral"}>{pitch.live ? "Live" : "Hidden"}</StatusPill>
+                    <StatusPill tone={pitch.protected ? "warn" : "neutral"}>
+                      {pitch.protected ? "Password" : "Public"}
+                    </StatusPill>
+                    {pitch.organizationName ? (
+                      <span className="text-xs text-[var(--csc-accent)]">{pitch.organizationName}</span>
+                    ) : null}
+                  </span>
+                </Link>
+                <form
+                  className="mt-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveUrl(pitch);
+                  }}
+                >
+                  <label className="block">
+                    <span className="sr-only">URL for {pitch.name}</span>
+                    <input
+                      value={urls[pitch.id] ?? pitch.href}
+                      spellCheck={false}
+                      aria-label={`URL for ${pitch.name}`}
+                      disabled={savingUrl === pitch.id}
+                      onChange={(event) => setUrls((current) => ({ ...current, [pitch.id]: event.target.value }))}
+                      onBlur={() => void saveUrl(pitch)}
+                      className="w-full border border-white/15 bg-black px-2 py-1 font-mono text-xs text-white focus:border-[var(--csc-accent)] focus:outline-none disabled:opacity-50"
+                    />
+                  </label>
+                </form>
+              </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <SettingsButton href={pitch.href} target="_blank">
                   View

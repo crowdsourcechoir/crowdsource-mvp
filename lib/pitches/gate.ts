@@ -9,7 +9,7 @@ export function pitchGateCookie(pitch: { id: string; href: string; passwordHash:
   value: string;
   path: string;
 } {
-  if (pitch.id === SOBECA_PITCH_ID) {
+  if (pitch.id === SOBECA_PITCH_ID && pitch.href === "/sobeca-song-garden") {
     return {
       name: PITCH_AUTH_COOKIE,
       value: pitchAuthToken(pitch.passwordHash),

@@ -30,6 +30,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const body = (await request.json().catch(() => ({}))) as {
     name?: unknown;
     prompt?: unknown;
+    slug?: unknown;
     live?: unknown;
     slides?: unknown;
     reset?: boolean;
@@ -38,6 +39,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const updated = await updatePitch(params.id, {
     name: typeof body.name === "string" ? body.name : undefined,
     prompt: typeof body.prompt === "string" ? body.prompt : undefined,
+    slug: typeof body.slug === "string" ? body.slug : undefined,
     live: typeof body.live === "boolean" ? body.live : undefined,
     slides: Array.isArray(body.slides) ? body.slides : undefined,
     reset: body.reset === true,
