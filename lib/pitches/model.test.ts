@@ -100,6 +100,95 @@ assert.notEqual(copy.pitch.slides, meeting.slides);
 const locked = applyPassword(copy.state, { ...findLoadedPitch(copy.state, copy.pitch.id, sobeca)!, passwordHash: null }, "next:hash");
 assert.equal(findLoadedPitch(locked.state, copy.pitch.id, sobeca)?.passwordHash, "next:hash");
 
+const copied = findLoadedPitch(copy.state, copy.pitch.id, sobeca);
+assert.ok(copied);
+if (!copied) throw new Error("missing copy");
+const withLine = copied.slides.map((slide) => {
+  if (slide.id !== "with-you") return slide;
+  return {
+    ...slide,
+    blocks: slide.blocks.map((block) =>
+      block.type === "list" ? { ...block, items: [...block.items, "One more step."] } : block
+    ),
+  };
+});
+const listSaved = applyPitchPatch(copy.state, copied, { slides: withLine }, "2026-11-05T04:00:00.000Z");
+if ("error" in listSaved) throw new Error(listSaved.error);
+const listLoaded = findLoadedPitch(listSaved.state, copied.id, sobeca);
+const savedList = listLoaded?.slides.find((slide) => slide.id === "with-you")?.blocks.find((block) => block.type === "list");
+assert.equal(savedList && savedList.type === "list" ? savedList.items.at(-1) : "", "One more step.");
+
+const customLoaded = findLoadedPitch(created.state, created.pitch.id, sobeca);
+assert.ok(customLoaded);
+if (!customLoaded) throw new Error("missing custom");
+const extended = customLoaded.slides.map((slide, index) =>
+  index === 0 ? { ...slide, blocks: [...slide.blocks, { type: "paragraph" as const, text: "Added in the editor." }] } : slide
+);
+extended.push({
+  id: "encore",
+  image: customLoaded.slides[0]!.image,
+  imageAlt: customLoaded.slides[0]!.imageAlt,
+  blocks: [{ type: "heading", text: "Encore" }],
+});
+const customSaved = applyPitchPatch(created.state, customLoaded, { slides: extended }, "2026-11-05T05:00:00.000Z");
+if ("error" in customSaved) throw new Error(customSaved.error);
+const customAgain = findLoadedPitch(customSaved.state, customLoaded.id, sobeca);
+assert.equal(customAgain?.slides.length, customLoaded.slides.length + 1);
+assert.equal(customAgain?.slides.at(-1)?.id, "encore");
+const added = customAgain?.slides[0]?.blocks.at(-1);
+assert.equal(added && "text" in added ? added.text : "", "Added in the editor.");
+const customTrimmed = applyPitchPatch(
+  customSaved.state,
+  customAgain!,
+  {
+    slides: customAgain!.slides.slice(0, -1).map((slide, index) =>
+      index === 0 ? { ...slide, blocks: slide.blocks.slice(0, -1) } : slide
+    ),
+  },
+  "2026-11-05T06:00:00.000Z"
+);
+if ("error" in customTrimmed) throw new Error(customTrimmed.error);
+const customFinal = findLoadedPitch(customTrimmed.state, customLoaded.id, sobeca);
+assert.equal(customFinal?.slides.length, customLoaded.slides.length);
+assert.equal(customFinal?.slides[0]?.blocks.length, customLoaded.slides[0]?.blocks.length);
+
+const emptyDeck = applyPitchPatch(customTrimmed.state, customFinal!, { slides: [] }, "2026-11-05T06:30:00.000Z");
+assert.equal("error" in emptyDeck && emptyDeck.error, "A pitch needs at least one slide.");
+const duplicateIds = applyPitchPatch(
+  customTrimmed.state,
+  customFinal!,
+  { slides: [customFinal!.slides[0], customFinal!.slides[0]] },
+  "2026-11-05T06:40:00.000Z"
+);
+assert.equal("error" in duplicateIds, true);
+
+const meetingNow = findLoadedPitch(empty, INITIAL_MEETING_ID, sobeca);
+assert.ok(meetingNow);
+if (!meetingNow) throw new Error("missing meeting");
+const withEncore = applyPitchPatch(
+  empty,
+  meetingNow,
+  {
+    slides: [
+      ...meetingNow.slides,
+      {
+        id: "encore",
+        image: meetingNow.slides[0]!.image,
+        imageAlt: meetingNow.slides[0]!.imageAlt,
+        blocks: [{ type: "heading", text: "Encore" }],
+      },
+    ],
+  },
+  "2026-11-05T07:00:00.000Z"
+);
+if ("error" in withEncore) throw new Error(withEncore.error);
+assert.equal(findLoadedPitch(withEncore.state, INITIAL_MEETING_ID, sobeca)?.slides.at(-1)?.id, "encore");
+const meetingReset = applyPitchPatch(withEncore.state, withEncore.pitch, { reset: true }, "2026-11-05T08:00:00.000Z");
+assert.ok(!("error" in meetingReset));
+if ("error" in meetingReset) throw new Error("meeting reset failed");
+assert.equal(meetingReset.state.overrides[INITIAL_MEETING_ID]?.slides, null);
+assert.equal(findLoadedPitch(meetingReset.state, INITIAL_MEETING_ID, sobeca)?.slides.length, initialMeetingSlides.length);
+
 const junk = normalizeWebPitches({
   overrides: { "not-a-pitch": { live: false }, [INITIAL_MEETING_ID]: { live: false, prompt: "  kept  " } },
   custom: [{ id: "nope", name: "Bad", prompt: "x", slides: [] }, created.pitch, { ...created.pitch, slug: "other" }],
