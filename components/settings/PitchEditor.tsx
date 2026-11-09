@@ -1,9 +1,25 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
+import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
+import {
+  addListBlock,
+  addListItem,
+  addTableBlock,
+  addTableRow,
+  addTextBlock,
+  insertSlide,
+  moveBlock,
+  moveSlide,
+  removeBlock,
+  removeListItem,
+  removeSlide,
+  removeTableRow,
+  type SlideEdit,
+} from "@/lib/pitches/structure";
 import { SettingsButton } from "@/components/settings/ui";
 
 type PitchPayload = {
@@ -38,18 +54,77 @@ const BLOCK_LABEL: Record<string, string> = {
 
 const TEXT_STYLES = ["title", "heading", "kicker", "line", "paragraph"] as const;
 
+function RoundButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="csc-btn-circle shrink-0 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BlockOrder({
+  label,
+  index,
+  count,
+  onMove,
+  onRemove,
+}: {
+  label: string;
+  index: number;
+  count: number;
+  onMove: (direction: -1 | 1) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="flex items-center gap-1">
+      <RoundButton label={`Move ${label} up`} disabled={index === 0} onClick={() => onMove(-1)}>
+        ↑
+      </RoundButton>
+      <RoundButton label={`Move ${label} down`} disabled={index === count - 1} onClick={() => onMove(1)}>
+        ↓
+      </RoundButton>
+      <RoundButton
+        label={count <= 1 ? "A slide needs at least one block" : `Delete ${label}`}
+        disabled={count <= 1}
+        onClick={onRemove}
+      >
+        ×
+      </RoundButton>
+    </span>
+  );
+}
+
 function FitText({
   value,
   onChange,
   label,
   styleName,
   onStyle,
+  tools,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   styleName?: string;
   onStyle?: (style: (typeof TEXT_STYLES)[number]) => void;
+  tools?: ReactNode;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -62,25 +137,28 @@ function FitText({
 
   return (
     <label className="block border-b border-[var(--csc-row-divider)] py-2">
-      <span className="flex items-center justify-between gap-3">
+      <span className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">{label}</span>
-        {onStyle && styleName ? (
-          <select
-            aria-label={`${label} font style`}
-            value={styleName}
-            onChange={(event) => {
-              const next = event.target.value;
-              if ((TEXT_STYLES as readonly string[]).includes(next)) onStyle(next as (typeof TEXT_STYLES)[number]);
-            }}
-            className="bg-black text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--csc-accent)] focus:outline-none"
-          >
-            <option value="title">Title</option>
-            <option value="heading">Heading</option>
-            <option value="kicker">Kicker</option>
-            <option value="line">Line</option>
-            <option value="paragraph">Paragraph</option>
-          </select>
-        ) : null}
+        <span className="flex items-center gap-2">
+          {onStyle && styleName ? (
+            <select
+              aria-label={`${label} font style`}
+              value={styleName}
+              onChange={(event) => {
+                const next = event.target.value;
+                if ((TEXT_STYLES as readonly string[]).includes(next)) onStyle(next as (typeof TEXT_STYLES)[number]);
+              }}
+              className="bg-black text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--csc-accent)] focus:outline-none"
+            >
+              <option value="title">Title</option>
+              <option value="heading">Heading</option>
+              <option value="kicker">Kicker</option>
+              <option value="line">Line</option>
+              <option value="paragraph">Paragraph</option>
+            </select>
+          ) : null}
+          {tools}
+        </span>
       </span>
       <textarea
         ref={ref}
@@ -107,6 +185,8 @@ export default function PitchEditor({ id }: { id: string }) {
   const [passwordOn, setPasswordOn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [live, setLive] = useState(true);
+  const slidesRef = useRef<PitchSlide[] | null>(null);
+  slidesRef.current = slides;
 
   useEffect(() => {
     fetch(`/api/pitches/${id}`, { cache: "no-store" })
@@ -142,6 +222,7 @@ export default function PitchEditor({ id }: { id: string }) {
       setPrompt(next.prompt);
       setSlides(next.slides);
       setLive(next.live);
+      setActiveId((current) => (next.slides.some((slide) => slide.id === current) ? current : next.slides[0]?.id ?? null));
       setStatus(reset ? "Reset." : "Saved.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed");
@@ -211,13 +292,57 @@ export default function PitchEditor({ id }: { id: string }) {
     return <p className="text-sm text-white/70">{status ?? "Loading pitch…"}</p>;
   }
 
+  const deck = slides;
+  const structureOpen = pitch.id !== SOBECA_PITCH_ID;
+
   function jump(sectionId: string) {
     setActiveId(sectionId);
     document.getElementById(`pitch-${sectionId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function patchSlide(sectionId: string, recipe: (slide: PitchSlide) => PitchSlide) {
-    setSlides((current) => current?.map((item) => (item.id === sectionId ? recipe(item) : item)) ?? current);
+    setSlides((current) => {
+      const next = current?.map((item) => (item.id === sectionId ? recipe(item) : item)) ?? current;
+      slidesRef.current = next;
+      return next;
+    });
+    setStatus(null);
+  }
+
+  function commit(result: SlideEdit) {
+    if ("error" in result) {
+      setStatus(result.error);
+      return null;
+    }
+    slidesRef.current = result.slides;
+    setSlides(result.slides);
+    setStatus(null);
+    return result;
+  }
+
+  function addSlide(afterId: string | null) {
+    const current = slidesRef.current ?? deck;
+    const result = commit(insertSlide(current, afterId));
+    if (!result?.id) return;
+    setActiveId(result.id);
+    window.setTimeout(() => {
+      document.getElementById(`pitch-${result.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+
+  function deleteSlide(slide: PitchSlide, index: number) {
+    const current = slidesRef.current ?? deck;
+    if (current.length <= 1) return;
+    const label = slideLabel(slide).trim().slice(0, 80) || `Slide ${index + 1}`;
+    if (!window.confirm(`Delete slide ${index + 1}, "${label}"?`)) return;
+    const neighbor = current[index + 1]?.id ?? current[index - 1]?.id ?? null;
+    if (commit(removeSlide(current, slide.id))) setActiveId(neighbor);
+  }
+
+  function revealBlock(slideId: string, blockIndex: number) {
+    window.setTimeout(() => {
+      document.getElementById(`block-${slideId}-${blockIndex}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
   }
 
   return (
@@ -338,7 +463,7 @@ export default function PitchEditor({ id }: { id: string }) {
 
       <div className="sticky top-0 z-10 -mx-4 mt-3 border-b border-[var(--csc-row-divider)] bg-black px-4 py-2 lg:hidden">
         <p className="csc-eyebrow">Sections</p>
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1">
           {slides.map((item, index) => {
             const selected = item.id === activeId;
             return (
@@ -354,28 +479,38 @@ export default function PitchEditor({ id }: { id: string }) {
               </button>
             );
           })}
+          {structureOpen ? (
+            <SettingsButton onClick={() => addSlide(null)}>Add slide</SettingsButton>
+          ) : null}
         </div>
       </div>
 
       <div className="mt-4 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
-        <nav className="csc-list sticky top-4 hidden max-h-[calc(100dvh-8rem)] overflow-y-auto lg:block">
-          {slides.map((item, index) => {
-            const selected = item.id === activeId;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => jump(item.id)}
-                className="csc-list-row w-full text-left"
-                aria-current={selected ? "true" : undefined}
-                style={selected ? { outlineColor: "var(--csc-accent)" } : undefined}
-              >
-                <span className="w-5 shrink-0 text-xs text-white/50">{index + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-sm text-white">{slideLabel(item)}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <div className="sticky top-4 hidden max-h-[calc(100dvh-8rem)] lg:flex lg:flex-col">
+          <nav className="csc-list min-h-0 overflow-y-auto">
+            {slides.map((item, index) => {
+              const selected = item.id === activeId;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => jump(item.id)}
+                  className="csc-list-row w-full text-left"
+                  aria-current={selected ? "true" : undefined}
+                  style={selected ? { outlineColor: "var(--csc-accent)" } : undefined}
+                >
+                  <span className="w-5 shrink-0 text-xs text-white/50">{index + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-white">{slideLabel(item)}</span>
+                </button>
+              );
+            })}
+          </nav>
+          {structureOpen ? (
+            <div className="pt-3">
+              <SettingsButton onClick={() => addSlide(null)}>Add slide</SettingsButton>
+            </div>
+          ) : null}
+        </div>
 
         <div>
           {slides.map((slide, index) => (
@@ -398,6 +533,56 @@ export default function PitchEditor({ id }: { id: string }) {
                   <span className="font-mono">{slide.copyColor || DEFAULT_COPY_COLOR}</span>
                 </label>
               </div>
+
+              {structureOpen ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SettingsButton
+                    onClick={() => {
+                      const result = commit(addTextBlock(slidesRef.current ?? deck, slide.id));
+                      const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;
+                      if (count) revealBlock(slide.id, count - 1);
+                    }}
+                  >
+                    Add text
+                  </SettingsButton>
+                  <SettingsButton
+                    onClick={() => {
+                      const result = commit(addListBlock(slidesRef.current ?? deck, slide.id));
+                      const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;
+                      if (count) revealBlock(slide.id, count - 1);
+                    }}
+                  >
+                    Add list
+                  </SettingsButton>
+                  <SettingsButton
+                    onClick={() => {
+                      const result = commit(addTableBlock(slidesRef.current ?? deck, slide.id));
+                      const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;
+                      if (count) revealBlock(slide.id, count - 1);
+                    }}
+                  >
+                    Add table
+                  </SettingsButton>
+                  <SettingsButton onClick={() => addSlide(slide.id)}>Add slide</SettingsButton>
+                  <SettingsButton disabled={index === 0} onClick={() => commit(moveSlide(slidesRef.current ?? deck, slide.id, -1))}>
+                    Move up
+                  </SettingsButton>
+                  <SettingsButton
+                    disabled={index === deck.length - 1}
+                    onClick={() => commit(moveSlide(slidesRef.current ?? deck, slide.id, 1))}
+                  >
+                    Move down
+                  </SettingsButton>
+                  <SettingsButton
+                    variant="danger"
+                    disabled={deck.length < 2}
+                    title={deck.length < 2 ? "A pitch needs at least one slide." : "Delete this slide"}
+                    onClick={() => deleteSlide(slide, index)}
+                  >
+                    Delete slide
+                  </SettingsButton>
+                </div>
+              ) : null}
 
               <div className="relative mt-3">
                 <img src={slide.image} alt="" className="h-28 w-full object-cover" />
@@ -444,15 +629,58 @@ export default function PitchEditor({ id }: { id: string }) {
 
               <div className="mt-2">
                 {slide.blocks.map((block, blockIndex) => {
-                  if (block.type === "image") return null;
+                  const order = structureOpen ? (
+                    <BlockOrder
+                      label={(BLOCK_LABEL[block.type] ?? block.type).toLowerCase()}
+                      index={blockIndex}
+                      count={slide.blocks.length}
+                      onMove={(direction) => commit(moveBlock(slidesRef.current ?? deck, slide.id, blockIndex, direction))}
+                      onRemove={() => commit(removeBlock(slidesRef.current ?? deck, slide.id, blockIndex))}
+                    />
+                  ) : null;
+
+                  if (block.type === "image") {
+                    if (!structureOpen) return null;
+                    return (
+                      <div
+                        key={blockIndex}
+                        id={`block-${slide.id}-${blockIndex}`}
+                        className="flex items-center justify-between gap-3 border-b border-[var(--csc-row-divider)] py-2"
+                      >
+                        <span className="min-w-0">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
+                            Image
+                          </span>
+                          <span className="mt-1 block truncate text-sm text-white">{block.alt}</span>
+                        </span>
+                        {order}
+                      </div>
+                    );
+                  }
                   if (block.type === "list") {
                     return (
-                      <div key={blockIndex}>
+                      <div key={blockIndex} id={`block-${slide.id}-${blockIndex}`} className="border-b border-[var(--csc-row-divider)] py-2">
+                        <span className="flex flex-wrap items-center justify-between gap-3">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
+                            List
+                          </span>
+                          {order}
+                        </span>
                         {block.items.map((item, itemIndex) => (
                           <FitText
                             key={itemIndex}
                             label={`Item ${itemIndex + 1}`}
                             value={item}
+                            tools={
+                              structureOpen && block.items.length > 1 ? (
+                                <RoundButton
+                                  label={`Delete item ${itemIndex + 1}`}
+                                  onClick={() => commit(removeListItem(slidesRef.current ?? deck, slide.id, blockIndex, itemIndex))}
+                                >
+                                  ×
+                                </RoundButton>
+                              ) : undefined
+                            }
                             onChange={(value) =>
                               patchSlide(slide.id, (current) => {
                                 const existing = current.blocks[blockIndex];
@@ -464,66 +692,123 @@ export default function PitchEditor({ id }: { id: string }) {
                             }
                           />
                         ))}
+                        {structureOpen ? (
+                          <div className="pt-2">
+                            <SettingsButton onClick={() => commit(addListItem(slidesRef.current ?? deck, slide.id, blockIndex))}>
+                              Add line
+                            </SettingsButton>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   }
                   if (block.type === "table") {
+                    const columns =
+                      block.headers.length === 2
+                        ? "grid gap-x-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]"
+                        : "grid gap-x-4";
+                    const columnStyle =
+                      block.headers.length === 2
+                        ? undefined
+                        : { gridTemplateColumns: `repeat(${Math.max(block.headers.length, 1)}, minmax(0, 1fr))` };
                     return (
-                      <div key={blockIndex} className="mt-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
-                          {block.headers.join(" · ")}
-                        </p>
+                      <div key={blockIndex} id={`block-${slide.id}-${blockIndex}`} className="mt-2">
+                        <span className="flex flex-wrap items-center justify-between gap-3">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
+                            Table
+                          </span>
+                          {order}
+                        </span>
+                        <div className={columns} style={columnStyle}>
+                          {block.headers.map((header, headerIndex) => (
+                            <FitText
+                              key={`header-${headerIndex}`}
+                              label={`Header ${headerIndex + 1}`}
+                              value={header}
+                              onChange={(value) =>
+                                patchSlide(slide.id, (current) => {
+                                  const existing = current.blocks[blockIndex];
+                                  if (existing?.type !== "table") return current;
+                                  const headers = existing.headers.slice();
+                                  headers[headerIndex] = value;
+                                  return updateBlock(current, blockIndex, { ...existing, headers });
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
                         {block.rows.map((row, rowIndex) => (
-                          <div key={rowIndex} className="grid gap-x-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
-                            {row.map((cell, cellIndex) => (
-                              <FitText
-                                key={cellIndex}
-                                label={block.headers[cellIndex] ?? "Cell"}
-                                value={cell}
-                                onChange={(value) =>
-                                  patchSlide(slide.id, (current) => {
-                                    const existing = current.blocks[blockIndex];
-                                    if (existing?.type !== "table") return current;
-                                    const rows = existing.rows.map((currentRow) => currentRow.slice());
-                                    rows[rowIndex][cellIndex] = value;
-                                    return updateBlock(current, blockIndex, { ...existing, rows });
-                                  })
-                                }
-                              />
-                            ))}
+                          <div key={rowIndex} className="flex items-start gap-2">
+                            <div className={`min-w-0 flex-1 ${columns}`} style={columnStyle}>
+                              {row.map((cell, cellIndex) => (
+                                <FitText
+                                  key={cellIndex}
+                                  label={block.headers[cellIndex]?.trim() || `Column ${cellIndex + 1}`}
+                                  value={cell}
+                                  onChange={(value) =>
+                                    patchSlide(slide.id, (current) => {
+                                      const existing = current.blocks[blockIndex];
+                                      if (existing?.type !== "table") return current;
+                                      const rows = existing.rows.map((currentRow) => currentRow.slice());
+                                      rows[rowIndex][cellIndex] = value;
+                                      return updateBlock(current, blockIndex, { ...existing, rows });
+                                    })
+                                  }
+                                />
+                              ))}
+                            </div>
+                            {structureOpen && block.rows.length > 1 ? (
+                              <div className="pt-2">
+                                <RoundButton
+                                  label={`Delete row ${rowIndex + 1}`}
+                                  onClick={() => commit(removeTableRow(slidesRef.current ?? deck, slide.id, blockIndex, rowIndex))}
+                                >
+                                  ×
+                                </RoundButton>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
+                        {structureOpen ? (
+                          <div className="pt-2">
+                            <SettingsButton onClick={() => commit(addTableRow(slidesRef.current ?? deck, slide.id, blockIndex))}>
+                              Add row
+                            </SettingsButton>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   }
                   return (
-                    <FitText
-                      key={blockIndex}
-                      label={BLOCK_LABEL[block.type] ?? block.type}
-                      styleName={block.type}
-                      value={block.text}
-                      onStyle={(style) =>
-                        patchSlide(slide.id, (current) => {
-                          const existing = current.blocks[blockIndex];
-                          if (!existing || !("text" in existing)) return current;
-                          return updateBlock(current, blockIndex, { type: style, text: existing.text });
-                        })
-                      }
-                      onChange={(value) =>
-                        patchSlide(slide.id, (current) => {
-                          const existing = current.blocks[blockIndex];
-                          if (!existing || !("text" in existing)) return current;
-                          return updateBlock(current, blockIndex, { ...existing, text: value });
-                        })
-                      }
-                    />
+                    <div key={blockIndex} id={`block-${slide.id}-${blockIndex}`}>
+                      <FitText
+                        label={BLOCK_LABEL[block.type] ?? block.type}
+                        styleName={block.type}
+                        tools={order}
+                        value={block.text}
+                        onStyle={(style) =>
+                          patchSlide(slide.id, (current) => {
+                            const existing = current.blocks[blockIndex];
+                            if (!existing || !("text" in existing)) return current;
+                            return updateBlock(current, blockIndex, { type: style, text: existing.text });
+                          })
+                        }
+                        onChange={(value) =>
+                          patchSlide(slide.id, (current) => {
+                            const existing = current.blocks[blockIndex];
+                            if (!existing || !("text" in existing)) return current;
+                            return updateBlock(current, blockIndex, { ...existing, text: value });
+                          })
+                        }
+                      />
+                    </div>
                   );
                 })}
               </div>
 
-              {index < slides.length - 1 ? (
-                <button type="button" onClick={() => jump(slides[index + 1].id)} className="csc-link mt-3 text-sm">
-                  Next: {slideLabel(slides[index + 1])}
+              {index < deck.length - 1 ? (
+                <button type="button" onClick={() => jump(deck[index + 1].id)} className="csc-link mt-3 text-sm">
+                  Next: {slideLabel(deck[index + 1])}
                 </button>
               ) : null}
             </section>

@@ -189,6 +189,14 @@ export function isPitchSlide(value: unknown): value is PitchSlide {
   );
 }
 
+function copyBlock(block: CopyBlock): CopyBlock {
+  if (block.type === "list") return { ...block, items: block.items.slice() };
+  if (block.type === "table") {
+    return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
+  }
+  return { ...block };
+}
+
 function sanitizeSlides(value: unknown): PitchSlide[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 40) return null;
   const slides = value.filter(isPitchSlide).map((slide) => ({
@@ -196,9 +204,17 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
     image: safeImage(slide.image, SEED_PHOTO),
     wash: washFrom(slide.wash),
     copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
-    blocks: slide.blocks.map((block) => ({ ...block })),
+    blocks: slide.blocks.map(copyBlock),
   }));
-  return slides.length === value.length ? slides : null;
+  if (slides.length !== value.length) return null;
+  const ids = new Set(slides.map((slide) => slide.id));
+  if (ids.size !== slides.length) return null;
+  return slides;
+}
+
+/** The editor's full deck: added and deleted slides and blocks are kept. */
+export function acceptSlides(value: unknown): PitchSlide[] | null {
+  return sanitizeSlides(value);
 }
 
 const TEXT_STYLES = new Set(["kicker", "title", "heading", "paragraph", "line"]);
@@ -411,7 +427,10 @@ export function listLoadedPitches(
 ): LoadedPitch[] {
   const sobecaOverride = state.overrides[SOBECA_PITCH_ID];
   const meetingOverride = state.overrides[INITIAL_MEETING_ID];
-  const meetingSlides = mergeSlides(initialMeetingSlides, meetingOverride?.slides ?? null);
+  const meetingSlides =
+    meetingOverride?.slides && meetingOverride.slides.length > 0
+      ? cloneSlides(meetingOverride.slides)
+      : cloneSlides(initialMeetingSlides);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
     slug: SOBECA_PITCH_ID,
@@ -526,9 +545,17 @@ export function applyPitchPatch(
     slides = current.builtin && current.id === INITIAL_MEETING_ID ? cloneSlides(initialMeetingSlides) : current.builtin ? current.slides : seedSlides(name, prompt);
     if (current.id === SOBECA_PITCH_ID) slides = current.slides;
   } else if (patch.slides !== undefined) {
-    const base =
-      current.id === INITIAL_MEETING_ID ? initialMeetingSlides : current.builtin ? current.slides : current.slides;
-    slides = mergeSlides(current.id === SOBECA_PITCH_ID ? current.slides : base, patch.slides);
+    if (current.id === SOBECA_PITCH_ID) {
+      slides = current.slides;
+    } else if (Array.isArray(patch.slides) && patch.slides.length === 0) {
+      return { error: "A pitch needs at least one slide." };
+    } else {
+      const accepted = acceptSlides(patch.slides);
+      if (!accepted) {
+        return { error: "Each slide needs a photo and at least one block, with no duplicate ids." };
+      }
+      slides = accepted;
+    }
   }
 
   const nextPitch: LoadedPitch = {
