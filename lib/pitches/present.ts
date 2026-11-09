@@ -81,10 +81,10 @@ export function prefersImmersiveFallback(): boolean {
 }
 
 /**
- * Soft present when native fullscreen is unavailable or rejected.
- * Always enters immersive so Play works on a phone (no F11 dead end).
+ * Play always opens windowed present mode so the presenter keeps other apps visible.
+ * A separate control opts into monitor fullscreen.
  */
-export function presentFallback(options: { coarsePointer: boolean }): {
+export function startWindowedPresent(options: { coarsePointer: boolean }): {
   mode: "immersive";
   note: string | null;
 } {
@@ -92,8 +92,13 @@ export function presentFallback(options: { coarsePointer: boolean }): {
     mode: "immersive",
     note: options.coarsePointer
       ? "Swipe up once to tuck the address bar, then share this screen."
-      : "Browser chrome stayed. Share this window, or press F11 for a fuller view.",
+      : "Presenting in this window. Use expand for the whole screen.",
   };
+}
+
+/** @deprecated Use startWindowedPresent — kept name for older call sites during rename. */
+export function presentFallback(options: { coarsePointer: boolean }) {
+  return startWindowedPresent(options);
 }
 
 /** Nudge mobile browsers to collapse chrome after entering immersive mode. */

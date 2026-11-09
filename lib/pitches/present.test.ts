@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { presentFallback } from "./present";
+import { startWindowedPresent } from "./present";
 
-assert.deepEqual(presentFallback({ coarsePointer: true }), {
+assert.deepEqual(startWindowedPresent({ coarsePointer: true }), {
   mode: "immersive",
   note: "Swipe up once to tuck the address bar, then share this screen.",
 });
 
-assert.deepEqual(presentFallback({ coarsePointer: false }), {
+assert.deepEqual(startWindowedPresent({ coarsePointer: false }), {
   mode: "immersive",
-  note: "Browser chrome stayed. Share this window, or press F11 for a fuller view.",
+  note: "Presenting in this window. Use expand for the whole screen.",
 });
 
-console.log("present fallback ok");
+console.log("present windowed start ok");
