@@ -64,6 +64,10 @@ assert.deepEqual(
 const text = addTextBlock(start, "title", "line");
 if ("error" in text) throw new Error(text.error);
 assert.equal(text.slides[0]?.blocks[1]?.type, "line");
+const points = addTextBlock(start, "title", "heading2");
+if ("error" in points) throw new Error(points.error);
+assert.equal(points.slides[0]?.blocks.at(-1)?.type, "heading2");
+assert.equal(acceptSlides(points.slides)?.[0]?.blocks.at(-1)?.type, "heading2");
 const shifted = moveBlock(text.slides, "title", 1, -1);
 if ("error" in shifted) throw new Error(shifted.error);
 assert.equal(shifted.slides[0]?.blocks[0]?.type, "line");

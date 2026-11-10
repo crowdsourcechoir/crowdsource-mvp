@@ -30,6 +30,14 @@ const sentence: CopyBlock[] = [
 ];
 assert.equal(punchCopy(sentence)?.text, "You unlock a different level of engagement, connection, and ownership.");
 assert.equal(punchCopy([{ type: "heading", text: "Participation changes the equation." }, { type: "table", headers: ["A"], rows: [["B"]] }]), null);
+assert.equal(
+  punchCopy([
+    { type: "heading", text: "What changes" },
+    { type: "heading2", text: "The audience writes the line." },
+    { type: "heading2", text: "The room sings it back." },
+  ]),
+  null
+);
 
 assert.deepEqual(nextDeckStep({ index: 1, revealed: false }, 9, "next", true, false), { index: 1, revealed: true });
 assert.deepEqual(nextDeckStep({ index: 1, revealed: true }, 9, "next", true, false), { index: 2, revealed: false });

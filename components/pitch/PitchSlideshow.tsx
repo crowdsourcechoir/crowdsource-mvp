@@ -90,6 +90,14 @@ function Block({
       </h2>
     );
   }
+  if (block.type === "heading2") {
+    return (
+      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl`}>
+        <span aria-hidden="true" className="mt-[0.22em] h-[0.38em] w-[0.38em] shrink-0 bg-[#CFFF81]" />
+        <span>{block.text}</span>
+      </h3>
+    );
+  }
   if (block.type === "kicker") {
     return (
       <p className="mt-6 text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81] sm:text-sm">

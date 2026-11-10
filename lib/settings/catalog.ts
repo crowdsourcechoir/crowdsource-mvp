@@ -331,7 +331,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Duplicate a pitch",
           "Create a pitch from a prompt",
           "Add, reorder, and delete slides",
-          "Add and delete text, lists, and table rows",
+          "Add and delete text, Heading 2 points, lists, and table rows",
           "Edit words, photos, and copy color",
           "Song Garden pitch keeps the public page sections",
           "Live page, with a password when one is set",

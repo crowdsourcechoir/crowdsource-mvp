@@ -48,11 +48,12 @@ const BLOCK_LABEL: Record<string, string> = {
   title: "Title",
   kicker: "Kicker",
   heading: "Heading",
+  heading2: "Heading 2",
   line: "Line",
   paragraph: "Paragraph",
 };
 
-const TEXT_STYLES = ["title", "heading", "kicker", "line", "paragraph"] as const;
+const TEXT_STYLES = ["title", "heading", "heading2", "kicker", "line", "paragraph"] as const;
 
 function RoundButton({
   label,
@@ -152,6 +153,7 @@ function FitText({
             >
               <option value="title">Title</option>
               <option value="heading">Heading</option>
+              <option value="heading2">Heading 2</option>
               <option value="kicker">Kicker</option>
               <option value="line">Line</option>
               <option value="paragraph">Paragraph</option>
@@ -544,6 +546,15 @@ export default function PitchEditor({ id }: { id: string }) {
                     }}
                   >
                     Add text
+                  </SettingsButton>
+                  <SettingsButton
+                    onClick={() => {
+                      const result = commit(addTextBlock(slidesRef.current ?? deck, slide.id, "heading2"));
+                      const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;
+                      if (count) revealBlock(slide.id, count - 1);
+                    }}
+                  >
+                    Add heading 2
                   </SettingsButton>
                   <SettingsButton
                     onClick={() => {

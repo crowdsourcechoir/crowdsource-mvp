@@ -217,7 +217,7 @@ export function acceptSlides(value: unknown): PitchSlide[] | null {
   return sanitizeSlides(value);
 }
 
-const TEXT_STYLES = new Set(["kicker", "title", "heading", "paragraph", "line"]);
+const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "paragraph", "line"]);
 
 function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   if (!incoming || typeof incoming !== "object") return base;

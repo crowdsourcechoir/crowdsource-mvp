@@ -2,6 +2,7 @@ export type CopyBlock =
   | { type: "kicker"; text: string }
   | { type: "title"; text: string }
   | { type: "heading"; text: string }
+  | { type: "heading2"; text: string }
   | { type: "paragraph"; text: string }
   | { type: "line"; text: string }
   | { type: "image"; src: string; alt: string }

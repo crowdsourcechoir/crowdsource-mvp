@@ -6,7 +6,7 @@ export const MAX_SLIDE_BLOCKS = 40;
 const MAX_LIST_ITEMS = 40;
 const MAX_TABLE_ROWS = 40;
 
-export type TextBlockType = "title" | "heading" | "kicker" | "line" | "paragraph";
+export type TextBlockType = "title" | "heading" | "heading2" | "kicker" | "line" | "paragraph";
 
 export type SlideEdit = { slides: PitchSlide[]; id?: string } | { error: string };
 
