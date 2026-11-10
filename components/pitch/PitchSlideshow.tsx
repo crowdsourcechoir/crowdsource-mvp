@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import { GradedPhoto } from "@/components/pitch/GradedPhoto";
 import { PitchText } from "@/components/pitch/PitchText";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { evenFitScale } from "@/lib/pitches/fit-copy";
@@ -473,7 +474,7 @@ export default function PitchSlideshow({
 
   const slide = slides[index];
   if (!slide) return null;
-  const tint = OVERLAYS[index % OVERLAYS.length];
+  const tint = slide.photoOverlay === "salmon" ? "#FF2D95" : OVERLAYS[index % OVERLAYS.length];
   const wash = typeof slide.wash === "number" ? slide.wash : 0.45;
   const label = `${String(index + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
 
@@ -571,13 +572,13 @@ export default function PitchSlideshow({
     >
       <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
 
-      <img key={`${slide.id}-photo`} src={slide.image} alt={slide.imageAlt} className="slide-photo absolute inset-0 h-full w-full object-cover" />
+      <div key={`${slide.id}-photo`} className="slide-photo absolute inset-0">
+        <GradedPhoto src={slide.image} alt={slide.imageAlt} overlay={slide.photoOverlay} className="h-full w-full" />
+      </div>
       {outgoing !== null && slides[outgoing] ? (
-        <img
-          src={slides[outgoing].image}
-          alt=""
-          className="slide-out absolute inset-0 h-full w-full object-cover"
-        />
+        <div className="slide-out absolute inset-0">
+          <GradedPhoto src={slides[outgoing].image} alt="" overlay={slides[outgoing].photoOverlay} className="h-full w-full" />
+        </div>
       ) : null}
       <div
         key={`${slide.id}-wash`}

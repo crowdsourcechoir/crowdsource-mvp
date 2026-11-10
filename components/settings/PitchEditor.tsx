@@ -21,6 +21,7 @@ import {
   removeTableRow,
   type SlideEdit,
 } from "@/lib/pitches/structure";
+import { GradedPhoto } from "@/components/pitch/GradedPhoto";
 import PitchOrgField from "@/components/settings/PitchOrgField";
 import { SettingsButton } from "@/components/settings/ui";
 
@@ -697,8 +698,8 @@ export default function PitchEditor({ id }: { id: string }) {
               ) : null}
 
               <div className="relative mt-3">
-                <img src={slide.image} alt="" className="h-28 w-full object-cover" />
-                <label className="csc-link absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs">
+                <GradedPhoto src={slide.image} alt="" overlay={slide.photoOverlay} className="h-28 w-full" />
+                <label className="csc-link absolute bottom-2 right-2 z-10 bg-black/70 px-2 py-1 text-xs">
                   {uploadingId === slide.id ? "Uploading…" : "Upload photo"}
                   <input
                     type="file"
@@ -713,6 +714,25 @@ export default function PitchEditor({ id }: { id: string }) {
                   />
                 </label>
               </div>
+              {structureOpen ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="csc-eyebrow">Color overlay</span>
+                  <SettingsButton
+                    variant={slide.photoOverlay === "salmon" ? "ghost" : "primary"}
+                    title="Leave the photo as it was shot."
+                    onClick={() => patchSlide(slide.id, (current) => ({ ...current, photoOverlay: undefined }))}
+                  >
+                    None
+                  </SettingsButton>
+                  <SettingsButton
+                    variant={slide.photoOverlay === "salmon" ? "primary" : "ghost"}
+                    title="Pink grade so this photo matches the salmon library photos."
+                    onClick={() => patchSlide(slide.id, (current) => ({ ...current, photoOverlay: "salmon" }))}
+                  >
+                    Salmon
+                  </SettingsButton>
+                </div>
+              ) : null}
               <p className="csc-eyebrow mt-3">Library</p>
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                 {PHOTO_LIBRARY.map((photo) => {
@@ -733,7 +753,7 @@ export default function PitchEditor({ id }: { id: string }) {
                         }))
                       }
                     >
-                      <img src={photo.src} alt="" className="h-full w-full object-cover" />
+                      <GradedPhoto src={photo.src} alt="" overlay={slide.photoOverlay} className="h-full w-full" />
                     </button>
                   );
                 })}

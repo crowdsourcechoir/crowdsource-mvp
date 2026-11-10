@@ -21,6 +21,8 @@ export type PitchSlide = {
   copyColor?: string;
   /** When set, a click in the presentation brings in the next line. Omitted slides arrive together. */
   reveal?: "steps";
+  /** Optional pink grade on this photo. Omitted photos stay as shot. */
+  photoOverlay?: "salmon";
   /**
    * Multiply-tint strength for this section, 0–0.85.
    * Omitted sections keep the SoBECA Song Garden wash.
