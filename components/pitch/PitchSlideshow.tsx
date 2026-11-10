@@ -573,11 +573,23 @@ export default function PitchSlideshow({
       <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
 
       <div key={`${slide.id}-photo`} className="slide-photo absolute inset-0">
-        <GradedPhoto src={slide.image} alt={slide.imageAlt} overlay={slide.photoOverlay} className="h-full w-full" />
+        <GradedPhoto
+          src={slide.image}
+          alt={slide.imageAlt}
+          overlay={slide.photoOverlay}
+          amount={slide.photoOverlayAmount ?? 1}
+          className="h-full w-full"
+        />
       </div>
       {outgoing !== null && slides[outgoing] ? (
         <div className="slide-out absolute inset-0">
-          <GradedPhoto src={slides[outgoing].image} alt="" overlay={slides[outgoing].photoOverlay} className="h-full w-full" />
+          <GradedPhoto
+            src={slides[outgoing].image}
+            alt=""
+            overlay={slides[outgoing].photoOverlay}
+            amount={slides[outgoing].photoOverlayAmount ?? 1}
+            className="h-full w-full"
+          />
         </div>
       ) : null}
       <div

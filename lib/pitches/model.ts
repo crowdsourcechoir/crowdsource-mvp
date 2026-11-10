@@ -238,6 +238,12 @@ function salmonOverlay(value: unknown): "salmon" | undefined {
   return value === "salmon" ? "salmon" : undefined;
 }
 
+function overlayAmount(value: unknown, overlay: "salmon" | undefined): number | undefined {
+  if (overlay !== "salmon" || typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const clamped = Math.min(1, Math.max(0, value));
+  return Math.round(clamped * 100) / 100;
+}
+
 function copyBlock(block: CopyBlock): CopyBlock {
   if (block.type === "list") return { ...block, items: block.items.slice() };
   if (block.type === "table") {
@@ -260,6 +266,7 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
     copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
     reveal: revealMode(slide.reveal),
     photoOverlay: salmonOverlay(slide.photoOverlay),
+    photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, salmonOverlay(slide.photoOverlay)),
     blocks: slide.blocks.map(copyBlock),
   }));
   if (slides.length !== value.length) return null;

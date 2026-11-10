@@ -292,6 +292,28 @@ const graded = acceptSlides([
   },
 ]);
 assert.equal(graded?.[0]?.photoOverlay, "salmon");
+assert.equal(graded?.[0]?.photoOverlayAmount, undefined);
+const sheer = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlay: "salmon",
+    photoOverlayAmount: 0.35,
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(sheer?.[0]?.photoOverlayAmount, 0.35);
+const amountWithoutGrade = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlayAmount: 0.2,
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(amountWithoutGrade?.[0]?.photoOverlayAmount, undefined);
 const droppedGrade = acceptSlides([
   {
     id: "title",
