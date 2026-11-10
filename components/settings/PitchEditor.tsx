@@ -698,7 +698,13 @@ export default function PitchEditor({ id }: { id: string }) {
               ) : null}
 
               <div className="relative mt-3">
-                <GradedPhoto src={slide.image} alt="" overlay={slide.photoOverlay} className="h-28 w-full" />
+                <GradedPhoto
+                  src={slide.image}
+                  alt=""
+                  overlay={slide.photoOverlay}
+                  amount={slide.photoOverlayAmount ?? 1}
+                  className="h-28 w-full"
+                />
                 <label className="csc-link absolute bottom-2 right-2 z-10 bg-black/70 px-2 py-1 text-xs">
                   {uploadingId === slide.id ? "Uploading…" : "Upload photo"}
                   <input
@@ -733,6 +739,30 @@ export default function PitchEditor({ id }: { id: string }) {
                   </SettingsButton>
                 </div>
               ) : null}
+              {structureOpen && slide.photoOverlay === "salmon" ? (
+                <label className="mt-3 flex max-w-md items-center gap-3">
+                  <span className="csc-eyebrow shrink-0">
+                    Transparency {Math.round((1 - (slide.photoOverlayAmount ?? 1)) * 100)}%
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    aria-label="Overlay transparency"
+                    title="0% is the full color. 100% shows the photo as it was shot."
+                    value={Math.round((1 - (slide.photoOverlayAmount ?? 1)) * 100)}
+                    onChange={(event) => {
+                      const transparency = Number(event.target.value) / 100;
+                      patchSlide(slide.id, (current) => ({
+                        ...current,
+                        photoOverlayAmount: Math.round((1 - transparency) * 100) / 100,
+                      }));
+                    }}
+                    className="w-full accent-[var(--csc-accent)]"
+                  />
+                </label>
+              ) : null}
               <p className="csc-eyebrow mt-3">Library</p>
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                 {PHOTO_LIBRARY.map((photo) => {
@@ -753,7 +783,13 @@ export default function PitchEditor({ id }: { id: string }) {
                         }))
                       }
                     >
-                      <GradedPhoto src={photo.src} alt="" overlay={slide.photoOverlay} className="h-full w-full" />
+                      <GradedPhoto
+                        src={photo.src}
+                        alt=""
+                        overlay={slide.photoOverlay}
+                        amount={slide.photoOverlayAmount ?? 1}
+                        className="h-full w-full"
+                      />
                     </button>
                   );
                 })}
