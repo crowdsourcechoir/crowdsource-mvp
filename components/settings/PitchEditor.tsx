@@ -598,6 +598,20 @@ export default function PitchEditor({ id }: { id: string }) {
               {structureOpen ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <SettingsButton
+                    variant={slide.reveal === "steps" ? "ghost" : "primary"}
+                    title="Every line is on the slide. One extra click still holds the last line."
+                    onClick={() => patchSlide(slide.id, (current) => ({ ...current, reveal: undefined }))}
+                  >
+                    All at once
+                  </SettingsButton>
+                  <SettingsButton
+                    variant={slide.reveal === "steps" ? "primary" : "ghost"}
+                    title="Each click brings in the next line, bullet, or row."
+                    onClick={() => patchSlide(slide.id, (current) => ({ ...current, reveal: "steps" }))}
+                  >
+                    One at a time
+                  </SettingsButton>
+                  <SettingsButton
                     onClick={() => {
                       const result = commit(addTextBlock(slidesRef.current ?? deck, slide.id));
                       const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;

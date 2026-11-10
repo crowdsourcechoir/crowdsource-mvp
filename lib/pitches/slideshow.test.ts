@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { CopyBlock } from "@/app/sobeca-song-garden/content";
-import { nextDeckStep, punchCopy, slideGesture, stepSlide } from "./slideshow";
+import { copySteps, nextDeckStep, nextPresentStep, punchCopy, slideGesture, stepSlide } from "./slideshow";
 
 const width = 1000;
 
@@ -47,5 +47,48 @@ assert.deepEqual(nextDeckStep({ index: 3, revealed: false }, 9, "next", false, f
 assert.deepEqual(nextDeckStep({ index: 1, revealed: true }, 9, "prev", true, true), { index: 1, revealed: false });
 assert.deepEqual(nextDeckStep({ index: 2, revealed: false }, 9, "prev", true, true), { index: 1, revealed: true });
 assert.deepEqual(nextDeckStep({ index: 8, revealed: true }, 9, "next", true, false), { index: 8, revealed: true });
+
+const paced: CopyBlock[] = [
+  { type: "heading", text: "With you" },
+  { type: "list", items: ["One voice", " ", "The room"] },
+  { type: "table", headers: ["When", "What"], rows: [["Open", "Arrive"], ["Close", "Sing"]] },
+];
+assert.deepEqual(copySteps(paced), [
+  { blockIndex: 0 },
+  { blockIndex: 1, itemIndex: 0 },
+  { blockIndex: 1, itemIndex: 2 },
+  { blockIndex: 2, rowIndex: 0 },
+  { blockIndex: 2, rowIndex: 1 },
+]);
+
+const stepped = [
+  { reveal: "steps", blocks: paced },
+  { blocks: withLine },
+];
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, stepped, "next"), {
+  index: 0,
+  revealed: false,
+  arrived: 1,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 5 }, stepped, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 2 }, stepped, "prev"), {
+  index: 0,
+  revealed: false,
+  arrived: 1,
+});
+assert.deepEqual(nextPresentStep({ index: 1, revealed: false, arrived: 0 }, stepped, "prev"), {
+  index: 0,
+  revealed: false,
+  arrived: 5,
+});
+assert.deepEqual(nextPresentStep({ index: 1, revealed: false, arrived: 0 }, stepped, "next"), {
+  index: 1,
+  revealed: true,
+  arrived: 0,
+});
 
 console.log("slideshow gesture ok");

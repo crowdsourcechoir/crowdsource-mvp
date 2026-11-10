@@ -230,6 +230,10 @@ export function isPitchSlide(value: unknown): value is PitchSlide {
   );
 }
 
+function revealMode(value: unknown): "steps" | undefined {
+  return value === "steps" ? "steps" : undefined;
+}
+
 function copyBlock(block: CopyBlock): CopyBlock {
   if (block.type === "list") return { ...block, items: block.items.slice() };
   if (block.type === "table") {
@@ -246,6 +250,7 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
     image: safeImage(slide.image, SEED_PHOTO),
     wash: washFrom(slide.wash),
     copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
+    reveal: revealMode(slide.reveal),
     blocks: slide.blocks.map(copyBlock),
   }));
   if (slides.length !== value.length) return null;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { slides as sobecaSlides } from "@/app/sobeca-song-garden/content";
 import { initialMeetingSlides } from "./initial-meeting";
 import {
+  acceptSlides,
   applyPassword,
   applyPitchPatch,
   createCustomPitch,
@@ -234,6 +235,27 @@ assert.ok(!("error" in meetingReset));
 if ("error" in meetingReset) throw new Error("meeting reset failed");
 assert.equal(meetingReset.state.overrides[INITIAL_MEETING_ID]?.slides, null);
 assert.equal(findLoadedPitch(meetingReset.state, INITIAL_MEETING_ID, sobeca)?.slides.length, initialMeetingSlides.length);
+
+const pacedDeck = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    reveal: "steps",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(pacedDeck?.[0]?.reveal, "steps");
+const droppedPace = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    reveal: "together",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(droppedPace?.[0]?.reveal, undefined);
 
 const junk = normalizeWebPitches({
   overrides: { "not-a-pitch": { live: false }, [INITIAL_MEETING_ID]: { live: false, prompt: "  kept  " } },

@@ -334,6 +334,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Add, reorder, and delete slides",
           "Add and delete text, Heading 2 points, indented Heading 3 bullets, lists, and table rows",
           "Edit words, photos, and copy color",
+          "Present a slide all at once, or one line at a time",
           "Song Garden pitch keeps the public page sections",
           "Live page, with a password when one is set",
           "Connect a pitch to a sales organization",

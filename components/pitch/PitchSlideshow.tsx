@@ -16,7 +16,7 @@ import {
   startWindowedPresent,
   type PresentMode,
 } from "@/lib/pitches/present";
-import { nextDeckStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
+import { copySteps, nextPresentStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 
@@ -227,17 +227,48 @@ function FitCopy({ children, watch, color }: { children: ReactNode; watch: strin
   );
 }
 
+function steppedBlock(block: CopyBlock, blockIndex: number, visible: Set<string> | null): CopyBlock | null {
+  if (!visible) return block;
+  if (block.type === "list") {
+    const items = block.items.filter((item, itemIndex) => item.trim() && visible.has(`${blockIndex}:i${itemIndex}`));
+    return items.length ? { ...block, items } : null;
+  }
+  if (block.type === "table") {
+    const rows = block.rows.filter((_, rowIndex) => visible.has(`${blockIndex}:r${rowIndex}`));
+    return rows.length ? { ...block, rows } : null;
+  }
+  return visible.has(String(blockIndex)) ? block : null;
+}
+
 function SlideCopy({
   slide,
   display,
+  arrived,
 }: {
   slide: PitchSlide;
   display: string;
+  arrived: number | null;
 }) {
-  const punch = punchCopy(slide.blocks);
+  const visible =
+    arrived === null
+      ? null
+      : new Set(
+          copySteps(slide.blocks)
+            .slice(0, arrived)
+            .map((step) =>
+              typeof step.itemIndex === "number"
+                ? `${step.blockIndex}:i${step.itemIndex}`
+                : typeof step.rowIndex === "number"
+                  ? `${step.blockIndex}:r${step.rowIndex}`
+                  : String(step.blockIndex),
+            ),
+        );
+  const punch = visible ? null : punchCopy(slide.blocks);
   return (
     <div>
       {slide.blocks.map((block, blockIndex) => {
+        const shown = steppedBlock(block, blockIndex, visible);
+        if (!shown) return null;
         const previous = slide.blocks[blockIndex - 1]?.type;
         if (punch && blockIndex === punch.index) {
           if (!punch.before) return null;
@@ -251,7 +282,7 @@ function SlideCopy({
         }
         return (
           <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-            <Block block={block} display={display} previous={previous} />
+            <Block block={shown} display={display} previous={previous} />
           </div>
         );
       })}
@@ -272,6 +303,7 @@ export default function PitchSlideshow({
   const startRef = useRef<{ x: number; y: number; interactive: boolean } | null>(null);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [arrived, setArrived] = useState(0);
   const [outgoing, setOutgoing] = useState<number | null>(null);
   const [direction, setDirection] = useState<Exclude<SlideGesture, "none">>("next");
   const [motion, setMotion] = useState(true);
@@ -281,6 +313,7 @@ export default function PitchSlideshow({
   const shown = useRef(0);
   const indexRef = useRef(0);
   const revealedRef = useRef(false);
+  const arrivedRef = useRef(0);
   const slidesRef = useRef(slides);
   slidesRef.current = slides;
   const presenting = presentMode !== "off";
@@ -293,20 +326,18 @@ export default function PitchSlideshow({
   const go = useCallback((gesture: SlideGesture) => {
     const deck = slidesRef.current;
     const current = indexRef.current;
-    const slide = deck[current];
-    const previous = deck[Math.max(0, current - 1)];
-    const next = nextDeckStep(
-      { index: current, revealed: revealedRef.current },
-      deck.length,
+    const next = nextPresentStep(
+      { index: current, revealed: revealedRef.current, arrived: arrivedRef.current },
+      deck,
       gesture,
-      Boolean(slide && punchCopy(slide.blocks)),
-      Boolean(previous && punchCopy(previous.blocks)),
     );
     if (next.index !== current && gesture !== "none") setDirection(gesture === "prev" ? "prev" : "next");
     indexRef.current = next.index;
     revealedRef.current = next.revealed;
+    arrivedRef.current = next.arrived;
     setIndex(next.index);
     setRevealed(next.revealed);
+    setArrived(next.arrived);
   }, []);
 
   useEffect(() => {
@@ -549,7 +580,7 @@ export default function PitchSlideshow({
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
-      <div className={`relative z-10 flex h-full min-w-0 flex-col px-6 pt-8 sm:px-24 sm:pt-10 ${revealed && punchCopy(slide.blocks) ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
+      <div className={`relative z-10 flex h-full min-w-0 flex-col px-6 pt-8 sm:px-24 sm:pt-10 ${revealed && slide.reveal !== "steps" && punchCopy(slide.blocks) ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <div className="flex items-center gap-1 sm:gap-2">
@@ -636,12 +667,12 @@ export default function PitchSlideshow({
             <p className="ml-1 text-[11px] uppercase tracking-[0.28em] text-white/80 sm:ml-2">{label}</p>
           </div>
         </div>
-        <FitCopy watch={`${slide.id}:${revealed}`} color={slide.copyColor || "#FFFFFF"}>
-          <SlideCopy slide={slide} display={displayClass} />
+        <FitCopy watch={`${slide.id}:${revealed}:${arrived}`} color={slide.copyColor || "#FFFFFF"}>
+          <SlideCopy slide={slide} display={displayClass} arrived={slide.reveal === "steps" ? arrived : null} />
         </FitCopy>
       </div>
 
-      {revealed && punchCopy(slide.blocks) ? (
+      {revealed && slide.reveal !== "steps" && punchCopy(slide.blocks) ? (
         <p
           key={`${slide.id}-punch`}
           className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
@@ -668,7 +699,9 @@ export default function PitchSlideshow({
               setDirection(dot > index ? "next" : "prev");
               indexRef.current = dot;
               revealedRef.current = false;
+              arrivedRef.current = 0;
               setRevealed(false);
+              setArrived(0);
               setIndex(dot);
             }}
           />
