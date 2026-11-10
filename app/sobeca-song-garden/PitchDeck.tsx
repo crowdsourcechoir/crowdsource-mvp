@@ -73,8 +73,8 @@ function Block({
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} ${follow} flex max-w-full items-stretch gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
-        <span aria-hidden="true" className="w-0.5 shrink-0 self-stretch bg-[#CFFF81]" />
+      <h3 className={`${display} ${follow} flex max-w-full items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+        <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" />
         <span className="min-w-0 break-words">
           <PitchText text={block.text} />
         </span>
