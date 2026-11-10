@@ -30,10 +30,13 @@ export type PitchAdmin = {
   protected: boolean;
   href: string;
   builtin: boolean;
+  organizationId: string | null;
+  /** Resolved when the pitch is read for admin. Not stored on the pitch. */
+  organizationName: string | null;
   slides: PitchSlide[];
 };
 
-export type LoadedPitch = Omit<PitchAdmin, "protected"> & {
+export type LoadedPitch = Omit<PitchAdmin, "protected" | "organizationName"> & {
   passwordHash: string | null;
 };
 
@@ -43,6 +46,8 @@ export type PitchOverride = {
   live?: boolean;
   slides?: PitchSlide[] | null;
   passwordHash?: string | null;
+  /** Sales organization. Null clears a previous link. */
+  organizationId?: string | null;
 };
 
 export type CustomPitch = {
@@ -52,6 +57,7 @@ export type CustomPitch = {
   prompt: string;
   live: boolean;
   passwordHash: string | null;
+  organizationId: string | null;
   slides: PitchSlide[];
   createdAt: string;
   updatedAt: string;
@@ -121,6 +127,8 @@ export function toAdmin(pitch: LoadedPitch): PitchAdmin {
     protected: Boolean(pitch.passwordHash),
     href: pitch.href,
     builtin: pitch.builtin,
+    organizationId: pitch.organizationId,
+    organizationName: null,
     slides: pitch.slides,
   };
 }
@@ -342,6 +350,17 @@ function hashOrNull(value: unknown): string | null {
   return typeof value === "string" && value.includes(":") ? value : null;
 }
 
+const ORG_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A sales organization id, null when the link is cleared, or undefined when the value is absent. */
+export function organizationIdFrom(value: unknown): string | null | undefined {
+  if (value == null) return value === null ? null : undefined;
+  if (typeof value !== "string") return undefined;
+  const id = value.trim().toLowerCase();
+  if (!id) return undefined;
+  return ORG_ID.test(id) ? id : undefined;
+}
+
 function sanitizeOverride(value: unknown): PitchOverride | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as PitchOverride;
@@ -353,6 +372,8 @@ function sanitizeOverride(value: unknown): PitchOverride | null {
   if (typeof source.live === "boolean") override.live = source.live;
   if (source.passwordHash === null) override.passwordHash = null;
   else if (hashOrNull(source.passwordHash)) override.passwordHash = hashOrNull(source.passwordHash);
+  const organizationId = organizationIdFrom(source.organizationId);
+  if (organizationId !== undefined) override.organizationId = organizationId;
   if (source.slides === null) override.slides = null;
   else {
     const slides = sanitizeSlides(source.slides);
@@ -377,6 +398,7 @@ function sanitizeCustom(value: unknown): CustomPitch | null {
     prompt,
     live: source.live !== false,
     passwordHash: hashOrNull(source.passwordHash),
+    organizationId: organizationIdFrom(source.organizationId) ?? null,
     slides,
     createdAt: typeof source.createdAt === "string" ? source.createdAt : new Date(0).toISOString(),
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : new Date(0).toISOString(),
@@ -422,6 +444,7 @@ function presentCustom(pitch: CustomPitch): LoadedPitch {
     passwordHash: pitch.passwordHash,
     href: `/pitch/${pitch.slug}`,
     builtin: false,
+    organizationId: pitch.organizationId,
     slides: pitch.slides,
   };
 }
@@ -446,6 +469,7 @@ export function listLoadedPitches(
     passwordHash: sobeca.passwordHash,
     href: "/sobeca-song-garden",
     builtin: true,
+    organizationId: organizationIdFrom(sobecaOverride?.organizationId) ?? null,
     slides: sobeca.slides,
   };
   const meeting: LoadedPitch = {
@@ -458,6 +482,7 @@ export function listLoadedPitches(
     passwordHash: hashOrNull(meetingOverride?.passwordHash) ,
     href: "/pitch/initial-meeting",
     builtin: true,
+    organizationId: organizationIdFrom(meetingOverride?.organizationId) ?? null,
     slides: meetingSlides,
   };
   const custom = [...state.custom].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map(presentCustom);
@@ -481,7 +506,7 @@ function requireText(value: string, label: string, max: number): string | { erro
 
 export function createCustomPitch(
   state: WebPitchesState,
-  input: { name: string; prompt: string; live: boolean; passwordHash: string | null },
+  input: { name: string; prompt: string; live: boolean; passwordHash: string | null; organizationId?: string | null },
   deps: { id: string; now: string }
 ): { state: WebPitchesState; pitch: CustomPitch } | { error: string } {
   if (state.custom.length >= MAX_CUSTOM) return { error: "The pitch library is full." };
@@ -489,6 +514,12 @@ export function createCustomPitch(
   if (typeof name !== "string") return name;
   const prompt = requireText(input.prompt, "Prompt", MAX_PROMPT);
   if (typeof prompt !== "string") return prompt;
+  let organizationId: string | null = null;
+  if (input.organizationId) {
+    const parsed = organizationIdFrom(input.organizationId);
+    if (!parsed) return { error: "Choose an organization from search." };
+    organizationId = parsed;
+  }
   const slug = uniqueSlug(slugify(name), takenSlugs(state));
   const pitch: CustomPitch = {
     id: deps.id,
@@ -497,6 +528,7 @@ export function createCustomPitch(
     prompt,
     live: input.live,
     passwordHash: input.passwordHash,
+    organizationId,
     slides: seedSlides(name, prompt),
     createdAt: deps.now,
     updatedAt: deps.now,
@@ -519,6 +551,7 @@ export function duplicatePitch(
     prompt: source.prompt,
     live: source.live,
     passwordHash: source.passwordHash,
+    organizationId: source.organizationId,
     slides: cloneSlides(source.slides),
     createdAt: deps.now,
     updatedAt: deps.now,
@@ -529,7 +562,14 @@ export function duplicatePitch(
 export function applyPitchPatch(
   state: WebPitchesState,
   current: LoadedPitch,
-  patch: { name?: string; prompt?: string; live?: boolean; slides?: unknown; reset?: boolean },
+  patch: {
+    name?: string;
+    prompt?: string;
+    live?: boolean;
+    slides?: unknown;
+    reset?: boolean;
+    organizationId?: string | null;
+  },
   now: string
 ): { state: WebPitchesState; pitch: LoadedPitch } | { error: string } {
   let name = current.name;
@@ -545,6 +585,15 @@ export function applyPitchPatch(
     prompt = next;
   }
   const live = typeof patch.live === "boolean" ? patch.live : current.live;
+  let organizationId = current.organizationId;
+  if (patch.organizationId !== undefined) {
+    if (patch.organizationId === null) organizationId = null;
+    else {
+      const parsed = organizationIdFrom(patch.organizationId);
+      if (!parsed) return { error: "Choose an organization from search." };
+      organizationId = parsed;
+    }
+  }
   let slides = current.slides;
   if (patch.reset) {
     slides = current.builtin && current.id === INITIAL_MEETING_ID ? cloneSlides(initialMeetingSlides) : current.builtin ? current.slides : seedSlides(name, prompt);
@@ -568,6 +617,7 @@ export function applyPitchPatch(
     name,
     prompt,
     live,
+    organizationId,
     slides,
     title: pitchTitle(slides, name),
   };
@@ -580,6 +630,7 @@ export function applyPitchPatch(
             name,
             prompt,
             live,
+            organizationId,
             slides,
             updatedAt: now,
           }
@@ -589,7 +640,7 @@ export function applyPitchPatch(
   }
 
   const previous = state.overrides[current.id] ?? {};
-  const override: PitchOverride = { ...previous, name, prompt, live };
+  const override: PitchOverride = { ...previous, name, prompt, live, organizationId };
   if (current.id === INITIAL_MEETING_ID) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;

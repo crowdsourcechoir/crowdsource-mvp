@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import type { PitchSlide } from "@/app/sobeca-song-garden/content";
 import { applyStoredCopy } from "@/lib/sobeca-pitch/copy";
 import { hashPitchPassword, passwordHashFrom, writePitchPassword } from "@/lib/sobeca-pitch/access";
+import { listOrganizationsByIds } from "@/lib/sales/db/organizations";
 import { readWorkspaceSettings, writeWorkspaceSettings } from "@/lib/settings/store";
 import {
   applyPassword,
@@ -49,10 +50,29 @@ async function writeState(state: WebPitchesState): Promise<string | null> {
   return written.error;
 }
 
-export async function listPitchAdmin(): Promise<{ pitches: PitchAdmin[]; error: string | null }> {
+async function withOrganizationNames(pitches: PitchAdmin[]): Promise<PitchAdmin[]> {
+  const ids = pitches.map((pitch) => pitch.organizationId).filter((id): id is string => Boolean(id));
+  if (!ids.length) return pitches;
+  try {
+    const orgs = await listOrganizationsByIds(ids);
+    const names = new Map(orgs.map((org) => [org.id, org.name]));
+    return pitches.map((pitch) => ({
+      ...pitch,
+      organizationName: pitch.organizationId ? names.get(pitch.organizationId) ?? null : null,
+    }));
+  } catch {
+    return pitches;
+  }
+}
+
+export async function listPitchAdmin(organizationId?: string | null): Promise<{ pitches: PitchAdmin[]; error: string | null }> {
   const context = await readContext();
+  const wanted = organizationId?.trim().toLowerCase() || null;
+  const pitches = listLoadedPitches(context.state, context.sobeca)
+    .map(toAdmin)
+    .filter((pitch) => (wanted ? pitch.organizationId === wanted : true));
   return {
-    pitches: listLoadedPitches(context.state, context.sobeca).map(toAdmin),
+    pitches: await withOrganizationNames(pitches),
     error: context.error,
   };
 }
@@ -60,6 +80,13 @@ export async function listPitchAdmin(): Promise<{ pitches: PitchAdmin[]; error: 
 export async function loadPitch(idOrSlug: string): Promise<LoadedPitch | null> {
   const context = await readContext();
   return findLoadedPitch(context.state, idOrSlug, context.sobeca);
+}
+
+export async function loadPitchAdmin(idOrSlug: string): Promise<PitchAdmin | null> {
+  const pitch = await loadPitch(idOrSlug);
+  if (!pitch) return null;
+  const [named] = await withOrganizationNames([toAdmin(pitch)]);
+  return named ?? null;
 }
 
 async function saveSobecaSlides(slides: PitchSlide[] | null): Promise<{ slides: PitchSlide[]; error: string | null }> {
@@ -82,6 +109,7 @@ export async function createPitch(input: {
   prompt: string;
   live?: boolean;
   password?: string;
+  organizationId?: string | null;
 }): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();
   if (context.error) return { error: context.error, status: 503 };
@@ -93,6 +121,7 @@ export async function createPitch(input: {
       prompt: input.prompt,
       live: input.live !== false,
       passwordHash: password ? hashPitchPassword(password) : null,
+      organizationId: input.organizationId ?? null,
     },
     { id: newId(), now: now() }
   );
@@ -100,7 +129,9 @@ export async function createPitch(input: {
   const error = await writeState(created.state);
   if (error) return { error, status: 503 };
   const pitch = findLoadedPitch(created.state, created.pitch.id, context.sobeca);
-  return { pitch: pitch ? toAdmin(pitch) : undefined, status: 200 };
+  if (!pitch) return { status: 200 };
+  const [named] = await withOrganizationNames([toAdmin(pitch)]);
+  return { pitch: named, status: 200 };
 }
 
 export async function duplicatePitchById(id: string): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
@@ -118,7 +149,7 @@ export async function duplicatePitchById(id: string): Promise<{ pitch?: PitchAdm
 
 export async function updatePitch(
   id: string,
-  patch: { name?: string; prompt?: string; live?: boolean; slides?: unknown; reset?: boolean }
+  patch: { name?: string; prompt?: string; live?: boolean; slides?: unknown; reset?: boolean; organizationId?: string | null }
 ): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();
   if (context.error) return { error: context.error, status: 503 };
@@ -144,7 +175,8 @@ export async function updatePitch(
   if (error) return { error, status: 503 };
   const fresh = await readContext();
   const pitch = findLoadedPitch(fresh.state, current.id, fresh.sobeca);
-  return { pitch: pitch ? toAdmin(pitch) : toAdmin(applied.pitch), status: 200 };
+  const [named] = await withOrganizationNames([toAdmin(pitch ?? applied.pitch)]);
+  return { pitch: named, status: 200 };
 }
 
 export async function setPitchPassword(

@@ -21,6 +21,7 @@ import {
   removeTableRow,
   type SlideEdit,
 } from "@/lib/pitches/structure";
+import PitchOrgField from "@/components/settings/PitchOrgField";
 import { SettingsButton } from "@/components/settings/ui";
 
 type PitchPayload = {
@@ -31,6 +32,8 @@ type PitchPayload = {
   protected: boolean;
   href: string;
   builtin: boolean;
+  organizationId: string | null;
+  organizationName: string | null;
   slides: PitchSlide[];
 };
 
@@ -227,6 +230,8 @@ export default function PitchEditor({ id }: { id: string }) {
   const [passwordOn, setPasswordOn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [live, setLive] = useState(true);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [organizationName, setOrganizationName] = useState<string | null>(null);
   const slidesRef = useRef<PitchSlide[] | null>(null);
   slidesRef.current = slides;
 
@@ -242,6 +247,8 @@ export default function PitchEditor({ id }: { id: string }) {
         setSlides(next.slides);
         setLive(next.live);
         setPasswordOn(next.protected);
+        setOrganizationId(next.organizationId ?? null);
+        setOrganizationName(next.organizationName ?? null);
         setActiveId(next.slides?.[0]?.id ?? null);
       })
       .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load the pitch"));
@@ -264,6 +271,8 @@ export default function PitchEditor({ id }: { id: string }) {
       setPrompt(next.prompt);
       setSlides(next.slides);
       setLive(next.live);
+      setOrganizationId(next.organizationId ?? null);
+      setOrganizationName(next.organizationName ?? null);
       setActiveId((current) => (next.slides.some((slide) => slide.id === current) ? current : next.slides[0]?.id ?? null));
       setStatus(reset ? "Reset." : "Saved.");
     } catch (err) {
@@ -411,6 +420,16 @@ export default function PitchEditor({ id }: { id: string }) {
         </SettingsButton>
         {status ? <p className="text-sm text-white/70">{status}</p> : null}
       </div>
+
+      <PitchOrgField
+        pitchId={pitch.id}
+        organizationId={organizationId}
+        organizationName={organizationName}
+        onAssigned={(next) => {
+          setOrganizationId(next.organizationId);
+          setOrganizationName(next.organizationName);
+        }}
+      />
 
       <details className="border-b border-[var(--csc-row-divider)]">
         <summary className="cursor-pointer py-3 text-sm text-white">Brief</summary>

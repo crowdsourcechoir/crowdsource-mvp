@@ -335,6 +335,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Edit words, photos, and copy color",
           "Song Garden pitch keeps the public page sections",
           "Live page, with a password when one is set",
+          "Connect a pitch to a sales organization",
         ],
       },
       {
