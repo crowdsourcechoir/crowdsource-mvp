@@ -16,7 +16,7 @@ export default async function PitchSettingsPage({ params }: { params: { id: stri
     <SettingsSubpage
       eyebrow="Workspace"
       title={sobeca ? "Song Garden pitch" : pitch.name}
-      description={sobeca ? "Words on the public SoBECA page." : "Add and delete slides and text, then save. Reset rebuilds the starting deck."}
+      description={sobeca ? "Words on the public SoBECA page. Changes save on their own." : "Changes save on their own. Reset rebuilds the starting deck."}
       backHref="/admin/settings/pitches"
       backLabel="← Pitches"
     >

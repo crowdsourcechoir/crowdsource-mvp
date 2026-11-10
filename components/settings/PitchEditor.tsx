@@ -6,6 +6,7 @@ import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
 import { toggleBoldMarkup } from "@/lib/pitches/rich-text";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
+import { pitchDraftKey, shouldApplySavedDraft } from "@/lib/pitches/autosave";
 import {
   addListBlock,
   addListItem,
@@ -253,14 +254,93 @@ export default function PitchEditor({ id }: { id: string }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
   const slidesRef = useRef<PitchSlide[] | null>(null);
+  const nameRef = useRef("");
+  const promptRef = useRef("");
+  const savedKey = useRef<string | null>(null);
+  const saveGeneration = useRef(0);
+  const saveAbort = useRef<AbortController | null>(null);
+  const saveTimer = useRef<number | null>(null);
+  const saveDraftRef = useRef<(reset: boolean) => Promise<void>>(async () => {});
   slidesRef.current = slides;
+  nameRef.current = name;
+  promptRef.current = prompt;
+
+  function currentDraftKey() {
+    const currentSlides = slidesRef.current;
+    if (!currentSlides) return null;
+    return pitchDraftKey({ name: nameRef.current, prompt: promptRef.current, slides: currentSlides });
+  }
+
+  function applyPitch(next: PitchPayload, message: string) {
+    savedKey.current = pitchDraftKey({ name: next.name, prompt: next.prompt, slides: next.slides });
+    setPitch(next);
+    setName(next.name);
+    setPrompt(next.prompt);
+    setSlides(next.slides);
+    setLive(next.live);
+    setOrganizationId(next.organizationId ?? null);
+    setOrganizationName(next.organizationName ?? null);
+    setActiveId((current) => (next.slides.some((slide) => slide.id === current) ? current : next.slides[0]?.id ?? null));
+    setStatus(message);
+  }
+
+  function queueSave(delay: number) {
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      void saveDraftRef.current(false);
+    }, delay);
+  }
+
+  async function saveDraft(reset: boolean) {
+    const currentSlides = slidesRef.current;
+    if (!currentSlides) return;
+    const sentKey = pitchDraftKey({ name: nameRef.current, prompt: promptRef.current, slides: currentSlides });
+    if (!reset && sentKey === savedKey.current) return;
+    saveAbort.current?.abort();
+    const controller = new AbortController();
+    saveAbort.current = controller;
+    const generation = ++saveGeneration.current;
+    if (!reset) setStatus("Saving…");
+    try {
+      const res = await fetch(`/api/pitches/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          reset
+            ? { reset: true, name: nameRef.current, prompt: promptRef.current }
+            : { slides: currentSlides, name: nameRef.current, prompt: promptRef.current }
+        ),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      if (generation !== saveGeneration.current) return;
+      const next = data.pitch as PitchPayload;
+      const latestKey = currentDraftKey();
+      if (!reset && (latestKey === null || !shouldApplySavedDraft(latestKey, sentKey))) {
+        queueSave(200);
+        return;
+      }
+      applyPitch(next, reset ? "Reset." : "Saved.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      if (generation !== saveGeneration.current) return;
+      setStatus(err instanceof Error ? err.message : "Save failed");
+    }
+  }
+  saveDraftRef.current = saveDraft;
 
   useEffect(() => {
+    let cancelled = false;
+    savedKey.current = null;
     fetch(`/api/pitches/${id}`, { cache: "no-store" })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Could not load the pitch");
         const next = data.pitch as PitchPayload;
+        if (cancelled) return;
+        savedKey.current = pitchDraftKey({ name: next.name, prompt: next.prompt, slides: next.slides });
         setPitch(next);
         setName(next.name);
         setPrompt(next.prompt);
@@ -271,36 +351,48 @@ export default function PitchEditor({ id }: { id: string }) {
         setOrganizationName(next.organizationName ?? null);
         setActiveId(next.slides?.[0]?.id ?? null);
       })
-      .catch((err) => setStatus(err instanceof Error ? err.message : "Could not load the pitch"));
+      .catch((err) => {
+        if (!cancelled) setStatus(err instanceof Error ? err.message : "Could not load the pitch");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  async function save(reset: boolean) {
-    setSaving(true);
-    setStatus(null);
-    try {
-      const res = await fetch(`/api/pitches/${id}`, {
+  useEffect(() => {
+    if (!slides || savedKey.current === null) return;
+    const key = pitchDraftKey({ name, prompt, slides });
+    if (key === savedKey.current) return;
+    queueSave(600);
+    return () => {
+      if (saveTimer.current !== null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    };
+  }, [name, prompt, slides]);
+
+  useEffect(() => {
+    const flush = () => {
+      const currentSlides = slidesRef.current;
+      if (!currentSlides || savedKey.current === null) return;
+      const key = pitchDraftKey({ name: nameRef.current, prompt: promptRef.current, slides: currentSlides });
+      if (key === savedKey.current) return;
+      saveAbort.current?.abort();
+      if (saveTimer.current !== null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      void fetch(`/api/pitches/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reset ? { reset: true, name, prompt } : { slides, name, prompt }),
+        body: JSON.stringify({ slides: currentSlides, name: nameRef.current, prompt: promptRef.current }),
+        keepalive: true,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-      const next = data.pitch as PitchPayload;
-      setPitch(next);
-      setName(next.name);
-      setPrompt(next.prompt);
-      setSlides(next.slides);
-      setLive(next.live);
-      setOrganizationId(next.organizationId ?? null);
-      setOrganizationName(next.organizationName ?? null);
-      setActiveId((current) => (next.slides.some((slide) => slide.id === current) ? current : next.slides[0]?.id ?? null));
-      setStatus(reset ? "Reset." : "Saved.");
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
+    };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [id]);
 
   async function toggleLive() {
     setSaving(true);
@@ -339,19 +431,11 @@ export default function PitchEditor({ id }: { id: string }) {
         body: file,
       });
       if (!put.ok) throw new Error("Upload failed");
-      const next = (slides ?? []).map((item) =>
+      const next = (slidesRef.current ?? []).map((item) =>
         item.id === slide.id ? { ...item, image: prep.upload.publicUrl as string } : item
       );
+      slidesRef.current = next;
       setSlides(next);
-      const res = await fetch(`/api/pitches/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slides: next, name, prompt }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-      setSlides((data.pitch as PitchPayload).slides);
-      setStatus("Saved.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -418,14 +502,30 @@ export default function PitchEditor({ id }: { id: string }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--csc-row-divider)] pb-3">
-        <SettingsButton variant="primary" disabled={saving} onClick={() => save(false)}>
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b border-[var(--csc-row-divider)] bg-black py-3">
+        <SettingsButton
+          variant="primary"
+          disabled={saving}
+          onClick={() => {
+            if (saveTimer.current !== null) {
+              window.clearTimeout(saveTimer.current);
+              saveTimer.current = null;
+            }
+            void saveDraft(false);
+          }}
+        >
           Save
         </SettingsButton>
         <SettingsButton
           disabled={saving}
           title={pitch.builtin ? "Return to the original deck" : "Rebuild the sections from the prompt"}
-          onClick={() => save(true)}
+          onClick={() => {
+            if (saveTimer.current !== null) {
+              window.clearTimeout(saveTimer.current);
+              saveTimer.current = null;
+            }
+            void saveDraft(true);
+          }}
         >
           Reset
         </SettingsButton>
