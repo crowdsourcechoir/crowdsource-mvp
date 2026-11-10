@@ -3,6 +3,7 @@ export type QueueScope = (typeof QUEUE_SCOPES)[number];
 
 export const QUEUE_SCOPE_CHIPS: { key: QueueScope; label: string }[] = [
   { key: "to_send", label: "To send" },
+  // Follow-ups and nudges are the same filter: scope "due" includes every pending nudge.
   { key: "due", label: "Follow-ups" },
   { key: "all", label: "All" },
 ];

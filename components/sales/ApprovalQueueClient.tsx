@@ -587,15 +587,15 @@ export default function ApprovalQueueClient() {
       const queueItemId = (data as { queueItemId?: string }).queueItemId;
       if (!queueItemId) throw new Error("Follow-up drafted but no queue item returned");
       showCopyStatus("Follow-up draft ready — review and send.");
-      // Jump to the new pending nudge under To send (clear stage filter).
+      // Nudges and follow-ups are the same list.
       const params = new URLSearchParams(searchParams.toString());
       params.delete("funnel");
-      params.delete("scope");
+      params.set("scope", "due");
       params.set("item", queueItemId);
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
       setJumpToQueueItemId(queueItemId);
-      if (funnel === "all" && scope === "to_send") {
+      if (funnel === "all" && scope === "due") {
         await load();
       }
     } catch (err) {
@@ -1036,7 +1036,7 @@ export default function ApprovalQueueClient() {
               >
                 <span className="min-w-0 flex-1 truncate">
                   <span className="block truncate font-medium">
-                    {item.queueItem.kind === "nudge" && <span className="mr-1 text-amber-400">Nudge · </span>}
+                    {item.queueItem.kind === "nudge" && <span className="mr-1 text-amber-400">Follow-up · </span>}
                     {item.organizationName}
                   </span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
@@ -1107,7 +1107,7 @@ export default function ApprovalQueueClient() {
               <h2 className="text-xl font-semibold text-white">
                 {current.queueItem.kind === "nudge" && (
                   <span className="mr-2 rounded-md border border-amber-700 px-2 py-0.5 text-xs font-medium text-amber-300">
-                    Nudge
+                    Follow-up
                   </span>
                 )}
                 {current.organization.name}
