@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { PitchText } from "@/components/pitch/PitchText";
+import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { plainPitchText } from "@/lib/pitches/rich-text";
 import {
   exitDeckFullscreen,
@@ -77,11 +78,14 @@ function Block({
   block,
   display,
   footer = false,
+  previous,
 }: {
   block: CopyBlock;
   display: string;
   footer?: boolean;
+  previous?: CopyBlock["type"];
 }) {
+  const follow = pitchFollowMargin(block.type, previous, footer);
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-5xl text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
@@ -98,7 +102,7 @@ function Block({
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h3 className={`${display} ${follow} flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.22em] h-[0.38em] w-[0.38em] shrink-0 bg-[#CFFF81]" />
         <span>
           <PitchText text={block.text} />
@@ -108,7 +112,7 @@ function Block({
   }
   if (block.type === "heading3") {
     return (
-      <h4 className={`mt-3 flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h4 className={`${follow} flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.45em] h-[0.28em] w-[0.28em] shrink-0 rounded-full bg-[#CFFF81]" />
         <span>
           <PitchText text={block.text} />
@@ -132,7 +136,11 @@ function Block({
   }
   if (block.type === "paragraph") {
     return (
-      <p className={`max-w-3xl text-base leading-relaxed sm:text-lg${weight(block)} ${footer ? "text-white/85" : "mt-5"}`}>
+      <p
+        className={`max-w-3xl text-base sm:text-lg${weight(block)} ${previous === "heading2" ? "leading-snug" : "leading-relaxed"} ${
+          footer ? "text-white/85" : follow
+        }`}
+      >
         <PitchText text={block.text} />
       </p>
     );
@@ -193,6 +201,7 @@ function SlideCopy({
   return (
     <div>
       {slide.blocks.map((block, blockIndex) => {
+        const previous = slide.blocks[blockIndex - 1]?.type;
         if (punch && blockIndex === punch.index) {
           if (!punch.before) return null;
           return (
@@ -205,7 +214,7 @@ function SlideCopy({
         }
         return (
           <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-            <Block block={block} display={display} />
+            <Block block={block} display={display} previous={previous} />
           </div>
         );
       })}

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { CopyBlock, PitchSlide } from "./content";
 import { PitchText } from "@/components/pitch/PitchText";
+import { pitchFollowMargin } from "@/lib/pitches/block-space";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 const CLOSING_COLOR = "#CFFF81";
@@ -44,7 +45,18 @@ function weight(block: { bold?: boolean }): string {
   return block.bold ? " font-bold" : "";
 }
 
-function Block({ block, display, footer = false }: { block: CopyBlock; display: string; footer?: boolean }) {
+function Block({
+  block,
+  display,
+  footer = false,
+  previous,
+}: {
+  block: CopyBlock;
+  display: string;
+  footer?: boolean;
+  previous?: CopyBlock["type"];
+}) {
+  const follow = pitchFollowMargin(block.type, previous, footer);
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-6xl text-6xl leading-[0.9] tracking-wide sm:text-8xl${weight(block)}`}>
@@ -61,7 +73,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h3 className={`${display} ${follow} flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.22em] h-[0.38em] w-[0.38em] shrink-0 bg-[#CFFF81]" />
         <span>
           <PitchText text={block.text} />
@@ -71,7 +83,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   }
   if (block.type === "heading3") {
     return (
-      <h4 className={`mt-3 flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h4 className={`${follow} flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.45em] h-[0.28em] w-[0.28em] shrink-0 rounded-full bg-[#CFFF81]" />
         <span>
           <PitchText text={block.text} />
@@ -104,7 +116,11 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   }
   if (block.type === "paragraph") {
     return (
-      <p className={`mt-5 max-w-3xl text-base leading-relaxed sm:text-lg${weight(block)}`}>
+      <p
+        className={`${footer ? "" : follow} max-w-3xl text-base sm:text-lg${weight(block)} ${
+          previous === "heading2" ? "leading-snug" : "leading-relaxed"
+        }`}
+      >
         <PitchText text={block.text} />
       </p>
     );
@@ -252,7 +268,7 @@ export default function PitchDeck({
                   <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="h-10 w-auto sm:h-12" />
                 </a>
                 {(slide.id === "title" ? slide.blocks.filter((block) => block.type === "title" || block.type === "kicker") : slide.blocks).map(
-                  (block, blockIndex) => (
+                  (block, blockIndex, blocks) => (
                     <div key={`${slide.id}-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${blockIndex * 70}ms` }}>
                       {closing && blockIndex === closing.index ? (
                         <>
@@ -262,7 +278,7 @@ export default function PitchDeck({
                           <ClosingLine text={closing.last} display={displayClass} />
                         </>
                       ) : (
-                        <Block block={block} display={displayClass} />
+                        <Block block={block} display={displayClass} previous={blocks[blockIndex - 1]?.type} />
                       )}
                     </div>
                   ),
@@ -272,9 +288,9 @@ export default function PitchDeck({
                 <div className="max-w-3xl pb-4">
                   {slide.blocks
                     .filter((block) => block.type === "line" || block.type === "paragraph" || block.type === "heading2" || block.type === "heading3")
-                    .map((block, blockIndex) => (
+                    .map((block, blockIndex, blocks) => (
                       <div key={`${slide.id}-foot-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${200 + blockIndex * 80}ms` }}>
-                        <Block block={block} display={displayClass} footer />
+                        <Block block={block} display={displayClass} footer previous={blocks[blockIndex - 1]?.type} />
                       </div>
                     ))}
                 </div>
