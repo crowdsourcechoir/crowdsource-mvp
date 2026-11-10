@@ -6,28 +6,11 @@ export type DeckStep = { index: number; revealed: boolean };
 
 const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "heading3", "paragraph", "line"]);
 
-export function splitLastSentence(text: string): { before: string; last: string } {
-  const trimmed = text.trim();
-  const parts = trimmed.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ?? [];
-  if (parts.length <= 1) return { before: "", last: trimmed };
-  const last = parts[parts.length - 1];
-  const before = trimmed.slice(0, trimmed.length - last.length).trim();
-  return { before, last };
-}
-
-/** The line held for a second click. A line block wins. Otherwise the last sentence. */
+/** The line held for a second click. Only a line block. A paragraph stays a paragraph. */
 export function punchCopy(blocks: CopyBlock[]): { index: number; before: string; text: string } | null {
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
     if (block.type === "line" && block.text.trim()) return { index, before: "", text: block.text.trim() };
-  }
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (block.type === "image") continue;
-    if (block.type !== "paragraph") return null;
-    const { before, last } = splitLastSentence(block.text);
-    if (!last) return null;
-    return { index, before, text: last };
   }
   return null;
 }

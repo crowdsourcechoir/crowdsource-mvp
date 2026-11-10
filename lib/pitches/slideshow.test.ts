@@ -24,11 +24,13 @@ assert.equal(punchCopy(withLine)?.text, "The potential is already in the room.")
 assert.equal(punchCopy(withLine)?.index, 2);
 
 const sentence: CopyBlock[] = [
-  { type: "heading", text: "Your audience is your greatest untapped creative resource." },
-  { type: "paragraph", text: "What happens when you invite them to create something together?" },
-  { type: "paragraph", text: "You unlock a different level of engagement, connection, and ownership." },
+  { type: "heading2", text: "Live facilitation" },
+  {
+    type: "paragraph",
+    text: "Lead an accessible, high-energy experience with live music and lyric projection.",
+  },
 ];
-assert.equal(punchCopy(sentence)?.text, "You unlock a different level of engagement, connection, and ownership.");
+assert.equal(punchCopy(sentence), null);
 assert.equal(punchCopy([{ type: "heading", text: "Participation changes the equation." }, { type: "table", headers: ["A"], rows: [["B"]] }]), null);
 assert.equal(
   punchCopy([
