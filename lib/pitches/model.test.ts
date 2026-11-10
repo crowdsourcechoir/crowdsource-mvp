@@ -5,7 +5,6 @@ import {
   acceptSlides,
   applyPassword,
   applyPitchPatch,
-  acceptSlides,
   createCustomPitch,
   duplicatePitch,
   findLoadedPitch,
@@ -282,6 +281,27 @@ const droppedPace = acceptSlides([
   },
 ]);
 assert.equal(droppedPace?.[0]?.reveal, undefined);
+
+const graded = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlay: "salmon",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(graded?.[0]?.photoOverlay, "salmon");
+const droppedGrade = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlay: "blue",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(droppedGrade?.[0]?.photoOverlay, undefined);
 
 const junk = normalizeWebPitches({
   overrides: { "not-a-pitch": { live: false }, [INITIAL_MEETING_ID]: { live: false, prompt: "  kept  " } },
