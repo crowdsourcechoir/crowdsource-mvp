@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { PitchText } from "@/components/pitch/PitchText";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
+import { evenFitScale } from "@/lib/pitches/fit-copy";
 import { plainPitchText } from "@/lib/pitches/rich-text";
 import {
   exitDeckFullscreen,
@@ -88,23 +89,23 @@ function Block({
   const follow = pitchFollowMargin(block.type, previous, footer);
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-5xl text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
+      <h1 className={`${display} max-w-full break-words text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-5xl text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
+      <h2 className={`${display} max-w-full break-words text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h2>
     );
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} ${follow} flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
-        <span aria-hidden="true" className="mt-[0.22em] h-[0.38em] w-[0.38em] shrink-0 bg-[#CFFF81]" />
-        <span>
+      <h3 className={`${display} ${follow} flex max-w-full items-stretch gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+        <span aria-hidden="true" className="w-0.5 shrink-0 self-stretch bg-[#CFFF81]" />
+        <span className="min-w-0 break-words">
           <PitchText text={block.text} />
         </span>
       </h3>
@@ -114,7 +115,7 @@ function Block({
     return (
       <h4 className={`${follow} flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.45em] h-[0.28em] w-[0.28em] shrink-0 rounded-full bg-[#CFFF81]" />
-        <span>
+        <span className="min-w-0 break-words">
           <PitchText text={block.text} />
         </span>
       </h4>
@@ -129,7 +130,7 @@ function Block({
   }
   if (block.type === "line") {
     return (
-      <p className={`${display} mt-8 max-w-3xl text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl${weight(block)}`}>
+      <p className={`${display} mt-8 max-w-full break-words text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl${weight(block)}`}>
         <PitchText text={block.text} />
       </p>
     );
@@ -137,7 +138,7 @@ function Block({
   if (block.type === "paragraph") {
     return (
       <p
-        className={`max-w-3xl text-base sm:text-lg${weight(block)} ${previous === "heading2" ? "leading-snug" : "leading-relaxed"} ${
+        className={`max-w-full break-words text-base sm:text-lg${weight(block)} ${previous === "heading2" ? "pl-4 leading-snug" : "leading-relaxed"} ${
           footer ? "text-white/85" : follow
         }`}
       >
@@ -186,6 +187,42 @@ function Block({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function FitCopy({ children, watch, color }: { children: ReactNode; watch: string; color?: string }) {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    const box = boxRef.current;
+    if (!frame || !box) return;
+
+    const apply = () => {
+      if (!frame.isConnected || !box.isConnected) return;
+      box.style.transform = "none";
+      const scale = evenFitScale(frame.clientWidth, frame.clientHeight, box.scrollWidth, box.scrollHeight);
+      box.style.transformOrigin = "top left";
+      box.style.transform = scale < 0.999 ? `scale(${scale})` : "none";
+    };
+
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(frame);
+    const fonts = document.fonts?.ready.then(apply);
+    return () => {
+      observer.disconnect();
+      void fonts;
+    };
+  }, [watch]);
+
+  return (
+    <div ref={frameRef} data-slide-copy className="min-h-0 min-w-0 flex-1 overflow-hidden" style={{ color }}>
+      <div ref={boxRef} className="w-full">
+        {children}
+      </div>
     </div>
   );
 }
@@ -512,7 +549,7 @@ export default function PitchSlideshow({
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
-      <div className="relative z-10 flex h-full flex-col px-6 pb-24 pt-8 sm:px-24 sm:pb-28 sm:pt-10">
+      <div className="relative z-10 flex h-full min-w-0 flex-col px-6 pb-24 pt-8 sm:px-16 sm:pb-28 sm:pt-10 lg:px-24">
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <div className="flex items-center gap-1 sm:gap-2">
@@ -599,24 +636,19 @@ export default function PitchSlideshow({
             <p className="ml-1 text-[11px] uppercase tracking-[0.28em] text-white/80 sm:ml-2">{label}</p>
           </div>
         </div>
-        <div
-          key={slide.id}
-          data-slide-copy
-          className="min-h-0 flex-1 overflow-y-auto pr-1"
-          style={{ color: slide.copyColor || "#FFFFFF" }}
-        >
+        <FitCopy watch={`${slide.id}:${revealed}`} color={slide.copyColor || "#FFFFFF"}>
           <SlideCopy slide={slide} display={displayClass} />
-        </div>
+          {revealed && punchCopy(slide.blocks) ? (
+            <p
+              key={`${slide.id}-punch`}
+              className={`${displayClass} punch-in mt-8 max-w-full break-words text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:text-4xl`}
+            >
+              {plainPitchText(punchCopy(slide.blocks)?.text ?? "")}
+            </p>
+          ) : null}
+        </FitCopy>
       </div>
 
-      {revealed && slide && punchCopy(slide.blocks) ? (
-        <p
-          key={`${slide.id}-punch`}
-          className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
-        >
-          {plainPitchText(punchCopy(slide.blocks)?.text ?? "")}
-        </p>
-      ) : null}
       {playNote ? (
         <p className="absolute bottom-14 left-1/2 z-30 w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 bg-black/85 px-3 py-2 text-center text-xs text-[#CFFF81]">
           {playNote}
