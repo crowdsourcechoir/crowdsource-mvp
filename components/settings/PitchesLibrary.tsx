@@ -14,6 +14,7 @@ type PitchRow = {
   protected: boolean;
   href: string;
   builtin: boolean;
+  organizationName: string | null;
 };
 
 export default function PitchesLibrary() {
@@ -137,6 +138,9 @@ export default function PitchesLibrary() {
                     {pitch.protected ? "Password" : "Public"}
                   </StatusPill>
                   <span className="text-xs text-gray-500">{pitch.href}</span>
+                  {pitch.organizationName ? (
+                    <span className="text-xs text-[var(--csc-accent)]">{pitch.organizationName}</span>
+                  ) : null}
                 </span>
               </Link>
               <div className="flex shrink-0 flex-wrap gap-2">

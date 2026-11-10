@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import FollowUpControls from "@/components/sales/FollowUpControls";
 import OrgAttachmentsPanel from "@/components/sales/OrgAttachmentsPanel";
+import OrgPitches from "@/components/sales/OrgPitches";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import type { Organization, Opportunity } from "@/lib/sales/types";
 
@@ -297,6 +298,7 @@ export default function QueueOrgWorkspace({
             </button>
           </div>
         )}
+        <OrgPitches organizationId={organization.id} organizationName={organization.name} />
       </div>
 
       <div className="flex h-full min-w-0 flex-col">

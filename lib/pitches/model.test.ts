@@ -37,6 +37,26 @@ if ("error" in created) throw new Error("create failed");
 assert.equal(created.pitch.slug, "harbor-pitch");
 assert.equal(created.pitch.live, true);
 assert.equal(created.pitch.passwordHash, null);
+assert.equal(created.pitch.organizationId, null);
+
+const orgId = "11111111-1111-4111-8111-111111111111";
+const linked = createCustomPitch(
+  empty,
+  { name: "Harbor pitch", prompt: "Invite the room to sing the mission.", live: false, passwordHash: null, organizationId: orgId.toUpperCase() },
+  { id: "pitch_org1", now: "2026-11-05T00:00:00.000Z" }
+);
+assert.ok(!("error" in linked));
+if ("error" in linked) throw new Error("org create failed");
+assert.equal(linked.pitch.organizationId, orgId);
+const badOrg = createCustomPitch(
+  empty,
+  { name: "Harbor pitch", prompt: "Invite the room to sing the mission.", live: true, passwordHash: null, organizationId: "not-an-org" },
+  { id: "pitch_org2", now: "2026-11-05T00:00:00.000Z" }
+);
+assert.equal("error" in badOrg && badOrg.error, "Choose an organization from search.");
+const kept = normalizeWebPitches({ custom: [linked.pitch, { ...linked.pitch, id: "pitch_org3", slug: "other", organizationId: "nope" }] });
+assert.equal(kept.custom.find((pitch) => pitch.id === "pitch_org1")?.organizationId, orgId);
+assert.equal(kept.custom.find((pitch) => pitch.id === "pitch_org3")?.organizationId, null);
 
 const missingPrompt = createCustomPitch(empty, { name: "Harbor", prompt: "  ", live: true, passwordHash: null }, { id: "pitch_abcd", now: "2026-11-05T00:00:00.000Z" });
 assert.equal("error" in missingPrompt && missingPrompt.error, "Prompt is required.");
@@ -52,6 +72,15 @@ assert.deepEqual(listed.map((pitch) => pitch.id), [SOBECA_PITCH_ID, INITIAL_MEET
 assert.equal(listed[1]?.name, "Initial Meeting Deck");
 assert.equal(listed[1]?.live, true);
 assert.equal(listed[1]?.href, "/pitch/initial-meeting");
+assert.equal(listed[1]?.organizationId, null);
+const assigned = applyPitchPatch(empty, listed[1]!, { organizationId: orgId }, "2026-11-05T03:00:00.000Z");
+assert.ok(!("error" in assigned));
+if ("error" in assigned) throw new Error("assign failed");
+assert.equal(findLoadedPitch(assigned.state, INITIAL_MEETING_ID, sobeca)?.organizationId, orgId);
+const cleared = applyPitchPatch(assigned.state, assigned.pitch, { organizationId: null }, "2026-11-05T04:00:00.000Z");
+assert.ok(!("error" in cleared));
+if ("error" in cleared) throw new Error("clear failed");
+assert.equal(findLoadedPitch(cleared.state, INITIAL_MEETING_ID, sobeca)?.organizationId, null);
 assert.equal(listed[1]?.slides.length, initialMeetingSlides.length);
 assert.equal(toAdmin(listed[1]!).protected, false);
 assert.equal("passwordHash" in toAdmin(listed[1]!), false);

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { signedInOwner } from "@/lib/operators/current";
-import { loadPitch, updatePitch } from "@/lib/pitches/service";
-import { toAdmin } from "@/lib/pitches/model";
+import { loadPitchAdmin, updatePitch } from "@/lib/pitches/service";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +15,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
   if (!knownId(params.id)) return NextResponse.json({ error: "That pitch was not found." }, { status: 404 });
-  const pitch = await loadPitch(params.id);
+  const pitch = await loadPitchAdmin(params.id);
   if (!pitch || pitch.id !== params.id) {
     return NextResponse.json({ error: "That pitch was not found." }, { status: 404 });
   }
-  return NextResponse.json({ pitch: toAdmin(pitch) }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ pitch }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
@@ -34,6 +33,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     live?: unknown;
     slides?: unknown;
     reset?: boolean;
+    organizationId?: unknown;
   };
   const updated = await updatePitch(params.id, {
     name: typeof body.name === "string" ? body.name : undefined,
@@ -41,6 +41,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     live: typeof body.live === "boolean" ? body.live : undefined,
     slides: Array.isArray(body.slides) ? body.slides : undefined,
     reset: body.reset === true,
+    organizationId:
+      body.organizationId === null ? null : typeof body.organizationId === "string" ? body.organizationId : undefined,
   });
   if (!updated.pitch) {
     return NextResponse.json({ error: updated.error ?? "Could not save the pitch." }, { status: updated.status });
