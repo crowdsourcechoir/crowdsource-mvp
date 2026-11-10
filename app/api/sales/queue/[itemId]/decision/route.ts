@@ -16,6 +16,8 @@ import { createOutreachFeedback } from "@/lib/sales/db/feedback";
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { sendGmailMessage, getGmailRfcMessageId } from "@/lib/sales/gmail/send";
 import { addDaysIso, NUDGE_DUE_AFTER_DAYS } from "@/lib/sales/gmail/constants";
+import { coerceFollowUpIso } from "@/lib/sales/follow-up/meeting-reminder";
+import { maybeScheduleMeetingReminder } from "@/lib/sales/calendar/meeting-reminder";
 import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { draftToPlainText, coalesceDraftBody } from "@/lib/sales/outreach/email-body-format";
 import { isSendableContact } from "@/lib/sales/dedupe";
@@ -325,7 +327,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
 
       if (gmailSend) {
         const now = new Date().toISOString();
-        await createOutreachActivity({
+        const sentActivity = await createOutreachActivity({
           opportunityId: item.opportunityId,
           contactId: draft?.contactId ?? null,
           activityType: "sent",
@@ -334,9 +336,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           gmailMessageId: gmailSend.messageId,
           gmailThreadId: gmailSend.threadId,
         });
+        let importMetadata = opportunity.importMetadata;
+        try {
+          const scheduled = await maybeScheduleMeetingReminder({
+            opportunityId: item.opportunityId,
+            activityId: sentActivity.id,
+            gmailMessageId: gmailSend.messageId,
+            gmailThreadId: gmailSend.threadId,
+            contactId: draft?.contactId ?? null,
+            subject: finalSubject,
+            body: draftToPlainText(finalBody),
+            occurredAt: now,
+            fetchBody: false,
+          });
+          if (scheduled.importMetadata) importMetadata = scheduled.importMetadata;
+        } catch (err) {
+          console.warn("[queue-decision] meeting reminder skipped:", err instanceof Error ? err.message : err);
+        }
         await updateOpportunityTouchTimestamps(item.opportunityId, {
           lastOutboundAt: now,
-          nextFollowUpAt: addDaysIso(now, NUDGE_DUE_AFTER_DAYS),
+          nextFollowUpAt: coerceFollowUpIso({
+            proposedIso: addDaysIso(now, NUDGE_DUE_AFTER_DAYS),
+            importMetadata,
+          }),
           gmailThreadId: gmailSend.threadId,
         });
       }

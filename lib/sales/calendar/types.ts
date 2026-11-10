@@ -43,4 +43,10 @@ export type CalendarSyncResult = {
   window: { timeMin: string; timeMax: string };
   lastSyncedAt: string;
   error?: string;
+  meetingReminders?: {
+    scanned: number;
+    scheduled: number;
+    deferredNudges: number;
+    errors: string[];
+  };
 };

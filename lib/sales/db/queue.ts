@@ -588,6 +588,30 @@ export async function decideQueueItem(
   return rowToQueueItem(data);
 }
 
+/** Pending nudge drafts leave the queue once the thread is a future calendar reminder. */
+export async function deferPendingNudgesForOpportunity(opportunityId: string, note: string): Promise<number> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .select("id")
+    .eq("opportunity_id", opportunityId)
+    .eq("kind", "nudge")
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+  let deferred = 0;
+  for (const row of data ?? []) {
+    const id = row.id as string;
+    if (!id) continue;
+    await decideQueueItem(id, {
+      status: "deferred",
+      decisionNotes: note,
+      decidedBy: "meeting_reminder",
+    });
+    deferred += 1;
+  }
+  return deferred;
+}
+
 /** Put a decided queue row back to pending so multi-contact outreach can continue. */
 export async function reopenQueueItem(id: string): Promise<ApprovalQueueItem> {
   const db = requireSupabaseAdmin();

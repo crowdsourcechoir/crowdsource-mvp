@@ -5,12 +5,17 @@ import {
   CALENDAR_PRIMARY_ID,
   CALENDAR_SYNC_NEXT_DAYS,
   CALENDAR_SYNC_PAST_DAYS,
+  MEETING_REMINDER_PROP,
   hasCalendarWriteScope,
 } from "./constants";
+import { backfillMeetingReminders } from "./meeting-reminder";
 import { matchMeetingAttendees } from "./match";
 import { EMPTY_CALENDAR_STORE, writeCalendarStore } from "./store";
 import type { CalendarSyncResult, SyncedCalendarEvent } from "./types";
 import { readBloomCalendarIds } from "@/lib/events/bloom-calendar-ids";
+import { getOpportunity } from "../db/opportunities";
+import { getOrganization } from "../db/organizations";
+import { parseMeetingReminderProperty, readMeetingReminders } from "../follow-up/meeting-reminder";
 
 function eventInstant(
   slot: calendar_v3.Schema$EventDateTime | null | undefined
@@ -72,6 +77,30 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
   let cancelled = 0;
   const bloomIds = await readBloomCalendarIds();
   const googleIdToBloomId = new Map(Object.entries(bloomIds).map(([bloomId, gId]) => [gId, bloomId]));
+  const reminderLinks = new Map<
+    string,
+    { organizationId: string; organizationName: string | null; contactId: string | null; contactName: string | null } | null
+  >();
+
+  async function reminderLink(opportunityId: string, date: string) {
+    const cacheKey = `${opportunityId}:${date}`;
+    if (reminderLinks.has(cacheKey)) return reminderLinks.get(cacheKey) ?? null;
+    const opportunity = await getOpportunity(opportunityId);
+    if (!opportunity) {
+      reminderLinks.set(cacheKey, null);
+      return null;
+    }
+    const organization = await getOrganization(opportunity.organizationId);
+    const stored = readMeetingReminders(opportunity.importMetadata).find((item) => item.date === date) ?? null;
+    const linked = {
+      organizationId: opportunity.organizationId,
+      organizationName: organization?.name ?? null,
+      contactId: stored?.contactId ?? null,
+      contactName: stored?.contactName ?? null,
+    };
+    reminderLinks.set(cacheKey, linked);
+    return linked;
+  }
 
   try {
     do {
@@ -106,6 +135,8 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
         const bloomIdFromProp = item.extendedProperties?.private?.[BLOOM_CALENDAR_PROP] ?? null;
         const bloomId = bloomIdFromProp || googleIdToBloomId.get(item.id) || null;
         const isBloom = Boolean(bloomId);
+        const reminderKey = parseMeetingReminderProperty(item.extendedProperties?.private?.[MEETING_REMINDER_PROP]);
+        const linked = reminderKey ? await reminderLink(reminderKey.opportunityId, reminderKey.date) : null;
 
         events.push({
           googleEventId: item.id,
@@ -121,13 +152,13 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
           allDay: start.allDay,
           organizerEmail: item.organizer?.email ?? null,
           attendeeEmails,
-          contactId: match.contactId,
-          contactName: match.contactName,
+          contactId: match.contactId ?? linked?.contactId ?? null,
+          contactName: match.contactName ?? linked?.contactName ?? null,
           contactEmail: match.contactEmail,
-          organizationId: match.organizationId,
-          organizationName: match.organizationName,
-          opportunityId: match.opportunityId,
-          matchStatus: isBloom ? "self_only" : match.matchStatus,
+          organizationId: linked?.organizationId ?? match.organizationId,
+          organizationName: linked?.organizationName ?? match.organizationName,
+          opportunityId: linked ? reminderKey?.opportunityId ?? match.opportunityId : match.opportunityId,
+          matchStatus: isBloom ? "self_only" : linked ? "matched" : match.matchStatus,
           syncedAt,
           source: isBloom ? "bloom" : "google",
           bloomId,
@@ -166,7 +197,9 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
     events,
   });
 
-  // When Calendar write is granted, push Blooms in the window onto Google if missing.
+  let meetingReminders: CalendarSyncResult["meetingReminders"];
+  // When Calendar write is granted, push Blooms in the window onto Google if missing,
+  // and turn recent "let's meet in December" threads into private calendar reminders.
   if (hasCalendarWriteScope(bundle.scopes)) {
     try {
       const { syncBloomsInCalendarWindow } = await import("@/lib/events/bloom-calendar-backfill");
@@ -174,6 +207,23 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
     } catch (err) {
       console.warn("[calendar-sync] bloom backfill skipped:", err);
     }
+    try {
+      meetingReminders = await backfillMeetingReminders();
+    } catch (err) {
+      meetingReminders = {
+        scanned: 0,
+        scheduled: 0,
+        deferredNudges: 0,
+        errors: [err instanceof Error ? err.message : "Meeting reminder backfill failed"],
+      };
+    }
+  } else {
+    meetingReminders = {
+      scanned: 0,
+      scheduled: 0,
+      deferredNudges: 0,
+      errors: ["Reconnect Google and allow Calendar so meeting reminders can be created."],
+    };
   }
 
   return {
@@ -184,5 +234,6 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
     window: { timeMin, timeMax },
     lastSyncedAt: syncedAt,
     error: written.error ?? undefined,
+    meetingReminders,
   };
 }
