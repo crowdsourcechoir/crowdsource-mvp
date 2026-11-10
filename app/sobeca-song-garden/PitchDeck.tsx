@@ -71,8 +71,11 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
   }
   if (block.type === "heading3") {
     return (
-      <h4 className={`mt-5 max-w-5xl text-3xl leading-snug tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
-        <PitchText text={block.text} />
+      <h4 className={`mt-3 flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
+        <span aria-hidden="true" className="mt-[0.45em] h-[0.28em] w-[0.28em] shrink-0 rounded-full bg-[#CFFF81]" />
+        <span>
+          <PitchText text={block.text} />
+        </span>
       </h4>
     );
   }
