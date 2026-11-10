@@ -4,7 +4,7 @@ export type SlideGesture = "next" | "prev" | "none";
 
 export type DeckStep = { index: number; revealed: boolean };
 
-const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "paragraph", "line"]);
+const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "heading3", "paragraph", "line"]);
 
 export function splitLastSentence(text: string): { before: string; last: string } {
   const trimmed = text.trim();

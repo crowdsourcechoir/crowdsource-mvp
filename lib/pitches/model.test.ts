@@ -81,6 +81,12 @@ const pointed = mergeSlides(meeting.slides, [
 ]);
 const pointedAudience = pointed.find((slide) => slide.id === "audience");
 assert.equal(pointedAudience?.blocks[1]?.type, "heading2");
+const mono = mergeSlides(meeting.slides, [
+  { id: "audience", blocks: [{}, { type: "heading3", text: "Stories. **Hopes.**", bold: true }] },
+]);
+const monoAudience = mono.find((slide) => slide.id === "audience");
+assert.equal(monoAudience?.blocks[1]?.type, "heading3");
+assert.equal(monoAudience?.blocks[1] && "bold" in monoAudience.blocks[1] ? monoAudience.blocks[1].bold : false, true);
 assert.equal(
   pointedAudience?.blocks[1] && "text" in pointedAudience.blocks[1] ? pointedAudience.blocks[1].text : "",
   "The room writes the song."

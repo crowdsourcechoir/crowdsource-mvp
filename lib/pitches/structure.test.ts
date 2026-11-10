@@ -68,6 +68,28 @@ const points = addTextBlock(start, "title", "heading2");
 if ("error" in points) throw new Error(points.error);
 assert.equal(points.slides[0]?.blocks.at(-1)?.type, "heading2");
 assert.equal(acceptSlides(points.slides)?.[0]?.blocks.at(-1)?.type, "heading2");
+const mono = addTextBlock(start, "title", "heading3");
+if ("error" in mono) throw new Error(mono.error);
+const withBold = {
+  ...mono,
+  slides: mono.slides.map((slide, index) =>
+    index === 0
+      ? {
+          ...slide,
+          blocks: slide.blocks.map((block, blockIndex) =>
+            blockIndex === slide.blocks.length - 1 && block.type === "heading3"
+              ? { ...block, text: "Stories. **Hopes.**", bold: true as const }
+              : block
+          ),
+        }
+      : slide
+  ),
+};
+const saved = acceptSlides(withBold.slides);
+const heading3 = saved?.[0]?.blocks.at(-1);
+assert.equal(heading3?.type, "heading3");
+assert.equal(heading3 && "bold" in heading3 ? heading3.bold : false, true);
+assert.equal(heading3 && "text" in heading3 ? heading3.text : "", "Stories. **Hopes.**");
 const shifted = moveBlock(text.slides, "title", 1, -1);
 if ("error" in shifted) throw new Error(shifted.error);
 assert.equal(shifted.slides[0]?.blocks[0]?.type, "line");
