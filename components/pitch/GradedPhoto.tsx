@@ -31,9 +31,9 @@ export function GradedPhoto({
               values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0"
             />
             <feComponentTransfer>
-              <feFuncR type="table" tableValues="0.50 0.92 1" />
-              <feFuncG type="table" tableValues="0.14 0.36 0.86" />
-              <feFuncB type="table" tableValues="0.28 0.48 0.50" />
+              <feFuncR type="table" tableValues="0.48 0.90 1" />
+              <feFuncG type="table" tableValues="0.12 0.34 0.84" />
+              <feFuncB type="table" tableValues="0.32 0.62 0.52" />
             </feComponentTransfer>
           </filter>
         </svg>
