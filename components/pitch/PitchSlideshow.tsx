@@ -89,21 +89,21 @@ function Block({
   const follow = pitchFollowMargin(block.type, previous, footer);
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-full break-words text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
+      <h1 className={`${display} max-w-5xl break-words text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-full break-words text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
+      <h2 className={`${display} max-w-5xl break-words text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h2>
     );
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} ${follow} flex max-w-full items-stretch gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h3 className={`${display} ${follow} flex max-w-4xl items-stretch gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="w-0.5 shrink-0 self-stretch bg-[#CFFF81]" />
         <span className="min-w-0 break-words">
           <PitchText text={block.text} />
@@ -130,7 +130,7 @@ function Block({
   }
   if (block.type === "line") {
     return (
-      <p className={`${display} mt-8 max-w-full break-words text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl${weight(block)}`}>
+      <p className={`${display} mt-8 max-w-4xl break-words text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl${weight(block)}`}>
         <PitchText text={block.text} />
       </p>
     );
@@ -138,7 +138,7 @@ function Block({
   if (block.type === "paragraph") {
     return (
       <p
-        className={`max-w-full break-words text-base sm:text-lg${weight(block)} ${previous === "heading2" ? "pl-4 leading-snug" : "leading-relaxed"} ${
+        className={`max-w-3xl break-words text-base sm:text-lg${weight(block)} ${previous === "heading2" ? "pl-4 leading-snug" : "leading-relaxed"} ${
           footer ? "text-white/85" : follow
         }`}
       >
@@ -549,7 +549,7 @@ export default function PitchSlideshow({
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
-      <div className="relative z-10 flex h-full min-w-0 flex-col px-6 pb-24 pt-8 sm:px-16 sm:pb-28 sm:pt-10 lg:px-24">
+      <div className={`relative z-10 flex h-full min-w-0 flex-col px-6 pt-8 sm:px-24 sm:pt-10 ${revealed && punchCopy(slide.blocks) ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <div className="flex items-center gap-1 sm:gap-2">
@@ -638,16 +638,17 @@ export default function PitchSlideshow({
         </div>
         <FitCopy watch={`${slide.id}:${revealed}`} color={slide.copyColor || "#FFFFFF"}>
           <SlideCopy slide={slide} display={displayClass} />
-          {revealed && punchCopy(slide.blocks) ? (
-            <p
-              key={`${slide.id}-punch`}
-              className={`${displayClass} punch-in mt-8 max-w-full break-words text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:text-4xl`}
-            >
-              {plainPitchText(punchCopy(slide.blocks)?.text ?? "")}
-            </p>
-          ) : null}
         </FitCopy>
       </div>
+
+      {revealed && punchCopy(slide.blocks) ? (
+        <p
+          key={`${slide.id}-punch`}
+          className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
+        >
+          {plainPitchText(punchCopy(slide.blocks)?.text ?? "")}
+        </p>
+      ) : null}
 
       {playNote ? (
         <p className="absolute bottom-14 left-1/2 z-30 w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 bg-black/85 px-3 py-2 text-center text-xs text-[#CFFF81]">
