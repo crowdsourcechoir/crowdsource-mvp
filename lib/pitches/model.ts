@@ -43,6 +43,8 @@ export type LoadedPitch = Omit<PitchAdmin, "protected" | "organizationName"> & {
 export type PitchOverride = {
   name?: string;
   prompt?: string;
+  /** Public address segment. The page is /pitch/{slug}, except SoBECA's own path. */
+  slug?: string;
   live?: boolean;
   slides?: PitchSlide[] | null;
   passwordHash?: string | null;
@@ -82,6 +84,37 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
   return slug || "pitch";
+}
+
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Public path for a pitch. SoBECA keeps its own page until its address is changed. */
+export function hrefForPitch(id: string, slug: string): string {
+  if (id === SOBECA_PITCH_ID && slug === SOBECA_PITCH_ID) return "/sobeca-song-garden";
+  return `/pitch/${slug}`;
+}
+
+/**
+ * Accept a path, a /pitch/slug, or a bare slug.
+ * SoBECA may also stay at /sobeca-song-garden.
+ */
+export function parsePitchUrl(input: string, pitchId: string): { slug: string } | { error: string } {
+  let path = input.trim().toLowerCase();
+  path = path.replace(/^https?:\/\/[^/]+/i, "");
+  const query = path.search(/[?#]/);
+  if (query >= 0) path = path.slice(0, query);
+  if (!path.startsWith("/")) path = `/${path}`;
+  path = path.replace(/\/+$/, "");
+  if (pitchId === SOBECA_PITCH_ID && path === "/sobeca-song-garden") return { slug: SOBECA_PITCH_ID };
+  const prefixed = path.match(/^\/pitch\/([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+  const slug = prefixed ? prefixed[1] : path.replace(/^\//, "");
+  if (!SLUG_PATTERN.test(slug) || slug.length > 60) {
+    return { error: "Use a short path like /pitch/anthem." };
+  }
+  if (slug === SOBECA_PITCH_ID && pitchId !== SOBECA_PITCH_ID) {
+    return { error: "That address belongs to SoBECA Song Garden." };
+  }
+  return { slug };
 }
 
 export function uniqueSlug(base: string, taken: Set<string>): string {
@@ -369,6 +402,10 @@ function sanitizeOverride(value: unknown): PitchOverride | null {
   const prompt = clip(source.prompt, MAX_PROMPT);
   if (name) override.name = name;
   if (prompt) override.prompt = prompt;
+  if (typeof source.slug === "string" && source.slug.trim()) {
+    const slug = slugify(source.slug);
+    if (SLUG_PATTERN.test(slug)) override.slug = slug;
+  }
   if (typeof source.live === "boolean") override.live = source.live;
   if (source.passwordHash === null) override.passwordHash = null;
   else if (hashOrNull(source.passwordHash)) override.passwordHash = hashOrNull(source.passwordHash);
@@ -429,8 +466,25 @@ export function normalizeWebPitches(raw: unknown): WebPitchesState {
   return { overrides, custom: unique };
 }
 
-function takenSlugs(state: WebPitchesState): Set<string> {
-  return new Set([SOBECA_PITCH_ID, INITIAL_MEETING_ID, ...state.custom.map((pitch) => pitch.slug)]);
+function storedSlug(state: WebPitchesState, id: string, fallback: string): string {
+  const slug = state.overrides[id]?.slug;
+  return slug && SLUG_PATTERN.test(slug) ? slug : fallback;
+}
+
+function takenSlugs(state: WebPitchesState, exceptId?: string): Set<string> {
+  const taken = new Set<string>();
+  if (exceptId !== SOBECA_PITCH_ID) {
+    taken.add(SOBECA_PITCH_ID);
+    taken.add(storedSlug(state, SOBECA_PITCH_ID, SOBECA_PITCH_ID));
+  }
+  if (exceptId !== INITIAL_MEETING_ID) {
+    taken.add(INITIAL_MEETING_ID);
+    taken.add(storedSlug(state, INITIAL_MEETING_ID, INITIAL_MEETING_ID));
+  }
+  for (const pitch of state.custom) {
+    if (pitch.id !== exceptId) taken.add(pitch.slug);
+  }
+  return taken;
 }
 
 function presentCustom(pitch: CustomPitch): LoadedPitch {
@@ -442,7 +496,7 @@ function presentCustom(pitch: CustomPitch): LoadedPitch {
     prompt: pitch.prompt,
     live: pitch.live,
     passwordHash: pitch.passwordHash,
-    href: `/pitch/${pitch.slug}`,
+    href: hrefForPitch(pitch.id, pitch.slug),
     builtin: false,
     organizationId: pitch.organizationId,
     slides: pitch.slides,
@@ -459,28 +513,30 @@ export function listLoadedPitches(
     meetingOverride?.slides && meetingOverride.slides.length > 0
       ? cloneSlides(meetingOverride.slides)
       : cloneSlides(initialMeetingSlides);
+  const sobecaSlug = storedSlug(state, SOBECA_PITCH_ID, SOBECA_PITCH_ID);
+  const meetingSlug = storedSlug(state, INITIAL_MEETING_ID, INITIAL_MEETING_ID);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
-    slug: SOBECA_PITCH_ID,
+    slug: sobecaSlug,
     name: sobecaOverride?.name || "SoBECA Song Garden",
     title: pitchTitle(sobeca.slides, "SoBECA Song Garden"),
     prompt: sobecaOverride?.prompt || SOBECA_PITCH_PROMPT,
     live: sobecaOverride?.live !== false,
     passwordHash: sobeca.passwordHash,
-    href: "/sobeca-song-garden",
+    href: hrefForPitch(SOBECA_PITCH_ID, sobecaSlug),
     builtin: true,
     organizationId: organizationIdFrom(sobecaOverride?.organizationId) ?? null,
     slides: sobeca.slides,
   };
   const meeting: LoadedPitch = {
     id: INITIAL_MEETING_ID,
-    slug: INITIAL_MEETING_ID,
+    slug: meetingSlug,
     name: meetingOverride?.name || INITIAL_MEETING_NAME,
     title: pitchTitle(meetingSlides, INITIAL_MEETING_NAME),
     prompt: meetingOverride?.prompt || INITIAL_MEETING_PROMPT,
     live: meetingOverride?.live !== false,
     passwordHash: hashOrNull(meetingOverride?.passwordHash) ,
-    href: "/pitch/initial-meeting",
+    href: hrefForPitch(INITIAL_MEETING_ID, meetingSlug),
     builtin: true,
     organizationId: organizationIdFrom(meetingOverride?.organizationId) ?? null,
     slides: meetingSlides,
@@ -565,6 +621,7 @@ export function applyPitchPatch(
   patch: {
     name?: string;
     prompt?: string;
+    slug?: string;
     live?: boolean;
     slides?: unknown;
     reset?: boolean;
@@ -574,6 +631,13 @@ export function applyPitchPatch(
 ): { state: WebPitchesState; pitch: LoadedPitch } | { error: string } {
   let name = current.name;
   let prompt = current.prompt;
+  let slug = current.slug;
+  if (typeof patch.slug === "string") {
+    const parsed = parsePitchUrl(patch.slug, current.id);
+    if ("error" in parsed) return parsed;
+    if (takenSlugs(state, current.id).has(parsed.slug)) return { error: "That address is already in use." };
+    slug = parsed.slug;
+  }
   if (typeof patch.name === "string") {
     const next = requireText(patch.name, "Name", MAX_NAME);
     if (typeof next !== "string") return next;
@@ -616,6 +680,8 @@ export function applyPitchPatch(
     ...current,
     name,
     prompt,
+    slug,
+    href: hrefForPitch(current.id, slug),
     live,
     organizationId,
     slides,
@@ -629,6 +695,7 @@ export function applyPitchPatch(
             ...pitch,
             name,
             prompt,
+            slug,
             live,
             organizationId,
             slides,
@@ -640,7 +707,7 @@ export function applyPitchPatch(
   }
 
   const previous = state.overrides[current.id] ?? {};
-  const override: PitchOverride = { ...previous, name, prompt, live, organizationId };
+  const override: PitchOverride = { ...previous, name, prompt, slug, live, organizationId };
   if (current.id === INITIAL_MEETING_ID) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;

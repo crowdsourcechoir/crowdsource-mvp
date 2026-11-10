@@ -149,7 +149,15 @@ export async function duplicatePitchById(id: string): Promise<{ pitch?: PitchAdm
 
 export async function updatePitch(
   id: string,
-  patch: { name?: string; prompt?: string; live?: boolean; slides?: unknown; reset?: boolean; organizationId?: string | null }
+  patch: {
+    name?: string;
+    prompt?: string;
+    slug?: string;
+    live?: boolean;
+    slides?: unknown;
+    reset?: boolean;
+    organizationId?: string | null;
+  }
 ): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();
   if (context.error) return { error: context.error, status: 503 };

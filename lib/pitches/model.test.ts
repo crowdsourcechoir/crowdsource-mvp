@@ -13,6 +13,8 @@ import {
   normalizeWebPitches,
   pitchTitle,
   seedSlides,
+  hrefForPitch,
+  parsePitchUrl,
   slugify,
   SOBECA_PITCH_ID,
   toAdmin,
@@ -242,5 +244,27 @@ assert.equal(junk.overrides[INITIAL_MEETING_ID]?.prompt, "kept");
 assert.equal(junk.overrides["not-a-pitch"], undefined);
 assert.equal(junk.custom.length, 1);
 assert.equal(junk.custom[0]?.id, "pitch_abcd");
+
+assert.deepEqual(parsePitchUrl("anthem", INITIAL_MEETING_ID), { slug: "anthem" });
+assert.deepEqual(parsePitchUrl("/pitch/anthem-experience/", "pitch_abcd"), { slug: "anthem-experience" });
+assert.deepEqual(parsePitchUrl("/sobeca-song-garden", SOBECA_PITCH_ID), { slug: SOBECA_PITCH_ID });
+assert.equal("error" in parsePitchUrl("/sobeca-song-garden", INITIAL_MEETING_ID), true);
+assert.equal("error" in parsePitchUrl("/pitch/../admin", INITIAL_MEETING_ID), true);
+assert.equal(hrefForPitch(SOBECA_PITCH_ID, SOBECA_PITCH_ID), "/sobeca-song-garden");
+assert.equal(hrefForPitch(INITIAL_MEETING_ID, "anthem"), "/pitch/anthem");
+
+const renamed = applyPitchPatch(copy.state, findLoadedPitch(copy.state, copy.pitch.id, sobeca)!, { slug: "/pitch/anthem" }, "2026-11-05T04:00:00.000Z");
+assert.ok(!("error" in renamed));
+if ("error" in renamed) throw new Error("rename failed");
+assert.equal(renamed.pitch.href, "/pitch/anthem");
+assert.equal(findLoadedPitch(renamed.state, "anthem", sobeca)?.id, copy.pitch.id);
+const clash = applyPitchPatch(renamed.state, meeting, { slug: "anthem" }, "2026-11-05T05:00:00.000Z");
+assert.equal("error" in clash && clash.error, "That address is already in use.");
+const meetingUrl = applyPitchPatch(empty, meeting, { slug: "first-meeting" }, "2026-11-05T06:00:00.000Z");
+assert.ok(!("error" in meetingUrl));
+if ("error" in meetingUrl) throw new Error("meeting rename failed");
+assert.equal(meetingUrl.pitch.href, "/pitch/first-meeting");
+assert.equal(findLoadedPitch(meetingUrl.state, INITIAL_MEETING_ID, sobeca)?.href, "/pitch/first-meeting");
+assert.equal(findLoadedPitch(meetingUrl.state, "first-meeting", sobeca)?.id, INITIAL_MEETING_ID);
 
 console.log("pitch model tests ok");
