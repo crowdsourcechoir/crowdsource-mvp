@@ -19,6 +19,8 @@ export type PitchSlide = {
   blocks: CopyBlock[];
   /** Body copy color for this section. Labels and headers stay lime. */
   copyColor?: string;
+  /** When set, a click in the presentation brings in the next line. Omitted slides arrive together. */
+  reveal?: "steps";
   /**
    * Multiply-tint strength for this section, 0–0.85.
    * Omitted sections keep the SoBECA Song Garden wash.

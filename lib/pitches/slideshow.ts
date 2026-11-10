@@ -62,6 +62,82 @@ export function slideGesture(input: {
   return input.dx < 0 ? "next" : "prev";
 }
 
+export type CopyStep = { blockIndex: number; itemIndex?: number; rowIndex?: number };
+
+export type PresentStep = { index: number; revealed: boolean; arrived: number };
+
+export type PacedSlide = { reveal?: string; blocks: CopyBlock[] };
+
+/** One presenter click. List items and table rows each count. Blank lines do not. */
+export function copySteps(blocks: CopyBlock[]): CopyStep[] {
+  const steps: CopyStep[] = [];
+  blocks.forEach((block, blockIndex) => {
+    if (block.type === "list") {
+      block.items.forEach((item, itemIndex) => {
+        if (item.trim()) steps.push({ blockIndex, itemIndex });
+      });
+      return;
+    }
+    if (block.type === "table") {
+      block.rows.forEach((_, rowIndex) => steps.push({ blockIndex, rowIndex }));
+      return;
+    }
+    if (block.type === "image") {
+      if (block.src.trim()) steps.push({ blockIndex });
+      return;
+    }
+    if ("text" in block && block.text.trim()) steps.push({ blockIndex });
+  });
+  return steps;
+}
+
+function pacedCount(slide: PacedSlide | undefined): number {
+  if (!slide || slide.reveal !== "steps") return 0;
+  return copySteps(slide.blocks).length;
+}
+
+function enterSlide(slides: PacedSlide[], index: number, from: "prev" | "next", revealed = false): PresentStep {
+  const total = pacedCount(slides[index]);
+  if (total > 0) return { index, revealed: false, arrived: from === "prev" ? total : 0 };
+  return { index, revealed, arrived: 0 };
+}
+
+/**
+ * All-at-once slides keep the held last line.
+ * A stepped slide starts empty. Each forward click reveals the next line, and the click after the last line leaves the slide.
+ */
+export function nextPresentStep(state: PresentStep, slides: PacedSlide[], direction: SlideGesture): PresentStep {
+  if (direction === "none" || slides.length === 0) return state;
+  const slide = slides[state.index];
+  const total = pacedCount(slide);
+  if (total > 0) {
+    if (direction === "next") {
+      if (state.arrived < total) return { index: state.index, revealed: false, arrived: state.arrived + 1 };
+      const index = Math.min(slides.length - 1, state.index + 1);
+      if (index === state.index) return state;
+      return enterSlide(slides, index, "next");
+    }
+    if (state.arrived > 0) return { index: state.index, revealed: false, arrived: state.arrived - 1 };
+    const index = Math.max(0, state.index - 1);
+    if (index === state.index) return state;
+    return enterSlide(slides, index, "prev");
+  }
+
+  const previous = slides[Math.max(0, state.index - 1)];
+  const punched = nextDeckStep(
+    { index: state.index, revealed: state.revealed },
+    slides.length,
+    direction,
+    Boolean(slide && punchCopy(slide.blocks)),
+    Boolean(previous && previous.reveal !== "steps" && punchCopy(previous.blocks)),
+  );
+  if (punched.index !== state.index && pacedCount(slides[punched.index]) > 0) {
+    return enterSlide(slides, punched.index, direction === "prev" ? "prev" : "next");
+  }
+  if (punched.index === state.index) return { ...state, revealed: punched.revealed };
+  return { index: punched.index, revealed: punched.revealed, arrived: 0 };
+}
+
 export function stepSlide(index: number, count: number, direction: SlideGesture): number {
   if (direction === "none" || count <= 0) return index;
   const next = index + (direction === "next" ? 1 : -1);
