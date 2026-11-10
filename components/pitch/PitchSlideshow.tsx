@@ -474,7 +474,7 @@ export default function PitchSlideshow({
 
   const slide = slides[index];
   if (!slide) return null;
-  const tint = slide.photoOverlay === "salmon" ? "#FF2D95" : OVERLAYS[index % OVERLAYS.length];
+  const tint = OVERLAYS[index % OVERLAYS.length];
   const wash = typeof slide.wash === "number" ? slide.wash : 0.45;
   const label = `${String(index + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
 
