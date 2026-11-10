@@ -1,5 +1,6 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
+import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
 
@@ -259,16 +260,20 @@ function copyBlock(block: CopyBlock): CopyBlock {
 
 function sanitizeSlides(value: unknown): PitchSlide[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 40) return null;
-  const slides = value.filter(isPitchSlide).map((slide) => ({
-    ...slide,
-    image: safeImage(slide.image, SEED_PHOTO),
-    wash: washFrom(slide.wash),
-    copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
-    reveal: revealMode(slide.reveal),
-    photoOverlay: salmonOverlay(slide.photoOverlay),
-    photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, salmonOverlay(slide.photoOverlay)),
-    blocks: slide.blocks.map(copyBlock),
-  }));
+  const slides = value.filter(isPitchSlide).map((slide) => {
+    const grade = salmonOverlay(slide.photoOverlay);
+    return {
+      ...slide,
+      image: safeImage(slide.image, SEED_PHOTO),
+      wash: washFrom(slide.wash),
+      copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
+      reveal: revealMode(slide.reveal),
+      photoOverlay: grade,
+      photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, grade),
+      photoOverlayColor: grade ? storedOverlayColor(slide.photoOverlayColor) : undefined,
+      blocks: slide.blocks.map(copyBlock),
+    };
+  });
   if (slides.length !== value.length) return null;
   const ids = new Set(slides.map((slide) => slide.id));
   if (ids.size !== slides.length) return null;

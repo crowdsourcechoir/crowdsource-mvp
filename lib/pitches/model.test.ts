@@ -314,6 +314,38 @@ const amountWithoutGrade = acceptSlides([
   },
 ]);
 assert.equal(amountWithoutGrade?.[0]?.photoOverlayAmount, undefined);
+const colored = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlay: "salmon",
+    photoOverlayColor: "#3366ff",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(colored?.[0]?.photoOverlayColor, "#3366FF");
+const defaultColor = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlay: "salmon",
+    photoOverlayColor: "#e6579e",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(defaultColor?.[0]?.photoOverlayColor, undefined);
+const colorWithoutGrade = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    photoOverlayColor: "#3366FF",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(colorWithoutGrade?.[0]?.photoOverlayColor, undefined);
 const droppedGrade = acceptSlides([
   {
     id: "title",

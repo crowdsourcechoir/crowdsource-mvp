@@ -336,6 +336,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Edit words, photos, and copy color",
           "Add a salmon color overlay to a slide photo",
           "Set how transparent that overlay is",
+          "Choose the overlay color",
           "Present a slide all at once, or one line at a time",
           "Song Garden pitch keeps the public page sections",
           "Live page, with a password when one is set",

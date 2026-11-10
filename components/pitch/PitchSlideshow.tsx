@@ -578,6 +578,7 @@ export default function PitchSlideshow({
           alt={slide.imageAlt}
           overlay={slide.photoOverlay}
           amount={slide.photoOverlayAmount ?? 1}
+          color={slide.photoOverlayColor}
           className="h-full w-full"
         />
       </div>
@@ -588,6 +589,7 @@ export default function PitchSlideshow({
             alt=""
             overlay={slides[outgoing].photoOverlay}
             amount={slides[outgoing].photoOverlayAmount ?? 1}
+            color={slides[outgoing].photoOverlayColor}
             className="h-full w-full"
           />
         </div>

@@ -23,6 +23,7 @@ import {
   type SlideEdit,
 } from "@/lib/pitches/structure";
 import { GradedPhoto } from "@/components/pitch/GradedPhoto";
+import { SALMON_OVERLAY_COLOR } from "@/lib/pitches/photo-overlay";
 import PitchOrgField from "@/components/settings/PitchOrgField";
 import { SettingsButton } from "@/components/settings/ui";
 
@@ -803,6 +804,7 @@ export default function PitchEditor({ id }: { id: string }) {
                   alt=""
                   overlay={slide.photoOverlay}
                   amount={slide.photoOverlayAmount ?? 1}
+                  color={slide.photoOverlayColor}
                   className="h-28 w-full"
                 />
                 <label className="csc-link absolute bottom-2 right-2 z-10 bg-black/70 px-2 py-1 text-xs">
@@ -861,6 +863,21 @@ export default function PitchEditor({ id }: { id: string }) {
                     }}
                     className="w-full accent-[var(--csc-accent)]"
                   />
+                  <span className="csc-eyebrow shrink-0">Color</span>
+                  <input
+                    type="color"
+                    aria-label="Overlay color"
+                    title="Color of the photo grade"
+                    value={slide.photoOverlayColor || SALMON_OVERLAY_COLOR}
+                    className="h-6 w-8 cursor-pointer bg-transparent"
+                    onChange={(event) =>
+                      patchSlide(slide.id, (current) => ({
+                        ...current,
+                        photoOverlayColor: event.target.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                  <span className="font-mono text-xs text-white/70">{slide.photoOverlayColor || SALMON_OVERLAY_COLOR}</span>
                 </label>
               ) : null}
               <p className="csc-eyebrow mt-3">Library</p>
@@ -888,6 +905,7 @@ export default function PitchEditor({ id }: { id: string }) {
                         alt=""
                         overlay={slide.photoOverlay}
                         amount={slide.photoOverlayAmount ?? 1}
+                        color={slide.photoOverlayColor}
                         className="h-full w-full"
                       />
                     </button>
