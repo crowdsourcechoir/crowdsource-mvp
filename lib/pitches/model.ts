@@ -194,7 +194,8 @@ function copyBlock(block: CopyBlock): CopyBlock {
   if (block.type === "table") {
     return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
   }
-  return { ...block };
+  if (!("text" in block)) return block;
+  return block.bold === true ? { type: block.type, text: block.text, bold: true } : { type: block.type, text: block.text };
 }
 
 function sanitizeSlides(value: unknown): PitchSlide[] | null {
@@ -217,7 +218,7 @@ export function acceptSlides(value: unknown): PitchSlide[] | null {
   return sanitizeSlides(value);
 }
 
-const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "paragraph", "line"]);
+const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "heading3", "paragraph", "line"]);
 
 function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
   if (!incoming || typeof incoming !== "object") return base;
@@ -228,7 +229,11 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
     "text" in next &&
     typeof next.text === "string"
   ) {
-    return { type: next.type, text: next.text.slice(0, MAX_TEXT) } as CopyBlock;
+    return {
+      type: next.type,
+      text: next.text.slice(0, MAX_TEXT),
+      ...(next.bold === true ? { bold: true as const } : {}),
+    } as CopyBlock;
   }
   if (next.type !== base.type) return base;
 

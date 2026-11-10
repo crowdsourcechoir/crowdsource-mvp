@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
+import { toggleBoldMarkup } from "@/lib/pitches/rich-text";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import {
   addListBlock,
@@ -49,11 +50,12 @@ const BLOCK_LABEL: Record<string, string> = {
   kicker: "Kicker",
   heading: "Heading",
   heading2: "Heading 2",
+  heading3: "Heading 3",
   line: "Line",
   paragraph: "Paragraph",
 };
 
-const TEXT_STYLES = ["title", "heading", "heading2", "kicker", "line", "paragraph"] as const;
+const TEXT_STYLES = ["title", "heading", "heading2", "heading3", "kicker", "line", "paragraph"] as const;
 
 function RoundButton({
   label,
@@ -118,6 +120,8 @@ function FitText({
   label,
   styleName,
   onStyle,
+  bold = false,
+  onToggleBold,
   tools,
 }: {
   value: string;
@@ -125,6 +129,8 @@ function FitText({
   label: string;
   styleName?: string;
   onStyle?: (style: (typeof TEXT_STYLES)[number]) => void;
+  bold?: boolean;
+  onToggleBold?: () => void;
   tools?: ReactNode;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -135,6 +141,22 @@ function FitText({
     el.style.height = "0px";
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
+
+  function applyBold() {
+    const el = ref.current;
+    const start = el?.selectionStart ?? 0;
+    const end = el?.selectionEnd ?? 0;
+    if (el && start !== end) {
+      const next = toggleBoldMarkup(value, start, end);
+      onChange(next.value);
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(next.start, next.end);
+      });
+      return;
+    }
+    onToggleBold?.();
+  }
 
   return (
     <label className="block border-b border-[var(--csc-row-divider)] py-2">
@@ -154,10 +176,26 @@ function FitText({
               <option value="title">Title</option>
               <option value="heading">Heading</option>
               <option value="heading2">Heading 2</option>
+              <option value="heading3">Heading 3</option>
               <option value="kicker">Kicker</option>
               <option value="line">Line</option>
               <option value="paragraph">Paragraph</option>
             </select>
+          ) : null}
+          {onStyle ? (
+            <button
+              type="button"
+              aria-pressed={bold}
+              aria-label={`Bold ${label}`}
+              title="Bold the line, or the selected words"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={applyBold}
+              className={`text-[10px] uppercase tracking-[0.16em] ${
+                bold ? "border border-[var(--csc-accent)] px-1.5 font-bold text-white" : "font-semibold text-[var(--csc-accent)]"
+              }`}
+            >
+              Bold
+            </button>
           ) : null}
           {tools}
         </span>
@@ -168,7 +206,9 @@ function FitText({
         value={value}
         aria-label={label}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full resize-none bg-transparent text-sm leading-snug text-white focus:outline-none"
+        className={`mt-1 w-full resize-none bg-transparent leading-snug text-white focus:outline-none ${
+          styleName === "heading3" ? "font-mono text-base" : "text-sm"
+        } ${bold ? "font-bold" : ""}`}
       />
     </label>
   );
@@ -558,6 +598,15 @@ export default function PitchEditor({ id }: { id: string }) {
                   </SettingsButton>
                   <SettingsButton
                     onClick={() => {
+                      const result = commit(addTextBlock(slidesRef.current ?? deck, slide.id, "heading3"));
+                      const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;
+                      if (count) revealBlock(slide.id, count - 1);
+                    }}
+                  >
+                    Add heading 3
+                  </SettingsButton>
+                  <SettingsButton
+                    onClick={() => {
                       const result = commit(addListBlock(slidesRef.current ?? deck, slide.id));
                       const count = result?.slides.find((item) => item.id === slide.id)?.blocks.length ?? 0;
                       if (count) revealBlock(slide.id, count - 1);
@@ -795,13 +844,25 @@ export default function PitchEditor({ id }: { id: string }) {
                       <FitText
                         label={BLOCK_LABEL[block.type] ?? block.type}
                         styleName={block.type}
+                        bold={block.bold === true}
                         tools={order}
                         value={block.text}
+                        onToggleBold={() =>
+                          patchSlide(slide.id, (current) => {
+                            const existing = current.blocks[blockIndex];
+                            if (!existing || !("text" in existing)) return current;
+                            return updateBlock(current, blockIndex, { ...existing, bold: existing.bold ? undefined : true });
+                          })
+                        }
                         onStyle={(style) =>
                           patchSlide(slide.id, (current) => {
                             const existing = current.blocks[blockIndex];
                             if (!existing || !("text" in existing)) return current;
-                            return updateBlock(current, blockIndex, { type: style, text: existing.text });
+                            return updateBlock(current, blockIndex, {
+                              type: style,
+                              text: existing.text,
+                              ...(existing.bold ? { bold: true } : {}),
+                            });
                           })
                         }
                         onChange={(value) =>

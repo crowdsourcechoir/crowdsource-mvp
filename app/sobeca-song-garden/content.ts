@@ -1,10 +1,13 @@
+type PitchText = { text: string; bold?: boolean };
+
 export type CopyBlock =
-  | { type: "kicker"; text: string }
-  | { type: "title"; text: string }
-  | { type: "heading"; text: string }
-  | { type: "heading2"; text: string }
-  | { type: "paragraph"; text: string }
-  | { type: "line"; text: string }
+  | ({ type: "kicker" } & PitchText)
+  | ({ type: "title" } & PitchText)
+  | ({ type: "heading" } & PitchText)
+  | ({ type: "heading2" } & PitchText)
+  | ({ type: "heading3" } & PitchText)
+  | ({ type: "paragraph" } & PitchText)
+  | ({ type: "line" } & PitchText)
   | { type: "image"; src: string; alt: string }
   | { type: "table"; headers: string[]; rows: string[][] }
   | { type: "list"; items: string[] };

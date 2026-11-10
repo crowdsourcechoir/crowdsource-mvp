@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import { PitchText } from "@/components/pitch/PitchText";
+import { plainPitchText } from "@/lib/pitches/rich-text";
 import {
   exitDeckFullscreen,
   fullscreenAvailable,
@@ -67,6 +69,10 @@ const DECK_CSS = `
 }
 `;
 
+function weight(block: { bold?: boolean }): string {
+  return block.bold ? " font-bold" : "";
+}
+
 function Block({
   block,
   display,
@@ -78,44 +84,53 @@ function Block({
 }) {
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-5xl text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl`}>
-        {block.text}
+      <h1 className={`${display} max-w-5xl text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
+        <PitchText text={block.text} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-5xl text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl`}>
-        {block.text}
+      <h2 className={`${display} max-w-5xl text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
+        <PitchText text={block.text} />
       </h2>
     );
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl`}>
+      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.22em] h-[0.38em] w-[0.38em] shrink-0 bg-[#CFFF81]" />
-        <span>{block.text}</span>
+        <span>
+          <PitchText text={block.text} />
+        </span>
       </h3>
+    );
+  }
+  if (block.type === "heading3") {
+    return (
+      <h4 className={`mt-5 max-w-5xl text-3xl leading-snug tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+        <PitchText text={block.text} />
+      </h4>
     );
   }
   if (block.type === "kicker") {
     return (
-      <p className="mt-6 text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81] sm:text-sm">
-        {block.text}
+      <p className={`mt-6 text-xs font-semibold uppercase tracking-[0.28em] text-[#CFFF81] sm:text-sm${weight(block)}`}>
+        <PitchText text={block.text} />
       </p>
     );
   }
   if (block.type === "line") {
     return (
-      <p className={`${display} mt-8 max-w-3xl text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl`}>
-        {block.text}
+      <p className={`${display} mt-8 max-w-3xl text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl${weight(block)}`}>
+        <PitchText text={block.text} />
       </p>
     );
   }
   if (block.type === "paragraph") {
     return (
-      <p className={`max-w-3xl text-base leading-relaxed sm:text-lg ${footer ? "text-white/85" : "mt-5"}`}>
-        {block.text}
+      <p className={`max-w-3xl text-base leading-relaxed sm:text-lg${weight(block)} ${footer ? "text-white/85" : "mt-5"}`}>
+        <PitchText text={block.text} />
       </p>
     );
   }
@@ -179,7 +194,9 @@ function SlideCopy({
           if (!punch.before) return null;
           return (
             <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-              <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{punch.before}</p>
+              <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">
+                <PitchText text={punch.before} />
+              </p>
             </div>
           );
         }
@@ -585,7 +602,7 @@ export default function PitchSlideshow({
           key={`${slide.id}-punch`}
           className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
         >
-          {punchCopy(slide.blocks)?.text}
+          {plainPitchText(punchCopy(slide.blocks)?.text ?? "")}
         </p>
       ) : null}
       {playNote ? (

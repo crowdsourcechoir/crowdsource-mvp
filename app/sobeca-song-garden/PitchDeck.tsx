@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { CopyBlock, PitchSlide } from "./content";
+import { PitchText } from "@/components/pitch/PitchText";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 const CLOSING_COLOR = "#CFFF81";
@@ -39,33 +40,46 @@ function ClosingLine({ text, display }: { text: string; display: string }) {
   );
 }
 
+function weight(block: { bold?: boolean }): string {
+  return block.bold ? " font-bold" : "";
+}
+
 function Block({ block, display, footer = false }: { block: CopyBlock; display: string; footer?: boolean }) {
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-6xl text-6xl leading-[0.9] tracking-wide sm:text-8xl`}>
-        {block.text}
+      <h1 className={`${display} max-w-6xl text-6xl leading-[0.9] tracking-wide sm:text-8xl${weight(block)}`}>
+        <PitchText text={block.text} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-5xl text-5xl leading-[0.92] tracking-wide sm:text-7xl`}>
-        {block.text}
+      <h2 className={`${display} max-w-5xl text-5xl leading-[0.92] tracking-wide sm:text-7xl${weight(block)}`}>
+        <PitchText text={block.text} />
       </h2>
     );
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl`}>
+      <h3 className={`${display} mt-4 flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.22em] h-[0.38em] w-[0.38em] shrink-0 bg-[#CFFF81]" />
-        <span>{block.text}</span>
+        <span>
+          <PitchText text={block.text} />
+        </span>
       </h3>
+    );
+  }
+  if (block.type === "heading3") {
+    return (
+      <h4 className={`mt-5 max-w-5xl text-3xl leading-snug tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+        <PitchText text={block.text} />
+      </h4>
     );
   }
   if (block.type === "kicker") {
     return (
       <p className="mt-4 text-xs font-bold uppercase tracking-[0.28em] text-[#CFFF81] sm:text-sm">
-        {block.text}
+        <PitchText text={block.text} />
       </p>
     );
   }
@@ -73,7 +87,7 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
     const cycle = block.text.includes("PLANT AGAIN");
     return (
       <p
-        className={`${display} mt-8 text-[#CFFF81] ${
+        className={`${display} mt-8 text-[#CFFF81]${weight(block)} ${
           cycle
             ? "max-w-none text-[clamp(1.35rem,2.35vw,3rem)] leading-none tracking-wide max-lg:whitespace-normal lg:whitespace-nowrap"
             : footer
@@ -81,12 +95,16 @@ function Block({ block, display, footer = false }: { block: CopyBlock; display: 
               : "max-w-5xl text-3xl leading-tight tracking-wide sm:text-5xl"
         }`}
       >
-        {block.text}
+        <PitchText text={block.text} />
       </p>
     );
   }
   if (block.type === "paragraph") {
-    return <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">{block.text}</p>;
+    return (
+      <p className={`mt-5 max-w-3xl text-base leading-relaxed sm:text-lg${weight(block)}`}>
+        <PitchText text={block.text} />
+      </p>
+    );
   }
   if (block.type === "image") {
     return (
@@ -250,7 +268,7 @@ export default function PitchDeck({
               {slide.id === "title" ? (
                 <div className="max-w-3xl pb-4">
                   {slide.blocks
-                    .filter((block) => block.type === "line" || block.type === "paragraph" || block.type === "heading2")
+                    .filter((block) => block.type === "line" || block.type === "paragraph" || block.type === "heading2" || block.type === "heading3")
                     .map((block, blockIndex) => (
                       <div key={`${slide.id}-foot-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${200 + blockIndex * 80}ms` }}>
                         <Block block={block} display={displayClass} footer />
