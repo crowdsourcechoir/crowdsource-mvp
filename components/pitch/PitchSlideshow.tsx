@@ -136,13 +136,21 @@ function Block({
     );
   }
   if (block.type === "paragraph") {
+    const tight = previous === "heading2";
     return (
       <p
-        className={`max-w-3xl break-words text-base sm:text-lg${weight(block)} ${previous === "heading2" ? "pl-4 leading-snug" : "leading-relaxed"} ${
-          footer ? "text-white/85" : follow
-        }`}
+        className={`max-w-3xl break-words text-base sm:text-lg${weight(block)} ${tight ? "leading-snug" : "leading-relaxed"} ${
+          tight && !block.rule ? "pl-4" : ""
+        } ${block.rule ? "flex items-start gap-3" : ""} ${footer ? "text-white/85" : follow}`}
       >
-        <PitchText text={block.text} />
+        {block.rule ? <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" /> : null}
+        {block.rule ? (
+          <span className="min-w-0">
+            <PitchText text={block.text} />
+          </span>
+        ) : (
+          <PitchText text={block.text} />
+        )}
       </p>
     );
   }

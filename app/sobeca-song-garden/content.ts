@@ -6,7 +6,7 @@ export type CopyBlock =
   | ({ type: "heading" } & PitchText)
   | ({ type: "heading2" } & PitchText)
   | ({ type: "heading3" } & PitchText)
-  | ({ type: "paragraph" } & PitchText)
+  | ({ type: "paragraph"; rule?: boolean } & PitchText)
   | ({ type: "line" } & PitchText)
   | { type: "image"; src: string; alt: string }
   | { type: "table"; headers: string[]; rows: string[][] }

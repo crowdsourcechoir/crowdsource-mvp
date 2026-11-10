@@ -236,7 +236,11 @@ function copyBlock(block: CopyBlock): CopyBlock {
     return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
   }
   if (!("text" in block)) return block;
-  return block.bold === true ? { type: block.type, text: block.text, bold: true } : { type: block.type, text: block.text };
+  const bold = block.bold === true ? { bold: true as const } : {};
+  if (block.type === "paragraph") {
+    return { type: "paragraph", text: block.text, ...bold, ...(block.rule === true ? { rule: true as const } : {}) };
+  }
+  return { type: block.type, text: block.text, ...bold };
 }
 
 function sanitizeSlides(value: unknown): PitchSlide[] | null {
@@ -274,6 +278,7 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
       type: next.type,
       text: next.text.slice(0, MAX_TEXT),
       ...(next.bold === true ? { bold: true as const } : {}),
+      ...(next.type === "paragraph" && next.rule === true ? { rule: true as const } : {}),
     } as CopyBlock;
   }
   if (next.type !== base.type) return base;

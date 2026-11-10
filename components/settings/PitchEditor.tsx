@@ -125,6 +125,8 @@ function FitText({
   onStyle,
   bold = false,
   onToggleBold,
+  rule = false,
+  onToggleRule,
   tools,
 }: {
   value: string;
@@ -134,6 +136,8 @@ function FitText({
   onStyle?: (style: (typeof TEXT_STYLES)[number]) => void;
   bold?: boolean;
   onToggleBold?: () => void;
+  rule?: boolean;
+  onToggleRule?: () => void;
   tools?: ReactNode;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -184,6 +188,21 @@ function FitText({
               <option value="line">Line</option>
               <option value="paragraph">Paragraph</option>
             </select>
+          ) : null}
+          {onToggleRule ? (
+            <button
+              type="button"
+              aria-pressed={rule}
+              aria-label={`Lime vertical line on ${label}`}
+              title="Lime vertical line beside the first line"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onToggleRule}
+              className={`text-[10px] uppercase tracking-[0.16em] ${
+                rule ? "border border-[var(--csc-accent)] px-1.5 font-bold text-white" : "font-semibold text-[var(--csc-accent)]"
+              }`}
+            >
+              Bar
+            </button>
           ) : null}
           {onStyle ? (
             <button
@@ -864,6 +883,20 @@ export default function PitchEditor({ id }: { id: string }) {
                         label={BLOCK_LABEL[block.type] ?? block.type}
                         styleName={block.type}
                         bold={block.bold === true}
+                        rule={block.type === "paragraph" && block.rule === true}
+                        onToggleRule={
+                          block.type === "paragraph"
+                            ? () =>
+                                patchSlide(slide.id, (current) => {
+                                  const existing = current.blocks[blockIndex];
+                                  if (existing?.type !== "paragraph") return current;
+                                  return updateBlock(current, blockIndex, {
+                                    ...existing,
+                                    rule: existing.rule ? undefined : true,
+                                  });
+                                })
+                            : undefined
+                        }
                         tools={order}
                         value={block.text}
                         onToggleBold={() =>
@@ -881,6 +914,9 @@ export default function PitchEditor({ id }: { id: string }) {
                               type: style,
                               text: existing.text,
                               ...(existing.bold ? { bold: true } : {}),
+                              ...(style === "paragraph" && existing.type === "paragraph" && existing.rule
+                                ? { rule: true }
+                                : {}),
                             });
                           })
                         }

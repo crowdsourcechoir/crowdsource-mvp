@@ -4,6 +4,7 @@ import { initialMeetingSlides } from "./initial-meeting";
 import {
   applyPassword,
   applyPitchPatch,
+  acceptSlides,
   createCustomPitch,
   duplicatePitch,
   findLoadedPitch,
@@ -122,6 +123,31 @@ assert.equal(
   pointedAudience?.blocks[1] && "text" in pointedAudience.blocks[1] ? pointedAudience.blocks[1].text : "",
   "The room writes the song."
 );
+
+const ruled = acceptSlides([
+  {
+    id: "title",
+    image: "/pitch/library/conductor.jpg",
+    imageAlt: "A choir on stage",
+    blocks: [
+      { type: "paragraph", text: "Lead an accessible experience.", rule: true, bold: true },
+      { type: "paragraph", text: "No mark." },
+      { type: "heading", text: "Still a heading", rule: true },
+    ],
+  },
+]);
+const ruledParagraph = ruled?.[0]?.blocks[0];
+assert.equal(ruledParagraph?.type, "paragraph");
+assert.equal(ruledParagraph && "rule" in ruledParagraph ? ruledParagraph.rule : false, true);
+assert.equal(ruledParagraph && "bold" in ruledParagraph ? ruledParagraph.bold : false, true);
+assert.equal(ruled?.[0]?.blocks[1] && "rule" in ruled[0].blocks[1] ? ruled[0].blocks[1].rule : undefined, undefined);
+assert.equal("rule" in (ruled?.[0]?.blocks[2] ?? {}), false);
+const ruledMerge = mergeSlides(meeting.slides, [
+  { id: "audience", blocks: [{}, { type: "paragraph", text: "Lead an accessible experience.", rule: true }] },
+]);
+const ruledAudience = ruledMerge.find((slide) => slide.id === "audience")?.blocks[1];
+assert.equal(ruledAudience?.type, "paragraph");
+assert.equal(ruledAudience && "rule" in ruledAudience ? ruledAudience.rule : false, true);
 
 const patched = applyPitchPatch(empty, meeting, { slides: edited, prompt: "A tighter brief." }, "2026-11-05T01:00:00.000Z");
 assert.ok(!("error" in patched));

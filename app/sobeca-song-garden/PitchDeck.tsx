@@ -115,13 +115,21 @@ function Block({
     );
   }
   if (block.type === "paragraph") {
+    const tight = previous === "heading2";
     return (
       <p
         className={`${footer ? "" : follow} max-w-3xl text-base sm:text-lg${weight(block)} ${
-          previous === "heading2" ? "leading-snug" : "leading-relaxed"
-        }`}
+          tight ? "leading-snug" : "leading-relaxed"
+        } ${block.rule ? "flex items-start gap-3" : ""}`}
       >
-        <PitchText text={block.text} />
+        {block.rule ? <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" /> : null}
+        {block.rule ? (
+          <span className="min-w-0">
+            <PitchText text={block.text} />
+          </span>
+        ) : (
+          <PitchText text={block.text} />
+        )}
       </p>
     );
   }
