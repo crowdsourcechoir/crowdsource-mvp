@@ -288,22 +288,67 @@ export type ShowLoop = {
   label: string;
 };
 
-/** Video loops first, then stills, so the opening slide lands on a moving plate. */
-export function loopsFromStoryboard(
-  frames: Array<{ videoUrl?: string | null; sceneUrl?: string | null }> | null | undefined
+export type StoryboardPlate = {
+  videoUrl?: string | null;
+  sceneUrl?: string | null;
+  /** Bloom frame slot, 0-based. Stored generations carry this so a later take stays tied to Frame 3. */
+  frameIndex?: number;
+};
+
+function plateUrls(frame: StoryboardPlate): { videoUrl: string | null; sceneUrl: string | null } | null {
+  const videoUrl = frame.videoUrl?.trim() || null;
+  const sceneUrl = frame.sceneUrl?.trim() || null;
+  if (!videoUrl && !sceneUrl) return null;
+  return { videoUrl, sceneUrl };
+}
+
+/** Bloom storyboard order. Frame 1 is the first plate the bloom shows, video preferred over its still. */
+export function loopsFromStoryboard(frames: StoryboardPlate[] | null | undefined): ShowLoop[] {
+  const loops: ShowLoop[] = [];
+  (frames ?? []).forEach((frame, index) => {
+    const urls = plateUrls(frame);
+    if (!urls) return;
+    const n = (frame.frameIndex ?? index) + 1;
+    loops.push({ ...urls, label: `Frame ${n}` });
+  });
+  return loops;
+}
+
+/**
+ * Plates the bloom is using, then any stored generation that is not already on the board.
+ * A garden storyboard fills in only when the bloom board itself is empty.
+ * A stored video is kept even when its still is already on the board.
+ */
+export function accessibleBloomBackgrounds(
+  board: StoryboardPlate[] | null | undefined,
+  stored: StoryboardPlate[] | null | undefined,
+  garden: StoryboardPlate[] | null | undefined
 ): ShowLoop[] {
-  const videos: ShowLoop[] = [];
-  const stills: ShowLoop[] = [];
-  for (const frame of frames ?? []) {
-    const videoUrl = frame.videoUrl?.trim() || null;
-    const sceneUrl = frame.sceneUrl?.trim() || null;
-    if (videoUrl) videos.push({ videoUrl, sceneUrl, label: "" });
-    else if (sceneUrl) stills.push({ videoUrl: null, sceneUrl, label: "" });
+  const onBoard = loopsFromStoryboard(board);
+  const base = onBoard.length ? onBoard : loopsFromStoryboard(garden);
+  const videos = new Set(base.map((loop) => loop.videoUrl).filter((url): url is string => Boolean(url)));
+  const stills = new Set(base.map((loop) => loop.sceneUrl).filter((url): url is string => Boolean(url)));
+  const extras: ShowLoop[] = [];
+  const storedCount = new Map<number, number>();
+  for (const frame of stored ?? []) {
+    const urls = plateUrls(frame);
+    if (!urls) continue;
+    if (urls.videoUrl) {
+      if (videos.has(urls.videoUrl)) continue;
+      videos.add(urls.videoUrl);
+    } else if (urls.sceneUrl) {
+      if (stills.has(urls.sceneUrl)) continue;
+      stills.add(urls.sceneUrl);
+    }
+    const slot = frame.frameIndex ?? extras.length;
+    const count = (storedCount.get(slot) ?? 0) + 1;
+    storedCount.set(slot, count);
+    extras.push({
+      ...urls,
+      label: count === 1 ? `Frame ${slot + 1} · stored` : `Frame ${slot + 1} · stored ${count}`,
+    });
   }
-  return [...videos, ...stills].map((loop, index) => ({
-    ...loop,
-    label: loop.videoUrl ? `Loop ${index + 1}` : `Still ${index + 1}`,
-  }));
+  return [...base, ...extras];
 }
 
 export function pickLoop(loops: ShowLoop[], index: number): ShowLoop | null {

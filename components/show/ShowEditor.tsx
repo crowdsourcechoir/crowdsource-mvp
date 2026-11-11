@@ -248,7 +248,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
               <FieldLabel hint={videoNote}>Bloom</FieldLabel>
               <SettingsSelect
                 ariaLabel="Bloom"
-                value={show.bloomId ?? ""}
+                value={show.bloomId || background.bloom?.id || ""}
                 onChange={(bloomId) => update({ ...show, bloomId: bloomId || null })}
               >
                 <option value="">{show.match ? "Match a bloom named Gather" : "None"}</option>
@@ -257,8 +257,71 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     {bloom.title}
                   </option>
                 ))}
+                {background.bloom && !blooms.some((bloom) => bloom.id === background.bloom?.id) ? (
+                  <option value={background.bloom.id}>{background.bloom.title}</option>
+                ) : null}
               </SettingsSelect>
+              {background.bloom ? (
+                <Link href={`/admin/events/${background.bloom.id}`} className="csc-link mt-2 inline-flex text-xs">
+                  Open {background.bloom.title}
+                </Link>
+              ) : null}
             </div>
+            {background.loops.length > 0 ? (
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <FieldLabel hint="These are the bloom's background plates, in the order the bloom shows them. Stored generations stay available.">
+                    Background videos
+                  </FieldLabel>
+                  <SettingsButton
+                    onClick={() => {
+                      const slides = show.slides.map((item, index) => ({
+                        ...item,
+                        loopIndex: index % background.loops.length,
+                      }));
+                      update({ ...show, slides });
+                    }}
+                  >
+                    Use in order
+                  </SettingsButton>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {background.loops.map((item, index) => {
+                    const selected = Math.min(slide.loopIndex, background.loops.length - 1) === index;
+                    return (
+                      <button
+                        key={`${item.label}-${item.videoUrl ?? item.sceneUrl}-${index}`}
+                        type="button"
+                        aria-pressed={selected}
+                        aria-label={`Use ${item.label}`}
+                        onClick={() => updateSlide(slideIndex, { loopIndex: index })}
+                        className={`relative h-20 w-36 shrink-0 overflow-hidden rounded-lg border ${
+                          selected ? "border-[var(--csc-accent)]" : "border-white/15"
+                        }`}
+                      >
+                        {item.videoUrl ? (
+                          <video
+                            className="h-full w-full object-cover"
+                            src={item.videoUrl}
+                            poster={item.sceneUrl ?? undefined}
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                          />
+                        ) : item.sceneUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img alt="" src={item.sceneUrl} className="h-full w-full object-cover" />
+                        ) : null}
+                        <span className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                          {item.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section>
@@ -382,22 +445,6 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 ))}
               </div>
             </div>
-            {background.loops.length > 0 ? (
-              <div>
-                <FieldLabel hint="Loops are the bloom's storyboard videos.">Background loop</FieldLabel>
-                <SettingsSelect
-                  ariaLabel="Background loop"
-                  value={String(Math.min(slide.loopIndex, background.loops.length - 1))}
-                  onChange={(value) => updateSlide(slideIndex, { loopIndex: Number(value) })}
-                >
-                  {background.loops.map((item, index) => (
-                    <option key={`${item.label}-${index}`} value={String(index)}>
-                      {item.label}
-                    </option>
-                  ))}
-                </SettingsSelect>
-              </div>
-            ) : null}
           </section>
         </div>
 

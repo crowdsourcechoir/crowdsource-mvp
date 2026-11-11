@@ -3,22 +3,22 @@ import { localEventsGetAll, localEventsGetById } from "@/lib/local-events-store"
 import { supabaseAdmin } from "@/lib/supabase-server";
 import {
   EVENT_DETAIL_SELECT,
+  listStoryboardVersionsForEvent,
   recoverStoryboardForEvent,
   rowToEvent,
   storyboardNeedsRecovery,
 } from "@/lib/events-db";
-import { getGardenByIdOrSlug, listChapters } from "@/lib/song-garden-v2/garden/store";
+import { getChapterByEventId, getGardenByIdOrSlug, listChapters, listGardens } from "@/lib/song-garden-v2/garden/store";
 import {
   DEFAULT_ACCENT_COLOR,
   DEFAULT_PRIMARY_COLOR,
   resolveWorldConfig,
-  type WorldConfig,
-  type WorldStoryboardFrame,
 } from "@/lib/song-garden-v2/world-config";
 import {
-  loopsFromStoryboard,
+  accessibleBloomBackgrounds,
   type ShowDeck,
   type ShowLoop,
+  type StoryboardPlate,
 } from "@/lib/show-slides/model";
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
@@ -84,21 +84,26 @@ async function loadEvent(id: string): Promise<Event | null> {
   return event;
 }
 
-function bloomMatches(row: BloomRow, query: string): boolean {
+function bloomMatches(row: { slug: string; title: string }, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return false;
   return row.slug.toLowerCase().includes(q) || row.title.toLowerCase().includes(q);
 }
 
-async function storyboardFor(event: Event): Promise<{ world: WorldConfig; loops: ShowLoop[] }> {
-  const world = resolveWorldConfig(event);
-  return { world, loops: loopsFromStoryboard(world.worldStoryboard) };
+async function storedPlates(eventId: string, slug: string | null): Promise<StoryboardPlate[]> {
+  if (!supabaseAdmin) return [];
+  const versions = await listStoryboardVersionsForEvent({ eventId, slug });
+  return versions.map((version) => ({
+    videoUrl: version.videoUrl,
+    sceneUrl: version.sceneUrl,
+    frameIndex: version.frameIndex,
+  }));
 }
 
 /**
- * Video loops come from the assigned bloom's storyboard.
- * A garden with no bloom uses its open chapter, then the garden's own bloom storyboard.
- * Gather, with nothing locked yet, binds the bloom whose name contains "gather".
+ * Video plates come from the assigned bloom's storyboard, in the order the bloom shows them.
+ * Stored generations that are not on the board stay available.
+ * A garden named like the show (Gather) supplies its open chapter when no bloom is locked.
  */
 export async function resolveShowBackground(show: ShowDeck): Promise<ShowBackground> {
   const rows = await listBloomRows();
@@ -108,40 +113,51 @@ export async function resolveShowBackground(show: ShowDeck): Promise<ShowBackgro
   }
 
   let garden: { id: string; title: string } | null = null;
-  let gardenFrames: WorldStoryboardFrame[] = [];
+  let gardenFrames: StoryboardPlate[] = [];
   let gardenPrimary = DEFAULT_PRIMARY_COLOR;
   let gardenAccent = DEFAULT_ACCENT_COLOR;
 
-  if (show.gardenId) {
-    const loaded = await getGardenByIdOrSlug(show.gardenId);
-    if (loaded) {
-      garden = { id: loaded.id, title: loaded.title };
-      gardenFrames = loaded.brandKit.bloomStoryboard ?? [];
-      gardenPrimary = loaded.brandKit.primaryColor || gardenPrimary;
-      gardenAccent = loaded.brandKit.accentColor || gardenAccent;
-      if (!bloomId) {
-        const chapters = await listChapters(loaded.id);
-        const chapter = chapters.find((item) => item.status === "open") ?? chapters[chapters.length - 1] ?? null;
-        bloomId = chapter?.eventId ?? null;
-      }
+  async function takeGarden(idOrSlug: string) {
+    const loaded = await getGardenByIdOrSlug(idOrSlug);
+    if (!loaded) return;
+    garden = { id: loaded.id, title: loaded.title };
+    gardenFrames = loaded.brandKit.bloomStoryboard ?? [];
+    gardenPrimary = loaded.brandKit.primaryColor || gardenPrimary;
+    gardenAccent = loaded.brandKit.accentColor || gardenAccent;
+    if (!bloomId) {
+      const chapters = await listChapters(loaded.id);
+      const chapter = chapters.find((item) => item.status === "open") ?? chapters[chapters.length - 1] ?? null;
+      bloomId = chapter?.eventId ?? null;
     }
+  }
+
+  if (show.gardenId) {
+    await takeGarden(show.gardenId);
+  } else if (!bloomId && show.match) {
+    const named = (await listGardens()).find((item) => bloomMatches(item, show.match ?? ""));
+    if (named) await takeGarden(named.id);
   }
 
   const event = bloomId ? await loadEvent(bloomId) : null;
   if (event) {
-    const { world, loops } = await storyboardFor(event);
-    const bloomLoops = loops.length ? loops : loopsFromStoryboard(gardenFrames);
+    const world = resolveWorldConfig(event);
+    if (!garden) {
+      const chapter = await getChapterByEventId(String(event.id));
+      if (chapter) await takeGarden(chapter.gardenId);
+    }
+    const stored = await storedPlates(String(event.id), event.slug);
+    const loops = accessibleBloomBackgrounds(world.worldStoryboard, stored, gardenFrames);
     return {
       bloom: { id: String(event.id), slug: String(event.slug), title: event.title },
       garden,
       primaryColor: world.primaryColor || gardenPrimary,
       accentColor: world.accentColor || gardenAccent,
-      loops: bloomLoops,
-      source: loops.length ? "bloom" : bloomLoops.length ? "garden" : "none",
+      loops,
+      source: world.worldStoryboard.length ? "bloom" : loops.length ? (garden ? "garden" : "bloom") : "none",
     };
   }
 
-  const gardenLoops = loopsFromStoryboard(gardenFrames);
+  const gardenLoops = accessibleBloomBackgrounds(null, null, gardenFrames);
   if (garden && gardenLoops.length) {
     return {
       bloom: null,

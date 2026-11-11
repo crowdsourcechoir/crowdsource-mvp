@@ -16,6 +16,7 @@ import {
   stageScale,
   STAGE_HEIGHT,
   STAGE_WIDTH,
+  accessibleBloomBackgrounds,
 } from "./model";
 
 assert.equal(STAGE_WIDTH, 1920);
@@ -60,11 +61,30 @@ const loops = loopsFromStoryboard([
   { sceneUrl: "/still.jpg", videoUrl: null },
   { sceneUrl: "/poster.jpg", videoUrl: "https://cdn.example/loop.mp4" },
 ]);
-assert.equal(loops[0]?.videoUrl, "https://cdn.example/loop.mp4");
-assert.equal(loops[0]?.label, "Loop 1");
-assert.equal(loops[1]?.label, "Still 2");
-assert.equal(pickLoop(loops, 9)?.label, "Still 2");
+assert.equal(loops[0]?.label, "Frame 1");
+assert.equal(loops[0]?.sceneUrl, "/still.jpg");
+assert.equal(loops[1]?.label, "Frame 2");
+assert.equal(loops[1]?.videoUrl, "https://cdn.example/loop.mp4");
+assert.equal(pickLoop(loops, 9)?.label, "Frame 2");
 assert.equal(pickLoop([], 0), null);
+
+const accessible = accessibleBloomBackgrounds(
+  [{ sceneUrl: "/poster.jpg", videoUrl: null }],
+  [
+    { sceneUrl: "/poster.jpg", videoUrl: "https://cdn.example/loop.mp4", frameIndex: 0 },
+    { sceneUrl: "/other.jpg", videoUrl: "https://cdn.example/loop.mp4", frameIndex: 0 },
+  ],
+  [{ sceneUrl: "/garden.jpg", videoUrl: "https://cdn.example/garden.mp4" }]
+);
+assert.equal(accessible[0]?.label, "Frame 1");
+assert.equal(accessible[0]?.sceneUrl, "/poster.jpg");
+assert.equal(accessible[1]?.label, "Frame 1 · stored");
+assert.equal(accessible[1]?.videoUrl, "https://cdn.example/loop.mp4");
+assert.equal(accessible.length, 2);
+assert.equal(
+  accessibleBloomBackgrounds(null, null, [{ videoUrl: "https://cdn.example/garden.mp4", sceneUrl: null }])[0]?.label,
+  "Frame 1"
+);
 
 const created = createShow(EMPTY_SHOW_SLIDES, "Harbor chant", { id: "show_harbor", now: "2026-11-10T12:00:00.000Z" });
 assert.ok(!("error" in created));
