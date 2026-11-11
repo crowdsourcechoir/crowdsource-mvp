@@ -13,6 +13,7 @@ import {
   nextLyricCue,
   normalizeSlide,
   pickLoop,
+  slideBloomId,
   removeShow,
   revealedLines,
   stageScale,
@@ -80,6 +81,11 @@ assert.equal(pickLoop(loops, 9)?.label, "Frame 2");
 assert.equal(pickLoop([], 0), null);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.showLogo, true);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], showLogo: false }, 0)?.showLogo, false);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], bloomId: "bloom-harbor" }, 0)?.bloomId, "bloom-harbor");
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.bloomId, null);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], bloomId: "  " }, 0)?.bloomId, null);
+assert.equal(slideBloomId({ bloomId: "bloom-harbor" }, { bloomId: GATHER_BLOOM_ID }), "bloom-harbor");
+assert.equal(slideBloomId({ bloomId: null }, { bloomId: GATHER_BLOOM_ID }), GATHER_BLOOM_ID);
 assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
 
 const accessible = accessibleBloomBackgrounds(
@@ -108,6 +114,13 @@ const renamed = applyShowPatch(created.state, created.show, { name: "Harbor chan
 assert.ok(!("error" in renamed));
 if ("error" in renamed) throw new Error(renamed.error);
 assert.equal(renamed.show.slug, "harbor-chant-night");
+const bloomed = applyShowPatch(
+  created.state,
+  created.show,
+  { slides: [{ ...created.show.slides[0]!, bloomId: "bloom-harbor" }] },
+  "2026-11-10T13:00:00.000Z"
+);
+assert.equal("show" in bloomed ? bloomed.show.slides[0]?.bloomId : "", "bloom-harbor");
 assert.equal(removeShow(created.state, gatherShow()).error, "Gather stays. Clear its lines if you want a blank opening.");
 
 function spokenOf(show: { slides: { lines: string[] }[] }, index: number): string {
