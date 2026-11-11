@@ -61,6 +61,8 @@ export type ShowSlide = {
   loopIndex: number;
   /** Crowdsource Choir mark. Missing values stay visible, upper left, at the default width. */
   showLogo: boolean;
+  /** This slide's bloom. Empty uses the show's bloom. */
+  bloomId: string | null;
   /** Width of the mark on the 1920×1080 frame. */
   logoWidth: number;
   /** Upper left, or the center of the slide. */
@@ -150,6 +152,7 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         sizePx: 156,
         loopIndex: 0,
         showLogo: true,
+        bloomId: null,
         logoWidth: LOGO_WIDTH_DEFAULT,
         logoAnchor: "left",
       },
@@ -160,6 +163,7 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         sizePx: 64,
         loopIndex: 0,
         showLogo: true,
+        bloomId: null,
         logoWidth: LOGO_WIDTH_DEFAULT,
         logoAnchor: "left",
       },
@@ -203,6 +207,7 @@ export function normalizeSlide(value: unknown, index: number): ShowSlide | null 
     sizePx: clampLyricSize(Number(raw.sizePx)),
     loopIndex: Number.isFinite(loop) ? Math.max(0, Math.min(23, Math.floor(loop))) : 0,
     showLogo: raw.showLogo !== false,
+    bloomId: asId(raw.bloomId),
     logoWidth: clampLogoWidth(Number(raw.logoWidth)),
     logoAnchor: logoAnchorOf(raw.logoAnchor),
   };
@@ -249,9 +254,15 @@ export function blankSlide(id: string): ShowSlide {
     sizePx: 112,
     loopIndex: 0,
     showLogo: true,
+    bloomId: null,
     logoWidth: LOGO_WIDTH_DEFAULT,
     logoAnchor: "left",
   };
+}
+
+/** The bloom whose video this slide uses. A slide bloom wins; otherwise the show's bloom. */
+export function slideBloomId(slide: { bloomId?: string | null }, show: { bloomId: string | null }): string | null {
+  return slide.bloomId || show.bloomId;
 }
 
 export function normalizeShowSlides(raw: unknown): ShowSlidesState {

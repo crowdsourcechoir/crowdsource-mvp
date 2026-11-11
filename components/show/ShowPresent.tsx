@@ -29,13 +29,15 @@ type Background = {
 type ShowPresentProps = {
   show: ShowDeck;
   background: Background;
+  /** Plates for slides that name their own bloom. */
+  bloomBackgrounds?: Record<string, Background>;
 };
 
 function draftKey(id: string): string {
   return `csc-show-draft:${id}`;
 }
 
-export default function ShowPresent({ show: initial, background }: ShowPresentProps) {
+export default function ShowPresent({ show: initial, background, bloomBackgrounds = {} }: ShowPresentProps) {
   const [show, setShow] = useState(initial);
   const [cue, setCue] = useState<LyricCue>({ slide: 0, revealed: 0 });
   const [fullscreen, setFullscreen] = useState(false);
@@ -92,7 +94,8 @@ export default function ShowPresent({ show: initial, background }: ShowPresentPr
   const index = Math.max(0, Math.min(show.slides.length - 1, cue.slide));
   const slide = show.slides[index];
   const lines = revealedLines(slide, cue.revealed);
-  const loop = pickLoop(background.loops, slide?.loopIndex ?? 0);
+  const plates = (slide?.bloomId && bloomBackgrounds[slide.bloomId]) || background;
+  const loop = pickLoop(plates.loops, slide?.loopIndex ?? 0);
 
   return (
     <div id="show-stage" className="fixed inset-0 bg-black text-white">
@@ -105,8 +108,8 @@ export default function ShowPresent({ show: initial, background }: ShowPresentPr
           logoWidth={slide.logoWidth}
           logoAnchor={slide.logoAnchor}
           loop={loop}
-          primaryColor={background.primaryColor}
-          accentColor={background.accentColor}
+          primaryColor={plates.primaryColor}
+          accentColor={plates.accentColor}
           interactive
           hint={lines.length === 0 ? "Click or press space" : null}
           onAdvance={(direction) => setCue((current) => nextLyricCue(current, show.slides, direction))}

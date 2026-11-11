@@ -61,6 +61,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
   const [gardens, setGardens] = useState<Option[]>([]);
   const [blooms, setBlooms] = useState<Option[]>([]);
   const [background, setBackground] = useState<Background>(EMPTY_BACKGROUND);
+  const [bloomPlates, setBloomPlates] = useState<Record<string, Background>>({});
   const [selected, setSelected] = useState(0);
   const [cue, setCue] = useState<LyricCue>({ slide: 0, revealed: 0 });
   const [mode, setMode] = useState<"trigger" | "full">("trigger");
@@ -114,6 +115,30 @@ export default function ShowEditor({ showId }: { showId: string }) {
     if (!current) return;
     void loadBackground(current);
   }, [show?.id, show?.gardenId, show?.bloomId, loadBackground]);
+
+  const slideBloomKey = show?.slides.map((item) => item.bloomId ?? "").join("|") ?? "";
+  useEffect(() => {
+    const current = showRef.current;
+    if (!current) return;
+    const ids = Array.from(new Set(current.slides.map((item) => item.bloomId).filter((id): id is string => Boolean(id))));
+    let cancelled = false;
+    for (const bloomId of ids) {
+      const params = new URLSearchParams();
+      params.set("gardenId", current.gardenId ?? "");
+      params.set("bloomId", bloomId);
+      void fetch(`/api/shows/${encodeURIComponent(current.id)}/background?${params}`, { cache: "no-store" })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!cancelled && res.ok && data.background) {
+            setBloomPlates((prev) => ({ ...prev, [bloomId]: data.background as Background }));
+          }
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [show?.id, show?.gardenId, slideBloomKey]);
 
   const slideIndex = show ? Math.max(0, Math.min(show.slides.length - 1, selected)) : 0;
   const slide = show?.slides[slideIndex];
@@ -182,7 +207,16 @@ export default function ShowEditor({ showId }: { showId: string }) {
   }
 
   const fontNote = LYRIC_FONTS.find((font) => font.id === slide.font)?.note;
-  const loop = pickLoop(background.loops, previewSlide.loopIndex);
+  function platesFor(item: ShowSlide | undefined): Background {
+    if (item?.bloomId) return bloomPlates[item.bloomId] ?? EMPTY_BACKGROUND;
+    return background;
+  }
+  const stagePlates = platesFor(previewSlide);
+  const slidePlates = platesFor(slide);
+  const loop = pickLoop(stagePlates.loops, previewSlide.loopIndex);
+  const slideBloomTitle = slide.bloomId
+    ? blooms.find((bloom) => bloom.id === slide.bloomId)?.title || slidePlates.bloom?.title || "this bloom"
+    : null;
   const videoNote = background.bloom
     ? `Video loops from ${background.bloom.title}.`
     : background.source === "garden" && background.garden
@@ -270,17 +304,17 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 </Link>
               ) : null}
             </div>
-            {background.loops.length > 0 ? (
+            {slidePlates.loops.length > 0 ? (
               <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <FieldLabel hint="These are the bloom's background plates, in the order the bloom plays them. Stored generations stay available.">
+                  <FieldLabel hint={slideBloomTitle ? `Frames from ${slideBloomTitle}.` : "These are the bloom's background plates, in the order the bloom plays them. Stored generations stay available."}>
                     Background videos
                   </FieldLabel>
                   <SettingsButton
                     onClick={() => {
                       const slides = show.slides.map((item, index) => ({
                         ...item,
-                        loopIndex: index % background.loops.length,
+                        loopIndex: index % slidePlates.loops.length,
                       }));
                       update({ ...show, slides });
                     }}
@@ -289,17 +323,17 @@ export default function ShowEditor({ showId }: { showId: string }) {
                   </SettingsButton>
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  {background.loops.map((item, index) => {
-                    const selected = Math.min(slide.loopIndex, background.loops.length - 1) === index;
+                  {slidePlates.loops.map((item, index) => {
+                    const selectedLoop = Math.min(slide.loopIndex, slidePlates.loops.length - 1) === index;
                     return (
                       <button
                         key={`${item.label}-${item.videoUrl ?? item.sceneUrl}-${index}`}
                         type="button"
-                        aria-pressed={selected}
+                        aria-pressed={selectedLoop}
                         aria-label={`Use ${item.label}`}
                         onClick={() => updateSlide(slideIndex, { loopIndex: index })}
                         className={`relative h-20 w-36 shrink-0 overflow-hidden rounded-lg border ${
-                          selected ? "border-[var(--csc-accent)]" : "border-white/15"
+                          selectedLoop ? "border-[var(--csc-accent)]" : "border-white/15"
                         }`}
                       >
                         {item.videoUrl ? (
@@ -359,6 +393,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     </span>
                     <span className="mt-1 block text-xs text-gray-500">
                       {LYRIC_FONTS.find((font) => font.id === item.font)?.label} · {item.sizePx}px
+                      {item.bloomId ? ` · ${blooms.find((bloom) => bloom.id === item.bloomId)?.title ?? "Bloom"}` : ""}
                       {item.showLogo === false ? " · logo hidden" : item.logoAnchor === "center" ? " · logo center" : ""}
                     </span>
                   </button>
@@ -399,6 +434,26 @@ export default function ShowEditor({ showId }: { showId: string }) {
           </section>
 
           <section className="space-y-4">
+            <div>
+              <FieldLabel hint="This slide can belong to its own bloom. Video comes from that bloom. Leave it on the show when every slide shares one.">
+                Bloom
+              </FieldLabel>
+              <SettingsSelect
+                ariaLabel="Slide bloom"
+                value={slide.bloomId ?? ""}
+                onChange={(bloomId) => updateSlide(slideIndex, { bloomId: bloomId || null })}
+              >
+                <option value="">Show&apos;s bloom</option>
+                {blooms.map((bloom) => (
+                  <option key={bloom.id} value={bloom.id}>
+                    {bloom.title}
+                  </option>
+                ))}
+                {slide.bloomId && !blooms.some((bloom) => bloom.id === slide.bloomId) ? (
+                  <option value={slide.bloomId}>{slideBloomTitle}</option>
+                ) : null}
+              </SettingsSelect>
+            </div>
             <div>
               <FieldLabel hint="One lyric line per row. A click on the slide reveals the next row.">Lines</FieldLabel>
               <textarea
@@ -516,8 +571,8 @@ export default function ShowEditor({ showId }: { showId: string }) {
               logoWidth={previewSlide.logoWidth}
               logoAnchor={previewSlide.logoAnchor}
               loop={loop}
-              primaryColor={background.primaryColor}
-              accentColor={background.accentColor}
+              primaryColor={stagePlates.primaryColor}
+              accentColor={stagePlates.accentColor}
               interactive={mode === "trigger"}
               hint={mode === "trigger" && previewLines.length === 0 ? "Click to trigger the line" : null}
               onAdvance={(direction) => setCue((current) => nextLyricCue(current, show.slides, direction))}
