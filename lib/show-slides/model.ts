@@ -73,6 +73,10 @@ export type ShowSlide = {
   overlayColor?: string;
   /** 0 shows the picture. 1 is a full wash. Omitted is the readable default. */
   overlayAmount?: number;
+  /** Play to the end, then back to the start, so the loop does not cut. Omitted plays forward and cuts. */
+  motion?: "return";
+  /** 0.25–1. Omitted is full speed. */
+  speed?: number;
 };
 
 export type ShowDeck = {
@@ -180,6 +184,33 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
 }
 
 export const SHOW_OVERLAY_AMOUNT = 0.55;
+export const SLIDE_SPEED_MIN = 0.25;
+export const SLIDE_SPEED_MAX = 1;
+
+export function slideMotion(value: unknown): "loop" | "return" {
+  return value === "return" ? "return" : "loop";
+}
+
+export function slideSpeed(value: unknown): number {
+  const speed = Number(value);
+  if (!Number.isFinite(speed)) return 1;
+  const clamped = Math.min(SLIDE_SPEED_MAX, Math.max(SLIDE_SPEED_MIN, speed));
+  return Math.round(clamped * 100) / 100;
+}
+
+/** One step of a forward-then-back frame pass. The ends turn around instead of jumping. */
+export function stepBoomerang(
+  index: number,
+  direction: 1 | -1,
+  count: number
+): { index: number; direction: 1 | -1 } {
+  if (count <= 1) return { index: 0, direction: 1 };
+  const atEnd = direction === 1 && index >= count - 1;
+  const atStart = direction === -1 && index <= 0;
+  if (atEnd) return { index: count - 1, direction: -1 };
+  if (atStart) return { index: 0, direction: 1 };
+  return { index: index + direction, direction };
+}
 
 function asFont(value: unknown): LyricFontId {
   return typeof value === "string" && FONT_IDS.has(value) ? (value as LyricFontId) : "fraunces";
@@ -232,6 +263,8 @@ export function normalizeSlide(value: unknown, index: number): ShowSlide | null 
     logoWidth: clampLogoWidth(Number(raw.logoWidth)),
     logoAnchor: logoAnchorOf(raw.logoAnchor),
     ...asOverlay(raw),
+    ...(slideMotion(raw.motion) === "return" ? { motion: "return" as const } : {}),
+    ...(slideSpeed(raw.speed) < 1 ? { speed: slideSpeed(raw.speed) } : {}),
   };
 }
 

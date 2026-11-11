@@ -9,6 +9,8 @@ type LoopingVideoProps = {
   veilColor?: string;
   /** Fires once the poster is painted or the first video frame can play. */
   onReady?: () => void;
+  /** 1 is normal. Lower is slow motion. */
+  playbackRate?: number;
 };
 
 const SEAM_LEAD_SEC = 0.7;
@@ -24,6 +26,7 @@ export default function LoopingVideo({
   poster,
   veilColor = "#0E1F24",
   onReady,
+  playbackRate = 1,
 }: LoopingVideoProps) {
   const aRef = useRef<HTMLVideoElement | null>(null);
   const bRef = useRef<HTMLVideoElement | null>(null);
@@ -70,6 +73,7 @@ export default function LoopingVideo({
       el.playsInline = true;
       el.loop = false;
       el.preload = "auto";
+      el.playbackRate = playbackRate;
       try {
         el.currentTime = 0;
       } catch {
@@ -172,7 +176,7 @@ export default function LoopingVideo({
       a.pause();
       b.pause();
     };
-  }, [src, poster, markReady]);
+  }, [src, poster, markReady, playbackRate]);
 
   return (
     <div className="absolute inset-0" aria-hidden>
