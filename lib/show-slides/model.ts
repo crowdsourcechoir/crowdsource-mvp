@@ -6,6 +6,9 @@
 export const STAGE_WIDTH = 1920;
 export const STAGE_HEIGHT = 1080;
 export const GATHER_SHOW_ID = "show_gather";
+/** Live Gather Song Garden bloom (Crowdsource Choir: Gather, 3 Dec 2026). */
+export const GATHER_BLOOM_ID = "aa212bdd-696b-4e91-863d-808fd60bd84c";
+export const GATHER_BLOOM_SLUG = "csc-dec3";
 export const LYRIC_SIZE_MIN = 36;
 export const LYRIC_SIZE_MAX = 180;
 
@@ -116,7 +119,7 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
     name: "Gather",
     builtin: true,
     gardenId: null,
-    bloomId: null,
+    bloomId: GATHER_BLOOM_ID,
     match: "gather",
     slides: [
       {
@@ -230,7 +233,15 @@ export function normalizeShowSlides(raw: unknown): ShowSlidesState {
 
 export function listShows(state: ShowSlidesState): ShowDeck[] {
   const storedGather = state.shows.find((show) => show.id === GATHER_SHOW_ID);
-  const gather = storedGather ? { ...storedGather, builtin: true, slug: "gather", match: "gather" } : gatherShow();
+  const gather = storedGather
+    ? {
+        ...storedGather,
+        builtin: true,
+        slug: "gather",
+        match: "gather",
+        bloomId: storedGather.bloomId || GATHER_BLOOM_ID,
+      }
+    : gatherShow();
   const custom = state.shows.filter((show) => show.id !== GATHER_SHOW_ID);
   return [gather, ...custom];
 }

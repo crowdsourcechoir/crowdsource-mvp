@@ -185,7 +185,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
     : background.source === "garden" && background.garden
       ? `Video loops from the ${background.garden.title} garden.`
       : show.match
-        ? "No Gather bloom is connected in this workspace yet. Assign the conference bloom and its loops will fill the slide."
+        ? "The Gather Song Garden plates load from the live bloom. Assign another bloom if this show should use a different set."
         : "Assign a bloom to use its video loops.";
 
   return (
@@ -270,7 +270,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
             {background.loops.length > 0 ? (
               <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <FieldLabel hint="These are the bloom's background plates, in the order the bloom shows them. Stored generations stay available.">
+                  <FieldLabel hint="These are the bloom's background plates, in the order the bloom plays them. Stored generations stay available.">
                     Background videos
                   </FieldLabel>
                   <SettingsButton

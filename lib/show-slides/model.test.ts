@@ -5,6 +5,7 @@ import {
   createShow,
   EMPTY_SHOW_SLIDES,
   findShow,
+  GATHER_BLOOM_ID,
   gatherShow,
   listShows,
   loopsFromStoryboard,
@@ -32,6 +33,15 @@ assert.equal(clampLyricSize(72.4), 72);
 const listed = listShows(EMPTY_SHOW_SLIDES);
 assert.equal(listed[0]?.slug, "gather");
 assert.equal(listed[0]?.match, "gather");
+assert.equal(listed[0]?.bloomId, GATHER_BLOOM_ID);
+assert.equal(
+  listShows({ shows: [{ ...gatherShow(), bloomId: null }] })[0]?.bloomId,
+  GATHER_BLOOM_ID
+);
+assert.equal(
+  listShows({ shows: [{ ...gatherShow(), bloomId: "bloom-other" }] })[0]?.bloomId,
+  "bloom-other"
+);
 assert.equal(findShow(EMPTY_SHOW_SLIDES, "gather")?.name, "Gather");
 assert.equal(spokenOf(listed[0]!, 0), "Gather");
 

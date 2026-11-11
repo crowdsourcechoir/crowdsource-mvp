@@ -16,10 +16,16 @@ import {
 } from "@/lib/song-garden-v2/world-config";
 import {
   accessibleBloomBackgrounds,
+  GATHER_BLOOM_ID,
+  GATHER_BLOOM_SLUG,
+  GATHER_SHOW_ID,
   type ShowDeck,
   type ShowLoop,
   type StoryboardPlate,
 } from "@/lib/show-slides/model";
+
+/** Public read of the live Gather bloom. Used when this workspace has no database row for it. */
+const GATHER_PUBLIC_EVENT_URL = `https://app.crowdsourcechoir.com/api/events?slug=${GATHER_BLOOM_SLUG}`;
 
 const USE_LOCAL_EVENTS = process.env.USE_LOCAL_EVENTS === "true";
 
@@ -84,6 +90,18 @@ async function loadEvent(id: string): Promise<Event | null> {
   return event;
 }
 
+async function fetchPublicGatherEvent(): Promise<Event | null> {
+  try {
+    const res = await fetch(GATHER_PUBLIC_EVENT_URL, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Event | null;
+    if (!data || typeof data !== "object" || !data.worldConfig) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 function bloomMatches(row: { slug: string; title: string }, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return false;
@@ -108,7 +126,8 @@ async function storedPlates(eventId: string, slug: string | null): Promise<Story
 export async function resolveShowBackground(show: ShowDeck): Promise<ShowBackground> {
   const rows = await listBloomRows();
   let bloomId = show.bloomId;
-  if (!bloomId && show.match) {
+  if (show.id === GATHER_SHOW_ID && !bloomId) bloomId = GATHER_BLOOM_ID;
+  if (!bloomId && show.match && show.id !== GATHER_SHOW_ID) {
     bloomId = rows.find((row) => bloomMatches(row, show.match ?? ""))?.id ?? null;
   }
 
@@ -138,7 +157,12 @@ export async function resolveShowBackground(show: ShowDeck): Promise<ShowBackgro
     if (named) await takeGarden(named.id);
   }
 
-  const event = bloomId ? await loadEvent(bloomId) : null;
+  let event = bloomId ? await loadEvent(bloomId) : null;
+  if (!event && (bloomId === GATHER_BLOOM_ID || bloomId === GATHER_BLOOM_SLUG)) {
+    const bySlug = rows.find((row) => row.slug === GATHER_BLOOM_SLUG || row.id === GATHER_BLOOM_ID);
+    event = bySlug ? await loadEvent(bySlug.id) : null;
+    if (!event) event = await fetchPublicGatherEvent();
+  }
   if (event) {
     const world = resolveWorldConfig(event);
     if (!garden) {
