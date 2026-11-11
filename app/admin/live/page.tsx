@@ -161,6 +161,9 @@ export default function LivePage() {
           <p className="mt-2 text-sm text-gray-400">
             Runtime tools for Blooms: prompts, signal play, and live participation moments.
           </p>
+          <Link href="/admin/shows" className="csc-link mt-3 inline-flex text-sm">
+            Show slides
+          </Link>
         </div>
       </div>
 

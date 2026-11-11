@@ -1,5 +1,6 @@
 import { measurementIdFrom } from "@/lib/analytics/model";
 import { normalizeWebPitches, type WebPitchesState } from "@/lib/pitches/model";
+import { EMPTY_SHOW_SLIDES, normalizeShowSlides, type ShowSlidesState } from "@/lib/show-slides/model";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 /**
@@ -35,6 +36,8 @@ export type WorkspaceSettings = {
   songGarden: unknown;
   /** Web pitch decks: SoBECA and Initial Meeting overrides, plus pitches created in Settings. */
   webPitches: WebPitchesState;
+  /** Lyric show slides. Gather is filled in when this list has no Gather show. */
+  showSlides: ShowSlidesState;
   /** GA4 measurement id. Null means first-party analytics only. */
   gaMeasurementId: string | null;
   salesOffers: SalesOffersSettingsOverrides;
@@ -45,6 +48,7 @@ export const EMPTY_WORKSPACE_SETTINGS: WorkspaceSettings = {
   digest: { enabled: null, minScore: null, targetCount: null, recipient: null },
   songGarden: null,
   webPitches: { overrides: {}, custom: [] },
+  showSlides: EMPTY_SHOW_SLIDES,
   gaMeasurementId: null,
   salesOffers: {
     anthemExperienceAmount: null,
@@ -128,6 +132,7 @@ export function normalizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
     },
     songGarden: source.songGarden === undefined ? null : source.songGarden,
     webPitches: normalizeWebPitches(source.webPitches),
+    showSlides: normalizeShowSlides(source.showSlides),
     gaMeasurementId: measurementIdFrom(source.gaMeasurementId),
     salesOffers: {
       anthemExperienceAmount: coerceNumber(salesOffers.anthemExperienceAmount, 0, 1_000_000),
@@ -181,6 +186,7 @@ export async function writeWorkspaceSettings(
     gaMeasurementId: string | null;
     salesOffers: Partial<SalesOffersSettingsOverrides>;
     webPitches: WebPitchesState;
+    showSlides: ShowSlidesState;
   }>
 ): Promise<WorkspaceSettingsRead> {
   if (!supabaseAdmin) {
@@ -201,6 +207,9 @@ export async function writeWorkspaceSettings(
     webPitches: Object.prototype.hasOwnProperty.call(patch, "webPitches")
       ? patch.webPitches
       : current.settings.webPitches,
+    showSlides: Object.prototype.hasOwnProperty.call(patch, "showSlides")
+      ? patch.showSlides
+      : current.settings.showSlides,
     gaMeasurementId: Object.prototype.hasOwnProperty.call(patch, "gaMeasurementId")
       ? measurementIdFrom(patch.gaMeasurementId)
       : current.settings.gaMeasurementId,

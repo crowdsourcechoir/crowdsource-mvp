@@ -56,6 +56,15 @@ function IconBlooms({ className }: { className?: string }) {
   );
 }
 
+function IconShows({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3.5" y="5" width="17" height="14" rx="1.6" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M7.5 12.5h9M8.5 9.5h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconLive({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -177,6 +186,14 @@ const navItems: Array<AdminNavItem & { key: keyof NavFlags }> = [
     isActive: (pathname) =>
       pathname.startsWith("/admin/live") || pathname.startsWith("/admin/live-prompt-game"),
     icon: <IconLive className="h-5 w-5" />,
+  },
+  {
+    label: "Shows",
+    key: "live",
+    eyebrow: "Lyric Slides",
+    href: "/admin/shows",
+    isActive: (pathname) => pathname.startsWith("/admin/shows"),
+    icon: <IconShows className="h-5 w-5" />,
   },
   {
     label: "Composer",

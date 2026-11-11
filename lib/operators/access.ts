@@ -122,6 +122,8 @@ const OWNER_PREFIXES = [
   "/admin/settings",
   "/admin/marketing",
   "/admin/live",
+  "/admin/shows",
+  "/api/shows",
   "/admin/roots",
   "/admin/resonance",
   "/admin/events/new",
@@ -220,6 +222,11 @@ export function decideAccess(
   searchParams: URLSearchParams,
   actor: Actor | null
 ): AccessResult {
+  if (pathname === "/show" || pathname.startsWith("/show/")) {
+    if (!actor) return { kind: "redirect", to: "/" };
+    if (actor.role === "owner" || actor.legacy) return { kind: "allow" };
+    return { kind: "redirect", to: homePath(actor) };
+  }
   if (isPublicPath(pathname, method, searchParams)) return { kind: "public" };
   if (!pathname.startsWith("/admin") && !pathname.startsWith("/api")) return { kind: "public" };
   if (!actor) return pathname.startsWith("/api") ? { kind: "deny", status: 401 } : { kind: "redirect", to: "/" };

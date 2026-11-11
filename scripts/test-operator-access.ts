@@ -59,6 +59,12 @@ const checks: Array<[string, boolean]> = [
   ["anon analytics config", decide("/api/analytics/config", "GET", null).kind === "public"],
   ["anon analytics report", decide("/api/analytics/report", "GET", null).kind === "deny"],
   ["owner analytics report", decide("/api/analytics/report", "GET", owner).kind === "allow"],
+  ["artist shows", decide("/admin/shows", "GET", artist).kind === "redirect"],
+  ["artist show api", decide("/api/shows", "GET", artist).kind === "deny"],
+  ["owner shows", decide("/admin/shows", "GET", owner).kind === "allow"],
+  ["owner show stage", decide("/show/gather", "GET", owner).kind === "allow"],
+  ["artist show stage", decide("/show/gather", "GET", artist).kind === "redirect"],
+  ["anon show stage", decide("/show/gather", "GET", null).kind === "redirect"],
   ["artist home", homePath(artist) === "/admin/composer?bloom=bloom-1"],
   ["sales home", homePath(sales) === "/admin/sales"],
 ];

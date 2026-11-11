@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+import {
+  applyShowPatch,
+  clampLyricSize,
+  createShow,
+  EMPTY_SHOW_SLIDES,
+  findShow,
+  gatherShow,
+  listShows,
+  loopsFromStoryboard,
+  matchBloom,
+  nextLyricCue,
+  pickLoop,
+  removeShow,
+  revealedLines,
+  stageScale,
+  STAGE_HEIGHT,
+  STAGE_WIDTH,
+} from "./model";
+
+assert.equal(STAGE_WIDTH, 1920);
+assert.equal(STAGE_HEIGHT, 1080);
+assert.equal(stageScale(1920, 1080), 1);
+assert.equal(stageScale(960, 1080), 0.5);
+assert.equal(stageScale(1920, 540), 0.5);
+assert.equal(stageScale(1280, 800), 0.667);
+assert.equal(clampLyricSize(12), 36);
+assert.equal(clampLyricSize(400), 180);
+assert.equal(clampLyricSize(72.4), 72);
+
+const listed = listShows(EMPTY_SHOW_SLIDES);
+assert.equal(listed[0]?.slug, "gather");
+assert.equal(listed[0]?.match, "gather");
+assert.equal(findShow(EMPTY_SHOW_SLIDES, "gather")?.name, "Gather");
+assert.equal(spokenOf(listed[0]!, 0), "Gather");
+
+const slides = [
+  { lines: ["Gather", "  "] },
+  { lines: ["We are in the room", "The room is the song"] },
+];
+assert.deepEqual(nextLyricCue({ slide: 0, revealed: 0 }, slides, "next"), { slide: 0, revealed: 1 });
+assert.deepEqual(nextLyricCue({ slide: 0, revealed: 1 }, slides, "next"), { slide: 1, revealed: 0 });
+assert.deepEqual(nextLyricCue({ slide: 1, revealed: 0 }, slides, "next"), { slide: 1, revealed: 1 });
+assert.deepEqual(nextLyricCue({ slide: 1, revealed: 2 }, slides, "next"), { slide: 1, revealed: 2 });
+assert.deepEqual(nextLyricCue({ slide: 1, revealed: 1 }, slides, "prev"), { slide: 1, revealed: 0 });
+assert.deepEqual(nextLyricCue({ slide: 1, revealed: 0 }, slides, "prev"), { slide: 0, revealed: 1 });
+assert.deepEqual(nextLyricCue({ slide: 0, revealed: 0 }, slides, "prev"), { slide: 0, revealed: 0 });
+assert.deepEqual(nextLyricCue({ slide: 0, revealed: 0 }, slides, "none"), { slide: 0, revealed: 0 });
+assert.deepEqual(revealedLines(slides[1], 1), ["We are in the room"]);
+
+const blooms = [
+  { id: "b1", slug: "harbor-night", title: "Harbor Night" },
+  { id: "b2", slug: "gather-2026", title: "Gather Conference" },
+];
+assert.equal(matchBloom(blooms, { bloomId: null, match: "gather" })?.id, "b2");
+assert.equal(matchBloom(blooms, { bloomId: "b1", match: "gather" })?.id, "b1");
+assert.equal(matchBloom(blooms, { bloomId: "missing", match: "gather" }), null);
+
+const loops = loopsFromStoryboard([
+  { sceneUrl: "/still.jpg", videoUrl: null },
+  { sceneUrl: "/poster.jpg", videoUrl: "https://cdn.example/loop.mp4" },
+]);
+assert.equal(loops[0]?.videoUrl, "https://cdn.example/loop.mp4");
+assert.equal(loops[0]?.label, "Loop 1");
+assert.equal(loops[1]?.label, "Still 2");
+assert.equal(pickLoop(loops, 9)?.label, "Still 2");
+assert.equal(pickLoop([], 0), null);
+
+const created = createShow(EMPTY_SHOW_SLIDES, "Harbor chant", { id: "show_harbor", now: "2026-11-10T12:00:00.000Z" });
+assert.ok(!("error" in created));
+if ("error" in created) throw new Error(created.error);
+assert.equal(created.show.slug, "harbor-chant");
+const renamed = applyShowPatch(created.state, created.show, { name: "Harbor chant night" }, "2026-11-10T13:00:00.000Z");
+assert.ok(!("error" in renamed));
+if ("error" in renamed) throw new Error(renamed.error);
+assert.equal(renamed.show.slug, "harbor-chant-night");
+assert.equal(removeShow(created.state, gatherShow()).error, "Gather stays. Clear its lines if you want a blank opening.");
+
+function spokenOf(show: { slides: { lines: string[] }[] }, index: number): string {
+  return show.slides[index]?.lines[0] ?? "";
+}
+
+console.log("show slide checks passed");
