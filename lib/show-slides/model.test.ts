@@ -18,6 +18,9 @@ import {
   normalizeSlide,
   pickLoop,
   slideBloomId,
+  slideMotion,
+  slideSpeed,
+  stepBoomerang,
   removeShow,
   revealedLines,
   stageScale,
@@ -95,6 +98,19 @@ assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoAnchor, "lef
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoWidth: 4000, logoAnchor: "center" }, 0)?.logoWidth, LOGO_WIDTH_MAX);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoAnchor: "center" }, 0)?.logoAnchor, "center");
 assert.equal(clampLogoWidth(10), LOGO_WIDTH_MIN);
+assert.equal(slideMotion("return"), "return");
+assert.equal(slideMotion("loop"), "loop");
+assert.equal(slideSpeed(0.5), 0.5);
+assert.equal(slideSpeed(4), 1);
+assert.equal(slideSpeed(0.1), 0.25);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], motion: "return", speed: 0.5 }, 0)?.motion, "return");
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], motion: "return", speed: 0.5 }, 0)?.speed, 0.5);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.motion, undefined);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], speed: 1 }, 0)?.speed, undefined);
+assert.deepEqual(stepBoomerang(0, 1, 4), { index: 1, direction: 1 });
+assert.deepEqual(stepBoomerang(3, 1, 4), { index: 3, direction: -1 });
+assert.deepEqual(stepBoomerang(3, -1, 4), { index: 2, direction: -1 });
+assert.deepEqual(stepBoomerang(0, -1, 4), { index: 0, direction: 1 });
 assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
 const overlaySlide = normalizeSlide(
   { id: "s", lines: ["Sing"], treatment: "overlay", overlayColor: " #aabbcc ", overlayAmount: 0.2 },

@@ -251,6 +251,8 @@ export default function ShowEditor({ showId }: { showId: string }) {
   const videoSummary = [
     slideBloomTitle ?? slidePlates.bloom?.title ?? background.bloom?.title ?? (show.match ? "Gather bloom" : "No bloom"),
     plate?.label,
+    slide.motion === "return" ? "forward and back" : null,
+    slide.speed && slide.speed < 1 ? `${Math.round(slide.speed * 100)}% speed` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -426,6 +428,8 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 overlayColor={previewSlide.overlayColor}
                 overlayAmount={previewSlide.overlayAmount}
                 loop={loop}
+                motion={previewSlide.motion}
+                speed={previewSlide.speed}
                 primaryColor={stagePlates.primaryColor}
                 accentColor={stagePlates.accentColor}
                 interactive={mode === "trigger"}
@@ -627,6 +631,34 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     ) : null}
                   </SettingsSelect>
                 </div>
+                <SettingsButton
+                  variant={slide.motion === "return" ? "ghost" : "primary"}
+                  title="The clip plays forward and cuts back to the start."
+                  onClick={() => updateSlide(slideIndex, { motion: undefined })}
+                >
+                  Loop
+                </SettingsButton>
+                <SettingsButton
+                  variant={slide.motion === "return" ? "primary" : "ghost"}
+                  title="The clip plays forward, then back, so the loop does not jump."
+                  onClick={() => updateSlide(slideIndex, { motion: "return" })}
+                >
+                  Forward and back
+                </SettingsButton>
+                <label className="flex items-center gap-2 text-[11px] text-gray-400">
+                  Speed {Math.round((slide.speed ?? 1) * 100)}%
+                  <input
+                    type="range"
+                    min={25}
+                    max={100}
+                    step={5}
+                    aria-label="Video speed"
+                    title="100% is normal. Lower is slow motion."
+                    value={Math.round((slide.speed ?? 1) * 100)}
+                    onChange={(event) => updateSlide(slideIndex, { speed: Number(event.target.value) / 100 })}
+                    className="w-24 accent-[var(--csc-accent)]"
+                  />
+                </label>
                 {slidePlates.loops.length > 0 ? (
                   <SettingsButton
                     onClick={() => {

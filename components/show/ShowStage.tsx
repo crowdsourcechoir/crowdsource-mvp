@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
+import ReturnVideo from "@/components/show/ReturnVideo";
 import { lyricFontClass } from "@/components/show/lyric-fonts";
 import { slideGesture } from "@/lib/pitches/slideshow";
 import {
@@ -10,6 +11,7 @@ import {
   lyricLineHeight,
   SHOW_LOGO_SRC,
   SHOW_OVERLAY_AMOUNT,
+  slideSpeed,
   stageScale,
   STAGE_HEIGHT,
   STAGE_WIDTH,
@@ -29,6 +31,8 @@ type ShowStageProps = {
   treatment?: "card" | "overlay";
   overlayColor?: string;
   overlayAmount?: number;
+  motion?: "return";
+  speed?: number;
   primaryColor: string;
   accentColor: string;
   interactive?: boolean;
@@ -47,6 +51,8 @@ export default function ShowStage({
   treatment = "card",
   overlayColor,
   overlayAmount,
+  motion,
+  speed,
   primaryColor,
   accentColor,
   interactive = false,
@@ -167,7 +173,7 @@ export default function ShowStage({
             transformOrigin: "top left",
           }}
         >
-          <StagePlate loop={loop} primaryColor={primaryColor} />
+          <StagePlate loop={loop} primaryColor={primaryColor} motion={motion} speed={speed} />
           {showLogo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -285,9 +291,29 @@ export default function ShowStage({
   );
 }
 
-function StagePlate({ loop, primaryColor }: { loop: ShowLoop | null; primaryColor: string }) {
+function StagePlate({
+  loop,
+  primaryColor,
+  motion,
+  speed,
+}: {
+  loop: ShowLoop | null;
+  primaryColor: string;
+  motion?: "return";
+  speed?: number;
+}) {
   if (loop?.videoUrl) {
-    return <LoopingVideo src={loop.videoUrl} poster={loop.sceneUrl ?? undefined} veilColor={primaryColor} />;
+    if (motion === "return") {
+      return <ReturnVideo src={loop.videoUrl} poster={loop.sceneUrl ?? undefined} speed={slideSpeed(speed)} />;
+    }
+    return (
+      <LoopingVideo
+        src={loop.videoUrl}
+        poster={loop.sceneUrl ?? undefined}
+        veilColor={primaryColor}
+        playbackRate={slideSpeed(speed)}
+      />
+    );
   }
   if (loop?.sceneUrl) {
     return (

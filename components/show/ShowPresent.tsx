@@ -111,6 +111,8 @@ export default function ShowPresent({ show: initial, background, bloomBackground
           overlayColor={slide.overlayColor}
           overlayAmount={slide.overlayAmount}
           loop={loop}
+          motion={slide.motion}
+          speed={slide.speed}
           primaryColor={plates.primaryColor}
           accentColor={plates.accentColor}
           interactive
