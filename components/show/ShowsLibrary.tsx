@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SettingsButton, TextField } from "@/components/settings/ui";
+import { SettingsButton } from "@/components/settings/ui";
 import type { ShowDeck } from "@/lib/show-slides/model";
 
 export default function ShowsLibrary() {
   const router = useRouter();
   const [shows, setShows] = useState<ShowDeck[] | null>(null);
   const [name, setName] = useState("");
+  const [naming, setNaming] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +33,18 @@ export default function ShowsLibrary() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (naming) nameRef.current?.focus();
+  }, [naming]);
+
+  function beginShow() {
+    if (naming && name.trim()) {
+      void createShow();
+      return;
+    }
+    setNaming(true);
+  }
 
   async function createShow() {
     const trimmed = name.trim();
@@ -54,21 +68,36 @@ export default function ShowsLibrary() {
 
   return (
     <section className="mb-10 text-white">
-      <p className="csc-eyebrow">Show slides</p>
-      <h2 className="mt-2 text-lg font-bold text-white sm:text-xl">Lyric slides</h2>
-      <p className="mt-2 max-w-2xl text-sm text-gray-400">
-        1920×1080 lyric slides for the room. A click or the space bar reveals the next line. The background is the
-        bloom&apos;s video. Words can sit on a glass card, or directly on the picture.
-      </p>
-
-      <div className="mt-8 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <TextField value={name} onChange={setName} placeholder="Name a show" />
-        </div>
-        <SettingsButton variant="primary" disabled={busy || !name.trim()} onClick={createShow}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-white sm:text-xl">Lyric slides</h2>
+        <SettingsButton variant="primary" disabled={busy} expanded={naming} onClick={beginShow}>
           {busy ? "Creating" : "New show"}
         </SettingsButton>
       </div>
+      {naming ? (
+        <form
+          className="mt-4 max-w-xl"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createShow();
+          }}
+        >
+          <input
+            ref={nameRef}
+            aria-label="Show name"
+            value={name}
+            placeholder="Name a show"
+            disabled={busy}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              setNaming(false);
+              setName("");
+            }}
+            className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none disabled:opacity-50"
+          />
+        </form>
+      ) : null}
       {status ? <p className="mt-3 text-sm text-amber-200">{status}</p> : null}
 
       <div className="csc-list mt-8">
