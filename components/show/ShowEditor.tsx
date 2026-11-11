@@ -7,12 +7,16 @@ import { SettingsButton, SettingsSelect, TextField } from "@/components/settings
 import {
   blankSlide,
   LYRIC_FONTS,
+  LOGO_WIDTH_DEFAULT,
+  LOGO_WIDTH_MAX,
+  LOGO_WIDTH_MIN,
   LYRIC_SIZE_MAX,
   LYRIC_SIZE_MIN,
   nextLyricCue,
   pickLoop,
   revealedLines,
   SIZE_PRESETS,
+  SHOW_OVERLAY_AMOUNT,
   spokenLines,
   type LyricCue,
   type LyricFontId,
@@ -58,6 +62,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
   const [gardens, setGardens] = useState<Option[]>([]);
   const [blooms, setBlooms] = useState<Option[]>([]);
   const [background, setBackground] = useState<Background>(EMPTY_BACKGROUND);
+  const [bloomPlates, setBloomPlates] = useState<Record<string, Background>>({});
   const [selected, setSelected] = useState(0);
   const [cue, setCue] = useState<LyricCue>({ slide: 0, revealed: 0 });
   const [mode, setMode] = useState<"trigger" | "full">("trigger");
@@ -113,6 +118,30 @@ export default function ShowEditor({ showId }: { showId: string }) {
     if (!current) return;
     void loadBackground(current);
   }, [show?.id, show?.gardenId, show?.bloomId, loadBackground]);
+
+  const slideBloomKey = show?.slides.map((item) => item.bloomId ?? "").join("|") ?? "";
+  useEffect(() => {
+    const current = showRef.current;
+    if (!current) return;
+    const ids = Array.from(new Set(current.slides.map((item) => item.bloomId).filter((id): id is string => Boolean(id))));
+    let cancelled = false;
+    for (const bloomId of ids) {
+      const params = new URLSearchParams();
+      params.set("gardenId", current.gardenId ?? "");
+      params.set("bloomId", bloomId);
+      void fetch(`/api/shows/${encodeURIComponent(current.id)}/background?${params}`, { cache: "no-store" })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!cancelled && res.ok && data.background) {
+            setBloomPlates((prev) => ({ ...prev, [bloomId]: data.background as Background }));
+          }
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [show?.id, show?.gardenId, slideBloomKey]);
 
   const slideIndex = show ? Math.max(0, Math.min(show.slides.length - 1, selected)) : 0;
   const slide = show?.slides[slideIndex];
@@ -205,18 +234,30 @@ export default function ShowEditor({ showId }: { showId: string }) {
   }
 
   const fontNote = LYRIC_FONTS.find((font) => font.id === slide.font)?.note;
-  const loop = pickLoop(background.loops, previewSlide.loopIndex);
+  function platesFor(item: ShowSlide | undefined): Background {
+    if (item?.bloomId) return bloomPlates[item.bloomId] ?? EMPTY_BACKGROUND;
+    return background;
+  }
+  const stagePlates = platesFor(previewSlide);
+  const slidePlates = platesFor(slide);
+  const loop = pickLoop(stagePlates.loops, previewSlide.loopIndex);
+  const slideBloomTitle = slide.bloomId
+    ? blooms.find((bloom) => bloom.id === slide.bloomId)?.title || slidePlates.bloom?.title || "this bloom"
+    : null;
   const plate =
-    background.loops.length > 0
-      ? background.loops[Math.min(slide.loopIndex, background.loops.length - 1)]
+    slidePlates.loops.length > 0
+      ? slidePlates.loops[Math.min(slide.loopIndex, slidePlates.loops.length - 1)]
       : null;
-  const videoSummary = [background.bloom?.title ?? (show.match ? "Gather bloom" : "No bloom"), plate?.label]
+  const videoSummary = [
+    slideBloomTitle ?? slidePlates.bloom?.title ?? background.bloom?.title ?? (show.match ? "Gather bloom" : "No bloom"),
+    plate?.label,
+  ]
     .filter(Boolean)
     .join(" · ");
   const videoNote =
-    background.loops.length > 0
+    slidePlates.loops.length > 0
       ? null
-      : background.bloom
+      : slidePlates.bloom
         ? "This bloom has no video loops yet."
         : background.source === "garden" && background.garden
           ? `Loops come from the ${background.garden.title} garden.`
@@ -331,8 +372,11 @@ export default function ShowEditor({ showId }: { showId: string }) {
           <div ref={listRef} className="csc-list min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {show.slides.map((item, index) => {
               const title = spokenLines(item.lines)[0] || `Slide ${index + 1}`;
+              const bloomName = item.bloomId ? blooms.find((bloom) => bloom.id === item.bloomId)?.title : "";
               const meta = `${LYRIC_FONTS.find((font) => font.id === item.font)?.label ?? "Font"} · ${item.sizePx}px${
-                item.showLogo === false ? " · logo hidden" : ""
+                bloomName ? ` · ${bloomName}` : ""
+              }${item.showLogo === false ? " · logo hidden" : item.logoAnchor === "center" ? " · logo center" : ""}${
+                item.treatment === "overlay" ? " · overlay" : ""
               }`;
               return (
                 <div
@@ -376,9 +420,14 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 font={previewSlide.font}
                 sizePx={previewSlide.sizePx}
                 showLogo={previewSlide.showLogo}
+                logoWidth={previewSlide.logoWidth}
+                logoAnchor={previewSlide.logoAnchor}
+                treatment={previewSlide.treatment === "overlay" ? "overlay" : "card"}
+                overlayColor={previewSlide.overlayColor}
+                overlayAmount={previewSlide.overlayAmount}
                 loop={loop}
-                primaryColor={background.primaryColor}
-                accentColor={background.accentColor}
+                primaryColor={stagePlates.primaryColor}
+                accentColor={stagePlates.accentColor}
                 interactive={mode === "trigger"}
                 hint={mode === "trigger" && previewLines.length === 0 ? "Click to trigger the line" : null}
                 onAdvance={(direction) => setCue((current) => nextLyricCue(current, show.slides, direction))}
@@ -437,13 +486,83 @@ export default function ShowEditor({ showId }: { showId: string }) {
               </SettingsButton>
             ))}
             <SettingsButton
-              title="Crowdsource Choir mark in the upper left."
+              title="Card keeps the glass panel. Overlay sets the words on the picture."
+              variant={slide.treatment === "overlay" ? "ghost" : "primary"}
+              onClick={() =>
+                updateSlide(slideIndex, { treatment: undefined, overlayColor: undefined, overlayAmount: undefined })
+              }
+            >
+              Card
+            </SettingsButton>
+            <SettingsButton
+              title="Card keeps the glass panel. Overlay sets the words on the picture."
+              variant={slide.treatment === "overlay" ? "primary" : "ghost"}
+              onClick={() => updateSlide(slideIndex, { treatment: "overlay" })}
+            >
+              Overlay
+            </SettingsButton>
+            <SettingsButton
+              title="Crowdsource Choir mark. Each slide chooses a size, the upper left or the center, and whether it shows."
               variant={slide.showLogo !== false ? "primary" : "ghost"}
               onClick={() => updateSlide(slideIndex, { showLogo: slide.showLogo === false })}
             >
               {slide.showLogo !== false ? "Logo on" : "Logo off"}
             </SettingsButton>
+            <SettingsButton
+              variant={slide.logoAnchor !== "center" ? "primary" : "ghost"}
+              onClick={() => updateSlide(slideIndex, { logoAnchor: "left" })}
+            >
+              Upper left
+            </SettingsButton>
+            <SettingsButton
+              variant={slide.logoAnchor === "center" ? "primary" : "ghost"}
+              onClick={() => updateSlide(slideIndex, { logoAnchor: "center" })}
+            >
+              Center
+            </SettingsButton>
+            <input
+              aria-label="Logo size"
+              title="Width of the mark on the 1920×1080 frame."
+              type="range"
+              min={LOGO_WIDTH_MIN}
+              max={LOGO_WIDTH_MAX}
+              value={slide.logoWidth ?? LOGO_WIDTH_DEFAULT}
+              onChange={(event) => updateSlide(slideIndex, { logoWidth: Number(event.target.value) })}
+              className="w-24 accent-[var(--csc-accent)]"
+            />
           </div>
+          {slide.treatment === "overlay" ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              <span className="text-[11px] tabular-nums text-gray-400">
+                Transparency {Math.round((1 - (slide.overlayAmount ?? SHOW_OVERLAY_AMOUNT)) * 100)}%
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                aria-label="Overlay transparency"
+                title="0% is the full color. 100% shows the picture as it was shot."
+                value={Math.round((1 - (slide.overlayAmount ?? SHOW_OVERLAY_AMOUNT)) * 100)}
+                onChange={(event) => {
+                  const transparency = Number(event.target.value) / 100;
+                  updateSlide(slideIndex, { overlayAmount: Math.round((1 - transparency) * 100) / 100 });
+                }}
+                className="w-28 accent-[var(--csc-accent)]"
+              />
+              <label className="flex items-center gap-2 text-[11px] text-gray-400">
+                Color
+                <input
+                  type="color"
+                  aria-label="Overlay color"
+                  title="Color of the wash behind the words"
+                  value={slide.overlayColor || slidePlates.primaryColor}
+                  className="h-6 w-8 cursor-pointer bg-transparent"
+                  onChange={(event) => updateSlide(slideIndex, { overlayColor: event.target.value.toUpperCase() })}
+                />
+              </label>
+            </div>
+          ) : null}
 
           <details className="shrink-0 rounded-lg border border-white/10 px-3 py-2">
             <summary className="cursor-pointer text-xs text-gray-300">
@@ -491,12 +610,29 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     Open bloom
                   </Link>
                 ) : null}
-                {background.loops.length > 0 ? (
+                <div className="w-full sm:w-52" title="This slide can use its own bloom. Leave it on the show when every slide shares one.">
+                  <SettingsSelect
+                    ariaLabel="Slide bloom"
+                    value={slide.bloomId ?? ""}
+                    onChange={(bloomId) => updateSlide(slideIndex, { bloomId: bloomId || null })}
+                  >
+                    <option value="">Show&apos;s bloom</option>
+                    {blooms.map((bloom) => (
+                      <option key={bloom.id} value={bloom.id}>
+                        {bloom.title}
+                      </option>
+                    ))}
+                    {slide.bloomId && !blooms.some((bloom) => bloom.id === slide.bloomId) ? (
+                      <option value={slide.bloomId}>{slideBloomTitle}</option>
+                    ) : null}
+                  </SettingsSelect>
+                </div>
+                {slidePlates.loops.length > 0 ? (
                   <SettingsButton
                     onClick={() => {
                       const slides = show.slides.map((item, index) => ({
                         ...item,
-                        loopIndex: index % background.loops.length,
+                        loopIndex: index % slidePlates.loops.length,
                       }));
                       update({ ...show, slides });
                     }}
@@ -506,13 +642,13 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 ) : null}
               </div>
               {videoNote ? <p className="text-[11px] text-gray-500">{videoNote}</p> : null}
-              {background.loops.length > 0 ? (
+              {slidePlates.loops.length > 0 ? (
                 <div
                   className="flex gap-1.5 overflow-x-auto pb-1"
                   title="Background plates, in the order the bloom plays them."
                 >
-                  {background.loops.map((item, index) => {
-                    const plateOn = Math.min(slide.loopIndex, background.loops.length - 1) === index;
+                  {slidePlates.loops.map((item, index) => {
+                    const plateOn = Math.min(slide.loopIndex, slidePlates.loops.length - 1) === index;
                     return (
                       <button
                         key={`${item.label}-${item.videoUrl ?? item.sceneUrl}-${index}`}

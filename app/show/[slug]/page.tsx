@@ -23,5 +23,14 @@ export default async function ShowPage({ params }: PageProps) {
   const show = await loadShow(params.slug);
   if (!show) notFound();
   const background = await resolveShowBackground(show);
-  return <ShowPresent show={show} background={background} />;
+  const bloomIds = Array.from(
+    new Set(show.slides.map((slide) => slide.bloomId).filter((id): id is string => Boolean(id)))
+  ).filter((id) => id !== show.bloomId);
+  const pairs = await Promise.all(
+    bloomIds.map(async (id) => {
+      const resolved = await resolveShowBackground({ ...show, bloomId: id, match: null });
+      return [id, resolved] as const;
+    })
+  );
+  return <ShowPresent show={show} background={background} bloomBackgrounds={Object.fromEntries(pairs)} />;
 }

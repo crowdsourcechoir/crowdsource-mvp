@@ -58,7 +58,7 @@ export default function ShowsLibrary() {
       <h2 className="mt-2 text-lg font-bold text-white sm:text-xl">Lyric slides</h2>
       <p className="mt-2 max-w-2xl text-sm text-gray-400">
         1920×1080 lyric slides for the room. A click or the space bar reveals the next line. The background is the
-        bloom&apos;s video, with a glass card behind the words.
+        bloom&apos;s video. Words can sit on a glass card, or directly on the picture.
       </p>
 
       <div className="mt-8 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center">

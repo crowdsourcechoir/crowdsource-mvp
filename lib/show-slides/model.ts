@@ -11,6 +11,9 @@ export const GATHER_BLOOM_ID = "aa212bdd-696b-4e91-863d-808fd60bd84c";
 export const GATHER_BLOOM_SLUG = "csc-dec3";
 export const LYRIC_SIZE_MIN = 36;
 export const LYRIC_SIZE_MAX = 180;
+export const LOGO_WIDTH_MIN = 160;
+export const LOGO_WIDTH_MAX = 1200;
+export const LOGO_WIDTH_DEFAULT = 340;
 /** Default mark in the upper left of a lyric slide. */
 export const SHOW_LOGO_SRC = "/brand/crowdsource-choir-logo.png";
 
@@ -39,6 +42,7 @@ export const LYRIC_FONTS = [
 ] as const;
 
 export type LyricFontId = (typeof LYRIC_FONTS)[number]["id"];
+export type LogoAnchor = "left" | "center";
 
 export const SIZE_PRESETS = [
   { id: "huge", label: "Huge", px: 156 },
@@ -55,8 +59,20 @@ export type ShowSlide = {
   sizePx: number;
   /** Index into the bloom's video loops. */
   loopIndex: number;
-  /** Crowdsource Choir mark in the upper left. Missing values stay visible. */
+  /** Crowdsource Choir mark. Missing values stay visible, upper left, at the default width. */
   showLogo: boolean;
+  /** This slide's bloom. Empty uses the show's bloom. */
+  bloomId: string | null;
+  /** Width of the mark on the 1920×1080 frame. */
+  logoWidth: number;
+  /** Upper left, or the center of the slide. */
+  logoAnchor: LogoAnchor;
+  /** Overlay sets the lines on the picture. Omitted keeps the glass card. */
+  treatment?: "overlay";
+  /** Wash color for an overlay slide. Omitted uses the bloom color. */
+  overlayColor?: string;
+  /** 0 shows the picture. 1 is a full wash. Omitted is the readable default. */
+  overlayAmount?: number;
 };
 
 export type ShowDeck = {
@@ -101,6 +117,15 @@ export function clampLyricSize(value: number): number {
   return Math.max(LYRIC_SIZE_MIN, Math.min(LYRIC_SIZE_MAX, Math.round(value)));
 }
 
+export function clampLogoWidth(value: number): number {
+  if (!Number.isFinite(value)) return LOGO_WIDTH_DEFAULT;
+  return Math.max(LOGO_WIDTH_MIN, Math.min(LOGO_WIDTH_MAX, Math.round(value)));
+}
+
+export function logoAnchorOf(value: unknown): LogoAnchor {
+  return value === "center" ? "center" : "left";
+}
+
 export function slugifyShow(value: string): string {
   const slug = value
     .normalize("NFKD")
@@ -133,6 +158,9 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         sizePx: 156,
         loopIndex: 0,
         showLogo: true,
+        bloomId: null,
+        logoWidth: LOGO_WIDTH_DEFAULT,
+        logoAnchor: "left",
       },
       {
         id: "gather-verse",
@@ -141,6 +169,9 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         sizePx: 64,
         loopIndex: 0,
         showLogo: true,
+        bloomId: null,
+        logoWidth: LOGO_WIDTH_DEFAULT,
+        logoAnchor: "left",
       },
     ],
     createdAt: now,
@@ -148,8 +179,23 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
   };
 }
 
+export const SHOW_OVERLAY_AMOUNT = 0.55;
+
 function asFont(value: unknown): LyricFontId {
   return typeof value === "string" && FONT_IDS.has(value) ? (value as LyricFontId) : "fraunces";
+}
+
+function asOverlay(value: unknown): { treatment?: "overlay"; overlayColor?: string; overlayAmount?: number } {
+  if (!value || typeof value !== "object" || (value as { treatment?: unknown }).treatment !== "overlay") return {};
+  const raw = value as { overlayColor?: unknown; overlayAmount?: unknown };
+  const color = typeof raw.overlayColor === "string" ? raw.overlayColor.trim().toUpperCase() : "";
+  const overlayColor = /^#[0-9A-F]{6}$/.test(color) ? color : undefined;
+  let overlayAmount: number | undefined;
+  if (typeof raw.overlayAmount === "number" && Number.isFinite(raw.overlayAmount)) {
+    const amount = Math.round(Math.min(1, Math.max(0, raw.overlayAmount)) * 100) / 100;
+    if (amount !== SHOW_OVERLAY_AMOUNT) overlayAmount = amount;
+  }
+  return { treatment: "overlay", ...(overlayColor ? { overlayColor } : {}), ...(overlayAmount !== undefined ? { overlayAmount } : {}) };
 }
 
 function asId(value: unknown): string | null {
@@ -182,6 +228,10 @@ export function normalizeSlide(value: unknown, index: number): ShowSlide | null 
     sizePx: clampLyricSize(Number(raw.sizePx)),
     loopIndex: Number.isFinite(loop) ? Math.max(0, Math.min(23, Math.floor(loop))) : 0,
     showLogo: raw.showLogo !== false,
+    bloomId: asId(raw.bloomId),
+    logoWidth: clampLogoWidth(Number(raw.logoWidth)),
+    logoAnchor: logoAnchorOf(raw.logoAnchor),
+    ...asOverlay(raw),
   };
 }
 
@@ -219,7 +269,22 @@ export function normalizeShow(value: unknown): ShowDeck | null {
 }
 
 export function blankSlide(id: string): ShowSlide {
-  return { id, lines: [], font: "fraunces", sizePx: 112, loopIndex: 0, showLogo: true };
+  return {
+    id,
+    lines: [],
+    font: "fraunces",
+    sizePx: 112,
+    loopIndex: 0,
+    showLogo: true,
+    bloomId: null,
+    logoWidth: LOGO_WIDTH_DEFAULT,
+    logoAnchor: "left",
+  };
+}
+
+/** The bloom whose video this slide uses. A slide bloom wins; otherwise the show's bloom. */
+export function slideBloomId(slide: { bloomId?: string | null }, show: { bloomId: string | null }): string | null {
+  return slide.bloomId || show.bloomId;
 }
 
 export function normalizeShowSlides(raw: unknown): ShowSlidesState {

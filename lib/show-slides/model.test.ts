@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import {
   applyShowPatch,
+  clampLogoWidth,
   clampLyricSize,
+  LOGO_WIDTH_DEFAULT,
+  LOGO_WIDTH_MAX,
+  LOGO_WIDTH_MIN,
   createShow,
   EMPTY_SHOW_SLIDES,
   findShow,
@@ -13,6 +17,7 @@ import {
   nextLyricCue,
   normalizeSlide,
   pickLoop,
+  slideBloomId,
   removeShow,
   revealedLines,
   stageScale,
@@ -80,7 +85,34 @@ assert.equal(pickLoop(loops, 9)?.label, "Frame 2");
 assert.equal(pickLoop([], 0), null);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.showLogo, true);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], showLogo: false }, 0)?.showLogo, false);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], bloomId: "bloom-harbor" }, 0)?.bloomId, "bloom-harbor");
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.bloomId, null);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], bloomId: "  " }, 0)?.bloomId, null);
+assert.equal(slideBloomId({ bloomId: "bloom-harbor" }, { bloomId: GATHER_BLOOM_ID }), "bloom-harbor");
+assert.equal(slideBloomId({ bloomId: null }, { bloomId: GATHER_BLOOM_ID }), GATHER_BLOOM_ID);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoWidth, LOGO_WIDTH_DEFAULT);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoAnchor, "left");
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoWidth: 4000, logoAnchor: "center" }, 0)?.logoWidth, LOGO_WIDTH_MAX);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoAnchor: "center" }, 0)?.logoAnchor, "center");
+assert.equal(clampLogoWidth(10), LOGO_WIDTH_MIN);
 assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
+const overlaySlide = normalizeSlide(
+  { id: "s", lines: ["Sing"], treatment: "overlay", overlayColor: " #aabbcc ", overlayAmount: 0.2 },
+  0
+);
+assert.equal(overlaySlide?.treatment, "overlay");
+assert.equal(overlaySlide?.overlayColor, "#AABBCC");
+assert.equal(overlaySlide?.overlayAmount, 0.2);
+const cardSlide = normalizeSlide({ id: "s", lines: ["Sing"], overlayColor: "#112233", overlayAmount: 0.2 }, 0);
+assert.equal(cardSlide?.treatment, undefined);
+assert.equal(cardSlide?.overlayColor, undefined);
+const overlayDefaults = normalizeSlide(
+  { id: "s", lines: ["Sing"], treatment: "overlay", overlayColor: "nope", overlayAmount: 0.55 },
+  0
+);
+assert.equal(overlayDefaults?.treatment, "overlay");
+assert.equal(overlayDefaults?.overlayColor, undefined);
+assert.equal(overlayDefaults?.overlayAmount, undefined);
 
 const accessible = accessibleBloomBackgrounds(
   [{ sceneUrl: "/poster.jpg", videoUrl: null }],
@@ -108,6 +140,13 @@ const renamed = applyShowPatch(created.state, created.show, { name: "Harbor chan
 assert.ok(!("error" in renamed));
 if ("error" in renamed) throw new Error(renamed.error);
 assert.equal(renamed.show.slug, "harbor-chant-night");
+const bloomed = applyShowPatch(
+  created.state,
+  created.show,
+  { slides: [{ ...created.show.slides[0]!, bloomId: "bloom-harbor" }] },
+  "2026-11-10T13:00:00.000Z"
+);
+assert.equal("show" in bloomed ? bloomed.show.slides[0]?.bloomId : "", "bloom-harbor");
 assert.equal(removeShow(created.state, gatherShow()).error, "Gather stays. Clear its lines if you want a blank opening.");
 
 function spokenOf(show: { slides: { lines: string[] }[] }, index: number): string {
