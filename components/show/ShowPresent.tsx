@@ -105,6 +105,8 @@ export default function ShowPresent({ show: initial, background, bloomBackground
           font={slide.font}
           sizePx={slide.sizePx}
           showLogo={slide.showLogo}
+          logoWidth={slide.logoWidth}
+          logoAnchor={slide.logoAnchor}
           loop={loop}
           primaryColor={plates.primaryColor}
           accentColor={plates.accentColor}

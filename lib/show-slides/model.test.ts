@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import {
   applyShowPatch,
+  clampLogoWidth,
   clampLyricSize,
+  LOGO_WIDTH_DEFAULT,
+  LOGO_WIDTH_MAX,
+  LOGO_WIDTH_MIN,
   createShow,
   EMPTY_SHOW_SLIDES,
   findShow,
@@ -86,6 +90,11 @@ assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.bloomId, null);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], bloomId: "  " }, 0)?.bloomId, null);
 assert.equal(slideBloomId({ bloomId: "bloom-harbor" }, { bloomId: GATHER_BLOOM_ID }), "bloom-harbor");
 assert.equal(slideBloomId({ bloomId: null }, { bloomId: GATHER_BLOOM_ID }), GATHER_BLOOM_ID);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoWidth, LOGO_WIDTH_DEFAULT);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoAnchor, "left");
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoWidth: 4000, logoAnchor: "center" }, 0)?.logoWidth, LOGO_WIDTH_MAX);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoAnchor: "center" }, 0)?.logoAnchor, "center");
+assert.equal(clampLogoWidth(10), LOGO_WIDTH_MIN);
 assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
 
 const accessible = accessibleBloomBackgrounds(

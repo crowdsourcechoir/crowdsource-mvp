@@ -7,6 +7,9 @@ import { FieldLabel, SettingsButton, SettingsSelect, TextField } from "@/compone
 import {
   blankSlide,
   LYRIC_FONTS,
+  LOGO_WIDTH_DEFAULT,
+  LOGO_WIDTH_MAX,
+  LOGO_WIDTH_MIN,
   LYRIC_SIZE_MAX,
   LYRIC_SIZE_MIN,
   nextLyricCue,
@@ -391,7 +394,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     <span className="mt-1 block text-xs text-gray-500">
                       {LYRIC_FONTS.find((font) => font.id === item.font)?.label} · {item.sizePx}px
                       {item.bloomId ? ` · ${blooms.find((bloom) => bloom.id === item.bloomId)?.title ?? "Bloom"}` : ""}
-                      {item.showLogo === false ? " · logo hidden" : ""}
+                      {item.showLogo === false ? " · logo hidden" : item.logoAnchor === "center" ? " · logo center" : ""}
                     </span>
                   </button>
                   <span className="flex items-center gap-1">
@@ -502,15 +505,43 @@ export default function ShowEditor({ showId }: { showId: string }) {
               </div>
             </div>
             <div>
-              <FieldLabel hint="Crowdsource Choir mark in the upper left. Each slide can hide it.">
+              <FieldLabel hint="Crowdsource Choir mark. Each slide chooses a size, the upper left or the center, and whether it shows.">
                 Logo
               </FieldLabel>
-              <SettingsButton
-                variant={slide.showLogo !== false ? "primary" : "ghost"}
-                onClick={() => updateSlide(slideIndex, { showLogo: slide.showLogo === false })}
-              >
-                {slide.showLogo !== false ? "Showing" : "Hidden"}
-              </SettingsButton>
+              <div className="flex flex-wrap gap-2">
+                <SettingsButton
+                  variant={slide.showLogo !== false ? "primary" : "ghost"}
+                  onClick={() => updateSlide(slideIndex, { showLogo: slide.showLogo === false })}
+                >
+                  {slide.showLogo !== false ? "Showing" : "Hidden"}
+                </SettingsButton>
+                <SettingsButton
+                  variant={slide.logoAnchor !== "center" ? "primary" : "ghost"}
+                  onClick={() => updateSlide(slideIndex, { logoAnchor: "left" })}
+                >
+                  Upper left
+                </SettingsButton>
+                <SettingsButton
+                  variant={slide.logoAnchor === "center" ? "primary" : "ghost"}
+                  onClick={() => updateSlide(slideIndex, { logoAnchor: "center" })}
+                >
+                  Center
+                </SettingsButton>
+              </div>
+              <div className="mt-3">
+                <FieldLabel hint="Width of the mark on the 1920×1080 frame.">
+                  Size {slide.logoWidth ?? LOGO_WIDTH_DEFAULT}px
+                </FieldLabel>
+                <input
+                  aria-label="Logo size"
+                  type="range"
+                  min={LOGO_WIDTH_MIN}
+                  max={LOGO_WIDTH_MAX}
+                  value={slide.logoWidth ?? LOGO_WIDTH_DEFAULT}
+                  onChange={(event) => updateSlide(slideIndex, { logoWidth: Number(event.target.value) })}
+                  className="w-full accent-[var(--csc-accent)]"
+                />
+              </div>
             </div>
           </section>
         </div>
@@ -537,6 +568,8 @@ export default function ShowEditor({ showId }: { showId: string }) {
               font={previewSlide.font}
               sizePx={previewSlide.sizePx}
               showLogo={previewSlide.showLogo}
+              logoWidth={previewSlide.logoWidth}
+              logoAnchor={previewSlide.logoAnchor}
               loop={loop}
               primaryColor={stagePlates.primaryColor}
               accentColor={stagePlates.accentColor}

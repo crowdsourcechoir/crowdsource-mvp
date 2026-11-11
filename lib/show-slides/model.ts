@@ -11,6 +11,9 @@ export const GATHER_BLOOM_ID = "aa212bdd-696b-4e91-863d-808fd60bd84c";
 export const GATHER_BLOOM_SLUG = "csc-dec3";
 export const LYRIC_SIZE_MIN = 36;
 export const LYRIC_SIZE_MAX = 180;
+export const LOGO_WIDTH_MIN = 160;
+export const LOGO_WIDTH_MAX = 1200;
+export const LOGO_WIDTH_DEFAULT = 340;
 /** Default mark in the upper left of a lyric slide. */
 export const SHOW_LOGO_SRC = "/brand/crowdsource-choir-logo.png";
 
@@ -39,6 +42,7 @@ export const LYRIC_FONTS = [
 ] as const;
 
 export type LyricFontId = (typeof LYRIC_FONTS)[number]["id"];
+export type LogoAnchor = "left" | "center";
 
 export const SIZE_PRESETS = [
   { id: "huge", label: "Huge", px: 156 },
@@ -55,10 +59,14 @@ export type ShowSlide = {
   sizePx: number;
   /** Index into the bloom's video loops. */
   loopIndex: number;
-  /** Crowdsource Choir mark in the upper left. Missing values stay visible. */
+  /** Crowdsource Choir mark. Missing values stay visible, upper left, at the default width. */
   showLogo: boolean;
   /** This slide's bloom. Empty uses the show's bloom. */
   bloomId: string | null;
+  /** Width of the mark on the 1920×1080 frame. */
+  logoWidth: number;
+  /** Upper left, or the center of the slide. */
+  logoAnchor: LogoAnchor;
 };
 
 export type ShowDeck = {
@@ -103,6 +111,15 @@ export function clampLyricSize(value: number): number {
   return Math.max(LYRIC_SIZE_MIN, Math.min(LYRIC_SIZE_MAX, Math.round(value)));
 }
 
+export function clampLogoWidth(value: number): number {
+  if (!Number.isFinite(value)) return LOGO_WIDTH_DEFAULT;
+  return Math.max(LOGO_WIDTH_MIN, Math.min(LOGO_WIDTH_MAX, Math.round(value)));
+}
+
+export function logoAnchorOf(value: unknown): LogoAnchor {
+  return value === "center" ? "center" : "left";
+}
+
 export function slugifyShow(value: string): string {
   const slug = value
     .normalize("NFKD")
@@ -136,6 +153,8 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         loopIndex: 0,
         showLogo: true,
         bloomId: null,
+        logoWidth: LOGO_WIDTH_DEFAULT,
+        logoAnchor: "left",
       },
       {
         id: "gather-verse",
@@ -145,6 +164,8 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         loopIndex: 0,
         showLogo: true,
         bloomId: null,
+        logoWidth: LOGO_WIDTH_DEFAULT,
+        logoAnchor: "left",
       },
     ],
     createdAt: now,
@@ -187,6 +208,8 @@ export function normalizeSlide(value: unknown, index: number): ShowSlide | null 
     loopIndex: Number.isFinite(loop) ? Math.max(0, Math.min(23, Math.floor(loop))) : 0,
     showLogo: raw.showLogo !== false,
     bloomId: asId(raw.bloomId),
+    logoWidth: clampLogoWidth(Number(raw.logoWidth)),
+    logoAnchor: logoAnchorOf(raw.logoAnchor),
   };
 }
 
@@ -224,7 +247,17 @@ export function normalizeShow(value: unknown): ShowDeck | null {
 }
 
 export function blankSlide(id: string): ShowSlide {
-  return { id, lines: [], font: "fraunces", sizePx: 112, loopIndex: 0, showLogo: true, bloomId: null };
+  return {
+    id,
+    lines: [],
+    font: "fraunces",
+    sizePx: 112,
+    loopIndex: 0,
+    showLogo: true,
+    bloomId: null,
+    logoWidth: LOGO_WIDTH_DEFAULT,
+    logoAnchor: "left",
+  };
 }
 
 /** The bloom whose video this slide uses. A slide bloom wins; otherwise the show's bloom. */
