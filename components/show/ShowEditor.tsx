@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShowStage from "@/components/show/ShowStage";
-import { FieldLabel, SettingsButton, SettingsSelect, TextField } from "@/components/settings/ui";
+import { SettingsButton, SettingsSelect, TextField } from "@/components/settings/ui";
 import {
   blankSlide,
   LYRIC_FONTS,
@@ -105,6 +105,8 @@ export default function ShowEditor({ showId }: { showId: string }) {
 
   const showRef = useRef(show);
   showRef.current = show;
+  const listRef = useRef<HTMLDivElement>(null);
+  const linesRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const current = showRef.current;
@@ -121,6 +123,17 @@ export default function ShowEditor({ showId }: { showId: string }) {
     return revealedLines(previewSlide, cue.slide === slideIndex || mode === "trigger" ? cue.revealed : 0);
   }, [previewSlide, mode, cue, slideIndex]);
 
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const row = list.querySelector<HTMLElement>(`[data-slide-index="${slideIndex}"]`);
+    if (!row) return;
+    const listRect = list.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    if (rowRect.top < listRect.top) list.scrollTop -= listRect.top - rowRect.top;
+    else if (rowRect.bottom > listRect.bottom) list.scrollTop += rowRect.bottom - listRect.bottom;
+  }, [slideIndex, show?.slides.length]);
+
   function update(next: ShowDeck) {
     const touched = { ...next, updatedAt: new Date().toISOString() };
     setShow(touched);
@@ -132,6 +145,19 @@ export default function ShowEditor({ showId }: { showId: string }) {
     if (!show) return;
     const slides = show.slides.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item));
     update({ ...show, slides });
+  }
+
+  function moveSlide(index: number, direction: -1 | 1) {
+    if (!show) return;
+    const target = index + direction;
+    if (target < 0 || target >= show.slides.length) return;
+    const slides = show.slides.slice();
+    const [moved] = slides.splice(index, 1);
+    if (!moved) return;
+    slides.splice(target, 0, moved);
+    update({ ...show, slides });
+    setSelected(target);
+    setCue((current) => (current.slide === index ? { ...current, slide: target } : current));
   }
 
   async function save(current: ShowDeck): Promise<boolean> {
@@ -180,27 +206,49 @@ export default function ShowEditor({ showId }: { showId: string }) {
 
   const fontNote = LYRIC_FONTS.find((font) => font.id === slide.font)?.note;
   const loop = pickLoop(background.loops, previewSlide.loopIndex);
-  const videoNote = background.bloom
-    ? `Video loops from ${background.bloom.title}.`
-    : background.source === "garden" && background.garden
-      ? `Video loops from the ${background.garden.title} garden.`
-      : show.match
-        ? "The Gather Song Garden plates load from the live bloom. Assign another bloom if this show should use a different set."
-        : "Assign a bloom to use its video loops.";
+  const plate =
+    background.loops.length > 0
+      ? background.loops[Math.min(slide.loopIndex, background.loops.length - 1)]
+      : null;
+  const videoSummary = [background.bloom?.title ?? (show.match ? "Gather bloom" : "No bloom"), plate?.label]
+    .filter(Boolean)
+    .join(" · ");
+  const videoNote =
+    background.loops.length > 0
+      ? null
+      : background.bloom
+        ? "This bloom has no video loops yet."
+        : background.source === "garden" && background.garden
+          ? `Loops come from the ${background.garden.title} garden.`
+          : show.match
+            ? "Gather's plates load from the live bloom."
+            : "Assign a bloom to use its video loops.";
 
   return (
-    <div className="text-white">
-      <Link href="/admin/live" className="csc-link text-sm">
-        ← Live
-      </Link>
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="csc-eyebrow">1920 × 1080</p>
-          <div className="mt-2 max-w-md">
-            <TextField value={show.name} onChange={(name) => update({ ...show, name })} />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col text-white lg:h-[calc(100dvh-3rem)] lg:overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <Link href="/admin/live" className="csc-link shrink-0 text-sm">
+          ← Live
+        </Link>
+        <label className="min-w-[10rem] flex-1 sm:max-w-xs">
+          <span className="sr-only">Show name</span>
+          <TextField value={show.name} onChange={(name) => update({ ...show, name })} />
+        </label>
+        <p className="csc-eyebrow hidden shrink-0 xl:block">1920 × 1080</p>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <SettingsButton
+            variant={mode === "trigger" ? "primary" : "ghost"}
+            onClick={() => {
+              setMode("trigger");
+              setCue({ slide: slideIndex, revealed: 0 });
+            }}
+          >
+            Trigger
+          </SettingsButton>
+          <SettingsButton variant={mode === "full" ? "primary" : "ghost"} onClick={() => setMode("full")}>
+            Full slide
+          </SettingsButton>
+          <span className="mx-1 hidden h-4 w-px bg-white/15 sm:block" aria-hidden />
           <SettingsButton variant="primary" disabled={saving} onClick={() => void save(show)}>
             {saving ? "Saving" : "Save"}
           </SettingsButton>
@@ -222,57 +270,228 @@ export default function ShowEditor({ showId }: { showId: string }) {
           )}
         </div>
       </div>
-      {status ? <p className="mt-3 text-sm text-gray-400">{status}</p> : null}
+      {status ? <p className="mt-2 shrink-0 text-xs text-gray-400">{status}</p> : null}
 
-      <div className="mt-6 grid items-start gap-8 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <div className="space-y-6">
-          <section className="space-y-4 rounded-xl border border-[var(--csc-row-divider)] p-4">
-            <div>
-              <FieldLabel hint="The show can belong to a garden, a bloom, or both. Video comes from the bloom.">
-                Song Garden
-              </FieldLabel>
-              <SettingsSelect
-                ariaLabel="Song Garden"
-                value={show.gardenId ?? ""}
-                onChange={(gardenId) => update({ ...show, gardenId: gardenId || null })}
+      <div className="mt-3 grid min-h-0 flex-1 gap-4 lg:grid-cols-[272px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <section className="order-2 flex min-h-0 flex-col overflow-hidden max-lg:max-h-72 lg:order-1 lg:h-full">
+          <div className="mb-1 flex shrink-0 items-center gap-1">
+            <p className="csc-eyebrow">Slides</p>
+            <span className="text-[11px] tabular-nums text-gray-500">{show.slides.length}</span>
+            <span className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                className="csc-btn-circle text-xs disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Move slide up"
+                disabled={slideIndex === 0}
+                onClick={() => moveSlide(slideIndex, -1)}
               >
-                <option value="">None</option>
-                {gardens.map((garden) => (
-                  <option key={garden.id} value={garden.id}>
-                    {garden.title}
+                ↑
+              </button>
+              <button
+                type="button"
+                className="csc-btn-circle text-xs disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Move slide down"
+                disabled={slideIndex >= show.slides.length - 1}
+                onClick={() => moveSlide(slideIndex, 1)}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="csc-btn-circle text-xs disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Delete slide"
+                disabled={show.slides.length <= 1}
+                onClick={() => {
+                  if (show.slides.length <= 1) return;
+                  const nextIndex = Math.max(0, slideIndex - 1);
+                  update({ ...show, slides: show.slides.filter((candidate) => candidate.id !== slide.id) });
+                  setSelected(nextIndex);
+                  setCue({ slide: nextIndex, revealed: 0 });
+                }}
+              >
+                ×
+              </button>
+              <button
+                type="button"
+                className="csc-btn-circle text-sm"
+                aria-label="Add slide"
+                onClick={() => {
+                  const slides = [...show.slides, blankSlide(`slide_${Date.now().toString(36)}`)];
+                  const index = slides.length - 1;
+                  update({ ...show, slides });
+                  setSelected(index);
+                  setCue({ slide: index, revealed: 0 });
+                  linesRef.current?.focus();
+                }}
+              >
+                +
+              </button>
+            </span>
+          </div>
+          <div ref={listRef} className="csc-list min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {show.slides.map((item, index) => {
+              const title = spokenLines(item.lines)[0] || `Slide ${index + 1}`;
+              const meta = `${LYRIC_FONTS.find((font) => font.id === item.font)?.label ?? "Font"} · ${item.sizePx}px${
+                item.showLogo === false ? " · logo hidden" : ""
+              }`;
+              return (
+                <div
+                  key={item.id}
+                  data-slide-index={index}
+                  className="csc-list-row min-w-0"
+                  style={{
+                    paddingTop: 7,
+                    paddingBottom: 7,
+                    outlineColor: index === slideIndex ? "var(--csc-accent)" : undefined,
+                  }}
+                >
+                  <button
+                    type="button"
+                    title={meta}
+                    aria-current={index === slideIndex ? "true" : undefined}
+                    className={`min-w-0 flex-1 truncate text-left text-sm ${
+                      index === slideIndex ? "text-[var(--csc-accent)]" : "text-white"
+                    }`}
+                    onClick={() => {
+                      setSelected(index);
+                      setCue({ slide: index, revealed: 0 });
+                    }}
+                  >
+                    {title}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="order-1 flex min-h-0 flex-col gap-3 lg:order-2 lg:h-full lg:overflow-y-auto">
+          <div
+            className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl border border-[var(--csc-row-divider)] max-h-[calc(100dvh-22rem)] min-h-[160px]"
+            title="The frame is 1920×1080. Space and the arrow keys trigger lines on the present screen."
+          >
+            <div className="absolute inset-0">
+              <ShowStage
+                lines={previewLines}
+                font={previewSlide.font}
+                sizePx={previewSlide.sizePx}
+                showLogo={previewSlide.showLogo}
+                loop={loop}
+                primaryColor={background.primaryColor}
+                accentColor={background.accentColor}
+                interactive={mode === "trigger"}
+                hint={mode === "trigger" && previewLines.length === 0 ? "Click to trigger the line" : null}
+                onAdvance={(direction) => setCue((current) => nextLyricCue(current, show.slides, direction))}
+              />
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            <div className="mb-1 flex items-baseline justify-between gap-3">
+              <p className="text-xs font-medium text-gray-300">Lines</p>
+              <p className="truncate text-[11px] text-gray-500">One line per row. Space and arrows trigger on the present screen.</p>
+            </div>
+            <textarea
+              ref={linesRef}
+              aria-label="Lyric lines"
+              value={slide.lines.join("\n")}
+              onChange={(event) => updateSlide(slideIndex, { lines: event.target.value.split("\n").slice(0, 24) })}
+              rows={4}
+              className="w-full resize-none rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
+              placeholder="Type a lyric line"
+            />
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="w-44" title={fontNote}>
+              <SettingsSelect
+                ariaLabel="Lyric font"
+                value={slide.font}
+                onChange={(font) => updateSlide(slideIndex, { font: font as LyricFontId })}
+              >
+                {LYRIC_FONTS.map((font) => (
+                  <option key={font.id} value={font.id}>
+                    {font.label}
                   </option>
                 ))}
               </SettingsSelect>
             </div>
-            <div>
-              <FieldLabel hint={videoNote}>Bloom</FieldLabel>
-              <SettingsSelect
-                ariaLabel="Bloom"
-                value={show.bloomId || background.bloom?.id || ""}
-                onChange={(bloomId) => update({ ...show, bloomId: bloomId || null })}
+            <input
+              aria-label="Lyric size"
+              title="The slide shrinks type that does not fit."
+              type="range"
+              min={LYRIC_SIZE_MIN}
+              max={LYRIC_SIZE_MAX}
+              value={slide.sizePx}
+              onChange={(event) => updateSlide(slideIndex, { sizePx: Number(event.target.value) })}
+              className="w-28 accent-[var(--csc-accent)]"
+            />
+            <span className="w-12 text-xs tabular-nums text-gray-400">{slide.sizePx}px</span>
+            {SIZE_PRESETS.map((preset) => (
+              <SettingsButton
+                key={preset.id}
+                variant={slide.sizePx === preset.px ? "primary" : "ghost"}
+                onClick={() => updateSlide(slideIndex, { sizePx: preset.px })}
               >
-                <option value="">{show.match ? "Match a bloom named Gather" : "None"}</option>
-                {blooms.map((bloom) => (
-                  <option key={bloom.id} value={bloom.id}>
-                    {bloom.title}
-                  </option>
-                ))}
-                {background.bloom && !blooms.some((bloom) => bloom.id === background.bloom?.id) ? (
-                  <option value={background.bloom.id}>{background.bloom.title}</option>
+                {preset.label}
+              </SettingsButton>
+            ))}
+            <SettingsButton
+              title="Crowdsource Choir mark in the upper left."
+              variant={slide.showLogo !== false ? "primary" : "ghost"}
+              onClick={() => updateSlide(slideIndex, { showLogo: slide.showLogo === false })}
+            >
+              {slide.showLogo !== false ? "Logo on" : "Logo off"}
+            </SettingsButton>
+          </div>
+
+          <details className="shrink-0 rounded-lg border border-white/10 px-3 py-2">
+            <summary className="cursor-pointer text-xs text-gray-300">
+              Video
+              <span className="ml-2 font-normal text-gray-500">{videoSummary}</span>
+            </summary>
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="w-full sm:w-52"
+                  title="The show can belong to a garden, a bloom, or both. Video comes from the bloom."
+                >
+                  <SettingsSelect
+                    ariaLabel="Song Garden"
+                    value={show.gardenId ?? ""}
+                    onChange={(gardenId) => update({ ...show, gardenId: gardenId || null })}
+                  >
+                    <option value="">No garden</option>
+                    {gardens.map((garden) => (
+                      <option key={garden.id} value={garden.id}>
+                        {garden.title}
+                      </option>
+                    ))}
+                  </SettingsSelect>
+                </div>
+                <div className="w-full sm:w-60" title={videoNote ?? "Video loops from the bloom."}>
+                  <SettingsSelect
+                    ariaLabel="Bloom"
+                    value={show.bloomId || background.bloom?.id || ""}
+                    onChange={(bloomId) => update({ ...show, bloomId: bloomId || null })}
+                  >
+                    <option value="">{show.match ? "Match a bloom named Gather" : "No bloom"}</option>
+                    {blooms.map((bloom) => (
+                      <option key={bloom.id} value={bloom.id}>
+                        {bloom.title}
+                      </option>
+                    ))}
+                    {background.bloom && !blooms.some((bloom) => bloom.id === background.bloom?.id) ? (
+                      <option value={background.bloom.id}>{background.bloom.title}</option>
+                    ) : null}
+                  </SettingsSelect>
+                </div>
+                {background.bloom ? (
+                  <Link href={`/admin/events/${background.bloom.id}`} className="csc-link shrink-0 text-xs">
+                    Open bloom
+                  </Link>
                 ) : null}
-              </SettingsSelect>
-              {background.bloom ? (
-                <Link href={`/admin/events/${background.bloom.id}`} className="csc-link mt-2 inline-flex text-xs">
-                  Open {background.bloom.title}
-                </Link>
-              ) : null}
-            </div>
-            {background.loops.length > 0 ? (
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <FieldLabel hint="These are the bloom's background plates, in the order the bloom plays them. Stored generations stay available.">
-                    Background videos
-                  </FieldLabel>
+                {background.loops.length > 0 ? (
                   <SettingsButton
                     onClick={() => {
                       const slides = show.slides.map((item, index) => ({
@@ -284,19 +503,25 @@ export default function ShowEditor({ showId }: { showId: string }) {
                   >
                     Use in order
                   </SettingsButton>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                ) : null}
+              </div>
+              {videoNote ? <p className="text-[11px] text-gray-500">{videoNote}</p> : null}
+              {background.loops.length > 0 ? (
+                <div
+                  className="flex gap-1.5 overflow-x-auto pb-1"
+                  title="Background plates, in the order the bloom plays them."
+                >
                   {background.loops.map((item, index) => {
-                    const selected = Math.min(slide.loopIndex, background.loops.length - 1) === index;
+                    const plateOn = Math.min(slide.loopIndex, background.loops.length - 1) === index;
                     return (
                       <button
                         key={`${item.label}-${item.videoUrl ?? item.sceneUrl}-${index}`}
                         type="button"
-                        aria-pressed={selected}
+                        aria-pressed={plateOn}
                         aria-label={`Use ${item.label}`}
                         onClick={() => updateSlide(slideIndex, { loopIndex: index })}
-                        className={`relative h-20 w-36 shrink-0 overflow-hidden rounded-lg border ${
-                          selected ? "border-[var(--csc-accent)]" : "border-white/15"
+                        className={`relative h-12 w-20 shrink-0 overflow-hidden rounded-md border ${
+                          plateOn ? "border-[var(--csc-accent)]" : "border-white/15"
                         }`}
                       >
                         {item.videoUrl ? (
@@ -313,188 +538,18 @@ export default function ShowEditor({ showId }: { showId: string }) {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img alt="" src={item.sceneUrl} className="h-full w-full object-cover" />
                         ) : null}
-                        <span className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                        <span className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] text-white">
                           {item.label}
                         </span>
                       </button>
                     );
                   })}
                 </div>
-              </div>
-            ) : null}
-          </section>
-
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="csc-eyebrow">Slides</p>
-              <button
-                type="button"
-                className="csc-btn-circle text-sm"
-                aria-label="Add slide"
-                onClick={() => {
-                  const slides = [...show.slides, blankSlide(`slide_${Date.now().toString(36)}`)];
-                  update({ ...show, slides });
-                  setSelected(slides.length - 1);
-                }}
-              >
-                +
-              </button>
+              ) : null}
             </div>
-            <div className="csc-list">
-              {show.slides.map((item, index) => (
-                <div key={item.id} className="csc-list-row">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => {
-                      setSelected(index);
-                      setCue({ slide: index, revealed: 0 });
-                    }}
-                  >
-                    <span className="block text-sm text-white">
-                      {spokenLines(item.lines)[0] || `Slide ${index + 1}`}
-                    </span>
-                    <span className="mt-1 block text-xs text-gray-500">
-                      {LYRIC_FONTS.find((font) => font.id === item.font)?.label} · {item.sizePx}px
-                      {item.showLogo === false ? " · logo hidden" : ""}
-                    </span>
-                  </button>
-                  <span className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="csc-btn-circle text-xs"
-                      aria-label="Move slide up"
-                      disabled={index === 0}
-                      onClick={() => {
-                        if (index === 0) return;
-                        const slides = show.slides.slice();
-                        const [moved] = slides.splice(index, 1);
-                        slides.splice(index - 1, 0, moved);
-                        update({ ...show, slides });
-                        setSelected(index - 1);
-                      }}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="csc-btn-circle text-xs"
-                      aria-label="Delete slide"
-                      disabled={show.slides.length <= 1}
-                      onClick={() => {
-                        if (show.slides.length <= 1) return;
-                        update({ ...show, slides: show.slides.filter((candidate) => candidate.id !== item.id) });
-                        setSelected(Math.max(0, index - 1));
-                      }}
-                    >
-                      ×
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <div>
-              <FieldLabel hint="One lyric line per row. A click on the slide reveals the next row.">Lines</FieldLabel>
-              <textarea
-                aria-label="Lyric lines"
-                value={slide.lines.join("\n")}
-                onChange={(event) => updateSlide(slideIndex, { lines: event.target.value.split("\n").slice(0, 24) })}
-                rows={6}
-                className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-[var(--csc-accent)] focus:outline-none"
-                placeholder="Type a lyric line"
-              />
-            </div>
-            <div>
-              <FieldLabel hint={fontNote}>Font</FieldLabel>
-              <SettingsSelect
-                ariaLabel="Lyric font"
-                value={slide.font}
-                onChange={(font) => updateSlide(slideIndex, { font: font as LyricFontId })}
-              >
-                {LYRIC_FONTS.map((font) => (
-                  <option key={font.id} value={font.id}>
-                    {font.label}
-                  </option>
-                ))}
-              </SettingsSelect>
-            </div>
-            <div>
-              <FieldLabel hint="Huge for a single line. Tight when the verse needs more room. The slide shrinks type that does not fit.">
-                Size {slide.sizePx}px
-              </FieldLabel>
-              <input
-                aria-label="Lyric size"
-                type="range"
-                min={LYRIC_SIZE_MIN}
-                max={LYRIC_SIZE_MAX}
-                value={slide.sizePx}
-                onChange={(event) => updateSlide(slideIndex, { sizePx: Number(event.target.value) })}
-                className="w-full accent-[var(--csc-accent)]"
-              />
-              <div className="mt-2 flex flex-wrap gap-2">
-                {SIZE_PRESETS.map((preset) => (
-                  <SettingsButton
-                    key={preset.id}
-                    variant={slide.sizePx === preset.px ? "primary" : "ghost"}
-                    onClick={() => updateSlide(slideIndex, { sizePx: preset.px })}
-                  >
-                    {preset.label}
-                  </SettingsButton>
-                ))}
-              </div>
-            </div>
-            <div>
-              <FieldLabel hint="Crowdsource Choir mark in the upper left. Each slide can hide it.">
-                Logo
-              </FieldLabel>
-              <SettingsButton
-                variant={slide.showLogo !== false ? "primary" : "ghost"}
-                onClick={() => updateSlide(slideIndex, { showLogo: slide.showLogo === false })}
-              >
-                {slide.showLogo !== false ? "Showing" : "Hidden"}
-              </SettingsButton>
-            </div>
-          </section>
-        </div>
-
-        <div>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="csc-eyebrow">Slide</p>
-            <div className="flex gap-2">
-              <SettingsButton variant={mode === "trigger" ? "primary" : "ghost"} onClick={() => {
-                setMode("trigger");
-                setCue({ slide: slideIndex, revealed: 0 });
-              }}>
-                Trigger
-              </SettingsButton>
-              <SettingsButton variant={mode === "full" ? "primary" : "ghost"} onClick={() => setMode("full")}>
-                Full slide
-              </SettingsButton>
-            </div>
-          </div>
-          <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-[var(--csc-row-divider)]">
-            <div className="absolute inset-0">
-            <ShowStage
-              lines={previewLines}
-              font={previewSlide.font}
-              sizePx={previewSlide.sizePx}
-              showLogo={previewSlide.showLogo}
-              loop={loop}
-              primaryColor={background.primaryColor}
-              accentColor={background.accentColor}
-              interactive={mode === "trigger"}
-              hint={mode === "trigger" && previewLines.length === 0 ? "Click to trigger the line" : null}
-              onAdvance={(direction) => setCue((current) => nextLyricCue(current, show.slides, direction))}
-            />
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
-            The frame is 1920×1080 and scales to this window. Space and the arrow keys trigger lines on the present screen.
-          </p>
-        </div>
+          </details>
+          <div className="hidden min-h-0 flex-1 lg:block" />
+        </section>
       </div>
     </div>
   );
