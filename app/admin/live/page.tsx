@@ -159,9 +159,6 @@ export default function LivePage() {
             Runtime Tools
           </p>
           <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Live</h1>
-          <p className="mt-2 text-sm text-gray-400">
-            Lyric slides, prompts, signal play, and live participation for the room.
-          </p>
         </div>
       </div>
 
