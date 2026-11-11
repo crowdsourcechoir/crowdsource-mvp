@@ -5,11 +5,14 @@ import LoopingVideo from "@/components/song-garden-v2/LoopingVideo";
 import { lyricFontClass } from "@/components/show/lyric-fonts";
 import { slideGesture } from "@/lib/pitches/slideshow";
 import {
+  clampLogoWidth,
+  LOGO_WIDTH_DEFAULT,
   lyricLineHeight,
   SHOW_LOGO_SRC,
   stageScale,
   STAGE_HEIGHT,
   STAGE_WIDTH,
+  type LogoAnchor,
   type LyricFontId,
   type ShowLoop,
 } from "@/lib/show-slides/model";
@@ -20,6 +23,8 @@ type ShowStageProps = {
   sizePx: number;
   loop: ShowLoop | null;
   showLogo?: boolean;
+  logoWidth?: number;
+  logoAnchor?: LogoAnchor;
   primaryColor: string;
   accentColor: string;
   interactive?: boolean;
@@ -33,6 +38,8 @@ export default function ShowStage({
   sizePx,
   loop,
   showLogo = true,
+  logoWidth = LOGO_WIDTH_DEFAULT,
+  logoAnchor = "left",
   primaryColor,
   accentColor,
   interactive = false,
@@ -156,7 +163,17 @@ export default function ShowStage({
             <img
               src={SHOW_LOGO_SRC}
               alt="Crowdsource Choir"
-              className="pointer-events-none absolute left-12 top-9 z-20 w-[340px]"
+              className="pointer-events-none absolute z-20"
+              style={
+                logoAnchor === "center"
+                  ? {
+                      width: clampLogoWidth(logoWidth),
+                      left: "50%",
+                      top: "50%",
+                      transform: "translate(-50%, -50%)",
+                    }
+                  : { width: clampLogoWidth(logoWidth), left: 48, top: 36 }
+              }
             />
           ) : null}
           {card ? (

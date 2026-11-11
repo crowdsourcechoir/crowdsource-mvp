@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import {
   applyShowPatch,
+  clampLogoWidth,
   clampLyricSize,
+  LOGO_WIDTH_DEFAULT,
+  LOGO_WIDTH_MAX,
+  LOGO_WIDTH_MIN,
   createShow,
   EMPTY_SHOW_SLIDES,
   findShow,
@@ -80,6 +84,11 @@ assert.equal(pickLoop(loops, 9)?.label, "Frame 2");
 assert.equal(pickLoop([], 0), null);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.showLogo, true);
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], showLogo: false }, 0)?.showLogo, false);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoWidth, LOGO_WIDTH_DEFAULT);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.logoAnchor, "left");
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoWidth: 4000, logoAnchor: "center" }, 0)?.logoWidth, LOGO_WIDTH_MAX);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoAnchor: "center" }, 0)?.logoAnchor, "center");
+assert.equal(clampLogoWidth(10), LOGO_WIDTH_MIN);
 assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
 
 const accessible = accessibleBloomBackgrounds(
