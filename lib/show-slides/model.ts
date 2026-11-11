@@ -67,6 +67,12 @@ export type ShowSlide = {
   logoWidth: number;
   /** Upper left, or the center of the slide. */
   logoAnchor: LogoAnchor;
+  /** Overlay sets the lines on the picture. Omitted keeps the glass card. */
+  treatment?: "overlay";
+  /** Wash color for an overlay slide. Omitted uses the bloom color. */
+  overlayColor?: string;
+  /** 0 shows the picture. 1 is a full wash. Omitted is the readable default. */
+  overlayAmount?: number;
 };
 
 export type ShowDeck = {
@@ -173,8 +179,23 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
   };
 }
 
+export const SHOW_OVERLAY_AMOUNT = 0.55;
+
 function asFont(value: unknown): LyricFontId {
   return typeof value === "string" && FONT_IDS.has(value) ? (value as LyricFontId) : "fraunces";
+}
+
+function asOverlay(value: unknown): { treatment?: "overlay"; overlayColor?: string; overlayAmount?: number } {
+  if (!value || typeof value !== "object" || (value as { treatment?: unknown }).treatment !== "overlay") return {};
+  const raw = value as { overlayColor?: unknown; overlayAmount?: unknown };
+  const color = typeof raw.overlayColor === "string" ? raw.overlayColor.trim().toUpperCase() : "";
+  const overlayColor = /^#[0-9A-F]{6}$/.test(color) ? color : undefined;
+  let overlayAmount: number | undefined;
+  if (typeof raw.overlayAmount === "number" && Number.isFinite(raw.overlayAmount)) {
+    const amount = Math.round(Math.min(1, Math.max(0, raw.overlayAmount)) * 100) / 100;
+    if (amount !== SHOW_OVERLAY_AMOUNT) overlayAmount = amount;
+  }
+  return { treatment: "overlay", ...(overlayColor ? { overlayColor } : {}), ...(overlayAmount !== undefined ? { overlayAmount } : {}) };
 }
 
 function asId(value: unknown): string | null {
@@ -210,6 +231,7 @@ export function normalizeSlide(value: unknown, index: number): ShowSlide | null 
     bloomId: asId(raw.bloomId),
     logoWidth: clampLogoWidth(Number(raw.logoWidth)),
     logoAnchor: logoAnchorOf(raw.logoAnchor),
+    ...asOverlay(raw),
   };
 }
 

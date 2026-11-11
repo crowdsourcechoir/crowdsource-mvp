@@ -107,6 +107,9 @@ export default function ShowPresent({ show: initial, background, bloomBackground
           showLogo={slide.showLogo}
           logoWidth={slide.logoWidth}
           logoAnchor={slide.logoAnchor}
+          treatment={slide.treatment === "overlay" ? "overlay" : "card"}
+          overlayColor={slide.overlayColor}
+          overlayAmount={slide.overlayAmount}
           loop={loop}
           primaryColor={plates.primaryColor}
           accentColor={plates.accentColor}

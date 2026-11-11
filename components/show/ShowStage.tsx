@@ -9,6 +9,7 @@ import {
   LOGO_WIDTH_DEFAULT,
   lyricLineHeight,
   SHOW_LOGO_SRC,
+  SHOW_OVERLAY_AMOUNT,
   stageScale,
   STAGE_HEIGHT,
   STAGE_WIDTH,
@@ -25,6 +26,9 @@ type ShowStageProps = {
   showLogo?: boolean;
   logoWidth?: number;
   logoAnchor?: LogoAnchor;
+  treatment?: "card" | "overlay";
+  overlayColor?: string;
+  overlayAmount?: number;
   primaryColor: string;
   accentColor: string;
   interactive?: boolean;
@@ -40,6 +44,9 @@ export default function ShowStage({
   showLogo = true,
   logoWidth = LOGO_WIDTH_DEFAULT,
   logoAnchor = "left",
+  treatment = "card",
+  overlayColor,
+  overlayAmount,
   primaryColor,
   accentColor,
   interactive = false,
@@ -128,8 +135,11 @@ export default function ShowStage({
     onAdvance(direction);
   }
 
-  const card = lines.length > 0;
-  const shrunk = card && fitted < sizePx - 1;
+  const card = lines.length > 0 && treatment !== "overlay";
+  const overlay = treatment === "overlay";
+  const shrunk = lines.length > 0 && fitted < sizePx - 1;
+  const wash = overlayColor || primaryColor;
+  const washAmount = overlayAmount ?? SHOW_OVERLAY_AMOUNT;
 
   return (
     <div
@@ -176,20 +186,37 @@ export default function ShowStage({
               }
             />
           ) : null}
-          {card ? (
+          {overlay ? (
+            <>
+              <div
+                className="pointer-events-none absolute inset-0 mix-blend-multiply"
+                style={{ backgroundColor: wash, opacity: washAmount }}
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-black/40" />
+            </>
+          ) : null}
+          {lines.length > 0 ? (
             <div
               className="absolute left-1/2 top-1/2"
               style={{ width: 1560, height: 820, transform: "translate(-50%, -50%)" }}
             >
               <div
-                className="flex h-full w-full items-center justify-center rounded-[28px] px-[72px] py-[64px]"
-                style={{
-                  background: `linear-gradient(165deg, color-mix(in srgb, ${primaryColor} 84%, transparent) 0%, color-mix(in srgb, ${primaryColor} 76%, transparent) 55%, color-mix(in srgb, ${primaryColor} 70%, ${accentColor}) 100%)`,
-                  backdropFilter: "blur(16px) saturate(1.12)",
-                  WebkitBackdropFilter: "blur(16px) saturate(1.12)",
-                  border: `1px solid color-mix(in srgb, ${accentColor} 48%, transparent)`,
-                  boxShadow: "0 18px 48px -18px rgba(0,0,0,0.6), inset 0 1px 0 color-mix(in srgb, " + accentColor + " 30%, transparent)",
-                }}
+                className="flex h-full w-full items-center justify-center px-[72px] py-[64px]"
+                style={
+                  card
+                    ? {
+                        borderRadius: 28,
+                        background: `linear-gradient(165deg, color-mix(in srgb, ${primaryColor} 84%, transparent) 0%, color-mix(in srgb, ${primaryColor} 76%, transparent) 55%, color-mix(in srgb, ${primaryColor} 70%, ${accentColor}) 100%)`,
+                        backdropFilter: "blur(16px) saturate(1.12)",
+                        WebkitBackdropFilter: "blur(16px) saturate(1.12)",
+                        border: `1px solid color-mix(in srgb, ${accentColor} 48%, transparent)`,
+                        boxShadow:
+                          "0 18px 48px -18px rgba(0,0,0,0.6), inset 0 1px 0 color-mix(in srgb, " +
+                          accentColor +
+                          " 30%, transparent)",
+                      }
+                    : undefined
+                }
               >
                 <div ref={frameRef} className="h-full w-full overflow-hidden">
                   <div

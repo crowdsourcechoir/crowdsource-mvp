@@ -96,6 +96,23 @@ assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoWidth: 4000, logoA
 assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], logoAnchor: "center" }, 0)?.logoAnchor, "center");
 assert.equal(clampLogoWidth(10), LOGO_WIDTH_MIN);
 assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
+const overlaySlide = normalizeSlide(
+  { id: "s", lines: ["Sing"], treatment: "overlay", overlayColor: " #aabbcc ", overlayAmount: 0.2 },
+  0
+);
+assert.equal(overlaySlide?.treatment, "overlay");
+assert.equal(overlaySlide?.overlayColor, "#AABBCC");
+assert.equal(overlaySlide?.overlayAmount, 0.2);
+const cardSlide = normalizeSlide({ id: "s", lines: ["Sing"], overlayColor: "#112233", overlayAmount: 0.2 }, 0);
+assert.equal(cardSlide?.treatment, undefined);
+assert.equal(cardSlide?.overlayColor, undefined);
+const overlayDefaults = normalizeSlide(
+  { id: "s", lines: ["Sing"], treatment: "overlay", overlayColor: "nope", overlayAmount: 0.55 },
+  0
+);
+assert.equal(overlayDefaults?.treatment, "overlay");
+assert.equal(overlayDefaults?.overlayColor, undefined);
+assert.equal(overlayDefaults?.overlayAmount, undefined);
 
 const accessible = accessibleBloomBackgrounds(
   [{ sceneUrl: "/poster.jpg", videoUrl: null }],

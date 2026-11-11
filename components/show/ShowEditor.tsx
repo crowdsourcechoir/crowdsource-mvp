@@ -16,6 +16,7 @@ import {
   pickLoop,
   revealedLines,
   SIZE_PRESETS,
+  SHOW_OVERLAY_AMOUNT,
   spokenLines,
   type LyricCue,
   type LyricFontId,
@@ -505,6 +506,57 @@ export default function ShowEditor({ showId }: { showId: string }) {
               </div>
             </div>
             <div>
+              <FieldLabel hint="Card keeps the glass panel. Overlay sets the words on the picture, the way a pitch slide does.">
+                Words
+              </FieldLabel>
+              <div className="flex flex-wrap gap-2">
+                <SettingsButton
+                  variant={slide.treatment === "overlay" ? "ghost" : "primary"}
+                  onClick={() =>
+                    updateSlide(slideIndex, { treatment: undefined, overlayColor: undefined, overlayAmount: undefined })
+                  }
+                >
+                  Card
+                </SettingsButton>
+                <SettingsButton
+                  variant={slide.treatment === "overlay" ? "primary" : "ghost"}
+                  onClick={() => updateSlide(slideIndex, { treatment: "overlay" })}
+                >
+                  Overlay
+                </SettingsButton>
+              </div>
+              {slide.treatment === "overlay" ? (
+                <label className="mt-3 flex max-w-md items-center gap-3">
+                  <span className="csc-eyebrow shrink-0">
+                    Transparency {Math.round((1 - (slide.overlayAmount ?? SHOW_OVERLAY_AMOUNT)) * 100)}%
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    aria-label="Overlay transparency"
+                    title="0% is the full color. 100% shows the picture as it was shot."
+                    value={Math.round((1 - (slide.overlayAmount ?? SHOW_OVERLAY_AMOUNT)) * 100)}
+                    onChange={(event) => {
+                      const transparency = Number(event.target.value) / 100;
+                      updateSlide(slideIndex, { overlayAmount: Math.round((1 - transparency) * 100) / 100 });
+                    }}
+                    className="w-full accent-[var(--csc-accent)]"
+                  />
+                  <span className="csc-eyebrow shrink-0">Color</span>
+                  <input
+                    type="color"
+                    aria-label="Overlay color"
+                    title="Color of the wash behind the words"
+                    value={slide.overlayColor || slidePlates.primaryColor}
+                    className="h-6 w-8 cursor-pointer bg-transparent"
+                    onChange={(event) => updateSlide(slideIndex, { overlayColor: event.target.value.toUpperCase() })}
+                  />
+                </label>
+              ) : null}
+            </div>
+            <div>
               <FieldLabel hint="Crowdsource Choir mark. Each slide chooses a size, the upper left or the center, and whether it shows.">
                 Logo
               </FieldLabel>
@@ -570,6 +622,9 @@ export default function ShowEditor({ showId }: { showId: string }) {
               showLogo={previewSlide.showLogo}
               logoWidth={previewSlide.logoWidth}
               logoAnchor={previewSlide.logoAnchor}
+              treatment={previewSlide.treatment === "overlay" ? "overlay" : "card"}
+              overlayColor={previewSlide.overlayColor}
+              overlayAmount={previewSlide.overlayAmount}
               loop={loop}
               primaryColor={stagePlates.primaryColor}
               accentColor={stagePlates.accentColor}
