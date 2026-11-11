@@ -25,6 +25,8 @@ export type PitchSlide = {
   photoOverlay?: "salmon";
   /** How much of the grade shows, 0–1. Omitted means the full grade. */
   photoOverlayAmount?: number;
+  /** Overlay color. Omitted keeps the salmon grade. */
+  photoOverlayColor?: string;
   /**
    * Multiply-tint strength for this section, 0–0.85.
    * Omitted sections keep the SoBECA Song Garden wash.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { overlayTable } from "@/lib/pitches/photo-overlay";
 
 /**
  * Magenta-and-gold grade matching the library photos that are already pink.
@@ -12,6 +13,7 @@ export function GradedPhoto({
   alt,
   overlay,
   amount = 1,
+  color,
   className = "",
   imgClassName = "",
 }: {
@@ -19,10 +21,12 @@ export function GradedPhoto({
   alt: string;
   overlay?: "salmon";
   amount?: number;
+  color?: string;
   className?: string;
   imgClassName?: string;
 }) {
   const filterId = `pitch-salmon-${useId().replace(/:/g, "")}`;
+  const stops = overlayTable(color);
   const strength = overlay === "salmon" ? Math.min(1, Math.max(0, amount)) : 0;
   const graded = strength > 0;
   const mix = strength < 0.999;
@@ -38,9 +42,9 @@ export function GradedPhoto({
               result="gray"
             />
             <feComponentTransfer in="gray" result="graded">
-              <feFuncR type="table" tableValues="0.48 0.90 1" />
-              <feFuncG type="table" tableValues="0.12 0.34 0.84" />
-              <feFuncB type="table" tableValues="0.32 0.62 0.52" />
+              <feFuncR type="table" tableValues={stops.r} />
+              <feFuncG type="table" tableValues={stops.g} />
+              <feFuncB type="table" tableValues={stops.b} />
             </feComponentTransfer>
             {mix ? (
               <feComposite
