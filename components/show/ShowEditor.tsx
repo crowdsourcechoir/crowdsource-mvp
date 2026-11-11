@@ -145,11 +145,11 @@ export default function ShowEditor({ showId }: { showId: string }) {
 
   const slideIndex = show ? Math.max(0, Math.min(show.slides.length - 1, selected)) : 0;
   const slide = show?.slides[slideIndex];
-  const previewSlide = mode === "trigger" && show ? show.slides[Math.min(cue.slide, show.slides.length - 1)] : slide;
+  const previewSlide = slide;
   const previewLines = useMemo(() => {
     if (!previewSlide) return [];
     if (mode === "full") return spokenLines(previewSlide.lines);
-    return revealedLines(previewSlide, cue.slide === slideIndex || mode === "trigger" ? cue.revealed : 0);
+    return revealedLines(previewSlide, cue.slide === slideIndex ? cue.revealed : 0);
   }, [previewSlide, mode, cue, slideIndex]);
 
   useEffect(() => {
@@ -176,6 +176,13 @@ export default function ShowEditor({ showId }: { showId: string }) {
     update({ ...show, slides });
   }
 
+  function selectSlide(index: number, revealed = 0) {
+    if (!show) return;
+    const next = Math.max(0, Math.min(show.slides.length - 1, index));
+    setSelected(next);
+    setCue({ slide: next, revealed });
+  }
+
   function moveSlide(index: number, direction: -1 | 1) {
     if (!show) return;
     const target = index + direction;
@@ -186,7 +193,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
     slides.splice(target, 0, moved);
     update({ ...show, slides });
     setSelected(target);
-    setCue((current) => (current.slide === index ? { ...current, slide: target } : current));
+    setCue({ slide: target, revealed: 0 });
   }
 
   async function save(current: ShowDeck): Promise<boolean> {
@@ -283,7 +290,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
             variant={mode === "trigger" ? "primary" : "ghost"}
             onClick={() => {
               setMode("trigger");
-              setCue({ slide: slideIndex, revealed: 0 });
+              selectSlide(slideIndex, 0);
             }}
           >
             Trigger
@@ -398,10 +405,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     className={`min-w-0 flex-1 truncate text-left text-sm ${
                       index === slideIndex ? "text-[var(--csc-accent)]" : "text-white"
                     }`}
-                    onClick={() => {
-                      setSelected(index);
-                      setCue({ slide: index, revealed: 0 });
-                    }}
+                    onClick={() => selectSlide(index, 0)}
                   >
                     {title}
                   </button>
@@ -433,8 +437,11 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 primaryColor={stagePlates.primaryColor}
                 accentColor={stagePlates.accentColor}
                 interactive={mode === "trigger"}
-                hint={mode === "trigger" && previewLines.length === 0 ? "Click to trigger the line" : null}
-                onAdvance={(direction) => setCue((current) => nextLyricCue(current, show.slides, direction))}
+                onAdvance={(direction) => {
+                  const next = nextLyricCue(cue, show.slides, direction);
+                  setCue(next);
+                  setSelected(next.slide);
+                }}
               />
             </div>
           </div>
@@ -592,35 +599,15 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     ))}
                   </SettingsSelect>
                 </div>
-                <div className="w-full sm:w-60" title={videoNote ?? "Video loops from the bloom."}>
+                <div className="w-full sm:w-72" title="Bloom for this slide. Show's bloom uses the show default.">
                   <SettingsSelect
                     ariaLabel="Bloom"
-                    value={show.bloomId || background.bloom?.id || ""}
-                    onChange={(bloomId) => update({ ...show, bloomId: bloomId || null })}
-                  >
-                    <option value="">{show.match ? "Match a bloom named Gather" : "No bloom"}</option>
-                    {blooms.map((bloom) => (
-                      <option key={bloom.id} value={bloom.id}>
-                        {bloom.title}
-                      </option>
-                    ))}
-                    {background.bloom && !blooms.some((bloom) => bloom.id === background.bloom?.id) ? (
-                      <option value={background.bloom.id}>{background.bloom.title}</option>
-                    ) : null}
-                  </SettingsSelect>
-                </div>
-                {background.bloom ? (
-                  <Link href={`/admin/events/${background.bloom.id}`} className="csc-link shrink-0 text-xs">
-                    Open bloom
-                  </Link>
-                ) : null}
-                <div className="w-full sm:w-52" title="This slide can use its own bloom. Leave it on the show when every slide shares one.">
-                  <SettingsSelect
-                    ariaLabel="Slide bloom"
                     value={slide.bloomId ?? ""}
                     onChange={(bloomId) => updateSlide(slideIndex, { bloomId: bloomId || null })}
                   >
-                    <option value="">Show&apos;s bloom</option>
+                    <option value="">
+                      {background.bloom ? `Show's bloom · ${background.bloom.title}` : "Show's bloom"}
+                    </option>
                     {blooms.map((bloom) => (
                       <option key={bloom.id} value={bloom.id}>
                         {bloom.title}
