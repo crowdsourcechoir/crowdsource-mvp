@@ -1,7 +1,6 @@
-import ShowsLibrary from "@/components/show/ShowsLibrary";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+/** Show slides live on Live. Old links land there. */
 export default function ShowsPage() {
-  return <ShowsLibrary />;
+  redirect("/admin/live");
 }

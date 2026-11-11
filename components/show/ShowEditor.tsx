@@ -171,7 +171,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
       setStatus(data.error ?? "Could not delete");
       return;
     }
-    window.location.href = "/admin/shows";
+    window.location.href = "/admin/live";
   }
 
   if (!show || !slide || !previewSlide) {
@@ -190,8 +190,8 @@ export default function ShowEditor({ showId }: { showId: string }) {
 
   return (
     <div className="text-white">
-      <Link href="/admin/shows" className="csc-link text-sm">
-        ← Shows
+      <Link href="/admin/live" className="csc-link text-sm">
+        ← Live
       </Link>
       <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 flex-1">

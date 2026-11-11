@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import ShowsLibrary from "@/components/show/ShowsLibrary";
 import { getAllEvents } from "@/data/eventsClient";
 import { createSession } from "@/data/livePromptGame";
 import type { Event } from "@/data/mockEvents";
@@ -159,13 +160,12 @@ export default function LivePage() {
           </p>
           <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Live</h1>
           <p className="mt-2 text-sm text-gray-400">
-            Runtime tools for Blooms: prompts, signal play, and live participation moments.
+            Lyric slides, prompts, signal play, and live participation for the room.
           </p>
-          <Link href="/admin/shows" className="csc-link mt-3 inline-flex text-sm">
-            Show slides
-          </Link>
         </div>
       </div>
+
+      <ShowsLibrary />
 
       <section className="mb-8 rounded-xl border border-white/10 bg-transparent p-5 sm:p-6">
         <h2 className="text-lg font-bold text-white sm:text-xl">Start Session</h2>

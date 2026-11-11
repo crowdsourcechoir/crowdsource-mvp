@@ -53,12 +53,12 @@ export default function ShowsLibrary() {
   }
 
   return (
-    <div className="text-white">
-      <p className="csc-eyebrow">Lyric projection</p>
-      <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Shows</h1>
+    <section className="mb-10 text-white">
+      <p className="csc-eyebrow">Show slides</p>
+      <h2 className="mt-2 text-lg font-bold text-white sm:text-xl">Lyric slides</h2>
       <p className="mt-2 max-w-2xl text-sm text-gray-400">
-        1920×1080 lyric slides. A click or the space bar reveals the next line, the same way a pitch deck steps
-        forward. The background is that bloom&apos;s video loop, with a glass card behind the words so they stay legible.
+        1920×1080 lyric slides for the room. A click or the space bar reveals the next line. The background is the
+        bloom&apos;s video, with a glass card behind the words.
       </p>
 
       <div className="mt-8 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center">
@@ -83,7 +83,7 @@ export default function ShowsLibrary() {
                 <p className="text-sm font-semibold text-white">{show.name}</p>
                 <p className="mt-1 text-xs text-gray-500">
                   /show/{show.slug}
-                  {show.builtin ? " · Gather conference" : ""}
+                  {show.builtin ? " · Gather Song Garden" : ""}
                   {show.bloomId ? " · bloom assigned" : show.gardenId ? " · garden assigned" : show.match ? " · matches a bloom named Gather" : ""}
                 </p>
               </div>
@@ -92,6 +92,6 @@ export default function ShowsLibrary() {
           ))
         )}
       </div>
-    </div>
+    </section>
   );
 }
