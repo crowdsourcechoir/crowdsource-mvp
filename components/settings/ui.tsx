@@ -77,6 +77,7 @@ export function SettingsButton({
   title,
   href,
   target,
+  expanded,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -88,6 +89,8 @@ export function SettingsButton({
   /** When set, renders as a same-styled link (e.g. Connect Gmail). */
   href?: string;
   target?: string;
+  /** Sets aria-expanded when the button opens and closes a panel. */
+  expanded?: boolean;
 }) {
   // Match StatusPill: full pill, caps, tracked — selected stays lime, idle stays gray.
   const base =
@@ -115,7 +118,14 @@ export function SettingsButton({
   }
 
   return (
-    <button type={type} onClick={onClick} disabled={disabled} title={title} className={`${base} ${styles}`}>
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-expanded={expanded}
+      className={`${base} ${styles}`}
+    >
       {children}
     </button>
   );

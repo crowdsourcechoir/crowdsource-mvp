@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import SettingsSubpage from "@/components/settings/SettingsSubpage";
 import { SettingsButton, StatusPill } from "@/components/settings/ui";
 
 type PitchRow = {
@@ -17,7 +18,7 @@ type PitchRow = {
   organizationName: string | null;
 };
 
-export default function PitchesLibrary() {
+export default function PitchesLibrary({ title, description }: { title: string; description: string }) {
   const router = useRouter();
   const [pitches, setPitches] = useState<PitchRow[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -26,8 +27,14 @@ export default function PitchesLibrary() {
   const [prompt, setPrompt] = useState("");
   const [password, setPassword] = useState("");
   const [live, setLive] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [savingUrl, setSavingUrl] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (creating) nameRef.current?.focus();
+  }, [creating]);
 
   async function reload() {
     const res = await fetch("/api/pitches", { cache: "no-store" });
@@ -104,12 +111,22 @@ export default function PitchesLibrary() {
   }
 
   return (
-    <div>
-      <form onSubmit={createPitch} className="border-b border-[var(--csc-row-divider)] pb-5">
-        <p className="csc-eyebrow">New pitch</p>
+    <SettingsSubpage
+      eyebrow="Content"
+      title={title}
+      description={description}
+      actions={
+        <SettingsButton variant="primary" expanded={creating} onClick={() => setCreating((open) => !open)}>
+          New pitch
+        </SettingsButton>
+      }
+    >
+      {creating ? (
+        <form onSubmit={createPitch} className="border-b border-[var(--csc-row-divider)] pb-5">
         <label className="mt-3 block">
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Internal name</span>
           <input
+            ref={nameRef}
             value={name}
             required
             aria-label="Internal name"
@@ -148,6 +165,9 @@ export default function PitchesLibrary() {
         </div>
         {status ? <p className="mt-3 text-sm text-white/70">{status}</p> : null}
       </form>
+      ) : status ? (
+        <p className="mt-3 text-sm text-white/70">{status}</p>
+      ) : null}
 
       {!pitches ? (
         <p className="mt-4 text-sm text-white/70">Loading pitches…</p>
@@ -205,6 +225,6 @@ export default function PitchesLibrary() {
           ))}
         </div>
       )}
-    </div>
+    </SettingsSubpage>
   );
 }
