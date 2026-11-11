@@ -11,6 +11,7 @@ import {
   loopsFromStoryboard,
   matchBloom,
   nextLyricCue,
+  normalizeSlide,
   pickLoop,
   removeShow,
   revealedLines,
@@ -77,6 +78,9 @@ assert.equal(loops[1]?.label, "Frame 2");
 assert.equal(loops[1]?.videoUrl, "https://cdn.example/loop.mp4");
 assert.equal(pickLoop(loops, 9)?.label, "Frame 2");
 assert.equal(pickLoop([], 0), null);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"] }, 0)?.showLogo, true);
+assert.equal(normalizeSlide({ id: "s", lines: ["Gather"], showLogo: false }, 0)?.showLogo, false);
+assert.equal(gatherShow().slides.every((slide) => slide.showLogo), true);
 
 const accessible = accessibleBloomBackgrounds(
   [{ sceneUrl: "/poster.jpg", videoUrl: null }],

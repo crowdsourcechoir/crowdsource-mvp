@@ -356,6 +356,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
                     </span>
                     <span className="mt-1 block text-xs text-gray-500">
                       {LYRIC_FONTS.find((font) => font.id === item.font)?.label} · {item.sizePx}px
+                      {item.showLogo === false ? " · logo hidden" : ""}
                     </span>
                   </button>
                   <span className="flex items-center gap-1">
@@ -445,6 +446,17 @@ export default function ShowEditor({ showId }: { showId: string }) {
                 ))}
               </div>
             </div>
+            <div>
+              <FieldLabel hint="Crowdsource Choir mark in the upper left. Each slide can hide it.">
+                Logo
+              </FieldLabel>
+              <SettingsButton
+                variant={slide.showLogo !== false ? "primary" : "ghost"}
+                onClick={() => updateSlide(slideIndex, { showLogo: slide.showLogo === false })}
+              >
+                {slide.showLogo !== false ? "Showing" : "Hidden"}
+              </SettingsButton>
+            </div>
           </section>
         </div>
 
@@ -469,6 +481,7 @@ export default function ShowEditor({ showId }: { showId: string }) {
               lines={previewLines}
               font={previewSlide.font}
               sizePx={previewSlide.sizePx}
+              showLogo={previewSlide.showLogo}
               loop={loop}
               primaryColor={background.primaryColor}
               accentColor={background.accentColor}

@@ -6,6 +6,7 @@ import { lyricFontClass } from "@/components/show/lyric-fonts";
 import { slideGesture } from "@/lib/pitches/slideshow";
 import {
   lyricLineHeight,
+  SHOW_LOGO_SRC,
   stageScale,
   STAGE_HEIGHT,
   STAGE_WIDTH,
@@ -18,6 +19,7 @@ type ShowStageProps = {
   font: LyricFontId;
   sizePx: number;
   loop: ShowLoop | null;
+  showLogo?: boolean;
   primaryColor: string;
   accentColor: string;
   interactive?: boolean;
@@ -30,6 +32,7 @@ export default function ShowStage({
   font,
   sizePx,
   loop,
+  showLogo = true,
   primaryColor,
   accentColor,
   interactive = false,
@@ -148,6 +151,14 @@ export default function ShowStage({
           }}
         >
           <StagePlate loop={loop} primaryColor={primaryColor} />
+          {showLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={SHOW_LOGO_SRC}
+              alt="Crowdsource Choir"
+              className="pointer-events-none absolute left-12 top-9 z-20 w-[340px]"
+            />
+          ) : null}
           {card ? (
             <div
               className="absolute left-1/2 top-1/2"

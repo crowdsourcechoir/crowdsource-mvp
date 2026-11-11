@@ -11,6 +11,8 @@ export const GATHER_BLOOM_ID = "aa212bdd-696b-4e91-863d-808fd60bd84c";
 export const GATHER_BLOOM_SLUG = "csc-dec3";
 export const LYRIC_SIZE_MIN = 36;
 export const LYRIC_SIZE_MAX = 180;
+/** Default mark in the upper left of a lyric slide. */
+export const SHOW_LOGO_SRC = "/brand/crowdsource-choir-logo.png";
 
 const MAX_SHOWS = 40;
 const MAX_SLIDES = 40;
@@ -53,6 +55,8 @@ export type ShowSlide = {
   sizePx: number;
   /** Index into the bloom's video loops. */
   loopIndex: number;
+  /** Crowdsource Choir mark in the upper left. Missing values stay visible. */
+  showLogo: boolean;
 };
 
 export type ShowDeck = {
@@ -128,6 +132,7 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         font: "fraunces",
         sizePx: 156,
         loopIndex: 0,
+        showLogo: true,
       },
       {
         id: "gather-verse",
@@ -135,6 +140,7 @@ export function gatherShow(now = "2026-11-10T00:00:00.000Z"): ShowDeck {
         font: "literata",
         sizePx: 64,
         loopIndex: 0,
+        showLogo: true,
       },
     ],
     createdAt: now,
@@ -175,6 +181,7 @@ export function normalizeSlide(value: unknown, index: number): ShowSlide | null 
     font: asFont(raw.font),
     sizePx: clampLyricSize(Number(raw.sizePx)),
     loopIndex: Number.isFinite(loop) ? Math.max(0, Math.min(23, Math.floor(loop))) : 0,
+    showLogo: raw.showLogo !== false,
   };
 }
 
@@ -212,7 +219,7 @@ export function normalizeShow(value: unknown): ShowDeck | null {
 }
 
 export function blankSlide(id: string): ShowSlide {
-  return { id, lines: [], font: "fraunces", sizePx: 112, loopIndex: 0 };
+  return { id, lines: [], font: "fraunces", sizePx: 112, loopIndex: 0, showLogo: true };
 }
 
 export function normalizeShowSlides(raw: unknown): ShowSlidesState {
