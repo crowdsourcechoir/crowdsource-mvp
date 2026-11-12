@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
-import { GradedPhoto } from "@/components/pitch/GradedPhoto";
 import { PitchText } from "@/components/pitch/PitchText";
+import { SlideBackground } from "@/components/pitch/SlideBackground";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { plainPitchText } from "@/lib/pitches/rich-text";
 import { evenFitScale } from "@/lib/pitches/fit-copy";
@@ -568,25 +568,11 @@ export default function PitchSlideshow({
       <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
 
       <div key={`${slide.id}-photo`} className="slide-photo absolute inset-0">
-        <GradedPhoto
-          src={slide.image}
-          alt={slide.imageAlt}
-          overlay={slide.photoOverlay}
-          amount={slide.photoOverlayAmount ?? 1}
-          color={slide.photoOverlayColor}
-          className="h-full w-full"
-        />
+        <SlideBackground slide={slide} className="h-full w-full" />
       </div>
       {outgoing !== null && slides[outgoing] ? (
         <div className="slide-out absolute inset-0">
-          <GradedPhoto
-            src={slides[outgoing].image}
-            alt=""
-            overlay={slides[outgoing].photoOverlay}
-            amount={slides[outgoing].photoOverlayAmount ?? 1}
-            color={slides[outgoing].photoOverlayColor}
-            className="h-full w-full"
-          />
+          <SlideBackground slide={slides[outgoing]} className="h-full w-full" decorative />
         </div>
       ) : null}
       <div
