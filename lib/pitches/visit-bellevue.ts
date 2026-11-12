@@ -5,154 +5,204 @@ import { libraryPhoto } from "@/lib/pitches/photo-library";
 export const VISIT_BELLEVUE_NAME = "Visit Bellevue";
 
 export const VISIT_BELLEVUE_PROMPT =
-  "Partnership pitch for Visit Bellevue. The Crowdsource Choir story: audiences become a choir, the crowd becomes the show, across venues, festivals, activations, districts, and sports. Song Garden and Rave Choir are two ways that practice shows up in a city.";
+  "Partnership pitch for Visit Bellevue. The promise of talked-about experiences: visitors become participants, audiences become choirs, and crowds become the show. A Song Garden sources an original Anthem, premiered by the room, with ways to live on in events, meetings, and a Bellevue edition of Rave Choir.";
 
 const photo = {
-  title: libraryPhoto("conductor"),
-  choir: libraryPhoto("audience"),
-  more: libraryPhoto("arms-wide"),
-  where: libraryPhoto("balcony"),
-  garden: libraryPhoto("piano"),
-  rave: libraryPhoto("band"),
-  city: libraryPhoto("leaders"),
-  close: libraryPhoto("wide-crowd"),
+  promise: libraryPhoto("conductor"),
+  opportunity: libraryPhoto("balcony"),
+  potential: libraryPhoto("hands"),
+  experience: libraryPhoto("anthem"),
+  process: libraryPhoto("piano"),
+  possibilities: libraryPhoto("band"),
+  value: libraryPhoto("leaders"),
+  invitation: libraryPhoto("wide-crowd"),
 } as const;
 
 const wash = 0.5;
 
-/** The company story, told for a city partner. Confidence before the ask. */
+/** The Visit Bellevue partnership, told as eight beats from promise to invitation. */
 export const visitBellevueSlides: PitchSlide[] = [
   {
-    id: "title",
-    image: photo.title.src,
-    imageAlt: photo.title.alt,
+    id: "promise",
+    image: photo.promise.src,
+    imageAlt: photo.promise.alt,
     wash,
     blocks: [
-      { type: "kicker", text: "Visit Bellevue" },
-      { type: "title", text: "Crowdsource Choir" },
-      { type: "line", text: "Participatory entertainment." },
+      { type: "kicker", text: "Visit Bellevue × Crowdsource Choir" },
+      { type: "heading", text: "Create Bellevue’s most talked-about experiences." },
+      {
+        type: "paragraph",
+        text: "Crowdsource Choir is a participatory entertainment company.",
+      },
+      {
+        type: "line",
+        text: "We turn visitors into participants, audiences into choirs, and crowds into the show.",
+      },
     ],
   },
   {
-    id: "choir",
-    image: photo.choir.src,
-    imageAlt: photo.choir.alt,
+    id: "opportunity",
+    image: photo.opportunity.src,
+    imageAlt: photo.opportunity.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "We turn audiences into a choir." },
+      { type: "heading", text: "A destination is more than a place people visit." },
+      { type: "line", text: "It’s what they experience together." },
       {
         type: "paragraph",
-        text: "People arrive as a crowd. Someone starts the song. Then the room is the one singing it.",
+        text: "Bellevue’s next unforgettable attraction could be something its visitors, residents, and communities create together.",
       },
-      { type: "line", text: "The crowd becomes the show." },
+      { type: "line", text: "Not just something to see. Something to be part of." },
     ],
   },
   {
-    id: "more",
-    image: photo.more.src,
-    imageAlt: photo.more.alt,
+    id: "potential",
+    image: photo.potential.src,
+    imageAlt: photo.potential.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "More than a performance." },
+      { type: "heading", text: "Every audience is full of untapped creative potential." },
       {
         type: "paragraph",
-        text: "A performance is something a room receives. This is something a room makes.",
+        text: "Every visitor, resident, and gathering brings distinct voices, stories, and perspectives.",
       },
       {
         type: "paragraph",
-        text: "Crowdsource Choir accelerates and amplifies creativity. We create the conditions for collective effervescence to emerge.",
+        text: "Together, they represent something no other destination or event can replicate.",
       },
-      { type: "line", text: "What happens could not have happened to any one person alone." },
+      { type: "line", text: "What if we brought those voices into harmony?" },
     ],
   },
   {
-    id: "where",
-    image: photo.where.src,
-    imageAlt: photo.where.alt,
+    id: "experience",
+    image: photo.experience.src,
+    imageAlt: photo.experience.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "Wherever a crowd can become the work." },
+      { type: "heading", text: "We turn crowds into the show." },
+      {
+        type: "paragraph",
+        text: "Crowdsource Choir transforms the people, purpose, and place behind a gathering into an original, event-branded Anthem that everyone helps create and perform.",
+      },
+      {
+        type: "paragraph",
+        text: "A high-energy, participatory world premiere where strangers become collaborators and the audience becomes the attraction.",
+      },
+      { type: "line", text: "They don’t just hear what the gathering stands for. They sing it." },
+    ],
+  },
+  {
+    id: "process",
+    image: photo.process.src,
+    imageAlt: photo.process.alt,
+    wash,
+    reveal: "steps",
+    blocks: [
+      { type: "heading", text: "From untapped potential to collective expression." },
       {
         type: "table",
-        headers: ["Where", "What changes"],
+        headers: ["Step", "What happens"],
         rows: [
-          ["Venues", "A room finds one voice."],
-          ["Festivals", "Strangers become a choir for a night."],
-          ["Activations", "People step into the moment."],
-          ["Districts", "A place hears itself."],
-          ["Sports", "The stands become part of the play."],
+          [
+            "Source",
+            "Invite participation. A branded digital Song Garden gathers stories, reflections, and inspiration from the people who make the experience meaningful.",
+          ],
+          [
+            "Create",
+            "Compose the Anthem. We transform those contributions into original songs, anthems, and chants that authentically express the voice, spirit, and purpose of the gathering.",
+          ],
+          [
+            "Activate",
+            "Bring it to life. A wildly fun, facilitated world premiere turns the entire audience into a choir. No musical experience required.",
+          ],
+          [
+            "Extend",
+            "Let it live on. Optional produced music, visuals, and video create shareable content that carries the experience beyond the event.",
+          ],
         ],
       },
     ],
   },
   {
-    id: "garden",
-    image: photo.garden.src,
-    imageAlt: photo.garden.alt,
+    id: "possibilities",
+    image: photo.possibilities.src,
+    imageAlt: photo.possibilities.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "kicker", text: "Song Garden" },
-      { type: "heading", text: "Sometimes the choir begins before anyone gathers." },
+      { type: "heading", text: "One creative engine. Many ways to bring Bellevue to life." },
       {
-        type: "paragraph",
-        text: "A school, a district, a community, or a destination offers stories, words, and voices. The garden blooms into the music, and often into the event itself.",
+        type: "table",
+        headers: ["Where", "What it becomes"],
+        rows: [
+          [
+            "Signature Events & Celebrations",
+            "Create a signature Anthem and unforgettable collective moment for a festival, cultural celebration, or community gathering.",
+          ],
+          [
+            "Meetings & Conventions",
+            "Give meeting planners an original, event-branded experience that connects their attendees to each other and to Bellevue.",
+          ],
+          [
+            "Signature Entertainment",
+            "Develop sponsorable, recurring entertainment properties—including the potential for a Bellevue edition of Rave Choir—that give people a reason to gather, visit, and return.",
+          ],
+        ],
       },
-      { type: "line", text: "The place is already in the song." },
+      { type: "line", text: "Start with one moment. Build toward something distinctly Bellevue." },
     ],
   },
   {
-    id: "rave",
-    image: photo.rave.src,
-    imageAlt: photo.rave.alt,
+    id: "value",
+    image: photo.value.src,
+    imageAlt: photo.value.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "kicker", text: "Rave Choir" },
-      { type: "heading", text: "A whole city, making one night." },
+      { type: "heading", text: "Participation creates value beyond the moment." },
       {
-        type: "paragraph",
-        text: "Families, visitors, and locals, dancing and singing together. The same practice, large enough for a downtown season.",
+        type: "table",
+        headers: ["Value", "What it gives Bellevue"],
+        rows: [
+          ["Destination distinction", "Original, participatory entertainment that helps Bellevue stand apart."],
+          ["Community connection", "Visitors, residents, and local partners become active contributors to shared experiences."],
+          [
+            "Stories worth sharing",
+            "Memorable moments and original creative content that inspire word of mouth and extend the reach of each event.",
+          ],
+          [
+            "Long-term potential",
+            "A creative partnership spanning events, venues, conventions, sponsors, and destination initiatives.",
+          ],
+        ],
       },
-      {
-        type: "paragraph",
-        text: "In a season like Snowflake Lane, it is the room inside the lights. The part of the visit people are in.",
-      },
-      { type: "line", text: "The city, singing." },
+      { type: "line", text: "Create experiences people don’t just attend. They talk about." },
     ],
   },
   {
-    id: "city",
-    image: photo.city.src,
-    imageAlt: photo.city.alt,
+    id: "invitation",
+    image: photo.invitation.src,
+    imageAlt: photo.invitation.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "Bellevue already knows how to gather people." },
       {
-        type: "paragraph",
-        text: "Visit Bellevue stands where those gatherings are chosen. A season. A district. A festival. A venue. A sports night.",
+        type: "heading",
+        text: "What if Bellevue’s next great gathering didn’t just bring people together—but gave them something to sing together?",
       },
       {
         type: "paragraph",
-        text: "Crowdsource Choir can be the night itself. It can also be what a partner uses when they want their people to make something together.",
+        text: "Let’s identify a signature event, conference, or celebration where Crowdsource Choir can create an original, branded Anthem that brings its people, purpose, and place to life.",
       },
-      { type: "line", text: "The practice travels. The feeling is the same." },
-    ],
-  },
-  {
-    id: "close",
-    image: photo.close.src,
-    imageAlt: photo.close.alt,
-    wash,
-    reveal: "steps",
-    blocks: [
-      { type: "kicker", text: "Crowdsource Choir" },
-      { type: "heading", text: "Collective effervescence." },
-      { type: "line", text: "Audiences into a choir. The crowd into the show." },
+      {
+        type: "paragraph",
+        text: "And explore how participatory entertainment can grow into something uniquely Bellevue.",
+      },
+      { type: "line", text: "One original experience. A world of possibilities." },
+      { type: "kicker", text: "Crowdsource Choir × Visit Bellevue" },
     ],
   },
 ];
