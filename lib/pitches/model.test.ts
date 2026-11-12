@@ -20,6 +20,7 @@ import {
   SOBECA_PITCH_ID,
   toAdmin,
   uniqueSlug,
+  VISIT_BELLEVUE_ID,
   type WebPitchesState,
 } from "./model";
 
@@ -296,6 +297,97 @@ const blankBottom = acceptSlides([
   },
 ]);
 assert.equal(blankBottom?.[0]?.bottom, undefined);
+
+const linkedBottom = acceptSlides([
+  {
+    id: "experience",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom:
+      "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created with the people participating, specifically for that moment.",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created with the people participating, specifically for that moment.",
+      },
+    ],
+  },
+]);
+assert.equal(
+  linkedBottom?.[0]?.bottom,
+  "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created with the people participating, specifically for that moment."
+);
+
+const orphanBottom = acceptSlides([
+  {
+    id: "experience",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom:
+      "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people who make it meaningful.",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created with the people participating, specifically for that moment.",
+      },
+      { type: "line", text: "They don’t just hear it. They sing it." },
+    ],
+  },
+]);
+assert.equal(orphanBottom?.[0]?.bottom, undefined);
+
+const customBottom = acceptSlides([
+  {
+    id: "experience",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom: "A custom closer that is not on the slide.",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song.",
+      },
+    ],
+  },
+]);
+assert.equal(customBottom?.[0]?.bottom, "A custom closer that is not on the slide.");
+
+const bellevueOrphanState: WebPitchesState = {
+  overrides: {
+    [VISIT_BELLEVUE_ID]: {
+      slides: [
+        {
+          id: "experience",
+          image: "/pitch/library/anthem.jpg",
+          imageAlt: "A musician with one hand raised in front of a singing room",
+          wash: 0.5,
+          reveal: "steps",
+          bottom:
+            "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people who make it meaningful.",
+          blocks: [
+            { type: "heading", text: "An Anthem Made for the moment." },
+            {
+              type: "paragraph",
+              text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created with the people participating, specifically for that moment.",
+              rule: true,
+            },
+            {
+              type: "paragraph",
+              text: "Then we bring it to life in a high-energy world premiere where the audience becomes the choir and the crowd becomes the show.",
+              rule: true,
+            },
+            { type: "line", text: "They don’t just hear it. They sing it." },
+          ],
+        },
+      ],
+    },
+  },
+  custom: [],
+};
+const bellevueOrphanPitch = listLoadedPitches(bellevueOrphanState, sobeca).find((pitch) => pitch.id === VISIT_BELLEVUE_ID);
+assert.equal(bellevueOrphanPitch?.slides[0]?.id, "experience");
+assert.equal(bellevueOrphanPitch?.slides[0]?.bottom, undefined);
+
 const droppedPace = acceptSlides([
   {
     id: "title",

@@ -1036,9 +1036,14 @@ export default function PitchEditor({ id }: { id: string }) {
                               patchSlide(slide.id, (current) => {
                                 const existing = current.blocks[blockIndex];
                                 if (existing?.type !== "list") return current;
+                                const prevPlain = item.trim();
+                                const linked = Boolean(current.bottom?.trim() && current.bottom.trim() === prevPlain);
                                 const items = existing.items.slice();
                                 items[itemIndex] = value;
-                                return updateBlock(current, blockIndex, { ...existing, items });
+                                const next = updateBlock(current, blockIndex, { ...existing, items });
+                                if (!linked) return next;
+                                const nextPlain = value.trim();
+                                return { ...next, bottom: nextPlain || undefined };
                               })
                             }
                           />
@@ -1188,7 +1193,12 @@ export default function PitchEditor({ id }: { id: string }) {
                           patchSlide(slide.id, (current) => {
                             const existing = current.blocks[blockIndex];
                             if (!existing || !("text" in existing)) return current;
-                            return updateBlock(current, blockIndex, { ...existing, text: value });
+                            const prevPlain = plainPitchText(existing.text).trim();
+                            const linked = Boolean(current.bottom?.trim() && current.bottom.trim() === prevPlain);
+                            const next = updateBlock(current, blockIndex, { ...existing, text: value });
+                            if (!linked) return next;
+                            const nextPlain = plainPitchText(value).trim();
+                            return { ...next, bottom: nextPlain || undefined };
                           })
                         }
                       />
