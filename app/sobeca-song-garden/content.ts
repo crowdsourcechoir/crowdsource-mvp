@@ -21,6 +21,8 @@ export type PitchSlide = {
   copyColor?: string;
   /** When set, a click in the presentation brings in the next line. Omitted slides arrive together. */
   reveal?: "steps";
+  /** Shown at the bottom after one click. A Line block stays on the slide. */
+  bottom?: string;
   /** Optional pink grade on this photo. Omitted photos stay as shot. */
   photoOverlay?: "salmon";
   /** How much of the grade shows, 0–1. Omitted means the full grade. */

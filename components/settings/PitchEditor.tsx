@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
-import { toggleBoldMarkup } from "@/lib/pitches/rich-text";
+import { plainPitchText, toggleBoldMarkup } from "@/lib/pitches/rich-text";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { pitchDraftKey, shouldApplySavedDraft } from "@/lib/pitches/autosave";
 import {
@@ -130,6 +130,8 @@ function FitText({
   onToggleBold,
   rule = false,
   onToggleRule,
+  nextClick = false,
+  onNextClick,
   tools,
 }: {
   value: string;
@@ -141,6 +143,8 @@ function FitText({
   onToggleBold?: () => void;
   rule?: boolean;
   onToggleRule?: () => void;
+  nextClick?: boolean;
+  onNextClick?: () => void;
   tools?: ReactNode;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -205,6 +209,21 @@ function FitText({
               }`}
             >
               Bar
+            </button>
+          ) : null}
+          {onNextClick ? (
+            <button
+              type="button"
+              aria-pressed={nextClick}
+              aria-label={`Put ${label} at the bottom on the next click`}
+              title="Put this text at the bottom on the next click"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onNextClick}
+              className={`text-[10px] uppercase tracking-[0.16em] ${
+                nextClick ? "border border-[var(--csc-accent)] px-1.5 font-bold text-white" : "font-semibold text-[var(--csc-accent)]"
+              }`}
+            >
+              Next click
             </button>
           ) : null}
           {onStyle ? (
@@ -716,6 +735,21 @@ export default function PitchEditor({ id }: { id: string }) {
                 </label>
               </div>
 
+              <label className="mt-3 block border-b border-[var(--csc-row-divider)] pb-3">
+                <span className="csc-eyebrow">Next click</span>
+                <textarea
+                  rows={2}
+                  value={slide.bottom ?? ""}
+                  aria-label={`Text at the bottom of slide ${index + 1} on the next click`}
+                  placeholder="Shown at the bottom on the next click"
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    patchSlide(slide.id, (current) => ({ ...current, bottom: value ? value : undefined }));
+                  }}
+                  className="mt-1 w-full resize-y bg-transparent text-sm leading-snug text-white focus:outline-none"
+                />
+              </label>
+
               {structureOpen ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <SettingsButton
@@ -957,6 +991,15 @@ export default function PitchEditor({ id }: { id: string }) {
                             key={itemIndex}
                             label={`Item ${itemIndex + 1}`}
                             value={item}
+                            nextClick={slide.bottom?.trim() === item.trim() && item.trim().length > 0}
+                            onNextClick={() => {
+                              const plain = item.trim();
+                              if (!plain) return;
+                              patchSlide(slide.id, (current) => ({
+                                ...current,
+                                bottom: current.bottom?.trim() === plain ? undefined : plain,
+                              }));
+                            }}
                             tools={
                               structureOpen && block.items.length > 1 ? (
                                 <RoundButton
@@ -1071,6 +1114,17 @@ export default function PitchEditor({ id }: { id: string }) {
                         label={BLOCK_LABEL[block.type] ?? block.type}
                         styleName={block.type}
                         bold={block.bold === true}
+                        nextClick={
+                          slide.bottom?.trim() === plainPitchText(block.text).trim() && plainPitchText(block.text).trim().length > 0
+                        }
+                        onNextClick={() => {
+                          const plain = plainPitchText(block.text).trim();
+                          if (!plain) return;
+                          patchSlide(slide.id, (current) => ({
+                            ...current,
+                            bottom: current.bottom?.trim() === plain ? undefined : plain,
+                          }));
+                        }}
                         rule={block.type === "paragraph" && block.rule === true}
                         onToggleRule={
                           block.type === "paragraph"

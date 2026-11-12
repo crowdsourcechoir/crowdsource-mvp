@@ -276,6 +276,26 @@ const pacedDeck = acceptSlides([
   },
 ]);
 assert.equal(pacedDeck?.[0]?.reveal, "steps");
+const withBottom = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom: "  On the next click  ",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(withBottom?.[0]?.bottom, "On the next click");
+const blankBottom = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom: "   ",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(blankBottom?.[0]?.bottom, undefined);
 const droppedPace = acceptSlides([
   {
     id: "title",

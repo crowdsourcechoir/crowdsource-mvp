@@ -239,6 +239,10 @@ function revealMode(value: unknown): "steps" | undefined {
   return value === "steps" ? "steps" : undefined;
 }
 
+function bottomCopy(value: unknown): string | undefined {
+  return clip(value, MAX_TEXT) ?? undefined;
+}
+
 function salmonOverlay(value: unknown): "salmon" | undefined {
   return value === "salmon" ? "salmon" : undefined;
 }
@@ -272,6 +276,7 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
       wash: washFrom(slide.wash),
       copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
       reveal: revealMode(slide.reveal),
+      bottom: bottomCopy(slide.bottom),
       photoOverlay: grade,
       photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, grade),
       photoOverlayColor: grade ? storedOverlayColor(slide.photoOverlayColor) : undefined,
@@ -361,6 +366,7 @@ export function mergeSlides(base: PitchSlide[], incoming: unknown): PitchSlide[]
       image: safeImage(match.image, slide.image),
       imageAlt: typeof match.imageAlt === "string" && match.imageAlt.trim() ? match.imageAlt.trim().slice(0, 300) : slide.imageAlt,
       copyColor: typeof match.copyColor === "string" ? safeCopyColor(match.copyColor) : slide.copyColor,
+      bottom: bottomCopy(match.bottom),
       wash: washFrom(match.wash, slide.wash),
       blocks: slide.blocks.map((block, index) => overlayBlock(block, match.blocks?.[index])),
     };

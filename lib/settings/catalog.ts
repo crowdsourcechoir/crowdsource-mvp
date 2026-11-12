@@ -338,6 +338,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Set how transparent that overlay is",
           "Choose the overlay color",
           "Present a slide all at once, or one line at a time",
+          "Place a Line anywhere, and keep a closing Line at the bottom",
+          "Hold any text for the bottom of the slide on the next click",
           "Song Garden pitch keeps the public page sections",
           "Live page, with a password when one is set",
           "Connect a pitch to a sales organization",

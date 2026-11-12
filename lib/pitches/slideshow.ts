@@ -1,4 +1,5 @@
 import type { CopyBlock } from "@/app/sobeca-song-garden/content";
+import { plainPitchText } from "@/lib/pitches/rich-text";
 
 export type SlideGesture = "next" | "prev" | "none";
 
@@ -6,12 +7,19 @@ export type DeckStep = { index: number; revealed: boolean };
 
 const TEXT_STYLES = new Set(["kicker", "title", "heading", "heading2", "heading3", "paragraph", "line"]);
 
-/** The line held for a second click. Only a line block. A paragraph stays a paragraph. */
-export function punchCopy(blocks: CopyBlock[]): { index: number; before: string; text: string } | null {
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (block.type === "line" && block.text.trim()) return { index, before: "", text: block.text.trim() };
-  }
+/** Text held for the next click. A Line stays where it was placed. */
+export function punchCopy(_blocks: CopyBlock[], bottom?: string): { index: number; before: string; text: string } | null {
+  const text = bottom?.trim() ?? "";
+  if (!text) return null;
+  return { index: -1, before: "", text };
+}
+
+/** The closing Line, pinned to the bottom. Stepped slides keep every Line in order. */
+export function pinnedLine(slide: { reveal?: string; blocks: CopyBlock[] }): { index: number; text: string } | null {
+  if (slide.reveal === "steps") return null;
+  const index = slide.blocks.length - 1;
+  const block = slide.blocks[index];
+  if (block?.type === "line" && block.text.trim()) return { index, text: block.text.trim() };
   return null;
 }
 
@@ -66,7 +74,7 @@ export type CopyStep = { blockIndex: number; itemIndex?: number; rowIndex?: numb
 
 export type PresentStep = { index: number; revealed: boolean; arrived: number };
 
-export type PacedSlide = { reveal?: string; blocks: CopyBlock[] };
+export type PacedSlide = { reveal?: string; blocks: CopyBlock[]; bottom?: string };
 
 /** One presenter click. List items and table rows each count. Blank lines do not. */
 export function copySteps(blocks: CopyBlock[]): CopyStep[] {
@@ -96,15 +104,25 @@ function pacedCount(slide: PacedSlide | undefined): number {
   return copySteps(slide.blocks).length;
 }
 
+function heldBottom(slide: PacedSlide | undefined): boolean {
+  const text = plainPitchText(slide?.bottom ?? "").trim();
+  if (!text) return false;
+  const pinned = slide ? pinnedLine(slide) : null;
+  return !pinned || pinned.text !== text;
+}
+
 function enterSlide(slides: PacedSlide[], index: number, from: "prev" | "next", revealed = false): PresentStep {
-  const total = pacedCount(slides[index]);
-  if (total > 0) return { index, revealed: false, arrived: from === "prev" ? total : 0 };
-  return { index, revealed, arrived: 0 };
+  const slide = slides[index];
+  const total = pacedCount(slide);
+  if (total > 0) {
+    return { index, revealed: from === "prev" && heldBottom(slide), arrived: from === "prev" ? total : 0 };
+  }
+  return { index, revealed: from === "prev" ? heldBottom(slide) : revealed, arrived: 0 };
 }
 
 /**
- * All-at-once slides keep the held last line.
- * A stepped slide starts empty. Each forward click reveals the next line, and the click after the last line leaves the slide.
+ * All-at-once slides hold the Next click text, then advance.
+ * A stepped slide starts empty. Each forward click reveals the next line. After the last line, Next click text appears, and the following click leaves the slide.
  */
 export function nextPresentStep(state: PresentStep, slides: PacedSlide[], direction: SlideGesture): PresentStep {
   if (direction === "none" || slides.length === 0) return state;
@@ -113,10 +131,12 @@ export function nextPresentStep(state: PresentStep, slides: PacedSlide[], direct
   if (total > 0) {
     if (direction === "next") {
       if (state.arrived < total) return { index: state.index, revealed: false, arrived: state.arrived + 1 };
+      if (heldBottom(slide) && !state.revealed) return { index: state.index, revealed: true, arrived: state.arrived };
       const index = Math.min(slides.length - 1, state.index + 1);
       if (index === state.index) return state;
       return enterSlide(slides, index, "next");
     }
+    if (state.revealed) return { index: state.index, revealed: false, arrived: state.arrived };
     if (state.arrived > 0) return { index: state.index, revealed: false, arrived: state.arrived - 1 };
     const index = Math.max(0, state.index - 1);
     if (index === state.index) return state;
@@ -128,8 +148,8 @@ export function nextPresentStep(state: PresentStep, slides: PacedSlide[], direct
     { index: state.index, revealed: state.revealed },
     slides.length,
     direction,
-    Boolean(slide && punchCopy(slide.blocks)),
-    Boolean(previous && previous.reveal !== "steps" && punchCopy(previous.blocks)),
+    heldBottom(slide),
+    Boolean(previous && previous.reveal !== "steps" && heldBottom(previous)),
   );
   if (punched.index !== state.index && pacedCount(slides[punched.index]) > 0) {
     return enterSlide(slides, punched.index, direction === "prev" ? "prev" : "next");
