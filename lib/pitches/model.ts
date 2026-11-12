@@ -184,6 +184,15 @@ function safeImage(value: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Optional slide video. Same URL rules as photos; blank clears the field. */
+function safeVideo(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") return undefined;
+  const url = value.trim();
+  if (!url) return undefined;
+  return safeImage(url, "") || undefined;
+}
+
 function clip(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
@@ -270,9 +279,11 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 40) return null;
   const slides = value.filter(isPitchSlide).map((slide) => {
     const grade = salmonOverlay(slide.photoOverlay);
+    const video = safeVideo(slide.video);
     return {
       ...slide,
       image: safeImage(slide.image, SEED_PHOTO),
+      ...(video ? { video } : { video: undefined }),
       wash: washFrom(slide.wash),
       copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
       reveal: revealMode(slide.reveal),
@@ -361,10 +372,14 @@ export function mergeSlides(base: PitchSlide[], incoming: unknown): PitchSlide[]
       (item) => item && typeof item === "object" && (item as PitchSlide).id === slide.id
     ) as PitchSlide | undefined;
     if (!match) return { ...slide, blocks: slide.blocks.map((block) => ({ ...block })) };
+    const video = Object.prototype.hasOwnProperty.call(match, "video")
+      ? safeVideo(match.video)
+      : slide.video;
     return {
       ...slide,
       image: safeImage(match.image, slide.image),
       imageAlt: typeof match.imageAlt === "string" && match.imageAlt.trim() ? match.imageAlt.trim().slice(0, 300) : slide.imageAlt,
+      ...(video ? { video } : { video: undefined }),
       copyColor: typeof match.copyColor === "string" ? safeCopyColor(match.copyColor) : slide.copyColor,
       bottom: bottomCopy(match.bottom),
       wash: washFrom(match.wash, slide.wash),

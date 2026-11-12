@@ -246,12 +246,28 @@ export default function PitchDeck({
         const closing = slide.id === "title" ? null : closingProse(slide.blocks);
         return (
           <section key={slide.id} className="relative min-h-[100dvh] w-full overflow-hidden">
-            <img
-              data-parallax
-              src={slide.image}
-              alt={slide.imageAlt}
-              className="absolute left-0 top-[-12%] h-[130%] w-full object-cover will-change-transform"
-            />
+            {slide.video ? (
+              <video
+                data-parallax
+                key={slide.video}
+                src={slide.video}
+                poster={slide.image}
+                className="absolute left-0 top-[-12%] h-[130%] w-full object-cover will-change-transform"
+                muted
+                playsInline
+                autoPlay
+                loop
+                preload="metadata"
+                aria-label={slide.imageAlt}
+              />
+            ) : (
+              <img
+                data-parallax
+                src={slide.image}
+                alt={slide.imageAlt}
+                className="absolute left-0 top-[-12%] h-[130%] w-full object-cover will-change-transform"
+              />
+            )}
             <div
               className="absolute inset-0 mix-blend-multiply"
               style={{ backgroundColor: tint, opacity: tintOpacity }}

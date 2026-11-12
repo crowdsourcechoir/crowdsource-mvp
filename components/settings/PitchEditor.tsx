@@ -434,14 +434,20 @@ export default function PitchEditor({ id }: { id: string }) {
     }
   }
 
-  async function replacePhoto(slide: PitchSlide, file: File) {
+  async function replaceMedia(slide: PitchSlide, file: File, kind: "image" | "video") {
     setUploadingId(slide.id);
     setStatus(null);
     try {
       const prepared = await fetch(`/api/pitches/${id}/background`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slideId: slide.id, name: file.name, contentType: file.type, size: file.size }),
+        body: JSON.stringify({
+          slideId: slide.id,
+          name: file.name,
+          contentType: file.type,
+          size: file.size,
+          kind,
+        }),
       });
       const prep = await prepared.json();
       if (!prepared.ok) throw new Error(prep.error ?? "Could not prepare upload");
@@ -451,11 +457,15 @@ export default function PitchEditor({ id }: { id: string }) {
         body: file,
       });
       if (!put.ok) throw new Error("Upload failed");
-      const next = (slidesRef.current ?? []).map((item) =>
-        item.id === slide.id ? { ...item, image: prep.upload.publicUrl as string } : item
-      );
+      const url = prep.upload.publicUrl as string;
+      const next = (slidesRef.current ?? []).map((item) => {
+        if (item.id !== slide.id) return item;
+        if (kind === "video") return { ...item, video: url };
+        return { ...item, image: url };
+      });
       slidesRef.current = next;
       setSlides(next);
+      setStatus(kind === "video" ? "Video uploaded." : null);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -833,28 +843,70 @@ export default function PitchEditor({ id }: { id: string }) {
               ) : null}
 
               <div className="relative mt-3">
-                <GradedPhoto
-                  src={slide.image}
-                  alt=""
-                  overlay={slide.photoOverlay}
-                  amount={slide.photoOverlayAmount ?? 1}
-                  color={slide.photoOverlayColor}
-                  className="h-28 w-full"
-                />
-                <label className="csc-link absolute bottom-2 right-2 z-10 bg-black/70 px-2 py-1 text-xs">
-                  {uploadingId === slide.id ? "Uploading…" : "Upload photo"}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="sr-only"
-                    disabled={uploadingId !== null || saving}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (file) void replacePhoto(slide, file);
-                    }}
+                <div className="relative h-28 w-full overflow-hidden bg-black">
+                  <GradedPhoto
+                    src={slide.image}
+                    alt=""
+                    overlay={slide.photoOverlay}
+                    amount={slide.photoOverlayAmount ?? 1}
+                    color={slide.photoOverlayColor}
+                    className="h-full w-full"
                   />
-                </label>
+                  {slide.video ? (
+                    <video
+                      key={slide.video}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      src={slide.video}
+                      poster={slide.image}
+                      muted
+                      playsInline
+                      autoPlay
+                      loop
+                      preload="metadata"
+                      aria-label="Slide background video preview"
+                    />
+                  ) : null}
+                </div>
+                <div className="absolute bottom-2 right-2 z-10 flex flex-wrap justify-end gap-1">
+                  <label className="csc-link bg-black/70 px-2 py-1 text-xs">
+                    {uploadingId === slide.id ? "Uploading…" : "Upload photo"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      disabled={uploadingId !== null || saving}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void replaceMedia(slide, file, "image");
+                      }}
+                    />
+                  </label>
+                  <label className="csc-link bg-black/70 px-2 py-1 text-xs">
+                    {uploadingId === slide.id ? "Uploading…" : slide.video ? "Replace video" : "Upload video"}
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime"
+                      className="sr-only"
+                      disabled={uploadingId !== null || saving}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void replaceMedia(slide, file, "video");
+                      }}
+                    />
+                  </label>
+                  {slide.video ? (
+                    <button
+                      type="button"
+                      className="csc-link bg-black/70 px-2 py-1 text-xs"
+                      disabled={uploadingId !== null || saving}
+                      onClick={() => patchSlide(slide.id, (current) => ({ ...current, video: undefined }))}
+                    >
+                      Remove video
+                    </button>
+                  ) : null}
+                </div>
               </div>
               {structureOpen ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -931,6 +983,7 @@ export default function PitchEditor({ id }: { id: string }) {
                           ...current,
                           image: photo.src,
                           imageAlt: photo.alt,
+                          video: undefined,
                         }))
                       }
                     >

@@ -307,6 +307,37 @@ const droppedPace = acceptSlides([
 ]);
 assert.equal(droppedPace?.[0]?.reveal, undefined);
 
+const withVideo = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    video: "https://cdn.example/pitch-loop.mp4",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(withVideo?.[0]?.video, "https://cdn.example/pitch-loop.mp4");
+const blankVideo = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    video: "   ",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(blankVideo?.[0]?.video, undefined);
+const badVideo = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    video: "javascript:alert(1)",
+    blocks: [{ type: "heading", text: "One" }],
+  },
+]);
+assert.equal(badVideo?.[0]?.video, undefined);
+
 const graded = acceptSlides([
   {
     id: "title",
