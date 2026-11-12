@@ -3,6 +3,7 @@ import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } fr
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
 import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
+import { bottomRepeatsCopy } from "@/lib/pitches/slideshow";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
 
@@ -239,8 +240,10 @@ function revealMode(value: unknown): "steps" | undefined {
   return value === "steps" ? "steps" : undefined;
 }
 
-function bottomCopy(value: unknown): string | undefined {
-  return clip(value, MAX_TEXT) ?? undefined;
+function bottomCopy(value: unknown, blocks: CopyBlock[]): string | undefined {
+  const text = clip(value, MAX_TEXT) ?? undefined;
+  if (!text || bottomRepeatsCopy({ blocks, bottom: text })) return undefined;
+  return text;
 }
 
 function salmonOverlay(value: unknown): "salmon" | undefined {
@@ -253,34 +256,49 @@ function overlayAmount(value: unknown, overlay: "salmon" | undefined): number | 
   return Math.round(clamped * 100) / 100;
 }
 
+function clickMarks(block: CopyBlock): { click: true } | Record<string, never> {
+  return "text" in block && block.click === true ? { click: true } : {};
+}
+
 function copyBlock(block: CopyBlock): CopyBlock {
-  if (block.type === "list") return { ...block, items: block.items.slice() };
+  if (block.type === "list") {
+    const clickItems = (block.clickItems ?? []).filter(
+      (index) => Number.isInteger(index) && index >= 0 && index < block.items.length && block.items[index]?.trim(),
+    );
+    return {
+      type: "list",
+      items: block.items.slice(),
+      ...(clickItems.length ? { clickItems: Array.from(new Set(clickItems)).sort((a, b) => a - b) } : {}),
+    };
+  }
   if (block.type === "table") {
     return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
   }
   if (!("text" in block)) return block;
   const bold = block.bold === true ? { bold: true as const } : {};
+  const click = clickMarks(block);
   if (block.type === "paragraph") {
-    return { type: "paragraph", text: block.text, ...bold, ...(block.rule === true ? { rule: true as const } : {}) };
+    return { type: "paragraph", text: block.text, ...bold, ...click, ...(block.rule === true ? { rule: true as const } : {}) };
   }
-  return { type: block.type, text: block.text, ...bold };
+  return { type: block.type, text: block.text, ...bold, ...click };
 }
 
 function sanitizeSlides(value: unknown): PitchSlide[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 40) return null;
   const slides = value.filter(isPitchSlide).map((slide) => {
     const grade = salmonOverlay(slide.photoOverlay);
+    const blocks = slide.blocks.map(copyBlock);
     return {
       ...slide,
       image: safeImage(slide.image, SEED_PHOTO),
       wash: washFrom(slide.wash),
       copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
       reveal: revealMode(slide.reveal),
-      bottom: bottomCopy(slide.bottom),
+      bottom: bottomCopy(slide.bottom, blocks),
       photoOverlay: grade,
       photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, grade),
       photoOverlayColor: grade ? storedOverlayColor(slide.photoOverlayColor) : undefined,
-      blocks: slide.blocks.map(copyBlock),
+      blocks,
     };
   });
   if (slides.length !== value.length) return null;
@@ -309,17 +327,23 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
       type: next.type,
       text: next.text.slice(0, MAX_TEXT),
       ...(next.bold === true ? { bold: true as const } : {}),
+      ...("text" in next && next.click === true ? { click: true as const } : {}),
       ...(next.type === "paragraph" && next.rule === true ? { rule: true as const } : {}),
     } as CopyBlock;
   }
   if (next.type !== base.type) return base;
 
   if (base.type === "list" && next.type === "list" && Array.isArray(next.items) && next.items.length === base.items.length) {
+    const items = base.items.map((item, index) =>
+      typeof next.items[index] === "string" ? next.items[index].slice(0, MAX_TEXT) : item,
+    );
+    const clickItems = (next.clickItems ?? []).filter(
+      (index) => Number.isInteger(index) && index >= 0 && index < items.length && items[index]?.trim(),
+    );
     return {
-      ...base,
-      items: base.items.map((item, index) =>
-        typeof next.items[index] === "string" ? next.items[index].slice(0, MAX_TEXT) : item
-      ),
+      type: "list",
+      items,
+      ...(clickItems.length ? { clickItems: Array.from(new Set(clickItems)).sort((a, b) => a - b) } : {}),
     };
   }
 
@@ -361,14 +385,15 @@ export function mergeSlides(base: PitchSlide[], incoming: unknown): PitchSlide[]
       (item) => item && typeof item === "object" && (item as PitchSlide).id === slide.id
     ) as PitchSlide | undefined;
     if (!match) return { ...slide, blocks: slide.blocks.map((block) => ({ ...block })) };
+    const blocks = slide.blocks.map((block, index) => overlayBlock(block, match.blocks?.[index]));
     return {
       ...slide,
       image: safeImage(match.image, slide.image),
       imageAlt: typeof match.imageAlt === "string" && match.imageAlt.trim() ? match.imageAlt.trim().slice(0, 300) : slide.imageAlt,
       copyColor: typeof match.copyColor === "string" ? safeCopyColor(match.copyColor) : slide.copyColor,
-      bottom: bottomCopy(match.bottom),
+      bottom: bottomCopy(match.bottom, blocks),
       wash: washFrom(match.wash, slide.wash),
-      blocks: slide.blocks.map((block, index) => overlayBlock(block, match.blocks?.[index])),
+      blocks,
     };
   });
 }

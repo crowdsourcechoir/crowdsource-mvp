@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import type { CopyBlock } from "@/app/sobeca-song-garden/content";
-import { copySteps, nextDeckStep, nextPresentStep, pinnedLine, punchCopy, slideGesture, stepSlide } from "./slideshow";
+import {
+  bottomRepeatsCopy,
+  clickBeatHidden,
+  clickBeats,
+  copySteps,
+  nextDeckStep,
+  nextPresentStep,
+  pinnedLine,
+  punchCopy,
+  slideGesture,
+  stepSlide,
+} from "./slideshow";
 
 const width = 1000;
 
@@ -132,5 +143,117 @@ assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, diff
   revealed: true,
   arrived: 0,
 });
+
+const marked: CopyBlock[] = [
+  { type: "heading", text: "Visible now." },
+  { type: "paragraph", text: "First click.", click: true },
+  { type: "paragraph", text: "Second click.", click: true },
+  { type: "line", text: "Held line.", click: true },
+];
+assert.deepEqual(clickBeats(marked), [{ blockIndex: 1 }, { blockIndex: 2 }, { blockIndex: 3 }]);
+assert.equal(pinnedLine({ blocks: marked }), null);
+assert.equal(clickBeatHidden(clickBeats(marked), 1, undefined, 0), true);
+assert.equal(clickBeatHidden(clickBeats(marked), 1, undefined, 1), false);
+assert.equal(clickBeatHidden(clickBeats(marked), 0, undefined, 0), false);
+
+const many = [
+  { blocks: marked, bottom: "After the rows." },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, many, "next"), {
+  index: 0,
+  revealed: false,
+  arrived: 1,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 2 }, many, "next"), {
+  index: 0,
+  revealed: false,
+  arrived: 3,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 3 }, many, "next"), {
+  index: 0,
+  revealed: true,
+  arrived: 3,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 3 }, many, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+assert.deepEqual(nextPresentStep({ index: 1, revealed: false, arrived: 0 }, many, "prev"), {
+  index: 0,
+  revealed: true,
+  arrived: 3,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 3 }, many, "prev"), {
+  index: 0,
+  revealed: false,
+  arrived: 3,
+});
+
+const repeatedParagraph: CopyBlock[] = [
+  { type: "heading", text: "Anthem. Made for the moment." },
+  {
+    type: "paragraph",
+    text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song.",
+  },
+  { type: "line", text: "They don’t just hear it. They sing it." },
+];
+const repeated = [
+  { reveal: "steps" as const, blocks: repeatedParagraph, bottom: repeatedParagraph[1] && "text" in repeatedParagraph[1] ? repeatedParagraph[1].text : "" },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.equal(bottomRepeatsCopy(repeated[0]), true);
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 3 }, repeated, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+
+const revisedParagraph = "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people participating.";
+const previousParagraph = "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people who make it meaningful.";
+const revisedAnthem: CopyBlock[] = [
+  { type: "heading", text: "An Anthem Made for the moment." },
+  { type: "paragraph", text: revisedParagraph, rule: true },
+  {
+    type: "paragraph",
+    text: "Then we bring it to life in a high-energy, participatory world premiere where the audience becomes the choir and the crowd becomes the show.",
+    rule: true,
+  },
+  { type: "line", text: "They don’t just hear it. They sing it." },
+];
+const staleBottom = [
+  { reveal: "steps" as const, blocks: revisedAnthem, bottom: previousParagraph },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.equal(bottomRepeatsCopy(staleBottom[0]), true);
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 4 }, staleBottom, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+const customBottom = [
+  { reveal: "steps" as const, blocks: revisedAnthem, bottom: "Hold this line for the room." },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.equal(bottomRepeatsCopy(customBottom[0]), false);
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 4 }, customBottom, "next"), {
+  index: 0,
+  revealed: true,
+  arrived: 4,
+});
+assert.equal(
+  bottomRepeatsCopy({
+    blocks: [{ type: "line", text: "They don’t just hear it. They sing it." }],
+    bottom: "They don't just hear it. They sing it.",
+  }),
+  true,
+);
+
+const listMarked: CopyBlock[] = [{ type: "list", items: ["Stay", "First", "Second"], clickItems: [2, 1] }];
+assert.deepEqual(clickBeats(listMarked), [
+  { blockIndex: 0, itemIndex: 1 },
+  { blockIndex: 0, itemIndex: 2 },
+]);
 
 console.log("slideshow gesture ok");

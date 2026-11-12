@@ -1,4 +1,4 @@
-type PitchText = { text: string; bold?: boolean };
+type PitchText = { text: string; bold?: boolean; click?: boolean };
 
 export type CopyBlock =
   | ({ type: "kicker" } & PitchText)
@@ -10,7 +10,7 @@ export type CopyBlock =
   | ({ type: "line" } & PitchText)
   | { type: "image"; src: string; alt: string }
   | { type: "table"; headers: string[]; rows: string[][] }
-  | { type: "list"; items: string[] };
+  | { type: "list"; items: string[]; clickItems?: number[] };
 
 export type PitchSlide = {
   id: string;
@@ -21,7 +21,7 @@ export type PitchSlide = {
   copyColor?: string;
   /** When set, a click in the presentation brings in the next line. Omitted slides arrive together. */
   reveal?: "steps";
-  /** Shown at the bottom after one click. A Line block stays on the slide. */
+  /** Extra line at the bottom after the marked rows have come in. */
   bottom?: string;
   /** Optional pink grade on this photo. Omitted photos stay as shot. */
   photoOverlay?: "salmon";

@@ -14,13 +14,36 @@ export function punchCopy(_blocks: CopyBlock[], bottom?: string): { index: numbe
   return { index: -1, before: "", text };
 }
 
-/** The closing Line, pinned to the bottom. Stepped slides keep every Line in order. */
+/** The closing Line, pinned to the bottom. Stepped slides keep every Line in order. A marked line waits for its click. */
 export function pinnedLine(slide: { reveal?: string; blocks: CopyBlock[] }): { index: number; text: string } | null {
   if (slide.reveal === "steps") return null;
   const index = slide.blocks.length - 1;
   const block = slide.blocks[index];
-  if (block?.type === "line" && block.text.trim()) return { index, text: block.text.trim() };
+  if (block?.type === "line" && block.text.trim() && block.click !== true) return { index, text: block.text.trim() };
   return null;
+}
+
+export type ClickBeat = { blockIndex: number; itemIndex?: number };
+
+/** Rows marked Next click, in reading order. Each click brings the next one onto the slide. */
+export function clickBeats(blocks: CopyBlock[]): ClickBeat[] {
+  const beats: ClickBeat[] = [];
+  blocks.forEach((block, blockIndex) => {
+    if (block.type === "list") {
+      const marks = Array.from(new Set(block.clickItems ?? [])).filter((index) => Number.isInteger(index)).sort((a, b) => a - b);
+      marks.forEach((itemIndex) => {
+        if (block.items[itemIndex]?.trim()) beats.push({ blockIndex, itemIndex });
+      });
+      return;
+    }
+    if ("text" in block && block.click === true && block.text.trim()) beats.push({ blockIndex });
+  });
+  return beats;
+}
+
+export function clickBeatHidden(beats: ClickBeat[], blockIndex: number, itemIndex: number | undefined, shown: number): boolean {
+  const at = beats.findIndex((beat) => beat.blockIndex === blockIndex && beat.itemIndex === itemIndex);
+  return at >= 0 && at >= shown;
 }
 
 export function isTextStyle(type: string): boolean {
@@ -104,15 +127,76 @@ function pacedCount(slide: PacedSlide | undefined): number {
   return copySteps(slide.blocks).length;
 }
 
+function clickCount(slide: PacedSlide | undefined): number {
+  if (!slide) return 0;
+  return clickBeats(slide.blocks).length;
+}
+
+/** Fold quotes, dashes, and punctuation so two wordings of one sentence can be compared. */
+function comparableCopy(text: string): string {
+  return plainPitchText(text)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function rowCopy(blocks: CopyBlock[]): string[] {
+  const rows: string[] = [];
+  blocks.forEach((block) => {
+    if (block.type === "list") {
+      block.items.forEach((item) => rows.push(item));
+      return;
+    }
+    if ("text" in block) rows.push(block.text);
+  });
+  return rows;
+}
+
+/**
+ * Same sentence, including a later edit. Short lines stay distinct:
+ * a custom next-click line that only shares a few words is not a repeat.
+ */
+function sameSentence(bottom: string, row: string): boolean {
+  const left = comparableCopy(bottom);
+  const right = comparableCopy(row);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftWords = left.split(" ");
+  const rightWords = right.split(" ");
+  if (leftWords.length < 8 || rightWords.length < 8) return false;
+  const counts = new Map<string, number>();
+  leftWords.forEach((word) => counts.set(word, (counts.get(word) ?? 0) + 1));
+  let overlap = 0;
+  rightWords.forEach((word) => {
+    const remaining = counts.get(word) ?? 0;
+    if (remaining <= 0) return;
+    overlap += 1;
+    counts.set(word, remaining - 1);
+  });
+  return (2 * overlap) / (leftWords.length + rightWords.length) >= 0.8;
+}
+
+/** True when the bottom line is already a row on the slide, so it must not paint a second time. */
+export function bottomRepeatsCopy(slide: { blocks: CopyBlock[]; bottom?: string } | undefined): boolean {
+  const text = plainPitchText(slide?.bottom ?? "").trim();
+  if (!text || !slide) return false;
+  return rowCopy(slide.blocks).some((row) => sameSentence(text, row));
+}
+
 function heldBottom(slide: PacedSlide | undefined): boolean {
   const text = plainPitchText(slide?.bottom ?? "").trim();
-  if (!text) return false;
+  if (!text || bottomRepeatsCopy(slide)) return false;
   const pinned = slide ? pinnedLine(slide) : null;
   return !pinned || pinned.text !== text;
 }
 
 function enterSlide(slides: PacedSlide[], index: number, from: "prev" | "next", revealed = false): PresentStep {
   const slide = slides[index];
+  const clicks = clickCount(slide);
+  if (clicks > 0) {
+    return { index, revealed: from === "prev" && heldBottom(slide), arrived: from === "prev" ? clicks : 0 };
+  }
   const total = pacedCount(slide);
   if (total > 0) {
     return { index, revealed: from === "prev" && heldBottom(slide), arrived: from === "prev" ? total : 0 };
@@ -121,12 +205,27 @@ function enterSlide(slides: PacedSlide[], index: number, from: "prev" | "next", 
 }
 
 /**
- * All-at-once slides hold the Next click text, then advance.
- * A stepped slide starts empty. Each forward click reveals the next line. After the last line, Next click text appears, and the following click leaves the slide.
+ * Marked rows come in one click at a time, in reading order. An extra bottom line follows them.
+ * A stepped slide with no marks starts empty and reveals every line. All-at-once slides hold only that bottom line.
  */
 export function nextPresentStep(state: PresentStep, slides: PacedSlide[], direction: SlideGesture): PresentStep {
   if (direction === "none" || slides.length === 0) return state;
   const slide = slides[state.index];
+  const clicks = clickCount(slide);
+  if (clicks > 0) {
+    if (direction === "next") {
+      if (state.arrived < clicks) return { index: state.index, revealed: false, arrived: state.arrived + 1 };
+      if (heldBottom(slide) && !state.revealed) return { index: state.index, revealed: true, arrived: state.arrived };
+      const index = Math.min(slides.length - 1, state.index + 1);
+      if (index === state.index) return state;
+      return enterSlide(slides, index, "next");
+    }
+    if (state.revealed) return { index: state.index, revealed: false, arrived: state.arrived };
+    if (state.arrived > 0) return { index: state.index, revealed: false, arrived: state.arrived - 1 };
+    const index = Math.max(0, state.index - 1);
+    if (index === state.index) return state;
+    return enterSlide(slides, index, "prev");
+  }
   const total = pacedCount(slide);
   if (total > 0) {
     if (direction === "next") {
@@ -151,7 +250,10 @@ export function nextPresentStep(state: PresentStep, slides: PacedSlide[], direct
     heldBottom(slide),
     Boolean(previous && previous.reveal !== "steps" && heldBottom(previous)),
   );
-  if (punched.index !== state.index && pacedCount(slides[punched.index]) > 0) {
+  if (
+    punched.index !== state.index &&
+    (clickCount(slides[punched.index]) > 0 || pacedCount(slides[punched.index]) > 0)
+  ) {
     return enterSlide(slides, punched.index, direction === "prev" ? "prev" : "next");
   }
   if (punched.index === state.index) return { ...state, revealed: punched.revealed };

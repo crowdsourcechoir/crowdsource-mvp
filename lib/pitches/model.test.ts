@@ -286,6 +286,59 @@ const withBottom = acceptSlides([
   },
 ]);
 assert.equal(withBottom?.[0]?.bottom, "On the next click");
+const repeatedBottom = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom: "Our signature Anthem Experience.",
+    blocks: [
+      { type: "paragraph", text: "Our signature Anthem Experience." },
+      { type: "line", text: "They sing it." },
+    ],
+  },
+]);
+assert.equal(repeatedBottom?.[0]?.bottom, undefined);
+const revisedBottom = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom:
+      "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people who make it meaningful.",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people participating.",
+      },
+      { type: "line", text: "They don’t just hear it. They sing it." },
+    ],
+  },
+]);
+assert.equal(revisedBottom?.[0]?.bottom, undefined);
+assert.equal(
+  revisedBottom?.[0]?.blocks[0] && "text" in revisedBottom[0].blocks[0] ? revisedBottom[0].blocks[0].text.endsWith("people participating.") : false,
+  true,
+);
+const markedRows = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    blocks: [
+      { type: "paragraph", text: "First.", click: true, rule: true },
+      { type: "heading", text: "Second.", click: true },
+      { type: "paragraph", text: "Stays." },
+      { type: "list", items: ["A", "B", " "], clickItems: [1, 0, 9, 2] },
+    ],
+  },
+]);
+const markedBlocks = markedRows?.[0]?.blocks ?? [];
+assert.equal(markedBlocks[0]?.type === "paragraph" && markedBlocks[0].click, true);
+assert.equal(markedBlocks[0]?.type === "paragraph" && markedBlocks[0].rule, true);
+assert.equal(markedBlocks[1]?.type === "heading" && markedBlocks[1].click, true);
+assert.equal(markedBlocks[2]?.type === "paragraph" && markedBlocks[2].click, undefined);
+assert.deepEqual(markedBlocks[3]?.type === "list" ? markedBlocks[3].clickItems : null, [0, 1]);
 const blankBottom = acceptSlides([
   {
     id: "title",
