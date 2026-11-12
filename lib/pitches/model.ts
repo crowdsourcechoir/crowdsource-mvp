@@ -1,5 +1,6 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
+import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
@@ -12,6 +13,7 @@ function safeCopyColor(value: unknown): string {
 
 export const SOBECA_PITCH_ID = "sobeca-song-garden";
 export const INITIAL_MEETING_ID = "initial-meeting";
+export const STRATEGY_ID = "strategy";
 
 export const SOBECA_PITCH_PROMPT =
   "Public pitch for the SoBECA Song Garden: a living participatory arts initiative for the arts district, and an invitation to create it together.";
@@ -475,7 +477,7 @@ export function normalizeWebPitches(raw: unknown): WebPitchesState {
   const overrides: Record<string, PitchOverride> = {};
   if (source.overrides && typeof source.overrides === "object" && !Array.isArray(source.overrides)) {
     for (const [id, value] of Object.entries(source.overrides)) {
-      if (id !== SOBECA_PITCH_ID && id !== INITIAL_MEETING_ID) continue;
+      if (id !== SOBECA_PITCH_ID && id !== INITIAL_MEETING_ID && id !== STRATEGY_ID) continue;
       const override = sanitizeOverride(value);
       if (override) overrides[id] = override;
     }
@@ -508,6 +510,10 @@ function takenSlugs(state: WebPitchesState, exceptId?: string): Set<string> {
     taken.add(INITIAL_MEETING_ID);
     taken.add(storedSlug(state, INITIAL_MEETING_ID, INITIAL_MEETING_ID));
   }
+  if (exceptId !== STRATEGY_ID) {
+    taken.add(STRATEGY_ID);
+    taken.add(storedSlug(state, STRATEGY_ID, STRATEGY_ID));
+  }
   for (const pitch of state.custom) {
     if (pitch.id !== exceptId) taken.add(pitch.slug);
   }
@@ -536,12 +542,18 @@ export function listLoadedPitches(
 ): LoadedPitch[] {
   const sobecaOverride = state.overrides[SOBECA_PITCH_ID];
   const meetingOverride = state.overrides[INITIAL_MEETING_ID];
+  const strategyOverride = state.overrides[STRATEGY_ID];
   const meetingSlides =
     meetingOverride?.slides && meetingOverride.slides.length > 0
       ? cloneSlides(meetingOverride.slides)
       : cloneSlides(initialMeetingSlides);
+  const strategyDeck =
+    strategyOverride?.slides && strategyOverride.slides.length > 0
+      ? cloneSlides(strategyOverride.slides)
+      : cloneSlides(strategySlides);
   const sobecaSlug = storedSlug(state, SOBECA_PITCH_ID, SOBECA_PITCH_ID);
   const meetingSlug = storedSlug(state, INITIAL_MEETING_ID, INITIAL_MEETING_ID);
+  const strategySlug = storedSlug(state, STRATEGY_ID, STRATEGY_ID);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
     slug: sobecaSlug,
@@ -568,8 +580,21 @@ export function listLoadedPitches(
     organizationId: organizationIdFrom(meetingOverride?.organizationId) ?? null,
     slides: meetingSlides,
   };
+  const strategy: LoadedPitch = {
+    id: STRATEGY_ID,
+    slug: strategySlug,
+    name: strategyOverride?.name || STRATEGY_NAME,
+    title: pitchTitle(strategyDeck, STRATEGY_NAME),
+    prompt: strategyOverride?.prompt || STRATEGY_PROMPT,
+    live: strategyOverride?.live !== false,
+    passwordHash: hashOrNull(strategyOverride?.passwordHash),
+    href: hrefForPitch(STRATEGY_ID, strategySlug),
+    builtin: true,
+    organizationId: organizationIdFrom(strategyOverride?.organizationId) ?? null,
+    slides: strategyDeck,
+  };
   const custom = [...state.custom].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map(presentCustom);
-  return [sobecaPitch, meeting, ...custom];
+  return [sobecaPitch, meeting, strategy, ...custom];
 }
 
 export function findLoadedPitch(
@@ -687,7 +712,14 @@ export function applyPitchPatch(
   }
   let slides = current.slides;
   if (patch.reset) {
-    slides = current.builtin && current.id === INITIAL_MEETING_ID ? cloneSlides(initialMeetingSlides) : current.builtin ? current.slides : seedSlides(name, prompt);
+    slides =
+      current.id === INITIAL_MEETING_ID
+        ? cloneSlides(initialMeetingSlides)
+        : current.id === STRATEGY_ID
+          ? cloneSlides(strategySlides)
+          : current.builtin
+            ? current.slides
+            : seedSlides(name, prompt);
     if (current.id === SOBECA_PITCH_ID) slides = current.slides;
   } else if (patch.slides !== undefined) {
     if (current.id === SOBECA_PITCH_ID) {
@@ -735,7 +767,7 @@ export function applyPitchPatch(
 
   const previous = state.overrides[current.id] ?? {};
   const override: PitchOverride = { ...previous, name, prompt, slug, live, organizationId };
-  if (current.id === INITIAL_MEETING_ID) {
+  if (current.id === INITIAL_MEETING_ID || current.id === STRATEGY_ID) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;
   }
