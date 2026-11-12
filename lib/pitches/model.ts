@@ -1,4 +1,5 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
+import { CONFERENCE_BELLEVUE_NAME, CONFERENCE_BELLEVUE_PROMPT, conferenceBellevueSlides } from "@/lib/pitches/conference-bellevue";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
@@ -16,6 +17,7 @@ export const SOBECA_PITCH_ID = "sobeca-song-garden";
 export const INITIAL_MEETING_ID = "initial-meeting";
 export const STRATEGY_ID = "strategy";
 export const VISIT_BELLEVUE_ID = "visit-bellevue";
+export const CONFERENCE_BELLEVUE_ID = "conference-pitch-bellevue";
 
 export const SOBECA_PITCH_PROMPT =
   "Public pitch for the SoBECA Song Garden: a living participatory arts initiative for the arts district, and an invitation to create it together.";
@@ -500,7 +502,15 @@ export function normalizeWebPitches(raw: unknown): WebPitchesState {
   const overrides: Record<string, PitchOverride> = {};
   if (source.overrides && typeof source.overrides === "object" && !Array.isArray(source.overrides)) {
     for (const [id, value] of Object.entries(source.overrides)) {
-      if (id !== SOBECA_PITCH_ID && id !== INITIAL_MEETING_ID && id !== STRATEGY_ID && id !== VISIT_BELLEVUE_ID) continue;
+      if (
+        id !== SOBECA_PITCH_ID &&
+        id !== INITIAL_MEETING_ID &&
+        id !== STRATEGY_ID &&
+        id !== VISIT_BELLEVUE_ID &&
+        id !== CONFERENCE_BELLEVUE_ID
+      ) {
+        continue;
+      }
       const override = sanitizeOverride(value);
       if (override) overrides[id] = override;
     }
@@ -541,6 +551,10 @@ function takenSlugs(state: WebPitchesState, exceptId?: string): Set<string> {
     taken.add(VISIT_BELLEVUE_ID);
     taken.add(storedSlug(state, VISIT_BELLEVUE_ID, VISIT_BELLEVUE_ID));
   }
+  if (exceptId !== CONFERENCE_BELLEVUE_ID) {
+    taken.add(CONFERENCE_BELLEVUE_ID);
+    taken.add(storedSlug(state, CONFERENCE_BELLEVUE_ID, CONFERENCE_BELLEVUE_ID));
+  }
   for (const pitch of state.custom) {
     if (pitch.id !== exceptId) taken.add(pitch.slug);
   }
@@ -571,6 +585,7 @@ export function listLoadedPitches(
   const meetingOverride = state.overrides[INITIAL_MEETING_ID];
   const strategyOverride = state.overrides[STRATEGY_ID];
   const bellevueOverride = state.overrides[VISIT_BELLEVUE_ID];
+  const conferenceOverride = state.overrides[CONFERENCE_BELLEVUE_ID];
   const meetingSlides =
     meetingOverride?.slides && meetingOverride.slides.length > 0
       ? cloneSlides(meetingOverride.slides)
@@ -583,10 +598,15 @@ export function listLoadedPitches(
   const meetingSlug = storedSlug(state, INITIAL_MEETING_ID, INITIAL_MEETING_ID);
   const strategySlug = storedSlug(state, STRATEGY_ID, STRATEGY_ID);
   const bellevueSlug = storedSlug(state, VISIT_BELLEVUE_ID, VISIT_BELLEVUE_ID);
+  const conferenceSlug = storedSlug(state, CONFERENCE_BELLEVUE_ID, CONFERENCE_BELLEVUE_ID);
   const bellevueDeck =
     bellevueOverride?.slides && bellevueOverride.slides.length > 0
       ? cloneSlides(bellevueOverride.slides)
       : cloneSlides(visitBellevueSlides);
+  const conferenceDeck =
+    conferenceOverride?.slides && conferenceOverride.slides.length > 0
+      ? cloneSlides(conferenceOverride.slides)
+      : cloneSlides(conferenceBellevueSlides);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
     slug: sobecaSlug,
@@ -639,8 +659,21 @@ export function listLoadedPitches(
     organizationId: organizationIdFrom(bellevueOverride?.organizationId) ?? null,
     slides: bellevueDeck,
   };
+  const conference: LoadedPitch = {
+    id: CONFERENCE_BELLEVUE_ID,
+    slug: conferenceSlug,
+    name: conferenceOverride?.name || CONFERENCE_BELLEVUE_NAME,
+    title: pitchTitle(conferenceDeck, CONFERENCE_BELLEVUE_NAME),
+    prompt: conferenceOverride?.prompt || CONFERENCE_BELLEVUE_PROMPT,
+    live: conferenceOverride?.live !== false,
+    passwordHash: hashOrNull(conferenceOverride?.passwordHash),
+    href: hrefForPitch(CONFERENCE_BELLEVUE_ID, conferenceSlug),
+    builtin: true,
+    organizationId: organizationIdFrom(conferenceOverride?.organizationId) ?? null,
+    slides: conferenceDeck,
+  };
   const custom = [...state.custom].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map(presentCustom);
-  return [sobecaPitch, meeting, strategy, bellevue, ...custom];
+  return [sobecaPitch, meeting, strategy, bellevue, conference, ...custom];
 }
 
 export function findLoadedPitch(
@@ -765,9 +798,11 @@ export function applyPitchPatch(
           ? cloneSlides(strategySlides)
           : current.id === VISIT_BELLEVUE_ID
             ? cloneSlides(visitBellevueSlides)
-            : current.builtin
-            ? current.slides
-            : seedSlides(name, prompt);
+            : current.id === CONFERENCE_BELLEVUE_ID
+              ? cloneSlides(conferenceBellevueSlides)
+              : current.builtin
+                ? current.slides
+                : seedSlides(name, prompt);
     if (current.id === SOBECA_PITCH_ID) slides = current.slides;
   } else if (patch.slides !== undefined) {
     if (current.id === SOBECA_PITCH_ID) {
@@ -815,7 +850,12 @@ export function applyPitchPatch(
 
   const previous = state.overrides[current.id] ?? {};
   const override: PitchOverride = { ...previous, name, prompt, slug, live, organizationId };
-  if (current.id === INITIAL_MEETING_ID || current.id === STRATEGY_ID || current.id === VISIT_BELLEVUE_ID) {
+  if (
+    current.id === INITIAL_MEETING_ID ||
+    current.id === STRATEGY_ID ||
+    current.id === VISIT_BELLEVUE_ID ||
+    current.id === CONFERENCE_BELLEVUE_ID
+  ) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;
   }
