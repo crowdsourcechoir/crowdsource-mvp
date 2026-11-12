@@ -265,7 +265,7 @@ function copyBlock(block: CopyBlock): CopyBlock {
     return {
       type: "list",
       items: block.items.slice(),
-      ...(clickItems.length ? { clickItems: [...new Set(clickItems)].sort((a, b) => a - b) } : {}),
+      ...(clickItems.length ? { clickItems: Array.from(new Set(clickItems)).sort((a, b) => a - b) } : {}),
     };
   }
   if (block.type === "table") {
@@ -339,7 +339,7 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
     return {
       type: "list",
       items,
-      ...(clickItems.length ? { clickItems: [...new Set(clickItems)].sort((a, b) => a - b) } : {}),
+      ...(clickItems.length ? { clickItems: Array.from(new Set(clickItems)).sort((a, b) => a - b) } : {}),
     };
   }
 

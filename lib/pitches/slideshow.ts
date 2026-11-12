@@ -30,7 +30,7 @@ export function clickBeats(blocks: CopyBlock[]): ClickBeat[] {
   const beats: ClickBeat[] = [];
   blocks.forEach((block, blockIndex) => {
     if (block.type === "list") {
-      const marks = [...new Set(block.clickItems ?? [])].filter((index) => Number.isInteger(index)).sort((a, b) => a - b);
+      const marks = Array.from(new Set(block.clickItems ?? [])).filter((index) => Number.isInteger(index)).sort((a, b) => a - b);
       marks.forEach((itemIndex) => {
         if (block.items[itemIndex]?.trim()) beats.push({ blockIndex, itemIndex });
       });

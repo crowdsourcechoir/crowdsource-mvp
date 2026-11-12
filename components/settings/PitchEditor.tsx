@@ -999,7 +999,7 @@ export default function PitchEditor({ id }: { id: string }) {
                                 const marks = new Set(existing.clickItems ?? []);
                                 if (marks.has(itemIndex)) marks.delete(itemIndex);
                                 else marks.add(itemIndex);
-                                const clickItems = [...marks].sort((a, b) => a - b);
+                                const clickItems = Array.from(marks).sort((a, b) => a - b);
                                 return updateBlock(current, blockIndex, {
                                   ...existing,
                                   clickItems: clickItems.length ? clickItems : undefined,
