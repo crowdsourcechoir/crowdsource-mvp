@@ -71,7 +71,9 @@ assert.equal(reserved.pitch.slug, "initial-meeting-2");
 assert.equal(reserved.pitch.passwordHash, "salt:hash");
 
 const listed = listLoadedPitches(empty, sobeca);
-assert.deepEqual(listed.map((pitch) => pitch.id), [SOBECA_PITCH_ID, INITIAL_MEETING_ID, "strategy"]);
+assert.deepEqual(listed.map((pitch) => pitch.id), [SOBECA_PITCH_ID, INITIAL_MEETING_ID, "strategy", "visit-bellevue"]);
+assert.equal(listed[3]?.name, "Visit Bellevue");
+assert.equal(listed[3]?.href, "/pitch/visit-bellevue");
 assert.equal(listed[2]?.name, "Strategy");
 assert.equal(listed[2]?.href, "/pitch/strategy");
 assert.equal(listed[2]?.slides[0] && "text" in listed[2].slides[0].blocks[1] ? listed[2].slides[0].blocks[1].text : "", "Strategy");

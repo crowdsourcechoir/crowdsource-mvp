@@ -1,6 +1,7 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
+import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
 import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
@@ -14,6 +15,7 @@ function safeCopyColor(value: unknown): string {
 export const SOBECA_PITCH_ID = "sobeca-song-garden";
 export const INITIAL_MEETING_ID = "initial-meeting";
 export const STRATEGY_ID = "strategy";
+export const VISIT_BELLEVUE_ID = "visit-bellevue";
 
 export const SOBECA_PITCH_PROMPT =
   "Public pitch for the SoBECA Song Garden: a living participatory arts initiative for the arts district, and an invitation to create it together.";
@@ -477,7 +479,7 @@ export function normalizeWebPitches(raw: unknown): WebPitchesState {
   const overrides: Record<string, PitchOverride> = {};
   if (source.overrides && typeof source.overrides === "object" && !Array.isArray(source.overrides)) {
     for (const [id, value] of Object.entries(source.overrides)) {
-      if (id !== SOBECA_PITCH_ID && id !== INITIAL_MEETING_ID && id !== STRATEGY_ID) continue;
+      if (id !== SOBECA_PITCH_ID && id !== INITIAL_MEETING_ID && id !== STRATEGY_ID && id !== VISIT_BELLEVUE_ID) continue;
       const override = sanitizeOverride(value);
       if (override) overrides[id] = override;
     }
@@ -514,6 +516,10 @@ function takenSlugs(state: WebPitchesState, exceptId?: string): Set<string> {
     taken.add(STRATEGY_ID);
     taken.add(storedSlug(state, STRATEGY_ID, STRATEGY_ID));
   }
+  if (exceptId !== VISIT_BELLEVUE_ID) {
+    taken.add(VISIT_BELLEVUE_ID);
+    taken.add(storedSlug(state, VISIT_BELLEVUE_ID, VISIT_BELLEVUE_ID));
+  }
   for (const pitch of state.custom) {
     if (pitch.id !== exceptId) taken.add(pitch.slug);
   }
@@ -543,6 +549,7 @@ export function listLoadedPitches(
   const sobecaOverride = state.overrides[SOBECA_PITCH_ID];
   const meetingOverride = state.overrides[INITIAL_MEETING_ID];
   const strategyOverride = state.overrides[STRATEGY_ID];
+  const bellevueOverride = state.overrides[VISIT_BELLEVUE_ID];
   const meetingSlides =
     meetingOverride?.slides && meetingOverride.slides.length > 0
       ? cloneSlides(meetingOverride.slides)
@@ -554,6 +561,11 @@ export function listLoadedPitches(
   const sobecaSlug = storedSlug(state, SOBECA_PITCH_ID, SOBECA_PITCH_ID);
   const meetingSlug = storedSlug(state, INITIAL_MEETING_ID, INITIAL_MEETING_ID);
   const strategySlug = storedSlug(state, STRATEGY_ID, STRATEGY_ID);
+  const bellevueSlug = storedSlug(state, VISIT_BELLEVUE_ID, VISIT_BELLEVUE_ID);
+  const bellevueDeck =
+    bellevueOverride?.slides && bellevueOverride.slides.length > 0
+      ? cloneSlides(bellevueOverride.slides)
+      : cloneSlides(visitBellevueSlides);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
     slug: sobecaSlug,
@@ -593,8 +605,21 @@ export function listLoadedPitches(
     organizationId: organizationIdFrom(strategyOverride?.organizationId) ?? null,
     slides: strategyDeck,
   };
+  const bellevue: LoadedPitch = {
+    id: VISIT_BELLEVUE_ID,
+    slug: bellevueSlug,
+    name: bellevueOverride?.name || VISIT_BELLEVUE_NAME,
+    title: pitchTitle(bellevueDeck, VISIT_BELLEVUE_NAME),
+    prompt: bellevueOverride?.prompt || VISIT_BELLEVUE_PROMPT,
+    live: bellevueOverride?.live !== false,
+    passwordHash: hashOrNull(bellevueOverride?.passwordHash),
+    href: hrefForPitch(VISIT_BELLEVUE_ID, bellevueSlug),
+    builtin: true,
+    organizationId: organizationIdFrom(bellevueOverride?.organizationId) ?? null,
+    slides: bellevueDeck,
+  };
   const custom = [...state.custom].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map(presentCustom);
-  return [sobecaPitch, meeting, strategy, ...custom];
+  return [sobecaPitch, meeting, strategy, bellevue, ...custom];
 }
 
 export function findLoadedPitch(
@@ -717,7 +742,9 @@ export function applyPitchPatch(
         ? cloneSlides(initialMeetingSlides)
         : current.id === STRATEGY_ID
           ? cloneSlides(strategySlides)
-          : current.builtin
+          : current.id === VISIT_BELLEVUE_ID
+            ? cloneSlides(visitBellevueSlides)
+            : current.builtin
             ? current.slides
             : seedSlides(name, prompt);
     if (current.id === SOBECA_PITCH_ID) slides = current.slides;
@@ -767,7 +794,7 @@ export function applyPitchPatch(
 
   const previous = state.overrides[current.id] ?? {};
   const override: PitchOverride = { ...previous, name, prompt, slug, live, organizationId };
-  if (current.id === INITIAL_MEETING_ID || current.id === STRATEGY_ID) {
+  if (current.id === INITIAL_MEETING_ID || current.id === STRATEGY_ID || current.id === VISIT_BELLEVUE_ID) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;
   }
