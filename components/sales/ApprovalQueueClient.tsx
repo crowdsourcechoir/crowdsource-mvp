@@ -859,8 +859,8 @@ export default function ApprovalQueueClient() {
 
   const filterBar = (
     <div className="mb-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="flex shrink-0 items-center gap-2">
           <QueueFilterSelect
             label="Work"
             value={workstream}
@@ -924,7 +924,7 @@ export default function ApprovalQueueClient() {
         <button
           type="button"
           onClick={() => setFillQueueOpen((v) => !v)}
-          className="rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
+          className="shrink-0 rounded-lg border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-[var(--csc-accent)] hover:text-white"
         >
           {fillQueueOpen ? "Hide fill queue" : "Fill queue"}
         </button>

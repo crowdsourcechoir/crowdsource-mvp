@@ -292,7 +292,7 @@ export default function AdminSideNav({
 
       <aside
         id="admin-side-nav"
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[232px] max-w-[80vw] shrink-0 flex-col overflow-hidden border-r border-transparent bg-black transition-transform duration-200 ease-out md:relative md:visible md:z-auto md:w-auto md:max-w-none md:translate-x-0 md:pointer-events-auto ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[232px] max-w-[80vw] shrink-0 flex-col overflow-hidden border-r border-transparent bg-black transition-transform duration-200 ease-out md:relative md:visible md:z-auto md:max-w-none md:translate-x-0 md:pointer-events-auto ${
           mobileOpen
             ? "translate-x-0"
             : "-translate-x-full max-md:pointer-events-none max-md:invisible"
