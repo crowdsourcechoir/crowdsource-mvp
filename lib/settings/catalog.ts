@@ -385,7 +385,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         statusLabel: "Active",
         status: "live",
         controls: [
-          "Sidebar collapsed by default (per browser)",
+          "Sidebar collapsed by default on desktop (per browser)",
+          "Mobile nav hidden behind menu button (off-canvas drawer)",
           "Reset chrome prefs",
           "Shell colors via Design system (do not fork)",
         ],
