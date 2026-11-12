@@ -4,48 +4,82 @@ const LAYERS = [
     label: "Participatory",
     verb: "Co-create",
     line: "Because of you, together.",
-    r: 46,
-    fill: "rgba(207,255,129,0.12)",
+    r: 47,
+    fill: "rgba(207,255,129,0.16)",
     stroke: "rgba(207,255,129,0.95)",
+    y: 14,
+    titleSize: 3.2,
+    lineSize: 2.55,
   },
   {
     id: "interactive",
     label: "Interactive",
     verb: "Influence",
     line: "Responds to you.",
-    r: 34.5,
-    fill: "rgba(207,255,129,0.08)",
-    stroke: "rgba(207,255,129,0.72)",
+    r: 36,
+    fill: "rgba(207,255,129,0.11)",
+    stroke: "rgba(207,255,129,0.78)",
+    y: 28.5,
+    titleSize: 2.95,
+    lineSize: 2.4,
   },
   {
     id: "immersive",
     label: "Immersive",
     verb: "Enter",
     line: "Around you.",
-    r: 23,
-    fill: "rgba(207,255,129,0.05)",
-    stroke: "rgba(207,255,129,0.5)",
+    r: 25.5,
+    fill: "rgba(207,255,129,0.08)",
+    stroke: "rgba(207,255,129,0.58)",
+    y: 42,
+    titleSize: 2.7,
+    lineSize: 2.25,
   },
   {
     id: "traditional",
     label: "Traditional",
     verb: "Observe",
     line: "In front of you.",
-    r: 12,
-    fill: "rgba(207,255,129,0.04)",
-    stroke: "rgba(207,255,129,0.38)",
+    r: 16.5,
+    fill: "rgba(207,255,129,0.08)",
+    stroke: "rgba(207,255,129,0.48)",
+    y: 51.2,
+    titleSize: 2.2,
+    lineSize: 1.9,
+    stackTitle: true,
   },
 ] as const;
 
-/** Nested engagement layers — lime rings with short labels. */
+/** Nested lime rings with each layer’s copy inside the graphic. */
 export default function ParticipationLayersGraphic() {
   return (
     <figure
-      className="mt-6 grid w-full max-w-4xl items-center gap-6 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-8 lg:mt-2 lg:max-w-none"
+      className="mx-auto mt-4 w-full max-w-xl lg:mt-0 lg:max-w-none"
       aria-label="Participation layers from traditional to participatory"
     >
-      <svg viewBox="0 0 100 100" className="mx-auto h-auto w-full max-w-md drop-shadow-[0_0_28px_rgba(207,255,129,0.16)]" role="img">
+      <svg
+        viewBox="0 0 100 100"
+        className="h-auto w-full drop-shadow-[0_0_34px_rgba(207,255,129,0.22)]"
+        role="img"
+      >
         <title>Participation layers</title>
+        <defs>
+          <filter id="lime-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.05" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <radialGradient id="lime-core" cx="50%" cy="40%" r="70%">
+            <stop offset="0%" stopColor="rgba(207,255,129,0.3)" />
+            <stop offset="50%" stopColor="rgba(207,255,129,0.07)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </radialGradient>
+        </defs>
+
+        <circle cx="50" cy="50" r="49.2" fill="url(#lime-core)" />
+
         {LAYERS.map((layer) => (
           <circle
             key={`${layer.id}-ring`}
@@ -54,23 +88,84 @@ export default function ParticipationLayersGraphic() {
             r={layer.r}
             fill={layer.fill}
             stroke={layer.stroke}
-            strokeWidth="0.7"
+            strokeWidth="1"
+            filter="url(#lime-glow)"
           />
         ))}
-        <circle cx="50" cy="50" r="3.4" fill="#CFFF81" />
+
+        {LAYERS.map((layer) => {
+          const stacked = "stackTitle" in layer && layer.stackTitle;
+          return (
+            <g key={`${layer.id}-copy`}>
+              {stacked ? (
+                <>
+                  <text
+                    x="50"
+                    y={layer.y}
+                    textAnchor="middle"
+                    fill="#CFFF81"
+                    fontSize={layer.titleSize}
+                    fontWeight="700"
+                    letterSpacing="0.08em"
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                  >
+                    {layer.label.toUpperCase()}
+                  </text>
+                  <text
+                    x="50"
+                    y={layer.y + layer.titleSize * 1.15}
+                    textAnchor="middle"
+                    fill="#FFFFFF"
+                    fontSize={layer.titleSize}
+                    fontWeight="700"
+                    letterSpacing="0.08em"
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                  >
+                    {layer.verb.toUpperCase()}
+                  </text>
+                  <text
+                    x="50"
+                    y={layer.y + layer.titleSize * 2.35}
+                    textAnchor="middle"
+                    fill="rgba(255,255,255,0.92)"
+                    fontSize={layer.lineSize}
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                  >
+                    {layer.line}
+                  </text>
+                </>
+              ) : (
+                <>
+                  <text
+                    x="50"
+                    y={layer.y}
+                    textAnchor="middle"
+                    fill="#CFFF81"
+                    fontSize={layer.titleSize}
+                    fontWeight="700"
+                    letterSpacing="0.08em"
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                  >
+                    {layer.label.toUpperCase()}
+                    <tspan fill="rgba(207,255,129,0.45)"> · </tspan>
+                    <tspan fill="#FFFFFF">{layer.verb.toUpperCase()}</tspan>
+                  </text>
+                  <text
+                    x="50"
+                    y={layer.y + layer.titleSize * 1.3}
+                    textAnchor="middle"
+                    fill="rgba(255,255,255,0.92)"
+                    fontSize={layer.lineSize}
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                  >
+                    {layer.line}
+                  </text>
+                </>
+              )}
+            </g>
+          );
+        })}
       </svg>
-      <ol className="space-y-4 sm:space-y-5">
-        {LAYERS.map((layer) => (
-          <li key={layer.id} className="border-l-2 border-[#CFFF81] pl-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#CFFF81] sm:text-xs">
-              {layer.label}
-              <span className="text-[#CFFF81]/45"> · </span>
-              <span className="text-white">{layer.verb}</span>
-            </p>
-            <p className="mt-1 text-sm leading-snug text-white/90 sm:text-base">{layer.line}</p>
-          </li>
-        ))}
-      </ol>
     </figure>
   );
 }
