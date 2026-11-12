@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { slides as sobecaSlides } from "@/app/sobeca-song-garden/content";
+import { conferenceBellevueSlides } from "./conference-bellevue";
 import { initialMeetingSlides } from "./initial-meeting";
 import {
   acceptSlides,
   applyPassword,
   applyPitchPatch,
+  CONFERENCE_BELLEVUE_ID,
   createCustomPitch,
   duplicatePitch,
   findLoadedPitch,
@@ -71,9 +73,29 @@ assert.equal(reserved.pitch.slug, "initial-meeting-2");
 assert.equal(reserved.pitch.passwordHash, "salt:hash");
 
 const listed = listLoadedPitches(empty, sobeca);
-assert.deepEqual(listed.map((pitch) => pitch.id), [SOBECA_PITCH_ID, INITIAL_MEETING_ID, "strategy", "visit-bellevue"]);
+assert.deepEqual(listed.map((pitch) => pitch.id), [
+  SOBECA_PITCH_ID,
+  INITIAL_MEETING_ID,
+  "strategy",
+  "visit-bellevue",
+  CONFERENCE_BELLEVUE_ID,
+]);
 assert.equal(listed[3]?.name, "Visit Bellevue");
 assert.equal(listed[3]?.href, "/pitch/visit-bellevue");
+assert.equal(listed[4]?.name, "Conference Pitch: Bellevue");
+assert.equal(listed[4]?.href, "/pitch/conference-pitch-bellevue");
+assert.equal(listed[4]?.live, true);
+assert.equal(listed[4]?.slides.length, conferenceBellevueSlides.length);
+assert.equal(
+  listed[4]?.slides[0]?.blocks[0] && "text" in listed[4].slides[0].blocks[0] ? listed[4].slides[0].blocks[0].text : "",
+  "Make your next conference undeniable."
+);
+assert.equal(
+  listed[4]?.slides.at(-1)?.blocks.at(-1) && "text" in (listed[4]?.slides.at(-1)?.blocks.at(-1) ?? {})
+    ? (listed[4]?.slides.at(-1)?.blocks.at(-1) as { text: string }).text
+    : "",
+  "Introduced by Visit Bellevue"
+);
 assert.equal(listed[2]?.name, "Strategy");
 assert.equal(listed[2]?.href, "/pitch/strategy");
 assert.equal(listed[2]?.slides[0] && "text" in listed[2].slides[0].blocks[1] ? listed[2].slides[0].blocks[1].text : "", "Strategy");
@@ -265,6 +287,27 @@ assert.ok(!("error" in meetingReset));
 if ("error" in meetingReset) throw new Error("meeting reset failed");
 assert.equal(meetingReset.state.overrides[INITIAL_MEETING_ID]?.slides, null);
 assert.equal(findLoadedPitch(meetingReset.state, INITIAL_MEETING_ID, sobeca)?.slides.length, initialMeetingSlides.length);
+
+const conference = findLoadedPitch(empty, CONFERENCE_BELLEVUE_ID, sobeca);
+assert.ok(conference);
+if (!conference) throw new Error("missing conference pitch");
+const conferenceEdited = applyPitchPatch(
+  empty,
+  conference,
+  { slides: conference.slides.slice(0, 1), prompt: "A shorter conference brief." },
+  "2026-11-05T09:00:00.000Z"
+);
+assert.ok(!("error" in conferenceEdited));
+if ("error" in conferenceEdited) throw new Error("conference edit failed");
+assert.equal(findLoadedPitch(conferenceEdited.state, CONFERENCE_BELLEVUE_ID, sobeca)?.slides.length, 1);
+const conferenceReset = applyPitchPatch(conferenceEdited.state, conferenceEdited.pitch, { reset: true }, "2026-11-05T10:00:00.000Z");
+assert.ok(!("error" in conferenceReset));
+if ("error" in conferenceReset) throw new Error("conference reset failed");
+assert.equal(conferenceReset.state.overrides[CONFERENCE_BELLEVUE_ID]?.slides, null);
+const conferenceRestored = findLoadedPitch(conferenceReset.state, CONFERENCE_BELLEVUE_ID, sobeca);
+assert.equal(conferenceRestored?.slides.length, conferenceBellevueSlides.length);
+const anthemHeading = conferenceRestored?.slides[3]?.blocks[0];
+assert.equal(anthemHeading && "text" in anthemHeading ? anthemHeading.text : "", "Anthem. Made for your moment.");
 
 const pacedDeck = acceptSlides([
   {
