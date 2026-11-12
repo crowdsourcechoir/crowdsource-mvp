@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { GradedPhoto } from "@/components/pitch/GradedPhoto";
+import ParticipationLayersGraphic from "@/components/pitch/ParticipationLayersGraphic";
 import { PitchText } from "@/components/pitch/PitchText";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { plainPitchText } from "@/lib/pitches/rich-text";
@@ -158,6 +159,10 @@ function Block({
   if (block.type === "image") {
     return <img src={block.src} alt={block.alt} className="mt-8 w-full max-w-4xl" />;
   }
+  if (block.type === "graphic") {
+    if (block.kind === "participation-layers") return <ParticipationLayersGraphic />;
+    return null;
+  }
   if (block.type === "list") {
     return (
       <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed sm:text-lg">
@@ -273,21 +278,29 @@ function SlideCopy({
             ),
         );
   const pinned = pinnedLine(slide);
-  return (
-    <div>
-      {slide.blocks.map((block, blockIndex) => {
-        if (pinned && blockIndex === pinned.index) return null;
-        const shown = steppedBlock(block, blockIndex, visible);
-        if (!shown) return null;
-        const previous = slide.blocks[blockIndex - 1]?.type;
-        return (
-          <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-            <Block block={shown} display={display} previous={previous} />
-          </div>
-        );
-      })}
-    </div>
-  );
+  const nodes = slide.blocks.map((block, blockIndex) => {
+    if (pinned && blockIndex === pinned.index) return null;
+    const shown = steppedBlock(block, blockIndex, visible);
+    if (!shown) return null;
+    const previous = slide.blocks[blockIndex - 1]?.type;
+    return (
+      <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
+        <Block block={shown} display={display} previous={previous} />
+      </div>
+    );
+  });
+  const graphicIndex = slide.blocks.findIndex((block) => block.type === "graphic");
+  if (graphicIndex >= 0) {
+    const copyNodes = nodes.filter((_, index) => index !== graphicIndex && nodes[index] !== null);
+    const graphicNode = nodes[graphicIndex];
+    return (
+      <div className="flex min-h-0 flex-col gap-2 lg:flex-row lg:items-center lg:gap-10">
+        <div className="min-w-0 lg:w-[38%]">{copyNodes}</div>
+        <div className="min-w-0 flex-1">{graphicNode}</div>
+      </div>
+    );
+  }
+  return <div>{nodes}</div>;
 }
 
 export default function PitchSlideshow({

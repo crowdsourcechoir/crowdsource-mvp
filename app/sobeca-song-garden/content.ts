@@ -9,6 +9,7 @@ export type CopyBlock =
   | ({ type: "paragraph"; rule?: boolean } & PitchText)
   | ({ type: "line" } & PitchText)
   | { type: "image"; src: string; alt: string }
+  | { type: "graphic"; kind: "participation-layers" }
   | { type: "table"; headers: string[]; rows: string[][] }
   | { type: "list"; items: string[] };
 

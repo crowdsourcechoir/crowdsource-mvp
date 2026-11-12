@@ -59,6 +59,10 @@ const BLOCK_LABEL: Record<string, string> = {
   heading3: "Heading 3",
   line: "Line",
   paragraph: "Paragraph",
+  graphic: "Graphic",
+  image: "Image",
+  list: "List",
+  table: "Table",
 };
 
 const TEXT_STYLES = ["title", "heading", "heading2", "heading3", "kicker", "line", "paragraph"] as const;
@@ -972,6 +976,24 @@ export default function PitchEditor({ id }: { id: string }) {
                             Image
                           </span>
                           <span className="mt-1 block truncate text-sm text-white">{block.alt}</span>
+                        </span>
+                        {order}
+                      </div>
+                    );
+                  }
+                  if (block.type === "graphic") {
+                    if (!structureOpen) return null;
+                    return (
+                      <div
+                        key={blockIndex}
+                        id={`block-${slide.id}-${blockIndex}`}
+                        className="flex items-center justify-between gap-3 border-b border-[var(--csc-row-divider)] py-2"
+                      >
+                        <span className="min-w-0">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">
+                            Graphic
+                          </span>
+                          <span className="mt-1 block truncate text-sm text-white">{block.kind}</span>
                         </span>
                         {order}
                       </div>

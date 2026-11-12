@@ -94,6 +94,10 @@ export function copySteps(blocks: CopyBlock[]): CopyStep[] {
       if (block.src.trim()) steps.push({ blockIndex });
       return;
     }
+    if (block.type === "graphic") {
+      steps.push({ blockIndex });
+      return;
+    }
     if ("text" in block && block.text.trim()) steps.push({ blockIndex });
   });
   return steps;

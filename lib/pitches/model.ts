@@ -216,6 +216,9 @@ function isBlock(value: unknown): value is CopyBlock {
   if (block.type === "image") {
     return typeof block.src === "string" && typeof block.alt === "string" && block.alt.length <= 300;
   }
+  if (block.type === "graphic") {
+    return block.kind === "participation-layers";
+  }
   return "text" in block && typeof block.text === "string" && block.text.length <= MAX_TEXT;
 }
 
@@ -258,6 +261,8 @@ function copyBlock(block: CopyBlock): CopyBlock {
   if (block.type === "table") {
     return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
   }
+  if (block.type === "graphic") return { type: "graphic", kind: block.kind };
+  if (block.type === "image") return { type: "image", src: block.src, alt: block.alt };
   if (!("text" in block)) return block;
   const bold = block.bold === true ? { bold: true as const } : {};
   if (block.type === "paragraph") {
