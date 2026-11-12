@@ -3,6 +3,7 @@ import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } fr
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
 import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
+import { bottomRepeatsCopy } from "@/lib/pitches/slideshow";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
 
@@ -239,8 +240,10 @@ function revealMode(value: unknown): "steps" | undefined {
   return value === "steps" ? "steps" : undefined;
 }
 
-function bottomCopy(value: unknown): string | undefined {
-  return clip(value, MAX_TEXT) ?? undefined;
+function bottomCopy(value: unknown, blocks: CopyBlock[]): string | undefined {
+  const text = clip(value, MAX_TEXT) ?? undefined;
+  if (!text || bottomRepeatsCopy({ blocks, bottom: text })) return undefined;
+  return text;
 }
 
 function salmonOverlay(value: unknown): "salmon" | undefined {
@@ -284,17 +287,18 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 40) return null;
   const slides = value.filter(isPitchSlide).map((slide) => {
     const grade = salmonOverlay(slide.photoOverlay);
+    const blocks = slide.blocks.map(copyBlock);
     return {
       ...slide,
       image: safeImage(slide.image, SEED_PHOTO),
       wash: washFrom(slide.wash),
       copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
       reveal: revealMode(slide.reveal),
-      bottom: bottomCopy(slide.bottom),
+      bottom: bottomCopy(slide.bottom, blocks),
       photoOverlay: grade,
       photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, grade),
       photoOverlayColor: grade ? storedOverlayColor(slide.photoOverlayColor) : undefined,
-      blocks: slide.blocks.map(copyBlock),
+      blocks,
     };
   });
   if (slides.length !== value.length) return null;
@@ -381,14 +385,15 @@ export function mergeSlides(base: PitchSlide[], incoming: unknown): PitchSlide[]
       (item) => item && typeof item === "object" && (item as PitchSlide).id === slide.id
     ) as PitchSlide | undefined;
     if (!match) return { ...slide, blocks: slide.blocks.map((block) => ({ ...block })) };
+    const blocks = slide.blocks.map((block, index) => overlayBlock(block, match.blocks?.[index]));
     return {
       ...slide,
       image: safeImage(match.image, slide.image),
       imageAlt: typeof match.imageAlt === "string" && match.imageAlt.trim() ? match.imageAlt.trim().slice(0, 300) : slide.imageAlt,
       copyColor: typeof match.copyColor === "string" ? safeCopyColor(match.copyColor) : slide.copyColor,
-      bottom: bottomCopy(match.bottom),
+      bottom: bottomCopy(match.bottom, blocks),
       wash: washFrom(match.wash, slide.wash),
-      blocks: slide.blocks.map((block, index) => overlayBlock(block, match.blocks?.[index])),
+      blocks,
     };
   });
 }

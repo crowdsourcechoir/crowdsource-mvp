@@ -132,9 +132,20 @@ function clickCount(slide: PacedSlide | undefined): number {
   return clickBeats(slide.blocks).length;
 }
 
+/** True when the bottom line is already a row on the slide, so it must not paint a second time. */
+export function bottomRepeatsCopy(slide: { blocks: CopyBlock[]; bottom?: string } | undefined): boolean {
+  const text = plainPitchText(slide?.bottom ?? "").trim();
+  if (!text || !slide) return false;
+  return slide.blocks.some((block) => {
+    if (block.type === "list") return block.items.some((item) => plainPitchText(item).trim() === text);
+    if ("text" in block) return plainPitchText(block.text).trim() === text;
+    return false;
+  });
+}
+
 function heldBottom(slide: PacedSlide | undefined): boolean {
   const text = plainPitchText(slide?.bottom ?? "").trim();
-  if (!text) return false;
+  if (!text || bottomRepeatsCopy(slide)) return false;
   const pinned = slide ? pinnedLine(slide) : null;
   return !pinned || pinned.text !== text;
 }

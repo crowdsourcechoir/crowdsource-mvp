@@ -18,6 +18,7 @@ import {
   type PresentMode,
 } from "@/lib/pitches/present";
 import {
+  bottomRepeatsCopy,
   clickBeatHidden,
   clickBeats,
   copySteps,
@@ -488,7 +489,10 @@ export default function PitchSlideshow({
   if (!slide) return null;
   const pinned = pinnedLine(slide);
   const punchText = punchCopy(slide.blocks, slide.bottom)?.text ?? null;
-  const punch = punchText && pinned && plainPitchText(punchText).trim() === pinned.text ? null : punchText;
+  const punch =
+    punchText && !bottomRepeatsCopy(slide) && !(pinned && plainPitchText(punchText).trim() === pinned.text)
+      ? punchText
+      : null;
   const footers = (pinned ? 1 : 0) + (revealed && punch ? 1 : 0);
   const tint = OVERLAYS[index % OVERLAYS.length];
   const wash = typeof slide.wash === "number" ? slide.wash : 0.45;

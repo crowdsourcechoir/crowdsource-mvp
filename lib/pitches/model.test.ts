@@ -286,6 +286,19 @@ const withBottom = acceptSlides([
   },
 ]);
 assert.equal(withBottom?.[0]?.bottom, "On the next click");
+const repeatedBottom = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom: "Our signature Anthem Experience.",
+    blocks: [
+      { type: "paragraph", text: "Our signature Anthem Experience." },
+      { type: "line", text: "They sing it." },
+    ],
+  },
+]);
+assert.equal(repeatedBottom?.[0]?.bottom, undefined);
 const markedRows = acceptSlides([
   {
     id: "title",

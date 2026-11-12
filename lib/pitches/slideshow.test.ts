@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { CopyBlock } from "@/app/sobeca-song-garden/content";
 import {
+  bottomRepeatsCopy,
   clickBeatHidden,
   clickBeats,
   copySteps,
@@ -188,6 +189,25 @@ assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 3 }, many,
   index: 0,
   revealed: false,
   arrived: 3,
+});
+
+const repeatedParagraph: CopyBlock[] = [
+  { type: "heading", text: "Anthem. Made for the moment." },
+  {
+    type: "paragraph",
+    text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song.",
+  },
+  { type: "line", text: "They don’t just hear it. They sing it." },
+];
+const repeated = [
+  { reveal: "steps" as const, blocks: repeatedParagraph, bottom: repeatedParagraph[1] && "text" in repeatedParagraph[1] ? repeatedParagraph[1].text : "" },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.equal(bottomRepeatsCopy(repeated[0]), true);
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 3 }, repeated, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
 });
 
 const listMarked: CopyBlock[] = [{ type: "list", items: ["Stay", "First", "Second"], clickItems: [2, 1] }];
