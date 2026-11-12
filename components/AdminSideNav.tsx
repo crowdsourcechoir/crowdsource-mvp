@@ -132,6 +132,14 @@ function IconSettings({ className }: { className?: string }) {
   );
 }
 
+function IconClose({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 type NavFlags = {
   gardens: boolean;
   blooms: boolean;
@@ -210,7 +218,15 @@ const navItems: Array<AdminNavItem & { key: keyof NavFlags }> = [
   },
 ];
 
-export default function AdminSideNav() {
+type AdminSideNavProps = {
+  mobileOpen?: boolean;
+  onMobileOpenChange?: (open: boolean) => void;
+};
+
+export default function AdminSideNav({
+  mobileOpen = false,
+  onMobileOpenChange,
+}: AdminSideNavProps) {
   const pathname = usePathname() ?? "";
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -223,7 +239,8 @@ export default function AdminSideNav() {
       if (stored === "1" || stored === "0") {
         setCollapsed(stored === "1");
       } else {
-        setCollapsed(window.matchMedia("(max-width: 767px)").matches);
+        // Desktop-only preference; mobile uses the off-canvas drawer instead.
+        setCollapsed(false);
       }
     } catch {
       /* ignore */
@@ -250,98 +267,129 @@ export default function AdminSideNav() {
     });
   }
 
+  function closeMobile() {
+    onMobileOpenChange?.(false);
+  }
+
   const settingsActive =
     pathname.startsWith("/admin/settings") ||
     pathname.startsWith("/admin/roots") ||
     pathname.startsWith("/admin/resonance");
 
-  return (
-    <aside
-      className={`relative flex h-full shrink-0 flex-col overflow-hidden border-r border-transparent bg-black ${
-        collapsed ? "w-[72px]" : "w-[232px]"
-      } ${ready ? "opacity-100" : "opacity-0"}`}
-      aria-label="Admin navigation"
-    >
-      <div className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "px-4"}`}>
-        <Link href={home} className="flex shrink-0 items-center" title="Crowdsource Choir">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Crowdsource Choir" className="h-8 w-auto shrink-0" />
-        </Link>
-      </div>
+  // Mobile drawer always shows labels when open; desktop keeps the collapse rail.
+  const showLabels = mobileOpen || !collapsed;
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3">
-        {navItems.filter((item) => nav[item.key]).map((item) => {
-          const active = item.isActive(pathname);
-          return (
+  return (
+    <>
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/70 md:hidden"
+          aria-label="Close navigation"
+          onClick={closeMobile}
+        />
+      ) : null}
+
+      <aside
+        id="admin-side-nav"
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[min(232px,85vw)] shrink-0 flex-col overflow-hidden border-r border-transparent bg-black transition-transform duration-200 ease-out md:relative md:visible md:z-auto md:w-auto md:translate-x-0 md:pointer-events-auto ${
+          mobileOpen
+            ? "translate-x-0"
+            : "-translate-x-full max-md:pointer-events-none max-md:invisible"
+        } ${collapsed ? "md:w-[72px]" : "md:w-[232px]"} ${ready ? "opacity-100" : "opacity-0"}`}
+        aria-label="Admin navigation"
+      >
+        <div className={`flex items-center px-3 py-4 ${showLabels ? "justify-between px-4" : "justify-center"}`}>
+          <Link href={home} className="flex shrink-0 items-center" title="Crowdsource Choir" onClick={closeMobile}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Crowdsource Choir" className="h-8 w-auto shrink-0" />
+          </Link>
+          <button
+            type="button"
+            className="csc-btn-circle md:hidden"
+            aria-label="Close navigation"
+            onClick={closeMobile}
+          >
+            <IconClose className="h-4 w-4" />
+          </button>
+        </div>
+
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3">
+          {navItems.filter((item) => nav[item.key]).map((item) => {
+            const active = item.isActive(pathname);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={showLabels ? item.eyebrow : `${item.label} — ${item.eyebrow}`}
+                aria-current={active ? "page" : undefined}
+                onClick={closeMobile}
+                className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
+                  showLabels ? "" : "justify-center"
+                } ${
+                  active
+                    ? "bg-white/10 text-white"
+                    : "text-gray-400 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <span className={`shrink-0 ${active ? "text-[#CFFF81]" : "text-gray-400 group-hover:text-white"}`}>
+                  {item.icon}
+                </span>
+                {showLabels && <span className="truncate">{item.label}</span>}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto border-t border-white/10 px-2 py-3">
+          {nav.settings ? (
             <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? `${item.label} — ${item.eyebrow}` : item.eyebrow}
-              aria-current={active ? "page" : undefined}
+              href="/admin/settings"
+              title={showLabels ? undefined : "Settings"}
+              aria-current={settingsActive ? "page" : undefined}
+              onClick={closeMobile}
               className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
-                collapsed ? "justify-center" : ""
+                showLabels ? "" : "justify-center"
               } ${
-                active
+                settingsActive
                   ? "bg-white/10 text-white"
                   : "text-gray-400 hover:bg-white/5 hover:text-white"
               }`}
             >
-              <span className={`shrink-0 ${active ? "text-[#CFFF81]" : "text-gray-400 group-hover:text-white"}`}>
-                {item.icon}
+              <span className={`shrink-0 ${settingsActive ? "text-[var(--csc-accent)]" : "text-gray-400 group-hover:text-white"}`}>
+                <IconSettings className="h-5 w-5" />
               </span>
-              {!collapsed && <span className="truncate">{item.label}</span>}
+              {showLabels && <span>Settings</span>}
             </Link>
-          );
-        })}
-      </nav>
+          ) : null}
+          <button
+            type="button"
+            className={`mt-1 w-full rounded-lg px-2.5 py-2 text-left text-xs text-gray-500 hover:text-white ${showLabels ? "" : "text-center"}`}
+            onClick={() => {
+              void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+                window.location.href = "/";
+              });
+            }}
+          >
+            {showLabels ? "Sign out" : "Out"}
+          </button>
+        </div>
 
-      <div className="mt-auto border-t border-white/10 px-2 py-3">
-        {nav.settings ? (
-        <Link
-          href="/admin/settings"
-          title={collapsed ? "Settings" : undefined}
-          aria-current={settingsActive ? "page" : undefined}
-          className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
-            collapsed ? "justify-center" : ""
-          } ${
-            settingsActive
-              ? "bg-white/10 text-white"
-              : "text-gray-400 hover:bg-white/5 hover:text-white"
-          }`}
+        {/* Full-height border hit target — desktop collapse only */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          title="Toggle Sidebar"
+          aria-label="Toggle Sidebar"
+          aria-expanded={!collapsed}
+          className="group/rail absolute inset-y-0 right-0 z-20 hidden w-3 translate-x-1/2 cursor-col-resize border-0 bg-transparent p-0 md:block"
         >
-          <span className={`shrink-0 ${settingsActive ? "text-[var(--csc-accent)]" : "text-gray-400 group-hover:text-white"}`}>
-            <IconSettings className="h-5 w-5" />
-          </span>
-          {!collapsed && <span>Settings</span>}
-        </Link>
-      ) : null}
-      <button
-        type="button"
-        className={`mt-1 w-full rounded-lg px-2.5 py-2 text-left text-xs text-gray-500 hover:text-white ${collapsed ? "text-center" : ""}`}
-        onClick={() => {
-          void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
-            window.location.href = "/";
-          });
-        }}
-      >
-        {collapsed ? "Out" : "Sign out"}
-      </button>
-      </div>
-
-      {/* Full-height border hit target — no static arrow */}
-      <button
-        type="button"
-        onClick={toggleCollapsed}
-        title="Toggle Sidebar"
-        aria-label="Toggle Sidebar"
-        aria-expanded={!collapsed}
-        className="group/rail absolute inset-y-0 right-0 z-20 w-3 translate-x-1/2 cursor-col-resize border-0 bg-transparent p-0"
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10 transition-colors duration-75 group-hover/rail:bg-[#CFFF81]/70 group-focus-visible/rail:bg-[#CFFF81]"
-        />
-      </button>
-    </aside>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10 transition-colors duration-75 group-hover/rail:bg-[#CFFF81]/70 group-focus-visible/rail:bg-[#CFFF81]"
+          />
+        </button>
+      </aside>
+    </>
   );
 }

@@ -13,6 +13,7 @@ export default function SalesSearchBox({
 }) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SalesSearchHit[]>([]);
   const [open, setOpen] = useState(false);
@@ -65,8 +66,13 @@ export default function SalesSearchBox({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  function dismissKeyboard() {
+    inputRef.current?.blur();
+  }
+
   function pick(hit: SalesSearchHit) {
     setOpen(false);
+    dismissKeyboard();
     if (onPick) {
       onPick(hit);
       return;
@@ -77,8 +83,9 @@ export default function SalesSearchBox({
   const showMenu = open && query.trim().length >= SEARCH_MIN_CHARS;
 
   return (
-    <div ref={rootRef} className="relative w-40 shrink-0 sm:w-56">
+    <div ref={rootRef} className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
       <input
+        ref={inputRef}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -90,6 +97,7 @@ export default function SalesSearchBox({
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             setOpen(false);
+            dismissKeyboard();
             return;
           }
           if (e.key === "ArrowDown") {
@@ -102,11 +110,23 @@ export default function SalesSearchBox({
             setActive((i) => Math.max(0, i - 1));
             return;
           }
-          if (e.key === "Enter" && showMenu && hits[active]) {
+          if (e.key === "Enter") {
             e.preventDefault();
-            pick(hits[active]);
+            if (showMenu && hits[active]) {
+              pick(hits[active]);
+              return;
+            }
+            // Return should dismiss the mobile keyboard even with no selection.
+            setOpen(false);
+            dismissKeyboard();
           }
         }}
+        type="search"
+        inputMode="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
         placeholder="Search…"
         aria-label="Search organizations, contacts, titles"
         className="h-9 w-full rounded-full border border-[var(--csc-row-divider)] bg-transparent px-3 text-sm text-white placeholder:text-gray-500 focus:border-[var(--csc-accent)] focus:outline-none"
@@ -114,7 +134,7 @@ export default function SalesSearchBox({
       {showMenu && (
         <div
           role="listbox"
-          className="absolute right-0 z-40 mt-1.5 max-h-80 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-[var(--csc-row-divider)] bg-black"
+          className="absolute left-0 right-0 z-40 mt-1.5 max-h-[min(20rem,50dvh)] w-full overflow-y-auto rounded-xl border border-[var(--csc-row-divider)] bg-black sm:left-auto sm:right-0 sm:w-[min(24rem,calc(100vw-2rem))]"
         >
           {busy && hits.length === 0 && !error ? (
             <p className="px-4 py-3 text-sm text-gray-400">Searching…</p>

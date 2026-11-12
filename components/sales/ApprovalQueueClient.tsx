@@ -844,12 +844,12 @@ export default function ApprovalQueueClient() {
   );
 
   const pageHeader = (
-    <div className="mb-4 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+    <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div className="min-w-0">
         <p className="csc-eyebrow">Prospecting</p>
         <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Queue</h1>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
         <SalesSearchBox onPick={pickFromSearch} />
         <ScanCardButton onClick={() => setScanCardOpen(true)} />
         <AddOrgPlusButton onClick={() => setAddOrgOpen(true)} />
