@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { CopyBlock } from "@/app/sobeca-song-garden/content";
-import { copySteps, nextDeckStep, nextPresentStep, punchCopy, slideGesture, stepSlide } from "./slideshow";
+import { copySteps, nextDeckStep, nextPresentStep, pinnedLine, punchCopy, slideGesture, stepSlide } from "./slideshow";
 
 const width = 1000;
 
@@ -20,8 +20,21 @@ const withLine: CopyBlock[] = [
   { type: "paragraph", text: "Every audience holds a field of collective potential." },
   { type: "line", text: "The potential is already in the room." },
 ];
-assert.equal(punchCopy(withLine)?.text, "The potential is already in the room.");
-assert.equal(punchCopy(withLine)?.index, 2);
+assert.equal(punchCopy(withLine), null);
+assert.equal(punchCopy(withLine, "  ") , null);
+assert.equal(punchCopy(withLine, " Any closer ")?.text, "Any closer");
+assert.equal(punchCopy(withLine, "Any closer")?.index, -1);
+assert.deepEqual(pinnedLine({ blocks: withLine }), { index: 2, text: "The potential is already in the room." });
+assert.equal(
+  pinnedLine({
+    blocks: [
+      { type: "line", text: "In the room." },
+      { type: "paragraph", text: "Then more." },
+    ],
+  }),
+  null,
+);
+assert.equal(pinnedLine({ reveal: "steps", blocks: withLine }), null);
 
 const sentence: CopyBlock[] = [
   { type: "heading2", text: "Live facilitation" },
@@ -62,8 +75,8 @@ assert.deepEqual(copySteps(paced), [
 ]);
 
 const stepped = [
-  { reveal: "steps", blocks: paced },
-  { blocks: withLine },
+  { reveal: "steps", blocks: paced, bottom: "After the steps" },
+  { blocks: withLine, bottom: "Held for the click" },
 ];
 assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, stepped, "next"), {
   index: 0,
@@ -71,9 +84,19 @@ assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, step
   arrived: 1,
 });
 assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 5 }, stepped, "next"), {
+  index: 0,
+  revealed: true,
+  arrived: 5,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 5 }, stepped, "next"), {
   index: 1,
   revealed: false,
   arrived: 0,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 5 }, stepped, "prev"), {
+  index: 0,
+  revealed: false,
+  arrived: 5,
 });
 assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 2 }, stepped, "prev"), {
   index: 0,
@@ -82,11 +105,30 @@ assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 2 }, step
 });
 assert.deepEqual(nextPresentStep({ index: 1, revealed: false, arrived: 0 }, stepped, "prev"), {
   index: 0,
-  revealed: false,
+  revealed: true,
   arrived: 5,
 });
 assert.deepEqual(nextPresentStep({ index: 1, revealed: false, arrived: 0 }, stepped, "next"), {
   index: 1,
+  revealed: true,
+  arrived: 0,
+});
+
+const sameAsLine = [
+  { blocks: withLine, bottom: "The potential is already in the room." },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, sameAsLine, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+const differentBottom = [
+  { blocks: withLine, bottom: "A different closer." },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, differentBottom, "next"), {
+  index: 0,
   revealed: true,
   arrived: 0,
 });

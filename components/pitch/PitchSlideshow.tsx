@@ -5,8 +5,8 @@ import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { GradedPhoto } from "@/components/pitch/GradedPhoto";
 import { PitchText } from "@/components/pitch/PitchText";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
-import { evenFitScale } from "@/lib/pitches/fit-copy";
 import { plainPitchText } from "@/lib/pitches/rich-text";
+import { evenFitScale } from "@/lib/pitches/fit-copy";
 import {
   exitDeckFullscreen,
   fullscreenAvailable,
@@ -17,7 +17,7 @@ import {
   startWindowedPresent,
   type PresentMode,
 } from "@/lib/pitches/present";
-import { copySteps, nextPresentStep, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
+import { copySteps, nextPresentStep, pinnedLine, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 
@@ -272,23 +272,14 @@ function SlideCopy({
                   : String(step.blockIndex),
             ),
         );
-  const punch = visible ? null : punchCopy(slide.blocks);
+  const pinned = pinnedLine(slide);
   return (
     <div>
       {slide.blocks.map((block, blockIndex) => {
+        if (pinned && blockIndex === pinned.index) return null;
         const shown = steppedBlock(block, blockIndex, visible);
         if (!shown) return null;
         const previous = slide.blocks[blockIndex - 1]?.type;
-        if (punch && blockIndex === punch.index) {
-          if (!punch.before) return null;
-          return (
-            <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-              <p className="mt-5 max-w-3xl text-base leading-relaxed sm:text-lg">
-                <PitchText text={punch.before} />
-              </p>
-            </div>
-          );
-        }
         return (
           <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
             <Block block={shown} display={display} previous={previous} />
@@ -474,6 +465,10 @@ export default function PitchSlideshow({
 
   const slide = slides[index];
   if (!slide) return null;
+  const pinned = pinnedLine(slide);
+  const punchText = punchCopy(slide.blocks, slide.bottom)?.text ?? null;
+  const punch = punchText && pinned && plainPitchText(punchText).trim() === pinned.text ? null : punchText;
+  const footers = (pinned ? 1 : 0) + (revealed && punch ? 1 : 0);
   const tint = OVERLAYS[index % OVERLAYS.length];
   const wash = typeof slide.wash === "number" ? slide.wash : 0.45;
   const label = `${String(index + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
@@ -603,7 +598,7 @@ export default function PitchSlideshow({
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
-      <div className={`relative z-10 flex h-full min-w-0 flex-col px-6 pt-8 sm:px-24 sm:pt-10 ${revealed && slide.reveal !== "steps" && punchCopy(slide.blocks) ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
+      <div className={`relative z-10 flex h-full min-w-0 flex-col px-6 pt-8 sm:px-24 sm:pt-10 ${footers > 1 ? "pb-56 sm:pb-64" : footers === 1 ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <div className="flex items-center gap-1 sm:gap-2">
@@ -695,13 +690,22 @@ export default function PitchSlideshow({
         </FitCopy>
       </div>
 
-      {revealed && slide.reveal !== "steps" && punchCopy(slide.blocks) ? (
-        <p
-          key={`${slide.id}-punch`}
-          className={`${displayClass} punch-in pointer-events-none absolute bottom-16 left-6 right-6 z-20 max-w-4xl text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:bottom-20 sm:left-24 sm:right-24 sm:text-4xl`}
-        >
-          {plainPitchText(punchCopy(slide.blocks)?.text ?? "")}
-        </p>
+      {pinned || (revealed && punch) ? (
+        <div className="pointer-events-none absolute bottom-16 left-6 right-6 z-20 flex max-w-4xl flex-col gap-4 sm:bottom-20 sm:left-24 sm:right-24">
+          {revealed && punch ? (
+            <p
+              key={`${slide.id}-punch`}
+              className={`${displayClass} punch-in text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:text-4xl`}
+            >
+              <PitchText text={punch} />
+            </p>
+          ) : null}
+          {pinned ? (
+            <p className={`${displayClass} text-2xl uppercase leading-[0.95] text-[#CFFF81] sm:text-4xl`}>
+              <PitchText text={pinned.text} />
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {playNote ? (
