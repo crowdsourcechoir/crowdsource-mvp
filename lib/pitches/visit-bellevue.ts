@@ -5,22 +5,22 @@ import { libraryPhoto } from "@/lib/pitches/photo-library";
 export const VISIT_BELLEVUE_NAME = "Visit Bellevue";
 
 export const VISIT_BELLEVUE_PROMPT =
-  "Partnership pitch for Visit Bellevue. A short overview of Crowdsource Choir as a participatory entertainment company, with Rave Choir as a city night they can book or refer, in a season like Snowflake Lane.";
+  "Partnership pitch for Visit Bellevue. The Crowdsource Choir story: audiences become a choir, the crowd becomes the show, across venues, festivals, activations, districts, and sports. Song Garden and Rave Choir are two ways that practice shows up in a city.";
 
 const photo = {
   title: libraryPhoto("conductor"),
-  feeling: libraryPhoto("wide-crowd"),
-  company: libraryPhoto("hands"),
+  choir: libraryPhoto("audience"),
+  more: libraryPhoto("arms-wide"),
+  where: libraryPhoto("balcony"),
+  garden: libraryPhoto("piano"),
   rave: libraryPhoto("band"),
-  partnership: libraryPhoto("leaders"),
-  city: libraryPhoto("audience"),
-  night: libraryPhoto("drums"),
-  close: libraryPhoto("arms-wide"),
+  city: libraryPhoto("leaders"),
+  close: libraryPhoto("wide-crowd"),
 } as const;
 
-const wash = 0.48;
+const wash = 0.5;
 
-/** Outward pitch. One idea on each slide, aimed at a tourism partner. */
+/** The company story, told for a city partner. Confidence before the ask. */
 export const visitBellevueSlides: PitchSlide[] = [
   {
     id: "title",
@@ -30,37 +30,78 @@ export const visitBellevueSlides: PitchSlide[] = [
     blocks: [
       { type: "kicker", text: "Visit Bellevue" },
       { type: "title", text: "Crowdsource Choir" },
-      { type: "line", text: "Participatory entertainment for the city." },
+      { type: "line", text: "Participatory entertainment." },
     ],
   },
   {
-    id: "feeling",
-    image: photo.feeling.src,
-    imageAlt: photo.feeling.alt,
+    id: "choir",
+    image: photo.choir.src,
+    imageAlt: photo.choir.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "The nights people remember are the ones they were in." },
+      { type: "heading", text: "We turn audiences into a choir." },
       {
         type: "paragraph",
-        text: "A visitor can watch a city go by. The trip they tell a friend about is the one they helped make.",
+        text: "People arrive as a crowd. Someone starts the song. Then the room is the one singing it.",
       },
-      { type: "line", text: "We turn a room of people into the show." },
+      { type: "line", text: "The crowd becomes the show." },
     ],
   },
   {
-    id: "company",
-    image: photo.company.src,
-    imageAlt: photo.company.alt,
+    id: "more",
+    image: photo.more.src,
+    imageAlt: photo.more.alt,
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "A participatory entertainment company." },
+      { type: "heading", text: "More than a performance." },
       {
         type: "paragraph",
-        text: "Crowdsource Choir writes music with the people in the room. They sing it, they move to it, and they leave having made it together.",
+        text: "A performance is something a room receives. This is something a room makes.",
       },
-      { type: "line", text: "Bellevue brings the people and the place. We bring the night." },
+      {
+        type: "paragraph",
+        text: "Crowdsource Choir accelerates and amplifies creativity. We create the conditions for collective effervescence to emerge.",
+      },
+      { type: "line", text: "What happens could not have happened to any one person alone." },
+    ],
+  },
+  {
+    id: "where",
+    image: photo.where.src,
+    imageAlt: photo.where.alt,
+    wash,
+    reveal: "steps",
+    blocks: [
+      { type: "heading", text: "Wherever a crowd can become the work." },
+      {
+        type: "table",
+        headers: ["Where", "What changes"],
+        rows: [
+          ["Venues", "A room finds one voice."],
+          ["Festivals", "Strangers become a choir for a night."],
+          ["Activations", "People step into the moment."],
+          ["Districts", "A place hears itself."],
+          ["Sports", "The stands become part of the play."],
+        ],
+      },
+    ],
+  },
+  {
+    id: "garden",
+    image: photo.garden.src,
+    imageAlt: photo.garden.alt,
+    wash,
+    reveal: "steps",
+    blocks: [
+      { type: "kicker", text: "Song Garden" },
+      { type: "heading", text: "Sometimes the choir begins before anyone gathers." },
+      {
+        type: "paragraph",
+        text: "A school, a district, a community, or a destination offers stories, words, and voices. The garden blooms into the music, and often into the event itself.",
+      },
+      { type: "line", text: "The place is already in the song." },
     ],
   },
   {
@@ -71,35 +112,16 @@ export const visitBellevueSlides: PitchSlide[] = [
     reveal: "steps",
     blocks: [
       { type: "kicker", text: "Rave Choir" },
-      { type: "heading", text: "A night the whole city can join." },
+      { type: "heading", text: "A whole city, making one night." },
       {
         type: "paragraph",
-        text: "Families, visitors, and locals in one room, dancing and singing together. Multigenerational, and built to happen again.",
+        text: "Families, visitors, and locals, dancing and singing together. The same practice, large enough for a downtown season.",
       },
       {
         type: "paragraph",
-        text: "A holiday edition belongs in a downtown season like Snowflake Lane. Lights outside. A room inside where the city makes the music.",
+        text: "In a season like Snowflake Lane, it is the room inside the lights. The part of the visit people are in.",
       },
-      { type: "line", text: "The kind of night a city puts on its list." },
-    ],
-  },
-  {
-    id: "partnership",
-    image: photo.partnership.src,
-    imageAlt: photo.partnership.alt,
-    wash,
-    reveal: "steps",
-    blocks: [
-      { type: "heading", text: "Book it, or send it on." },
-      {
-        type: "table",
-        headers: ["Door", "What it looks like"],
-        rows: [
-          ["Book it", "Visit Bellevue presents Rave Choir as a city experience."],
-          ["Refer it", "A hotel, venue, brand, or civic partner needs a participatory night. You send them to us."],
-        ],
-      },
-      { type: "line", text: "Either door puts an experience on Bellevue's list." },
+      { type: "line", text: "The city, singing." },
     ],
   },
   {
@@ -109,35 +131,16 @@ export const visitBellevueSlides: PitchSlide[] = [
     wash,
     reveal: "steps",
     blocks: [
-      { type: "heading", text: "A signature night, and the story after it." },
+      { type: "heading", text: "Bellevue already knows how to gather people." },
       {
-        type: "list",
-        items: [
-          "A reason to come downtown, not only a place to pass through.",
-          "Locals and visitors in the same room.",
-          "Film, music, and photos the city can keep using.",
-          "A partner when a conference, a district, or a season needs its own moment.",
-        ],
+        type: "paragraph",
+        text: "Visit Bellevue stands where those gatherings are chosen. A season. A district. A festival. A venue. A sports night.",
       },
-    ],
-  },
-  {
-    id: "first-night",
-    image: photo.night.src,
-    imageAlt: photo.night.alt,
-    wash,
-    reveal: "steps",
-    blocks: [
-      { type: "heading", text: "We start with one night, shaped for Bellevue." },
       {
-        type: "list",
-        items: [
-          "Choose the season and the room.",
-          "Shape the music around the city.",
-          "Fill it with visitors and locals.",
-          "Leave with a story the next partner can feel.",
-        ],
+        type: "paragraph",
+        text: "Crowdsource Choir can be the night itself. It can also be what a partner uses when they want their people to make something together.",
       },
+      { type: "line", text: "The practice travels. The feeling is the same." },
     ],
   },
   {
@@ -147,9 +150,9 @@ export const visitBellevueSlides: PitchSlide[] = [
     wash,
     reveal: "steps",
     blocks: [
-      { type: "kicker", text: "Visit Bellevue" },
-      { type: "heading", text: "Let's find Bellevue's night." },
-      { type: "line", text: "You already know how this city gathers. We can give them a night they make together." },
+      { type: "kicker", text: "Crowdsource Choir" },
+      { type: "heading", text: "Collective effervescence." },
+      { type: "line", text: "Audiences into a choir. The crowd into the show." },
     ],
   },
 ];
