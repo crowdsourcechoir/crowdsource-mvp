@@ -210,6 +210,46 @@ assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 3 }, repe
   arrived: 0,
 });
 
+const revisedParagraph = "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people participating.";
+const previousParagraph = "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people who make it meaningful.";
+const revisedAnthem: CopyBlock[] = [
+  { type: "heading", text: "An Anthem Made for the moment." },
+  { type: "paragraph", text: revisedParagraph, rule: true },
+  {
+    type: "paragraph",
+    text: "Then we bring it to life in a high-energy, participatory world premiere where the audience becomes the choir and the crowd becomes the show.",
+    rule: true,
+  },
+  { type: "line", text: "They don’t just hear it. They sing it." },
+];
+const staleBottom = [
+  { reveal: "steps" as const, blocks: revisedAnthem, bottom: previousParagraph },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.equal(bottomRepeatsCopy(staleBottom[0]), true);
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 4 }, staleBottom, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+const customBottom = [
+  { reveal: "steps" as const, blocks: revisedAnthem, bottom: "Hold this line for the room." },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.equal(bottomRepeatsCopy(customBottom[0]), false);
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 4 }, customBottom, "next"), {
+  index: 0,
+  revealed: true,
+  arrived: 4,
+});
+assert.equal(
+  bottomRepeatsCopy({
+    blocks: [{ type: "line", text: "They don’t just hear it. They sing it." }],
+    bottom: "They don't just hear it. They sing it.",
+  }),
+  true,
+);
+
 const listMarked: CopyBlock[] = [{ type: "list", items: ["Stay", "First", "Second"], clickItems: [2, 1] }];
 assert.deepEqual(clickBeats(listMarked), [
   { blockIndex: 0, itemIndex: 1 },

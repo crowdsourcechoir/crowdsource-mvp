@@ -132,15 +132,56 @@ function clickCount(slide: PacedSlide | undefined): number {
   return clickBeats(slide.blocks).length;
 }
 
+/** Fold quotes, dashes, and punctuation so two wordings of one sentence can be compared. */
+function comparableCopy(text: string): string {
+  return plainPitchText(text)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function rowCopy(blocks: CopyBlock[]): string[] {
+  const rows: string[] = [];
+  blocks.forEach((block) => {
+    if (block.type === "list") {
+      block.items.forEach((item) => rows.push(item));
+      return;
+    }
+    if ("text" in block) rows.push(block.text);
+  });
+  return rows;
+}
+
+/**
+ * Same sentence, including a later edit. Short lines stay distinct:
+ * a custom next-click line that only shares a few words is not a repeat.
+ */
+function sameSentence(bottom: string, row: string): boolean {
+  const left = comparableCopy(bottom);
+  const right = comparableCopy(row);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftWords = left.split(" ");
+  const rightWords = right.split(" ");
+  if (leftWords.length < 8 || rightWords.length < 8) return false;
+  const counts = new Map<string, number>();
+  leftWords.forEach((word) => counts.set(word, (counts.get(word) ?? 0) + 1));
+  let overlap = 0;
+  rightWords.forEach((word) => {
+    const remaining = counts.get(word) ?? 0;
+    if (remaining <= 0) return;
+    overlap += 1;
+    counts.set(word, remaining - 1);
+  });
+  return (2 * overlap) / (leftWords.length + rightWords.length) >= 0.8;
+}
+
 /** True when the bottom line is already a row on the slide, so it must not paint a second time. */
 export function bottomRepeatsCopy(slide: { blocks: CopyBlock[]; bottom?: string } | undefined): boolean {
   const text = plainPitchText(slide?.bottom ?? "").trim();
   if (!text || !slide) return false;
-  return slide.blocks.some((block) => {
-    if (block.type === "list") return block.items.some((item) => plainPitchText(item).trim() === text);
-    if ("text" in block) return plainPitchText(block.text).trim() === text;
-    return false;
-  });
+  return rowCopy(slide.blocks).some((row) => sameSentence(text, row));
 }
 
 function heldBottom(slide: PacedSlide | undefined): boolean {

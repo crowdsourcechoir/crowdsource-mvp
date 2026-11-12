@@ -299,6 +299,27 @@ const repeatedBottom = acceptSlides([
   },
 ]);
 assert.equal(repeatedBottom?.[0]?.bottom, undefined);
+const revisedBottom = acceptSlides([
+  {
+    id: "title",
+    image: meetingNow.slides[0]!.image,
+    imageAlt: meetingNow.slides[0]!.imageAlt,
+    bottom:
+      "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people who make it meaningful.",
+    blocks: [
+      {
+        type: "paragraph",
+        text: "Our signature Anthem Experience transforms the people, purpose, and place behind a gathering into an original song—created specifically for that moment and the people participating.",
+      },
+      { type: "line", text: "They don’t just hear it. They sing it." },
+    ],
+  },
+]);
+assert.equal(revisedBottom?.[0]?.bottom, undefined);
+assert.equal(
+  revisedBottom?.[0]?.blocks[0] && "text" in revisedBottom[0].blocks[0] ? revisedBottom[0].blocks[0].text.endsWith("people participating.") : false,
+  true,
+);
 const markedRows = acceptSlides([
   {
     id: "title",
