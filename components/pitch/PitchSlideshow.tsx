@@ -6,7 +6,7 @@ import { GradedPhoto } from "@/components/pitch/GradedPhoto";
 import { PitchText } from "@/components/pitch/PitchText";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { plainPitchText } from "@/lib/pitches/rich-text";
-import { evenFitScale } from "@/lib/pitches/fit-copy";
+import { FIT_COPY_MIN_SCALE, fitCopyLayout } from "@/lib/pitches/fit-copy";
 import {
   exitDeckFullscreen,
   fullscreenAvailable,
@@ -212,9 +212,25 @@ function FitCopy({ children, watch, color }: { children: ReactNode; watch: strin
     const apply = () => {
       if (!frame.isConnected || !box.isConnected) return;
       box.style.transform = "none";
-      const scale = evenFitScale(frame.clientWidth, frame.clientHeight, box.scrollWidth, box.scrollHeight);
+      frame.style.overflowY = "hidden";
+      // Phones (and short landscape heights) should keep readable type and scroll.
+      const preferScroll = window.matchMedia("(max-width: 768px), (max-height: 520px)").matches;
+      const layout = fitCopyLayout(
+        frame.clientWidth,
+        frame.clientHeight,
+        box.scrollWidth,
+        box.scrollHeight,
+        preferScroll ? 1 : FIT_COPY_MIN_SCALE,
+      );
+      if (layout.scroll) {
+        // Keep type at full size and scroll — transforms would break scroll metrics.
+        frame.style.overflowY = "auto";
+        frame.scrollTop = 0;
+        return;
+      }
       box.style.transformOrigin = "top left";
-      box.style.transform = scale < 0.999 ? `scale(${scale})` : "none";
+      box.style.transform = layout.scale < 0.999 ? `scale(${layout.scale})` : "none";
+      frame.scrollTop = 0;
     };
 
     apply();
@@ -228,7 +244,25 @@ function FitCopy({ children, watch, color }: { children: ReactNode; watch: strin
   }, [watch]);
 
   return (
-    <div ref={frameRef} data-slide-copy className="min-h-0 min-w-0 flex-1 overflow-hidden" style={{ color }}>
+    <div
+      ref={frameRef}
+      data-slide-copy
+      className="min-h-0 min-w-0 flex-1 overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+      style={{ color }}
+      onPointerDown={() => {
+        const frame = frameRef.current;
+        if (frame) frame.dataset.scrollAt = String(frame.scrollTop);
+      }}
+      onPointerUp={(event) => {
+        const frame = frameRef.current;
+        if (!frame) return;
+        const started = Number(frame.dataset.scrollAt ?? "0");
+        // A real scroll inside the copy should not also advance the deck.
+        if (frame.scrollHeight > frame.clientHeight + 4 && Math.abs(frame.scrollTop - started) > 2) {
+          event.stopPropagation();
+        }
+      }}
+    >
       <div ref={boxRef} className="w-full">
         {children}
       </div>
@@ -442,10 +476,15 @@ export default function PitchSlideshow({
     const onWheel = (event: WheelEvent) => {
       const copy = (event.target as HTMLElement | null)?.closest("[data-slide-copy]");
       const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-      if (copy instanceof HTMLElement && copy.scrollHeight > copy.clientHeight + 4) {
-        const atStart = copy.scrollTop <= 2;
-        const atEnd = copy.scrollTop + copy.clientHeight >= copy.scrollHeight - 2;
-        if ((delta > 0 && !atEnd) || (delta < 0 && !atStart)) return;
+      if (copy instanceof HTMLElement) {
+        const overflowY = getComputedStyle(copy).overflowY;
+        const scrollable =
+          (overflowY === "auto" || overflowY === "scroll") && copy.scrollHeight > copy.clientHeight + 4;
+        if (scrollable) {
+          const atStart = copy.scrollTop <= 2;
+          const atEnd = copy.scrollTop + copy.clientHeight >= copy.scrollHeight - 2;
+          if ((delta > 0 && !atEnd) || (delta < 0 && !atStart)) return;
+        }
       }
       event.preventDefault();
       if (wheelLock || Math.abs(delta) < 24) return;
