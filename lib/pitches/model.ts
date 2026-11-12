@@ -253,17 +253,31 @@ function overlayAmount(value: unknown, overlay: "salmon" | undefined): number | 
   return Math.round(clamped * 100) / 100;
 }
 
+function clickMarks(block: CopyBlock): { click: true } | Record<string, never> {
+  return "text" in block && block.click === true ? { click: true } : {};
+}
+
 function copyBlock(block: CopyBlock): CopyBlock {
-  if (block.type === "list") return { ...block, items: block.items.slice() };
+  if (block.type === "list") {
+    const clickItems = (block.clickItems ?? []).filter(
+      (index) => Number.isInteger(index) && index >= 0 && index < block.items.length && block.items[index]?.trim(),
+    );
+    return {
+      type: "list",
+      items: block.items.slice(),
+      ...(clickItems.length ? { clickItems: [...new Set(clickItems)].sort((a, b) => a - b) } : {}),
+    };
+  }
   if (block.type === "table") {
     return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
   }
   if (!("text" in block)) return block;
   const bold = block.bold === true ? { bold: true as const } : {};
+  const click = clickMarks(block);
   if (block.type === "paragraph") {
-    return { type: "paragraph", text: block.text, ...bold, ...(block.rule === true ? { rule: true as const } : {}) };
+    return { type: "paragraph", text: block.text, ...bold, ...click, ...(block.rule === true ? { rule: true as const } : {}) };
   }
-  return { type: block.type, text: block.text, ...bold };
+  return { type: block.type, text: block.text, ...bold, ...click };
 }
 
 function sanitizeSlides(value: unknown): PitchSlide[] | null {
@@ -309,17 +323,23 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
       type: next.type,
       text: next.text.slice(0, MAX_TEXT),
       ...(next.bold === true ? { bold: true as const } : {}),
+      ...("text" in next && next.click === true ? { click: true as const } : {}),
       ...(next.type === "paragraph" && next.rule === true ? { rule: true as const } : {}),
     } as CopyBlock;
   }
   if (next.type !== base.type) return base;
 
   if (base.type === "list" && next.type === "list" && Array.isArray(next.items) && next.items.length === base.items.length) {
+    const items = base.items.map((item, index) =>
+      typeof next.items[index] === "string" ? next.items[index].slice(0, MAX_TEXT) : item,
+    );
+    const clickItems = (next.clickItems ?? []).filter(
+      (index) => Number.isInteger(index) && index >= 0 && index < items.length && items[index]?.trim(),
+    );
     return {
-      ...base,
-      items: base.items.map((item, index) =>
-        typeof next.items[index] === "string" ? next.items[index].slice(0, MAX_TEXT) : item
-      ),
+      type: "list",
+      items,
+      ...(clickItems.length ? { clickItems: [...new Set(clickItems)].sort((a, b) => a - b) } : {}),
     };
   }
 

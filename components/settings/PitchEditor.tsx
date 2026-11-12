@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
-import { plainPitchText, toggleBoldMarkup } from "@/lib/pitches/rich-text";
+import { toggleBoldMarkup } from "@/lib/pitches/rich-text";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { pitchDraftKey, shouldApplySavedDraft } from "@/lib/pitches/autosave";
 import {
@@ -215,8 +215,8 @@ function FitText({
             <button
               type="button"
               aria-pressed={nextClick}
-              aria-label={`Put ${label} at the bottom on the next click`}
-              title="Put this text at the bottom on the next click"
+              aria-label={`Bring ${label} in on a click`}
+              title={nextClick ? "This row comes in on a click" : "Bring this row in on a click. Mark as many as you want."}
               onMouseDown={(event) => event.preventDefault()}
               onClick={onNextClick}
               className={`text-[10px] uppercase tracking-[0.16em] ${
@@ -740,8 +740,8 @@ export default function PitchEditor({ id }: { id: string }) {
                 <textarea
                   rows={2}
                   value={slide.bottom ?? ""}
-                  aria-label={`Text at the bottom of slide ${index + 1} on the next click`}
-                  placeholder="Shown at the bottom on the next click"
+                  aria-label={`Extra line at the bottom of slide ${index + 1} after the marked rows`}
+                  placeholder="Optional extra line after the marked rows"
                   onChange={(event) => {
                     const value = event.target.value;
                     patchSlide(slide.id, (current) => ({ ...current, bottom: value ? value : undefined }));
@@ -754,7 +754,7 @@ export default function PitchEditor({ id }: { id: string }) {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <SettingsButton
                     variant={slide.reveal === "steps" ? "ghost" : "primary"}
-                    title="Every line is on the slide. One extra click still holds the last line."
+                    title="Every line is on the slide. Marked rows still wait for a click."
                     onClick={() => patchSlide(slide.id, (current) => ({ ...current, reveal: undefined }))}
                   >
                     All at once
@@ -991,14 +991,20 @@ export default function PitchEditor({ id }: { id: string }) {
                             key={itemIndex}
                             label={`Item ${itemIndex + 1}`}
                             value={item}
-                            nextClick={slide.bottom?.trim() === item.trim() && item.trim().length > 0}
+                            nextClick={block.clickItems?.includes(itemIndex) === true}
                             onNextClick={() => {
-                              const plain = item.trim();
-                              if (!plain) return;
-                              patchSlide(slide.id, (current) => ({
-                                ...current,
-                                bottom: current.bottom?.trim() === plain ? undefined : plain,
-                              }));
+                              patchSlide(slide.id, (current) => {
+                                const existing = current.blocks[blockIndex];
+                                if (existing?.type !== "list") return current;
+                                const marks = new Set(existing.clickItems ?? []);
+                                if (marks.has(itemIndex)) marks.delete(itemIndex);
+                                else marks.add(itemIndex);
+                                const clickItems = [...marks].sort((a, b) => a - b);
+                                return updateBlock(current, blockIndex, {
+                                  ...existing,
+                                  clickItems: clickItems.length ? clickItems : undefined,
+                                });
+                              });
                             }}
                             tools={
                               structureOpen && block.items.length > 1 ? (
@@ -1114,16 +1120,16 @@ export default function PitchEditor({ id }: { id: string }) {
                         label={BLOCK_LABEL[block.type] ?? block.type}
                         styleName={block.type}
                         bold={block.bold === true}
-                        nextClick={
-                          slide.bottom?.trim() === plainPitchText(block.text).trim() && plainPitchText(block.text).trim().length > 0
-                        }
+                        nextClick={"click" in block && block.click === true}
                         onNextClick={() => {
-                          const plain = plainPitchText(block.text).trim();
-                          if (!plain) return;
-                          patchSlide(slide.id, (current) => ({
-                            ...current,
-                            bottom: current.bottom?.trim() === plain ? undefined : plain,
-                          }));
+                          patchSlide(slide.id, (current) => {
+                            const existing = current.blocks[blockIndex];
+                            if (!existing || !("text" in existing)) return current;
+                            return updateBlock(current, blockIndex, {
+                              ...existing,
+                              click: existing.click ? undefined : true,
+                            });
+                          });
                         }}
                         rule={block.type === "paragraph" && block.rule === true}
                         onToggleRule={
@@ -1156,6 +1162,7 @@ export default function PitchEditor({ id }: { id: string }) {
                               type: style,
                               text: existing.text,
                               ...(existing.bold ? { bold: true } : {}),
+                              ...(existing.click ? { click: true } : {}),
                               ...(style === "paragraph" && existing.type === "paragraph" && existing.rule
                                 ? { rule: true }
                                 : {}),

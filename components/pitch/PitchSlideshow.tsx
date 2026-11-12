@@ -17,7 +17,16 @@ import {
   startWindowedPresent,
   type PresentMode,
 } from "@/lib/pitches/present";
-import { copySteps, nextPresentStep, pinnedLine, punchCopy, slideGesture, type SlideGesture } from "@/lib/pitches/slideshow";
+import {
+  clickBeatHidden,
+  clickBeats,
+  copySteps,
+  nextPresentStep,
+  pinnedLine,
+  punchCopy,
+  slideGesture,
+  type SlideGesture,
+} from "@/lib/pitches/slideshow";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 
@@ -253,10 +262,12 @@ function SlideCopy({
   slide,
   display,
   arrived,
+  clicksShown,
 }: {
   slide: PitchSlide;
   display: string;
   arrived: number | null;
+  clicksShown: number | null;
 }) {
   const visible =
     arrived === null
@@ -272,13 +283,23 @@ function SlideCopy({
                   : String(step.blockIndex),
             ),
         );
+  const beats = clicksShown === null ? [] : clickBeats(slide.blocks);
   const pinned = pinnedLine(slide);
   return (
     <div>
       {slide.blocks.map((block, blockIndex) => {
         if (pinned && blockIndex === pinned.index) return null;
-        const shown = steppedBlock(block, blockIndex, visible);
+        let shown = steppedBlock(block, blockIndex, visible);
         if (!shown) return null;
+        if (clicksShown !== null) {
+          if (shown.type === "list") {
+            const items = shown.items.filter((_, itemIndex) => !clickBeatHidden(beats, blockIndex, itemIndex, clicksShown));
+            if (!items.length) return null;
+            shown = { ...shown, items };
+          } else if (clickBeatHidden(beats, blockIndex, undefined, clicksShown)) {
+            return null;
+          }
+        }
         const previous = slide.blocks[blockIndex - 1]?.type;
         return (
           <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
@@ -686,7 +707,12 @@ export default function PitchSlideshow({
           </div>
         </div>
         <FitCopy watch={`${slide.id}:${revealed}:${arrived}`} color={slide.copyColor || "#FFFFFF"}>
-          <SlideCopy slide={slide} display={displayClass} arrived={slide.reveal === "steps" ? arrived : null} />
+          <SlideCopy
+            slide={slide}
+            display={displayClass}
+            arrived={slide.reveal === "steps" && clickBeats(slide.blocks).length === 0 ? arrived : null}
+            clicksShown={clickBeats(slide.blocks).length ? arrived : null}
+          />
         </FitCopy>
       </div>
 

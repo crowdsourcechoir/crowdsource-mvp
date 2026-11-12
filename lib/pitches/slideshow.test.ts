@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import type { CopyBlock } from "@/app/sobeca-song-garden/content";
-import { copySteps, nextDeckStep, nextPresentStep, pinnedLine, punchCopy, slideGesture, stepSlide } from "./slideshow";
+import {
+  clickBeatHidden,
+  clickBeats,
+  copySteps,
+  nextDeckStep,
+  nextPresentStep,
+  pinnedLine,
+  punchCopy,
+  slideGesture,
+  stepSlide,
+} from "./slideshow";
 
 const width = 1000;
 
@@ -132,5 +142,58 @@ assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, diff
   revealed: true,
   arrived: 0,
 });
+
+const marked: CopyBlock[] = [
+  { type: "heading", text: "Visible now." },
+  { type: "paragraph", text: "First click.", click: true },
+  { type: "paragraph", text: "Second click.", click: true },
+  { type: "line", text: "Held line.", click: true },
+];
+assert.deepEqual(clickBeats(marked), [{ blockIndex: 1 }, { blockIndex: 2 }, { blockIndex: 3 }]);
+assert.equal(pinnedLine({ blocks: marked }), null);
+assert.equal(clickBeatHidden(clickBeats(marked), 1, undefined, 0), true);
+assert.equal(clickBeatHidden(clickBeats(marked), 1, undefined, 1), false);
+assert.equal(clickBeatHidden(clickBeats(marked), 0, undefined, 0), false);
+
+const many = [
+  { blocks: marked, bottom: "After the rows." },
+  { blocks: [{ type: "heading" as const, text: "Next" }] },
+];
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 0 }, many, "next"), {
+  index: 0,
+  revealed: false,
+  arrived: 1,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 2 }, many, "next"), {
+  index: 0,
+  revealed: false,
+  arrived: 3,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: false, arrived: 3 }, many, "next"), {
+  index: 0,
+  revealed: true,
+  arrived: 3,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 3 }, many, "next"), {
+  index: 1,
+  revealed: false,
+  arrived: 0,
+});
+assert.deepEqual(nextPresentStep({ index: 1, revealed: false, arrived: 0 }, many, "prev"), {
+  index: 0,
+  revealed: true,
+  arrived: 3,
+});
+assert.deepEqual(nextPresentStep({ index: 0, revealed: true, arrived: 3 }, many, "prev"), {
+  index: 0,
+  revealed: false,
+  arrived: 3,
+});
+
+const listMarked: CopyBlock[] = [{ type: "list", items: ["Stay", "First", "Second"], clickItems: [2, 1] }];
+assert.deepEqual(clickBeats(listMarked), [
+  { blockIndex: 0, itemIndex: 1 },
+  { blockIndex: 0, itemIndex: 2 },
+]);
 
 console.log("slideshow gesture ok");
