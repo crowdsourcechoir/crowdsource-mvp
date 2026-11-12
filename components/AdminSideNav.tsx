@@ -285,28 +285,28 @@ export default function AdminSideNav({
         <button
           type="button"
           className="fixed inset-0 z-40 bg-black/70 md:hidden"
-          aria-label="Close navigation"
+          aria-label="Dismiss navigation"
           onClick={closeMobile}
         />
       ) : null}
 
       <aside
         id="admin-side-nav"
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[min(232px,85vw)] shrink-0 flex-col overflow-hidden border-r border-transparent bg-black transition-transform duration-200 ease-out md:relative md:visible md:z-auto md:w-auto md:translate-x-0 md:pointer-events-auto ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[232px] max-w-[80vw] shrink-0 flex-col overflow-hidden border-r border-transparent bg-black transition-transform duration-200 ease-out md:relative md:visible md:z-auto md:w-auto md:max-w-none md:translate-x-0 md:pointer-events-auto ${
           mobileOpen
             ? "translate-x-0"
             : "-translate-x-full max-md:pointer-events-none max-md:invisible"
         } ${collapsed ? "md:w-[72px]" : "md:w-[232px]"} ${ready ? "opacity-100" : "opacity-0"}`}
         aria-label="Admin navigation"
       >
-        <div className={`flex items-center px-3 py-4 ${showLabels ? "justify-between px-4" : "justify-center"}`}>
-          <Link href={home} className="flex shrink-0 items-center" title="Crowdsource Choir" onClick={closeMobile}>
+        <div className={`flex items-center px-3 py-4 ${showLabels ? "justify-between gap-2 px-4" : "justify-center"}`}>
+          <Link href={home} className="flex min-w-0 shrink items-center" title="Crowdsource Choir" onClick={closeMobile}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Crowdsource Choir" className="h-8 w-auto shrink-0" />
           </Link>
           <button
             type="button"
-            className="csc-btn-circle md:hidden"
+            className="csc-btn-circle shrink-0 md:hidden"
             aria-label="Close navigation"
             onClick={closeMobile}
           >
