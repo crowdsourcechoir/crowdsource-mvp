@@ -138,6 +138,9 @@ function Block({
       <img src={block.src} alt={block.alt} className="mt-10 w-full max-w-4xl" />
     );
   }
+  if (block.type === "graphic") {
+    return null;
+  }
   if (block.type === "list") {
     return (
       <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed sm:text-lg">
@@ -149,6 +152,7 @@ function Block({
       </ul>
     );
   }
+  if (block.type !== "table") return null;
   return (
     <div className="mt-8 max-w-5xl overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm sm:text-base">

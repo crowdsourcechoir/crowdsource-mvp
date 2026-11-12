@@ -174,6 +174,7 @@ function Block({
       </ul>
     );
   }
+  if (block.type !== "table") return null;
   return (
     <div className="mt-6 max-w-5xl overflow-x-auto">
       <table className="w-full min-w-[36rem] border-collapse text-left text-sm sm:text-base">
