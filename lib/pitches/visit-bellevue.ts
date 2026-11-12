@@ -11,6 +11,7 @@ const photo = {
   promise: libraryPhoto("conductor"),
   opportunity: libraryPhoto("balcony"),
   potential: libraryPhoto("hands"),
+  participation: libraryPhoto("audience"),
   experience: libraryPhoto("anthem"),
   process: libraryPhoto("piano"),
   partners: libraryPhoto("circle"),
@@ -76,6 +77,17 @@ export const visitBellevueSlides: PitchSlide[] = [
         text: "Together, they form a one-of-a-kind gathering, unique to these people, this place, and this moment.",
       },
       { type: "line", text: "Something magical happens when we welcome those voices into harmony." },
+    ],
+  },
+  {
+    id: "participation",
+    image: photo.participation.src,
+    imageAlt: photo.participation.alt,
+    wash,
+    blocks: [
+      { type: "heading", text: "Participation is the difference." },
+      { type: "paragraph", text: "From spectators to co-creators." },
+      { type: "graphic", kind: "participation-layers" },
     ],
   },
   {

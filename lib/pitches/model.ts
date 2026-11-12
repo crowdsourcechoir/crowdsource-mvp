@@ -3,6 +3,7 @@ import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } fr
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
 import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
+import { plainPitchText } from "@/lib/pitches/rich-text";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
 
@@ -216,6 +217,9 @@ function isBlock(value: unknown): value is CopyBlock {
   if (block.type === "image") {
     return typeof block.src === "string" && typeof block.alt === "string" && block.alt.length <= 300;
   }
+  if (block.type === "graphic") {
+    return block.kind === "participation-layers";
+  }
   return "text" in block && typeof block.text === "string" && block.text.length <= MAX_TEXT;
 }
 
@@ -243,6 +247,39 @@ function bottomCopy(value: unknown): string | undefined {
   return clip(value, MAX_TEXT) ?? undefined;
 }
 
+/**
+ * Drop Next-click copy left behind after its source block was rewritten.
+ * Active Next click still matches a block exactly and is kept.
+ */
+export function scrubOrphanBottom(slide: PitchSlide): PitchSlide {
+  const bottom = slide.bottom?.trim();
+  if (!bottom) return slide;
+
+  const blockTexts: string[] = [];
+  for (const block of slide.blocks) {
+    if (block.type === "list") {
+      for (const item of block.items) {
+        const plain = item.trim();
+        if (plain) blockTexts.push(plain);
+      }
+      continue;
+    }
+    if (!("text" in block)) continue;
+    const plain = plainPitchText(block.text).trim();
+    if (plain) blockTexts.push(plain);
+  }
+
+  if (blockTexts.some((text) => text === bottom)) return slide;
+
+  const orphan = blockTexts.some((text) => {
+    if (text.length < 48 || bottom.length < 48) return false;
+    return text.slice(0, 48).toLowerCase() === bottom.slice(0, 48).toLowerCase();
+  });
+  if (!orphan) return slide;
+
+  return { ...slide, bottom: undefined };
+}
+
 function salmonOverlay(value: unknown): "salmon" | undefined {
   return value === "salmon" ? "salmon" : undefined;
 }
@@ -258,6 +295,8 @@ function copyBlock(block: CopyBlock): CopyBlock {
   if (block.type === "table") {
     return { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) };
   }
+  if (block.type === "graphic") return { type: "graphic", kind: block.kind };
+  if (block.type === "image") return { type: "image", src: block.src, alt: block.alt };
   if (!("text" in block)) return block;
   const bold = block.bold === true ? { bold: true as const } : {};
   if (block.type === "paragraph") {
@@ -270,7 +309,7 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 40) return null;
   const slides = value.filter(isPitchSlide).map((slide) => {
     const grade = salmonOverlay(slide.photoOverlay);
-    return {
+    return scrubOrphanBottom({
       ...slide,
       image: safeImage(slide.image, SEED_PHOTO),
       wash: washFrom(slide.wash),
@@ -281,7 +320,7 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
       photoOverlayAmount: overlayAmount(slide.photoOverlayAmount, grade),
       photoOverlayColor: grade ? storedOverlayColor(slide.photoOverlayColor) : undefined,
       blocks: slide.blocks.map(copyBlock),
-    };
+    });
   });
   if (slides.length !== value.length) return null;
   const ids = new Set(slides.map((slide) => slide.id));
@@ -404,16 +443,18 @@ export function seedSlides(name: string, prompt: string): PitchSlide[] {
 }
 
 function cloneSlides(slides: PitchSlide[]): PitchSlide[] {
-  return slides.map((slide) => ({
-    ...slide,
-    blocks: slide.blocks.map((block) =>
-      block.type === "list"
-        ? { ...block, items: block.items.slice() }
-        : block.type === "table"
-          ? { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) }
-          : { ...block }
-    ),
-  }));
+  return slides.map((slide) =>
+    scrubOrphanBottom({
+      ...slide,
+      blocks: slide.blocks.map((block) =>
+        block.type === "list"
+          ? { ...block, items: block.items.slice() }
+          : block.type === "table"
+            ? { ...block, headers: block.headers.slice(), rows: block.rows.map((row) => row.slice()) }
+            : { ...block }
+      ),
+    })
+  );
 }
 
 function hashOrNull(value: unknown): string | null {
