@@ -17,6 +17,13 @@ R&D work organized as one living system.
 Together these form the living system: Gardens persist, Blooms activate, Roots
 nourish, Live performs, Composer forms, and Sales distributes.
 
+The commercial frame for 2027–2028 is
+[`octo-business-strategy-2027.md`](./octo-business-strategy-2027.md). Anthem is
+the cash engine. Song Garden is a commissioned activation whose material can
+bloom into an anthem, a film, a chant, or a show. Rave Choir and themed shows
+are owned entertainment, financed with partners before production risk. Fan
+Chant follows funded sports partnerships. Song Garden Journeys wait until 2028.
+
 ## Garden
 
 A Garden is the persistent world. It can exist before, during, and after a live
@@ -135,7 +142,7 @@ Every media contribution should eventually carry consent and usage metadata:
 
 Use one persistent thread or agent per major living-system domain:
 
-- OCTO Core Agent: coherence, philosophy, architecture
+- OCTO Core Agent: coherence, philosophy, architecture. Commercial coherence is `docs/octo-business-strategy-2027.md`.
 - Garden Agent: public Song Garden product, worlds, contributions, persistence
 - Roots Agent: participation methodology and musical intelligence
 - Bloom Agent: event/gameday activation design

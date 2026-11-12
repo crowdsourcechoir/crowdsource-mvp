@@ -1,0 +1,33 @@
+---
+description: 2027–2028 commercial strategy — commissioned experiences, owned shows, and the decision filter
+alwaysApply: true
+---
+
+# OCTO business strategy (2027–2028)
+
+Commercial coherence lives in `docs/octo-business-strategy-2027.md`. Read it before planning sales, shows, gardens, pitches, or new product surface.
+
+## Company
+
+Crowdsource Choir is a participatory entertainment company. Scale through distribution partners, repeatable formats, sponsorships, and long-term relationships. More founder-led performances are not the scale path.
+
+## Two models
+
+- Premium commissioned experiences: Anthem (cash engine), Fan Chant, Song Garden, and Song Garden Journeys only from 2028.
+- Owned entertainment: Rave Choir, Holiday Rave Choir, A Thriller Night, and other themed shows only when a partnership justifies them.
+
+They share methods, technology, musicians, production, participation craft, and partners.
+
+## Decision filter
+
+Every opportunity needs creative potential, financial viability, and partnership quality. Prefer all three. Do not routinely trade away viability or partnership quality for creative excitement.
+
+## Do not drift
+
+- Song Garden is a commissioned activation that blooms into other art. It is not a content bucket, and self-service gardens are not a current commercial priority.
+- Song Garden Journeys wait until 2028. Do not pull current build time into retreats.
+- Fan Chant follows funded team or league opportunities. Do not finance a speculative sports property.
+- No speculative ticketed production without funding, promotion, and a break-even plan. Tickets are upside, not the financing plan.
+- Shared infrastructure should raise capacity without turning OCTO into a large agency.
+
+The October 2026 queue mix in `lib/sales/strategy/playbook.ts` still directs daily sales workload. This strategy is the frame those numbers serve.
