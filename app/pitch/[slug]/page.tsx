@@ -9,6 +9,7 @@ import PitchDeck from "@/app/sobeca-song-garden/PitchDeck";
 import { pitchGateCookie } from "@/lib/pitches/gate";
 import { pitchDescription, SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { loadPitch } from "@/lib/pitches/service";
+import { pitchVisitorView } from "@/lib/pitches/visitor";
 import { signedInOwner } from "@/lib/operators/current";
 
 export const dynamic = "force-dynamic";
@@ -37,15 +38,19 @@ export default async function PitchPage({ params }: PageProps) {
   if (pitch.href !== `/pitch/${params.slug}`) redirect(pitch.href);
 
   const owner = await signedInOwner();
-  if (!pitch.live && !owner) return <PitchUnavailable title={pitch.title} />;
-
+  let unlocked = false;
   if (pitch.passwordHash) {
     const cookie = pitchGateCookie({ id: pitch.id, href: pitch.href, passwordHash: pitch.passwordHash });
-    const token = (await cookies()).get(cookie.name)?.value;
-    if (token !== cookie.value) {
-      return <PitchPasswordGate title={pitch.title} pitchId={pitch.id} />;
-    }
+    unlocked = (await cookies()).get(cookie.name)?.value === cookie.value;
   }
+  const view = pitchVisitorView({
+    live: pitch.live,
+    hasPassword: Boolean(pitch.passwordHash),
+    owner,
+    unlocked,
+  });
+  if (view === "password") return <PitchPasswordGate title={pitch.title} pitchId={pitch.id} />;
+  if (view === "unavailable") return <PitchUnavailable title={pitch.title} />;
 
   if (pitch.id === SOBECA_PITCH_ID) {
     return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
