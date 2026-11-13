@@ -1,6 +1,7 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { CONFERENCE_BELLEVUE_NAME, CONFERENCE_BELLEVUE_PROMPT, conferenceBellevueSlides } from "@/lib/pitches/conference-bellevue";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
+import { NAFSA_LA_NAME, NAFSA_LA_PROMPT, nafsaLaSlides } from "@/lib/pitches/nafsa-la";
 import { NAFSA_NAME, NAFSA_PROMPT, nafsaSlides } from "@/lib/pitches/nafsa";
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
@@ -21,6 +22,7 @@ export const STRATEGY_ID = "strategy";
 export const VISIT_BELLEVUE_ID = "visit-bellevue";
 export const CONFERENCE_BELLEVUE_ID = "conference-pitch-bellevue";
 export const NAFSA_ID = "nafsa-anthem";
+export const NAFSA_LA_ID = "nafsa-la-2027";
 
 export const SOBECA_PITCH_PROMPT =
   "Public pitch for the SoBECA Song Garden: a living participatory arts initiative for the arts district, and an invitation to create it together.";
@@ -32,6 +34,7 @@ const MAX_NAME = 80;
 
 /** Untouched built-in decks stay in the order they were added. A save moves that deck to the top. */
 const BUILTIN_UPDATED_AT: Record<string, string> = {
+  [NAFSA_LA_ID]: "2026-11-13T01:45:00.000Z",
   [NAFSA_ID]: "2026-11-13T01:30:00.000Z",
   [CONFERENCE_BELLEVUE_ID]: "2026-11-12T20:00:00.000Z",
   [VISIT_BELLEVUE_ID]: "2026-11-08T20:00:00.000Z",
@@ -579,7 +582,8 @@ export function normalizeWebPitches(raw: unknown): WebPitchesState {
         id !== STRATEGY_ID &&
         id !== VISIT_BELLEVUE_ID &&
         id !== CONFERENCE_BELLEVUE_ID &&
-        id !== NAFSA_ID
+        id !== NAFSA_ID &&
+        id !== NAFSA_LA_ID
       ) {
         continue;
       }
@@ -631,6 +635,10 @@ function takenSlugs(state: WebPitchesState, exceptId?: string): Set<string> {
     taken.add(NAFSA_ID);
     taken.add(storedSlug(state, NAFSA_ID, NAFSA_ID));
   }
+  if (exceptId !== NAFSA_LA_ID) {
+    taken.add(NAFSA_LA_ID);
+    taken.add(storedSlug(state, NAFSA_LA_ID, NAFSA_LA_ID));
+  }
   for (const pitch of state.custom) {
     if (pitch.id !== exceptId) taken.add(pitch.slug);
   }
@@ -666,6 +674,7 @@ export function listLoadedPitches(
   const bellevueOverride = state.overrides[VISIT_BELLEVUE_ID];
   const conferenceOverride = state.overrides[CONFERENCE_BELLEVUE_ID];
   const nafsaOverride = state.overrides[NAFSA_ID];
+  const nafsaLaOverride = state.overrides[NAFSA_LA_ID];
   const meetingSlides =
     meetingOverride?.slides && meetingOverride.slides.length > 0
       ? cloneSlides(meetingOverride.slides)
@@ -680,6 +689,7 @@ export function listLoadedPitches(
   const bellevueSlug = storedSlug(state, VISIT_BELLEVUE_ID, VISIT_BELLEVUE_ID);
   const conferenceSlug = storedSlug(state, CONFERENCE_BELLEVUE_ID, CONFERENCE_BELLEVUE_ID);
   const nafsaSlug = storedSlug(state, NAFSA_ID, NAFSA_ID);
+  const nafsaLaSlug = storedSlug(state, NAFSA_LA_ID, NAFSA_LA_ID);
   const bellevueDeck =
     bellevueOverride?.slides && bellevueOverride.slides.length > 0
       ? cloneSlides(bellevueOverride.slides)
@@ -690,6 +700,10 @@ export function listLoadedPitches(
       : cloneSlides(conferenceBellevueSlides);
   const nafsaDeck =
     nafsaOverride?.slides && nafsaOverride.slides.length > 0 ? cloneSlides(nafsaOverride.slides) : cloneSlides(nafsaSlides);
+  const nafsaLaDeck =
+    nafsaLaOverride?.slides && nafsaLaOverride.slides.length > 0
+      ? cloneSlides(nafsaLaOverride.slides)
+      : cloneSlides(nafsaLaSlides);
   const previousNafsa = state.custom.find((pitch) => pitch.slug === NAFSA_ID);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
@@ -784,9 +798,23 @@ export function listLoadedPitches(
     updatedAt: nafsaFiled.updatedAt,
     slides: nafsaDeck,
   };
+  const nafsaLa: LoadedPitch = {
+    id: NAFSA_LA_ID,
+    slug: nafsaLaSlug,
+    name: nafsaLaOverride?.name || NAFSA_LA_NAME,
+    title: pitchTitle(nafsaLaDeck, NAFSA_LA_NAME),
+    prompt: nafsaLaOverride?.prompt || NAFSA_LA_PROMPT,
+    live: nafsaLaOverride?.live !== false,
+    passwordHash: hashOrNull(nafsaLaOverride?.passwordHash),
+    href: hrefForPitch(NAFSA_LA_ID, nafsaLaSlug),
+    builtin: true,
+    organizationId: organizationIdFrom(nafsaLaOverride?.organizationId) ?? null,
+    ...libraryFields(NAFSA_LA_ID, nafsaLaOverride),
+    slides: nafsaLaDeck,
+  };
   const retiredNafsa = new Set([NAFSA_ID, nafsaSlug]);
   const custom = state.custom.filter((pitch) => !retiredNafsa.has(pitch.slug)).map(presentCustom);
-  return [sobecaPitch, meeting, strategy, bellevue, conference, nafsa, ...custom].sort((a, b) => {
+  return [sobecaPitch, meeting, strategy, bellevue, conference, nafsa, nafsaLa, ...custom].sort((a, b) => {
     if (a.updatedAt !== b.updatedAt) return a.updatedAt < b.updatedAt ? 1 : -1;
     return a.name.localeCompare(b.name);
   });
@@ -934,7 +962,9 @@ export function applyPitchPatch(
               ? cloneSlides(conferenceBellevueSlides)
               : current.id === NAFSA_ID
                 ? cloneSlides(nafsaSlides)
-                : current.builtin
+                : current.id === NAFSA_LA_ID
+                  ? cloneSlides(nafsaLaSlides)
+                  : current.builtin
                   ? current.slides
                   : seedSlides(name, prompt);
     if (current.id === SOBECA_PITCH_ID) slides = current.slides;
@@ -1004,7 +1034,8 @@ export function applyPitchPatch(
     current.id === STRATEGY_ID ||
     current.id === VISIT_BELLEVUE_ID ||
     current.id === CONFERENCE_BELLEVUE_ID ||
-    current.id === NAFSA_ID
+    current.id === NAFSA_ID ||
+    current.id === NAFSA_LA_ID
   ) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { slides as sobecaSlides } from "@/app/sobeca-song-garden/content";
 import { conferenceBellevueSlides } from "./conference-bellevue";
 import { initialMeetingSlides } from "./initial-meeting";
+import { nafsaLaSlides } from "./nafsa-la";
 import { nafsaSlides } from "./nafsa";
 import {
   acceptSlides,
@@ -13,6 +14,7 @@ import {
   findLoadedPitch,
   INITIAL_MEETING_ID,
   NAFSA_ID,
+  NAFSA_LA_ID,
   listLoadedPitches,
   mergeSlides,
   normalizeWebPitches,
@@ -76,6 +78,7 @@ assert.equal(reserved.pitch.passwordHash, "salt:hash");
 
 const listed = listLoadedPitches(empty, sobeca);
 assert.deepEqual(listed.map((pitch) => pitch.id), [
+  NAFSA_LA_ID,
   NAFSA_ID,
   CONFERENCE_BELLEVUE_ID,
   "visit-bellevue",
@@ -185,7 +188,7 @@ assert.equal("passwordHash" in toAdmin(meetingRow!), false);
 assert.equal(findLoadedPitch(assigned.state, INITIAL_MEETING_ID, sobeca)?.updatedAt, "2026-11-05T03:00:00.000Z");
 const afterAssign = listLoadedPitches(assigned.state, sobeca).map((pitch) => pitch.id);
 assert.ok(afterAssign.indexOf(INITIAL_MEETING_ID) < afterAssign.indexOf("strategy"));
-assert.equal(afterAssign[0], NAFSA_ID);
+assert.equal(afterAssign[0], NAFSA_LA_ID);
 
 const filed = applyPitchPatch(
   empty,
@@ -433,6 +436,31 @@ assert.equal(nafsaRestored?.slides.length, nafsaSlides.length);
 const nafsaCopy = nafsaRestored?.slides.flatMap((slide) => slide.blocks).map((block) => ("text" in block ? block.text : "")).join("\n");
 assert.match(nafsaCopy ?? "", /What future are we ready to create together\?/);
 assert.match(nafsaCopy ?? "", /Make the moment undeniable\./);
+
+const nafsaLa = findLoadedPitch(empty, NAFSA_LA_ID, sobeca);
+assert.equal(nafsaLa?.name, "NAFSA LA 2027");
+assert.equal(nafsaLa?.href, "/pitch/nafsa-la-2027");
+assert.equal(nafsaLa?.live, true);
+assert.equal(nafsaLa?.slides.length, 4);
+assert.equal(nafsaLa?.slides.length, nafsaLaSlides.length);
+const nafsaLaCopy = nafsaLa?.slides.flatMap((slide) => slide.blocks).map((block) => ("text" in block ? block.text : block.type === "list" ? block.items.join(" ") : "")).join("\n");
+assert.match(nafsaLaCopy ?? "", /\$15,000–\$30,000/);
+assert.match(nafsaLaCopy ?? "", /sing@crowdsourcechoir\.com/);
+assert.match(nafsaLaCopy ?? "", /NAFSA-branded digital Song Garden/);
+const nafsaLaEdited = applyPitchPatch(
+  empty,
+  nafsaLa!,
+  { slides: nafsaLa!.slides.slice(0, 1), prompt: "A shorter NAFSA LA brief." },
+  "2026-11-13T05:00:00.000Z"
+);
+assert.ok(!("error" in nafsaLaEdited));
+if ("error" in nafsaLaEdited) throw new Error("nafsa la edit failed");
+assert.equal(findLoadedPitch(nafsaLaEdited.state, NAFSA_LA_ID, sobeca)?.slides.length, 1);
+const nafsaLaReset = applyPitchPatch(nafsaLaEdited.state, nafsaLaEdited.pitch, { reset: true }, "2026-11-13T05:30:00.000Z");
+assert.ok(!("error" in nafsaLaReset));
+if ("error" in nafsaLaReset) throw new Error("nafsa la reset failed");
+assert.equal(nafsaLaReset.state.overrides[NAFSA_LA_ID]?.slides, null);
+assert.equal(findLoadedPitch(nafsaLaReset.state, NAFSA_LA_ID, sobeca)?.slides.length, nafsaLaSlides.length);
 
 const pacedDeck = acceptSlides([
   {
