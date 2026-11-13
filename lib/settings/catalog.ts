@@ -338,6 +338,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Add and delete text, Heading 2 points, indented Heading 3 bullets, lists, and table rows",
           "Edit words, photos, and copy color",
           "Upload a looping background video for a slide",
+          "Use an uploaded video from the library",
           "Add a salmon color overlay to a slide photo",
           "Set how transparent that overlay is",
           "Choose the overlay color",

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
+import { uploadedLibraryVideos, type LibraryVideo } from "@/lib/pitches/video-library";
 import { plainPitchText, toggleBoldMarkup } from "@/lib/pitches/rich-text";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { pitchDraftKey, shouldApplySavedDraft } from "@/lib/pitches/autosave";
@@ -275,6 +276,8 @@ export default function PitchEditor({ id }: { id: string }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
   const [category, setCategory] = useState("");
+  const [videoPitches, setVideoPitches] = useState<Array<{ name: string; slides: PitchSlide[] }>>([]);
+  const [libraryVideos, setLibraryVideos] = useState<LibraryVideo[]>([]);
   const savedCategory = useRef("");
   const slidesRef = useRef<PitchSlide[] | null>(null);
   const nameRef = useRef("");
@@ -383,6 +386,44 @@ export default function PitchEditor({ id }: { id: string }) {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pitches", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || cancelled) return;
+        const pitches = Array.isArray(data.pitches) ? data.pitches : [];
+        setVideoPitches(
+          pitches
+            .filter((item: { id?: string }) => item.id !== id)
+            .map((item: { name?: string; slides?: PitchSlide[] }) => ({
+              name: item.name ?? "",
+              slides: Array.isArray(item.slides) ? item.slides : [],
+            }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setVideoPitches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    setLibraryVideos([]);
+  }, [id]);
+
+  useEffect(() => {
+    if (!slides || pitch?.id !== id) return;
+    const next = uploadedLibraryVideos([{ name, slides }, ...videoPitches]);
+    setLibraryVideos((current) => {
+      const seen = new Set(current.map((video) => video.src));
+      const added = next.filter((video) => !seen.has(video.src));
+      return added.length ? [...current, ...added] : current;
+    });
+  }, [slides, name, videoPitches, pitch, id]);
 
   useEffect(() => {
     if (!slides || savedKey.current === null) return;
@@ -1031,6 +1072,41 @@ export default function PitchEditor({ id }: { id: string }) {
                   );
                 })}
               </div>
+              {libraryVideos.length > 0 ? (
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  {libraryVideos.map((video) => {
+                    const selected = slide.video === video.src;
+                    return (
+                      <button
+                        key={video.src}
+                        type="button"
+                        aria-label={`Use ${video.label}`}
+                        title={video.label}
+                        aria-pressed={selected}
+                        className="relative h-16 w-24 shrink-0 overflow-hidden border-2"
+                        style={{ borderColor: selected ? "var(--csc-accent)" : "transparent" }}
+                        onClick={() =>
+                          patchSlide(slide.id, (current) => ({
+                            ...current,
+                            video: video.src,
+                          }))
+                        }
+                      >
+                        <video
+                          src={video.src}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="pointer-events-none h-full w-full object-cover"
+                        />
+                        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] text-white">
+                          Video
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
 
               <div className="mt-2">
                 {slide.blocks.map((block, blockIndex) => {
