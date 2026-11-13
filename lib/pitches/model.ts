@@ -1,6 +1,7 @@
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { CONFERENCE_BELLEVUE_NAME, CONFERENCE_BELLEVUE_PROMPT, conferenceBellevueSlides } from "@/lib/pitches/conference-bellevue";
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
+import { NAFSA_NAME, NAFSA_PROMPT, nafsaSlides } from "@/lib/pitches/nafsa";
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
 import { pitchCategoryFrom, pitchWorkFrom } from "@/lib/pitches/library";
@@ -19,6 +20,7 @@ export const INITIAL_MEETING_ID = "initial-meeting";
 export const STRATEGY_ID = "strategy";
 export const VISIT_BELLEVUE_ID = "visit-bellevue";
 export const CONFERENCE_BELLEVUE_ID = "conference-pitch-bellevue";
+export const NAFSA_ID = "nafsa-anthem";
 
 export const SOBECA_PITCH_PROMPT =
   "Public pitch for the SoBECA Song Garden: a living participatory arts initiative for the arts district, and an invitation to create it together.";
@@ -30,6 +32,7 @@ const MAX_NAME = 80;
 
 /** Untouched built-in decks stay in the order they were added. A save moves that deck to the top. */
 const BUILTIN_UPDATED_AT: Record<string, string> = {
+  [NAFSA_ID]: "2026-11-13T01:30:00.000Z",
   [CONFERENCE_BELLEVUE_ID]: "2026-11-12T20:00:00.000Z",
   [VISIT_BELLEVUE_ID]: "2026-11-08T20:00:00.000Z",
   [STRATEGY_ID]: "2026-10-15T20:00:00.000Z",
@@ -571,7 +574,8 @@ export function normalizeWebPitches(raw: unknown): WebPitchesState {
         id !== INITIAL_MEETING_ID &&
         id !== STRATEGY_ID &&
         id !== VISIT_BELLEVUE_ID &&
-        id !== CONFERENCE_BELLEVUE_ID
+        id !== CONFERENCE_BELLEVUE_ID &&
+        id !== NAFSA_ID
       ) {
         continue;
       }
@@ -619,6 +623,10 @@ function takenSlugs(state: WebPitchesState, exceptId?: string): Set<string> {
     taken.add(CONFERENCE_BELLEVUE_ID);
     taken.add(storedSlug(state, CONFERENCE_BELLEVUE_ID, CONFERENCE_BELLEVUE_ID));
   }
+  if (exceptId !== NAFSA_ID) {
+    taken.add(NAFSA_ID);
+    taken.add(storedSlug(state, NAFSA_ID, NAFSA_ID));
+  }
   for (const pitch of state.custom) {
     if (pitch.id !== exceptId) taken.add(pitch.slug);
   }
@@ -653,6 +661,7 @@ export function listLoadedPitches(
   const strategyOverride = state.overrides[STRATEGY_ID];
   const bellevueOverride = state.overrides[VISIT_BELLEVUE_ID];
   const conferenceOverride = state.overrides[CONFERENCE_BELLEVUE_ID];
+  const nafsaOverride = state.overrides[NAFSA_ID];
   const meetingSlides =
     meetingOverride?.slides && meetingOverride.slides.length > 0
       ? cloneSlides(meetingOverride.slides)
@@ -666,6 +675,7 @@ export function listLoadedPitches(
   const strategySlug = storedSlug(state, STRATEGY_ID, STRATEGY_ID);
   const bellevueSlug = storedSlug(state, VISIT_BELLEVUE_ID, VISIT_BELLEVUE_ID);
   const conferenceSlug = storedSlug(state, CONFERENCE_BELLEVUE_ID, CONFERENCE_BELLEVUE_ID);
+  const nafsaSlug = storedSlug(state, NAFSA_ID, NAFSA_ID);
   const bellevueDeck =
     bellevueOverride?.slides && bellevueOverride.slides.length > 0
       ? cloneSlides(bellevueOverride.slides)
@@ -674,6 +684,9 @@ export function listLoadedPitches(
     conferenceOverride?.slides && conferenceOverride.slides.length > 0
       ? cloneSlides(conferenceOverride.slides)
       : cloneSlides(conferenceBellevueSlides);
+  const nafsaDeck =
+    nafsaOverride?.slides && nafsaOverride.slides.length > 0 ? cloneSlides(nafsaOverride.slides) : cloneSlides(nafsaSlides);
+  const previousNafsa = state.custom.find((pitch) => pitch.slug === NAFSA_ID);
   const sobecaPitch: LoadedPitch = {
     id: SOBECA_PITCH_ID,
     slug: sobecaSlug,
@@ -744,8 +757,32 @@ export function listLoadedPitches(
     ...libraryFields(CONFERENCE_BELLEVUE_ID, conferenceOverride),
     slides: conferenceDeck,
   };
-  const custom = state.custom.map(presentCustom);
-  return [sobecaPitch, meeting, strategy, bellevue, conference, ...custom].sort((a, b) => {
+  const nafsaFiled = libraryFields(NAFSA_ID, nafsaOverride);
+  const nafsaKeeps = (key: "passwordHash" | "category" | "workstream" | "organizationId") =>
+    Boolean(nafsaOverride && Object.prototype.hasOwnProperty.call(nafsaOverride, key));
+  const nafsa: LoadedPitch = {
+    id: NAFSA_ID,
+    slug: nafsaSlug,
+    name: nafsaOverride?.name || NAFSA_NAME,
+    title: pitchTitle(nafsaDeck, NAFSA_NAME),
+    prompt: nafsaOverride?.prompt || NAFSA_PROMPT,
+    live: typeof nafsaOverride?.live === "boolean" ? nafsaOverride.live : previousNafsa ? previousNafsa.live : true,
+    passwordHash: nafsaKeeps("passwordHash")
+      ? hashOrNull(nafsaOverride?.passwordHash)
+      : previousNafsa?.passwordHash ?? null,
+    href: hrefForPitch(NAFSA_ID, nafsaSlug),
+    builtin: true,
+    organizationId: nafsaKeeps("organizationId")
+      ? organizationIdFrom(nafsaOverride?.organizationId) ?? null
+      : previousNafsa?.organizationId ?? null,
+    category: nafsaKeeps("category") ? nafsaFiled.category : previousNafsa?.category ?? null,
+    workstream: nafsaKeeps("workstream") ? nafsaFiled.workstream : previousNafsa?.workstream ?? null,
+    updatedAt: nafsaFiled.updatedAt,
+    slides: nafsaDeck,
+  };
+  const retiredNafsa = new Set([NAFSA_ID, nafsaSlug]);
+  const custom = state.custom.filter((pitch) => !retiredNafsa.has(pitch.slug)).map(presentCustom);
+  return [sobecaPitch, meeting, strategy, bellevue, conference, nafsa, ...custom].sort((a, b) => {
     if (a.updatedAt !== b.updatedAt) return a.updatedAt < b.updatedAt ? 1 : -1;
     return a.name.localeCompare(b.name);
   });
@@ -891,9 +928,11 @@ export function applyPitchPatch(
             ? cloneSlides(visitBellevueSlides)
             : current.id === CONFERENCE_BELLEVUE_ID
               ? cloneSlides(conferenceBellevueSlides)
-              : current.builtin
-                ? current.slides
-                : seedSlides(name, prompt);
+              : current.id === NAFSA_ID
+                ? cloneSlides(nafsaSlides)
+                : current.builtin
+                  ? current.slides
+                  : seedSlides(name, prompt);
     if (current.id === SOBECA_PITCH_ID) slides = current.slides;
   } else if (patch.slides !== undefined) {
     if (current.id === SOBECA_PITCH_ID) {
@@ -960,7 +999,8 @@ export function applyPitchPatch(
     current.id === INITIAL_MEETING_ID ||
     current.id === STRATEGY_ID ||
     current.id === VISIT_BELLEVUE_ID ||
-    current.id === CONFERENCE_BELLEVUE_ID
+    current.id === CONFERENCE_BELLEVUE_ID ||
+    current.id === NAFSA_ID
   ) {
     if (patch.reset) override.slides = null;
     else if (patch.slides !== undefined) override.slides = slides;
