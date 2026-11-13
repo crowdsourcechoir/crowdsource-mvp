@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { PitchText } from "@/components/pitch/PitchText";
 import { SlideBackground } from "@/components/pitch/SlideBackground";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { plainPitchText } from "@/lib/pitches/rich-text";
-import { evenFitScale } from "@/lib/pitches/fit-copy";
+import { columnSplitIndex, evenFitScale, shouldSplitCopy } from "@/lib/pitches/fit-copy";
 import {
   exitDeckFullscreen,
   fullscreenAvailable,
@@ -200,19 +200,59 @@ function Block({
   );
 }
 
-function FitCopy({ children, watch, color }: { children: ReactNode; watch: string; color?: string }) {
+function FitCopy({
+  slide,
+  display,
+  arrived,
+  color,
+  onSplit,
+}: {
+  slide: PitchSlide;
+  display: string;
+  arrived: number | null;
+  color?: string;
+  onSplit: (split: boolean) => void;
+}) {
   const frameRef = useRef<HTMLDivElement>(null);
+  const stackRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const onSplitRef = useRef(onSplit);
+  onSplitRef.current = onSplit;
+  const [columns, setColumns] = useState<number | null>(null);
+  const slideKey = `${slide.id}:${slide.blocks
+    .map((block) => {
+      if ("text" in block) return `${block.type}${block.text.length}`;
+      if (block.type === "list") return `list${block.items.join("").length}`;
+      if (block.type === "table") return `table${block.rows.length}`;
+      return block.type;
+    })
+    .join(".")}`;
 
   useLayoutEffect(() => {
     const frame = frameRef.current;
+    const stack = stackRef.current;
+    const measure = measureRef.current;
     const box = boxRef.current;
-    if (!frame || !box) return;
+    if (!frame || !stack || !measure || !box) return;
 
     const apply = () => {
-      if (!frame.isConnected || !box.isConnected) return;
-      box.style.transform = "none";
-      const scale = evenFitScale(frame.clientWidth, frame.clientHeight, box.scrollWidth, box.scrollHeight);
+      if (!frame.isConnected || !stack.isConnected || !measure.isConnected || !box.isConnected) return;
+      const stackScale = evenFitScale(frame.clientWidth, frame.clientHeight, stack.scrollWidth, stack.offsetHeight);
+      const wantSplit = shouldSplitCopy(stackScale, frame.clientWidth);
+      const nodes = Array.from(stack.querySelectorAll<HTMLElement>("[data-copy-block]"));
+      const cut = columnSplitIndex(
+        nodes.map((node) => node.offsetHeight),
+        nodes.map((node) => node.dataset.copyType ?? "")
+      );
+      const next = wantSplit && cut < nodes.length ? cut : null;
+      if (columns !== next) {
+        setColumns(next);
+        return;
+      }
+      onSplitRef.current(columns !== null);
+      const fitted = columns === null ? box : measure;
+      const scale = evenFitScale(frame.clientWidth, frame.clientHeight, fitted.scrollWidth, fitted.offsetHeight);
       box.style.transformOrigin = "top left";
       box.style.transform = scale < 0.999 ? `scale(${scale})` : "none";
     };
@@ -225,12 +265,20 @@ function FitCopy({ children, watch, color }: { children: ReactNode; watch: strin
       observer.disconnect();
       void fonts;
     };
-  }, [watch]);
+  }, [slideKey, columns, arrived]);
 
   return (
-    <div ref={frameRef} data-slide-copy className="min-h-0 min-w-0 flex-1 overflow-hidden" style={{ color }}>
+    <div ref={frameRef} data-slide-copy data-copy-layout={columns === null ? "stack" : "split"} className="relative min-h-0 min-w-0 flex-1 overflow-hidden" style={{ color }}>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-0 overflow-hidden">
+        <div ref={stackRef} className="w-full overflow-hidden">
+          <SlideCopy slide={slide} display={display} arrived={null} columns={null} measure />
+        </div>
+        <div ref={measureRef} className="w-full overflow-hidden">
+          <SlideCopy slide={slide} display={display} arrived={null} columns={columns} measure />
+        </div>
+      </div>
       <div ref={boxRef} className="w-full">
-        {children}
+        <SlideCopy slide={slide} display={display} arrived={arrived} columns={columns} />
       </div>
     </div>
   );
@@ -249,14 +297,26 @@ function steppedBlock(block: CopyBlock, blockIndex: number, visible: Set<string>
   return visible.has(String(blockIndex)) ? block : null;
 }
 
+function openingCount(blocks: CopyBlock[]): number {
+  let index = 0;
+  while (blocks[index]?.type === "kicker") index += 1;
+  if (blocks[index]?.type === "title" || blocks[index]?.type === "heading") index += 1;
+  return index;
+}
+
 function SlideCopy({
   slide,
   display,
   arrived,
+  columns,
+  measure = false,
 }: {
   slide: PitchSlide;
   display: string;
   arrived: number | null;
+  /** Body blocks kept in the left column. Null keeps the poster stack. */
+  columns: number | null;
+  measure?: boolean;
 }) {
   const visible =
     arrived === null
@@ -272,20 +332,53 @@ function SlideCopy({
                   : String(step.blockIndex),
             ),
         );
-  const pinned = pinnedLine(slide);
+  const pinned = pinnedLine(slide)?.index;
+  const flow = slide.blocks.map((_, index) => index).filter((index) => index !== pinned);
+  const opening = openingCount(flow.map((index) => slide.blocks[index]));
+  const title = flow.slice(0, opening);
+  const body = flow.slice(opening);
+
+  function renderBlock(blockIndex: number, previous: CopyBlock["type"] | undefined, bodyIndex: number | null) {
+    const shown = steppedBlock(slide.blocks[blockIndex], blockIndex, visible);
+    if (!shown) return null;
+    return (
+      <div
+        key={`${slide.id}-${blockIndex}`}
+        className={measure ? undefined : "slide-line"}
+        style={measure ? undefined : { animationDelay: `${140 + blockIndex * 90}ms` }}
+        data-copy-block={bodyIndex === null ? undefined : ""}
+        data-copy-type={bodyIndex === null ? undefined : shown.type}
+      >
+        <Block block={shown} display={display} previous={previous} />
+      </div>
+    );
+  }
+
+  function renderRun(indexes: number[], firstPrevious: CopyBlock["type"] | undefined, measured: boolean) {
+    return indexes.map((blockIndex, index) =>
+      renderBlock(blockIndex, index === 0 ? firstPrevious : slide.blocks[indexes[index - 1]]?.type, measured ? index : null)
+    );
+  }
+
+  const titlePrevious = undefined;
+  if (columns === null) {
+    return (
+      <div>
+        {renderRun(title, titlePrevious, false)}
+        {renderRun(body, slide.blocks[title[title.length - 1]]?.type, measure)}
+      </div>
+    );
+  }
+
+  const left = body.slice(0, columns);
+  const right = body.slice(columns);
   return (
     <div>
-      {slide.blocks.map((block, blockIndex) => {
-        if (pinned && blockIndex === pinned.index) return null;
-        const shown = steppedBlock(block, blockIndex, visible);
-        if (!shown) return null;
-        const previous = slide.blocks[blockIndex - 1]?.type;
-        return (
-          <div key={`${slide.id}-${blockIndex}`} className="slide-line" style={{ animationDelay: `${140 + blockIndex * 90}ms` }}>
-            <Block block={shown} display={display} previous={previous} />
-          </div>
-        );
-      })}
+      {renderRun(title, titlePrevious, false)}
+      <div className="mt-6 grid grid-cols-2 items-start gap-x-10 sm:gap-x-14">
+        <div>{renderRun(left, slide.blocks[title[title.length - 1]]?.type, measure)}</div>
+        <div>{renderRun(right, undefined, false)}</div>
+      </div>
     </div>
   );
 }
@@ -464,6 +557,12 @@ export default function PitchSlideshow({
   }, [go]);
 
   const slide = slides[index];
+  const [copySplit, setCopySplit] = useState(false);
+  const [splitSlideId, setSplitSlideId] = useState(slide?.id ?? "");
+  if (slide && splitSlideId !== slide.id) {
+    setSplitSlideId(slide.id);
+    setCopySplit(false);
+  }
   if (!slide) return null;
   const pinned = pinnedLine(slide);
   const punchText = punchCopy(slide.blocks, slide.bottom)?.text ?? null;
@@ -580,7 +679,11 @@ export default function PitchSlideshow({
         className="slide-wash absolute inset-0 mix-blend-multiply"
         style={{ backgroundColor: tint, ["--wash" as string]: wash, opacity: wash }}
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/35 to-transparent" />
+      <div
+        className={`absolute inset-0 bg-gradient-to-r ${
+          copySplit ? "from-black/90 via-black/72 to-black/55" : "from-black/80 via-black/35 to-transparent"
+        }`}
+      />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
@@ -671,9 +774,13 @@ export default function PitchSlideshow({
             <p className="ml-1 text-[11px] uppercase tracking-[0.28em] text-white/80 sm:ml-2">{label}</p>
           </div>
         </div>
-        <FitCopy watch={`${slide.id}:${revealed}:${arrived}`} color={slide.copyColor || "#FFFFFF"}>
-          <SlideCopy slide={slide} display={displayClass} arrived={slide.reveal === "steps" ? arrived : null} />
-        </FitCopy>
+        <FitCopy
+          slide={slide}
+          display={displayClass}
+          arrived={slide.reveal === "steps" ? arrived : null}
+          color={slide.copyColor || "#FFFFFF"}
+          onSplit={(split) => setCopySplit((current) => (current === split ? current : split))}
+        />
       </div>
 
       {pinned || (revealed && punch) ? (
