@@ -33,5 +33,5 @@ export function pitchCategoryNames(categories: Array<string | null>): string[] {
     const key = label.toLocaleLowerCase();
     if (!seen.has(key)) seen.set(key, label);
   }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
