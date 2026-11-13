@@ -9,7 +9,7 @@ export default function PitchesSettingsPage() {
   return (
     <PitchesLibrary
       title={card?.title ?? "Pitches"}
-      description="Find a pitch, duplicate one, or create a new one from a prompt. Each pitch is a live page, and asks for a password when you set one."
+      description="Search the library, file pitches by category, or start a new one. The newest save stays at the top."
     />
   );
 }
