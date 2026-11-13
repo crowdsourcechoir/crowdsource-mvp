@@ -481,10 +481,12 @@ const withVideo = acceptSlides([
     image: meetingNow.slides[0]!.image,
     imageAlt: meetingNow.slides[0]!.imageAlt,
     video: "https://cdn.example/pitch-loop.mp4",
+    videoLabel: "  Your love keeps lifting me higher  ",
     blocks: [{ type: "heading", text: "One" }],
   },
 ]);
 assert.equal(withVideo?.[0]?.video, "https://cdn.example/pitch-loop.mp4");
+assert.equal(withVideo?.[0]?.videoLabel, "Your love keeps lifting me higher");
 const blankVideo = acceptSlides([
   {
     id: "title",
@@ -495,6 +497,7 @@ const blankVideo = acceptSlides([
   },
 ]);
 assert.equal(blankVideo?.[0]?.video, undefined);
+assert.equal(blankVideo?.[0]?.videoLabel, undefined);
 const badVideo = acceptSlides([
   {
     id: "title",

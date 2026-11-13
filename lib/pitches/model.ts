@@ -311,10 +311,11 @@ function sanitizeSlides(value: unknown): PitchSlide[] | null {
   const slides = value.filter(isPitchSlide).map((slide) => {
     const grade = salmonOverlay(slide.photoOverlay);
     const video = safeVideo(slide.video);
+    const videoLabel = video ? clip(slide.videoLabel, 120) ?? undefined : undefined;
     return {
       ...slide,
       image: safeImage(slide.image, SEED_PHOTO),
-      ...(video ? { video } : { video: undefined }),
+      ...(video ? { video, ...(videoLabel ? { videoLabel } : { videoLabel: undefined }) } : { video: undefined, videoLabel: undefined }),
       wash: washFrom(slide.wash),
       copyColor: typeof slide.copyColor === "string" ? safeCopyColor(slide.copyColor) : undefined,
       reveal: revealMode(slide.reveal),
@@ -406,11 +407,14 @@ export function mergeSlides(base: PitchSlide[], incoming: unknown): PitchSlide[]
     const video = Object.prototype.hasOwnProperty.call(match, "video")
       ? safeVideo(match.video)
       : slide.video;
+    const videoLabel = video
+      ? clip(match.videoLabel, 120) ?? (Object.prototype.hasOwnProperty.call(match, "videoLabel") ? undefined : slide.videoLabel)
+      : undefined;
     return {
       ...slide,
       image: safeImage(match.image, slide.image),
       imageAlt: typeof match.imageAlt === "string" && match.imageAlt.trim() ? match.imageAlt.trim().slice(0, 300) : slide.imageAlt,
-      ...(video ? { video } : { video: undefined }),
+      ...(video ? { video, ...(videoLabel ? { videoLabel } : { videoLabel: undefined }) } : { video: undefined, videoLabel: undefined }),
       copyColor: typeof match.copyColor === "string" ? safeCopyColor(match.copyColor) : slide.copyColor,
       bottom: bottomCopy(match.bottom),
       wash: washFrom(match.wash, slide.wash),

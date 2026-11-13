@@ -19,6 +19,8 @@ export type PitchSlide = {
   blocks: CopyBlock[];
   /** Optional looping background video. The photo stays as the poster and editor thumb. */
   video?: string;
+  /** Original filename, shown in the pitch library. */
+  videoLabel?: string;
   /** Body copy color for this section. Labels and headers stay lime. */
   copyColor?: string;
   /** When set, a click in the presentation brings in the next line. Omitted slides arrive together. */

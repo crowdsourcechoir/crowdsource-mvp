@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
+import { uploadedLibraryVideos, videoTitleFromFilename, type LibraryVideo } from "@/lib/pitches/video-library";
 import { plainPitchText, toggleBoldMarkup } from "@/lib/pitches/rich-text";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { pitchDraftKey, shouldApplySavedDraft } from "@/lib/pitches/autosave";
@@ -281,6 +282,7 @@ export default function PitchEditor({ id }: { id: string }) {
   const [category, setCategory] = useState("");
   const [workstream, setWorkstream] = useState("");
   const [href, setHref] = useState("");
+  const [otherVideos, setOtherVideos] = useState<LibraryVideo[]>([]);
   const savedCategory = useRef("");
   const savedWorkstream = useRef("");
   const savedHref = useRef("");
@@ -397,6 +399,32 @@ export default function PitchEditor({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pitches", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || cancelled) return;
+        const pitches = Array.isArray(data.pitches) ? data.pitches : [];
+        setOtherVideos(
+          uploadedLibraryVideos(
+            pitches
+              .filter((item: { id?: string }) => item.id !== id)
+              .map((item: { name?: string; slides?: PitchSlide[] }) => ({
+                name: item.name ?? "",
+                slides: Array.isArray(item.slides) ? item.slides : [],
+              }))
+          )
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setOtherVideos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useEffect(() => {
     if (!slides || savedKey.current === null) return;
     const key = pitchDraftKey({ name, prompt, slides });
     if (key === savedKey.current) return;
@@ -477,7 +505,7 @@ export default function PitchEditor({ id }: { id: string }) {
       const url = prep.upload.publicUrl as string;
       const next = (slidesRef.current ?? []).map((item) => {
         if (item.id !== slide.id) return item;
-        if (kind === "video") return { ...item, video: url };
+        if (kind === "video") return { ...item, video: url, videoLabel: videoTitleFromFilename(file.name) || undefined };
         return { ...item, image: url };
       });
       slidesRef.current = next;
@@ -495,6 +523,10 @@ export default function PitchEditor({ id }: { id: string }) {
   }
 
   const deck = slides;
+  const libraryVideos = uploadedLibraryVideos([
+    { name, slides: deck },
+    { slides: otherVideos.map((video) => ({ video: video.src, videoLabel: video.label })) },
+  ]);
   const structureOpen = pitch.id !== SOBECA_PITCH_ID;
 
   function jump(sectionId: string) {
@@ -1013,7 +1045,7 @@ export default function PitchEditor({ id }: { id: string }) {
                       type="button"
                       className="csc-link bg-black/70 px-2 py-1 text-xs"
                       disabled={uploadingId !== null || saving}
-                      onClick={() => patchSlide(slide.id, (current) => ({ ...current, video: undefined }))}
+                      onClick={() => patchSlide(slide.id, (current) => ({ ...current, video: undefined, videoLabel: undefined }))}
                     >
                       Remove video
                     </button>
@@ -1079,6 +1111,44 @@ export default function PitchEditor({ id }: { id: string }) {
                 </label>
               ) : null}
               <p className="csc-eyebrow mt-3">Library</p>
+              {libraryVideos.length > 0 ? (
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  {libraryVideos.map((video) => {
+                    const selected = slide.video === video.src;
+                    return (
+                      <button
+                        key={video.src}
+                        type="button"
+                        aria-label={`Use ${video.label}`}
+                        title={video.label}
+                        aria-pressed={selected}
+                        className="w-40 shrink-0 text-left"
+                        onClick={() =>
+                          patchSlide(slide.id, (current) => ({
+                            ...current,
+                            video: video.src,
+                            videoLabel: video.label,
+                          }))
+                        }
+                      >
+                        <span
+                          className="relative block h-16 overflow-hidden border-2"
+                          style={{ borderColor: selected ? "var(--csc-accent)" : "var(--csc-row-divider)" }}
+                        >
+                          <video
+                            src={video.src}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="pointer-events-none h-full w-full object-cover"
+                          />
+                        </span>
+                        <span className="mt-1 block text-[11px] leading-tight text-white/80">{video.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                 {PHOTO_LIBRARY.map((photo) => {
                   const selected = slide.image === photo.src;
@@ -1096,6 +1166,7 @@ export default function PitchEditor({ id }: { id: string }) {
                           image: photo.src,
                           imageAlt: photo.alt,
                           video: undefined,
+                          videoLabel: undefined,
                         }))
                       }
                     >
