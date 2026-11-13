@@ -119,11 +119,25 @@ export function resolveContributionWindow(args: {
   };
 }
 
+export type WorldConfigFromBrandOptions = {
+  /**
+   * Bloom journeys (`/e/...`) keep the event world title in chrome.
+   * Garden presence (`/g/...`) leaves this off so brand.title can win.
+   */
+  persistFallbackTitle?: boolean;
+};
+
 /** Merge brand bloom storyboard into a WorldConfig for WorldStage when garden-linked. */
-export function worldConfigFromBrand(brand: BrandKit, fallback: WorldConfig): WorldConfig {
+export function worldConfigFromBrand(
+  brand: BrandKit,
+  fallback: WorldConfig,
+  options?: WorldConfigFromBrandOptions
+): WorldConfig {
   return {
     ...fallback,
-    title: brand.title || fallback.title,
+    title: options?.persistFallbackTitle
+      ? fallback.title || brand.title
+      : brand.title || fallback.title,
     logoUrl: fallback.logoUrl ?? brand.logoUrl,
     logoMaxWidthPx: fallback.logoMaxWidthPx ?? null,
     primaryColor: brand.primaryColor || fallback.primaryColor,

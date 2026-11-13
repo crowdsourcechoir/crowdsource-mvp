@@ -164,7 +164,9 @@ export default function WorldJourney({ event }: WorldJourneyProps) {
   const world = useMemo(
     () =>
       gardenSnap.linked && gardenSnap.snapshot
-        ? worldConfigFromBrand(gardenSnap.snapshot.brand, baseWorld)
+        ? worldConfigFromBrand(gardenSnap.snapshot.brand, baseWorld, {
+            persistFallbackTitle: true,
+          })
         : baseWorld,
     [baseWorld, gardenSnap.linked, gardenSnap.snapshot]
   );
