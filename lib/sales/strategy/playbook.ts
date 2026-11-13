@@ -51,7 +51,7 @@ export const WORKSTREAMS = {
     dealMath: "Distribution + residency sponsors",
     buyers: "Agencies, producers, WFEA network, aligned sponsors",
     action: "Build referral partners; secure sponsor/guarantee before a run",
-    targets: ["WFEA network", "gala producers", "DMCs"],
+    targets: ["WFEA network", "gala producers", "DMCs", "Seattle Sports Commission partners"],
   },
   owned: {
     key: "owned",
@@ -92,6 +92,7 @@ const INITIATIVE_TO_WORKSTREAM: Partial<Record<SalesInitiativeKey, WorkstreamKey
   tech_conferences: "premium",
   booking_agents: "premium",
   wfea_network: "sponsor",
+  sponsor_partners: "sponsor",
 };
 
 const CATEGORY_TO_WORKSTREAM: Record<QueueCategoryKey, WorkstreamKey> = {
@@ -102,6 +103,7 @@ const CATEGORY_TO_WORKSTREAM: Record<QueueCategoryKey, WorkstreamKey> = {
   entertainment: "owned",
   tech: "premium",
   booking_agents: "premium",
+  sponsors: "sponsor",
   other: "sponsor",
 };
 

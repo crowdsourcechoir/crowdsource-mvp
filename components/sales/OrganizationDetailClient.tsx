@@ -157,6 +157,14 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           Marked as an existing client — the pipeline will never run for this organization, and it won&apos;t be prospected.
         </p>
       )}
+      {typeof organization.importMetadata?.sscFit === "string" && (
+        <p className="rounded-md border border-gray-800 p-3 text-sm text-gray-300">
+          {organization.importMetadata.sscFit}
+          {organization.importMetadata.holdAutoPipeline === true
+            ? " Automatic prospecting is paused until you run the pipeline for this organization."
+            : ""}
+        </p>
+      )}
 
       <section className="rounded-xl border border-gray-800 p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Opportunities ({opportunities.length})</h2>
@@ -165,7 +173,8 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
         ) : (
           <ul className="space-y-2">
             {opportunities.map((o) => (
-              <li key={o.id} className="flex items-center justify-between rounded-md border border-gray-800 px-3 py-2">
+              <li key={o.id} className="rounded-md border border-gray-800 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
                 <div>
                   <Link href={`/admin/sales/opportunities/${o.id}`} className="font-medium text-gray-100 hover:underline">
                     {o.title}
@@ -183,6 +192,8 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
                 {o.targetContactRoleHint && !contacts.length && (
                   <span className="text-xs text-gray-500">Target role: {o.targetContactRoleHint}</span>
                 )}
+                </div>
+                {o.description ? <p className="mt-1 text-xs leading-relaxed text-gray-400">{o.description}</p> : null}
               </li>
             ))}
           </ul>
