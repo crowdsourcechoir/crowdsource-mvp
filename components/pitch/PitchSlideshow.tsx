@@ -90,14 +90,14 @@ function Block({
   const follow = pitchFollowMargin(block.type, previous, footer);
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-5xl break-words text-5xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
+      <h1 className={`${display} max-w-5xl break-words text-5xl uppercase leading-[0.84] tracking-wide [overflow-wrap:anywhere] sm:text-8xl lg:text-9xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-5xl break-words text-4xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
+      <h2 className={`${display} max-w-5xl break-words text-4xl uppercase leading-[0.86] tracking-wide [overflow-wrap:anywhere] sm:text-7xl lg:text-8xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h2>
     );
@@ -106,7 +106,7 @@ function Block({
     return (
       <h3 className={`${display} ${follow} flex max-w-4xl items-start gap-3 text-2xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" />
-        <span className="min-w-0 break-words">
+        <span className="min-w-0 break-words [overflow-wrap:anywhere]">
           <PitchText text={block.text} />
         </span>
       </h3>
@@ -114,9 +114,9 @@ function Block({
   }
   if (block.type === "heading3") {
     return (
-      <h4 className={`${follow} flex max-w-5xl items-start gap-4 pl-6 text-2xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h4 className={`${follow} flex max-w-5xl items-start gap-3 pl-1 text-2xl leading-snug tracking-wide sm:gap-4 sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.45em] h-[0.28em] w-[0.28em] shrink-0 rounded-full bg-[#CFFF81]" />
-        <span className="min-w-0 break-words">
+        <span className="min-w-0 break-words [overflow-wrap:anywhere]">
           <PitchText text={block.text} />
         </span>
       </h4>
@@ -140,7 +140,7 @@ function Block({
     const tight = previous === "heading2";
     return (
       <p
-        className={`max-w-3xl break-words text-[15px] sm:text-lg${weight(block)} ${tight ? "leading-snug" : "leading-relaxed"} ${
+        className={`max-w-none break-words text-[15px] sm:max-w-3xl sm:text-lg${weight(block)} ${tight ? "leading-snug" : "leading-relaxed"} ${
           tight && !block.rule ? "pl-4" : ""
         } ${block.rule ? "flex items-start gap-3" : ""} ${footer ? "text-white/85" : follow}`}
       >
@@ -160,9 +160,9 @@ function Block({
   }
   if (block.type === "list") {
     return (
-      <ul className="mt-5 max-w-3xl space-y-2 text-[15px] leading-relaxed sm:mt-6 sm:text-lg">
+      <ul className="mt-5 max-w-none space-y-2 text-[15px] leading-relaxed sm:mt-6 sm:max-w-3xl sm:text-lg">
         {block.items.map((item, index) => (
-          <li key={`${index}-${item}`} className="border-l-2 border-[#CFFF81] pl-4">
+          <li key={`${index}-${item}`} className="border-l-2 border-[#CFFF81] pl-4 [overflow-wrap:anywhere]">
             {item}
           </li>
         ))}
@@ -238,8 +238,13 @@ function FitCopy({
 
     const apply = () => {
       if (!frame.isConnected || !stack.isConnected || !measure.isConnected || !box.isConnected) return;
-      const stackScale = evenFitScale(frame.clientWidth, frame.clientHeight, stack.scrollWidth, stack.scrollHeight);
-      const wantSplit = shouldSplitCopy(stackScale, frame.clientWidth);
+      const width = frame.clientWidth;
+      const height = frame.clientHeight;
+      // Stepped reveals only show part of the body. Splitting from the full slide
+      // parks late steps in an empty right column and looks like a tiny text window.
+      const stepping = arrived !== null;
+      const stackScale = evenFitScale(width, height, stack.scrollWidth, stack.scrollHeight);
+      const wantSplit = !stepping && shouldSplitCopy(stackScale, width, height);
       const nodes = Array.from(stack.querySelectorAll<HTMLElement>("[data-copy-block]"));
       const cut = columnSplitIndex(
         nodes.map((node) => node.offsetHeight),
@@ -252,11 +257,13 @@ function FitCopy({
       }
       onSplitRef.current(columns !== null);
       const fitted = columns === null ? box : measure;
-      const rawScale = evenFitScale(frame.clientWidth, frame.clientHeight, fitted.scrollWidth, fitted.scrollHeight);
-      const scale = displayFitScale(rawScale, frame.clientWidth);
-      const scroll = shouldScrollCopy(rawScale, frame.clientWidth);
+      const rawScale = evenFitScale(width, height, fitted.scrollWidth, fitted.scrollHeight);
+      const scale = displayFitScale(rawScale, width, height);
+      const scroll = shouldScrollCopy(rawScale, width, height);
       box.style.transformOrigin = "top left";
       box.style.transform = scale < 0.999 ? `scale(${scale})` : "none";
+      box.style.width = "100%";
+      frame.style.overflowX = "hidden";
       frame.style.overflowY = scroll ? "auto" : "hidden";
       frame.style.overscrollBehavior = scroll ? "contain" : "auto";
       frame.dataset.copyScroll = scroll ? "1" : "0";
@@ -692,7 +699,7 @@ export default function PitchSlideshow({
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/25" />
       <div className="slide-rule absolute left-0 top-0 h-1 w-full bg-[#CFFF81]" />
 
-      <div className={`relative z-10 flex h-full min-w-0 flex-col px-6 pt-8 sm:px-24 sm:pt-10 ${footers > 1 ? "pb-56 sm:pb-64" : footers === 1 ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
+      <div className={`relative z-10 flex h-full min-w-0 flex-col px-4 pt-6 sm:px-24 sm:pt-10 ${footers > 1 ? "pb-56 sm:pb-64" : footers === 1 ? "pb-40 sm:pb-48" : "pb-24 sm:pb-28"}`}>
         <div className="mb-6 flex items-center justify-between gap-4">
           <img src="/sobeca-song-garden/logo.png" alt="Crowdsource Choir" className="slide-line h-9 w-auto sm:h-11" />
           <div className="flex items-center gap-1 sm:gap-2">

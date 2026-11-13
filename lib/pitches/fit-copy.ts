@@ -12,27 +12,43 @@ export function evenFitScale(
 
 /** Below this, a wide slide flows the body into a second column instead of shrinking the type. */
 export const COPY_SPLIT_SCALE = 0.75;
-/**
- * Narrow frames keep one column. Landscape phones (~667+) can still split;
- * portrait phones stay one readable column and scroll instead of shrinking.
- */
-export const COPY_SPLIT_MIN_WIDTH = 640;
+/** Two columns need a real desktop-width frame — not a phone in landscape. */
+export const COPY_SPLIT_MIN_WIDTH = 900;
+/** Landscape phones are ~390 tall; keep one column and scroll instead of a skinny split. */
+export const COPY_SPLIT_MIN_HEIGHT = 560;
 /** Never shrink type below this — scroll the slide instead of making words unreadably small. */
 export const COPY_MIN_SCALE = 0.9;
 
-export function shouldSplitCopy(scale: number, frameWidth: number): boolean {
-  return frameWidth >= COPY_SPLIT_MIN_WIDTH && scale > 0 && scale < COPY_SPLIT_SCALE;
+export function shouldSplitCopy(
+  scale: number,
+  frameWidth: number,
+  frameHeight: number = Number.POSITIVE_INFINITY
+): boolean {
+  return (
+    frameWidth >= COPY_SPLIT_MIN_WIDTH &&
+    frameHeight >= COPY_SPLIT_MIN_HEIGHT &&
+    scale > 0 &&
+    scale < COPY_SPLIT_SCALE
+  );
 }
 
-/** Phone / over-shrunk slides keep full type size and scroll. */
-export function shouldScrollCopy(scale: number, frameWidth: number): boolean {
-  if (frameWidth < COPY_SPLIT_MIN_WIDTH) return true;
+/** Phone / short / over-shrunk slides keep full type size and scroll. */
+export function shouldScrollCopy(
+  scale: number,
+  frameWidth: number,
+  frameHeight: number = Number.POSITIVE_INFINITY
+): boolean {
+  if (frameWidth < COPY_SPLIT_MIN_WIDTH || frameHeight < COPY_SPLIT_MIN_HEIGHT) return true;
   return scale > 0 && scale < COPY_MIN_SCALE;
 }
 
 /** Scale applied to the visible copy box. 1 when we scroll instead of shrink. */
-export function displayFitScale(scale: number, frameWidth: number): number {
-  return shouldScrollCopy(scale, frameWidth) ? 1 : scale;
+export function displayFitScale(
+  scale: number,
+  frameWidth: number,
+  frameHeight: number = Number.POSITIVE_INFINITY
+): number {
+  return shouldScrollCopy(scale, frameWidth, frameHeight) ? 1 : scale;
 }
 
 /**
