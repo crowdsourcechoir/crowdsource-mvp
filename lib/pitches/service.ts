@@ -110,6 +110,7 @@ export async function createPitch(input: {
   live?: boolean;
   password?: string;
   organizationId?: string | null;
+  category?: string | null;
 }): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();
   if (context.error) return { error: context.error, status: 503 };
@@ -122,6 +123,7 @@ export async function createPitch(input: {
       live: input.live !== false,
       passwordHash: password ? hashPitchPassword(password) : null,
       organizationId: input.organizationId ?? null,
+      category: input.category ?? null,
     },
     { id: newId(), now: now() }
   );
@@ -157,6 +159,7 @@ export async function updatePitch(
     slides?: unknown;
     reset?: boolean;
     organizationId?: string | null;
+    category?: string | null;
   }
 ): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();

@@ -74,36 +74,46 @@ assert.equal(reserved.pitch.passwordHash, "salt:hash");
 
 const listed = listLoadedPitches(empty, sobeca);
 assert.deepEqual(listed.map((pitch) => pitch.id), [
-  SOBECA_PITCH_ID,
-  INITIAL_MEETING_ID,
-  "strategy",
-  "visit-bellevue",
   CONFERENCE_BELLEVUE_ID,
+  "visit-bellevue",
+  "strategy",
+  INITIAL_MEETING_ID,
+  SOBECA_PITCH_ID,
 ]);
-assert.equal(listed[3]?.name, "Visit Bellevue");
-assert.equal(listed[3]?.href, "/pitch/visit-bellevue");
-assert.equal(listed[4]?.name, "Conference Pitch: Bellevue");
-assert.equal(listed[4]?.href, "/pitch/conference-pitch-bellevue");
-assert.equal(listed[4]?.live, true);
-assert.equal(listed[4]?.slides.length, conferenceBellevueSlides.length);
+const visit = listed.find((pitch) => pitch.id === "visit-bellevue");
+const conferencePitch = listed.find((pitch) => pitch.id === CONFERENCE_BELLEVUE_ID);
+const strategyPitch = listed.find((pitch) => pitch.id === "strategy");
+const meetingRow = listed.find((pitch) => pitch.id === INITIAL_MEETING_ID);
+assert.equal(visit?.name, "Visit Bellevue");
+assert.equal(visit?.href, "/pitch/visit-bellevue");
+assert.equal(visit?.category, null);
+assert.equal(conferencePitch?.name, "Conference Pitch: Bellevue");
+assert.equal(conferencePitch?.href, "/pitch/conference-pitch-bellevue");
+assert.equal(conferencePitch?.live, true);
+assert.equal(conferencePitch?.slides.length, conferenceBellevueSlides.length);
 assert.equal(
-  listed[4]?.slides[0]?.blocks[0] && "text" in listed[4].slides[0].blocks[0] ? listed[4].slides[0].blocks[0].text : "",
+  conferencePitch?.slides[0]?.blocks[0] && "text" in conferencePitch.slides[0].blocks[0]
+    ? conferencePitch.slides[0].blocks[0].text
+    : "",
   "Make your next conference undeniable."
 );
 assert.equal(
-  listed[4]?.slides.at(-1)?.blocks.at(-1) && "text" in (listed[4]?.slides.at(-1)?.blocks.at(-1) ?? {})
-    ? (listed[4]?.slides.at(-1)?.blocks.at(-1) as { text: string }).text
+  conferencePitch?.slides.at(-1)?.blocks.at(-1) && "text" in (conferencePitch.slides.at(-1)?.blocks.at(-1) ?? {})
+    ? (conferencePitch.slides.at(-1)?.blocks.at(-1) as { text: string }).text
     : "",
   "Introduced by Visit Bellevue"
 );
-assert.equal(listed[2]?.name, "Strategy");
-assert.equal(listed[2]?.href, "/pitch/strategy");
-assert.equal(listed[2]?.slides[0] && "text" in listed[2].slides[0].blocks[1] ? listed[2].slides[0].blocks[1].text : "", "Strategy");
-assert.equal(listed[1]?.name, "Initial Meeting Deck");
-assert.equal(listed[1]?.live, true);
-assert.equal(listed[1]?.href, "/pitch/initial-meeting");
-assert.equal(listed[1]?.organizationId, null);
-const assigned = applyPitchPatch(empty, listed[1]!, { organizationId: orgId }, "2026-11-05T03:00:00.000Z");
+assert.equal(strategyPitch?.name, "Strategy");
+assert.equal(strategyPitch?.href, "/pitch/strategy");
+assert.equal(
+  strategyPitch?.slides[0] && "text" in strategyPitch.slides[0].blocks[1] ? strategyPitch.slides[0].blocks[1].text : "",
+  "Strategy"
+);
+assert.equal(meetingRow?.name, "Initial Meeting Deck");
+assert.equal(meetingRow?.live, true);
+assert.equal(meetingRow?.href, "/pitch/initial-meeting");
+assert.equal(meetingRow?.organizationId, null);
+const assigned = applyPitchPatch(empty, meetingRow!, { organizationId: orgId }, "2026-11-05T03:00:00.000Z");
 assert.ok(!("error" in assigned));
 if ("error" in assigned) throw new Error("assign failed");
 assert.equal(findLoadedPitch(assigned.state, INITIAL_MEETING_ID, sobeca)?.organizationId, orgId);
@@ -111,19 +121,40 @@ const cleared = applyPitchPatch(assigned.state, assigned.pitch, { organizationId
 assert.ok(!("error" in cleared));
 if ("error" in cleared) throw new Error("clear failed");
 assert.equal(findLoadedPitch(cleared.state, INITIAL_MEETING_ID, sobeca)?.organizationId, null);
-assert.equal(listed[1]?.slides.length, initialMeetingSlides.length);
-assert.equal(toAdmin(listed[1]!).protected, false);
-assert.equal("passwordHash" in toAdmin(listed[1]!), false);
+assert.equal(meetingRow?.slides.length, initialMeetingSlides.length);
+assert.equal(toAdmin(meetingRow!).protected, false);
+assert.equal("passwordHash" in toAdmin(meetingRow!), false);
+assert.equal(findLoadedPitch(assigned.state, INITIAL_MEETING_ID, sobeca)?.updatedAt, "2026-11-05T03:00:00.000Z");
+const afterAssign = listLoadedPitches(assigned.state, sobeca).map((pitch) => pitch.id);
+assert.ok(afterAssign.indexOf(INITIAL_MEETING_ID) < afterAssign.indexOf("strategy"));
+assert.equal(afterAssign[0], CONFERENCE_BELLEVUE_ID);
+
+const filed = applyPitchPatch(empty, conferencePitch!, { category: "  Conference  " }, "2026-11-13T00:00:00.000Z");
+assert.ok(!("error" in filed));
+if ("error" in filed) throw new Error("category failed");
+assert.equal(filed.pitch.category, "Conference");
+assert.equal(findLoadedPitch(filed.state, CONFERENCE_BELLEVUE_ID, sobeca)?.category, "Conference");
+const clearedCategory = applyPitchPatch(filed.state, filed.pitch, { category: "   " }, "2026-11-13T01:00:00.000Z");
+assert.ok(!("error" in clearedCategory));
+if ("error" in clearedCategory) throw new Error("clear category failed");
+assert.equal(clearedCategory.pitch.category, null);
+const copiedCategory = duplicatePitch(filed.state, filed.pitch, { id: "pitch_cat1", now: "2026-11-13T02:00:00.000Z" });
+assert.ok(!("error" in copiedCategory));
+if ("error" in copiedCategory) throw new Error("category copy failed");
+assert.equal(copiedCategory.pitch.category, "Conference");
+assert.equal(listLoadedPitches(copiedCategory.state, sobeca)[0]?.id, "pitch_cat1");
 
 const hidden = listLoadedPitches(
   { overrides: { [INITIAL_MEETING_ID]: { live: false, passwordHash: "salt:hash", prompt: "Keep this private." } }, custom: [] },
   { slides: sobecaSlides, passwordHash: "sobeca:hash" }
 );
-assert.equal(hidden[1]?.live, false);
-assert.equal(hidden[1]?.passwordHash, "salt:hash");
-assert.equal(hidden[1]?.prompt, "Keep this private.");
-assert.equal(hidden[0]?.passwordHash, "sobeca:hash");
-assert.equal(toAdmin(hidden[0]!).protected, true);
+const hiddenMeeting = hidden.find((pitch) => pitch.id === INITIAL_MEETING_ID);
+const hiddenSobeca = hidden.find((pitch) => pitch.id === SOBECA_PITCH_ID);
+assert.equal(hiddenMeeting?.live, false);
+assert.equal(hiddenMeeting?.passwordHash, "salt:hash");
+assert.equal(hiddenMeeting?.prompt, "Keep this private.");
+assert.equal(hiddenSobeca?.passwordHash, "sobeca:hash");
+assert.equal(toAdmin(hiddenSobeca!).protected, true);
 
 const meeting = findLoadedPitch(empty, INITIAL_MEETING_ID, sobeca);
 assert.ok(meeting);

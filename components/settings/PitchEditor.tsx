@@ -37,6 +37,7 @@ type PitchPayload = {
   builtin: boolean;
   organizationId: string | null;
   organizationName: string | null;
+  category: string | null;
   slides: PitchSlide[];
 };
 
@@ -273,6 +274,8 @@ export default function PitchEditor({ id }: { id: string }) {
   const [live, setLive] = useState(true);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
+  const [category, setCategory] = useState("");
+  const savedCategory = useRef("");
   const slidesRef = useRef<PitchSlide[] | null>(null);
   const nameRef = useRef("");
   const promptRef = useRef("");
@@ -369,6 +372,8 @@ export default function PitchEditor({ id }: { id: string }) {
         setPasswordOn(next.protected);
         setOrganizationId(next.organizationId ?? null);
         setOrganizationName(next.organizationName ?? null);
+        savedCategory.current = next.category ?? "";
+        setCategory(savedCategory.current);
         setActiveId(next.slides?.[0]?.id ?? null);
       })
       .catch((err) => {
@@ -589,6 +594,33 @@ export default function PitchEditor({ id }: { id: string }) {
             value={name}
             aria-label="Internal name"
             onChange={(event) => setName(event.target.value)}
+            className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
+          />
+        </label>
+        <label className="block border-b border-[var(--csc-row-divider)] py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Category</span>
+          <input
+            value={category}
+            aria-label="Category"
+            placeholder="Conference, partnership, internal"
+            onChange={(event) => setCategory(event.target.value)}
+            onBlur={() => {
+              const next = category.trim().replace(/\s+/g, " ");
+              if (next === savedCategory.current) return;
+              void fetch(`/api/pitches/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ category: next }),
+              }).then(async (res) => {
+                const data = await res.json();
+                if (!res.ok) {
+                  setStatus(data.error ?? "Could not save the category");
+                  return;
+                }
+                savedCategory.current = data.pitch?.category ?? "";
+                setCategory(savedCategory.current);
+              });
+            }}
             className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
           />
         </label>
