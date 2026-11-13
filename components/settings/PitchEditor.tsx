@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
@@ -262,6 +263,7 @@ function FitText({
 }
 
 export default function PitchEditor({ id }: { id: string }) {
+  const router = useRouter();
   const [pitch, setPitch] = useState<PitchPayload | null>(null);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -278,8 +280,10 @@ export default function PitchEditor({ id }: { id: string }) {
   const [organizationName, setOrganizationName] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [workstream, setWorkstream] = useState("");
+  const [href, setHref] = useState("");
   const savedCategory = useRef("");
   const savedWorkstream = useRef("");
+  const savedHref = useRef("");
   const slidesRef = useRef<PitchSlide[] | null>(null);
   const nameRef = useRef("");
   const promptRef = useRef("");
@@ -378,8 +382,10 @@ export default function PitchEditor({ id }: { id: string }) {
         setOrganizationName(next.organizationName ?? null);
         savedCategory.current = next.category ?? "";
         savedWorkstream.current = next.workstream ?? "";
+        savedHref.current = next.href;
         setCategory(savedCategory.current);
         setWorkstream(savedWorkstream.current);
+        setHref(savedHref.current);
         setActiveId(next.slides?.[0]?.id ?? null);
       })
       .catch((err) => {
@@ -573,6 +579,25 @@ export default function PitchEditor({ id }: { id: string }) {
         <SettingsButton href={pitch.href} target="_blank">
           View
         </SettingsButton>
+        <SettingsButton
+          disabled={saving}
+          onClick={() => {
+            setSaving(true);
+            setStatus(null);
+            void fetch(`/api/pitches/${id}/duplicate`, { method: "POST" })
+              .then(async (res) => {
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error ?? "Could not duplicate the pitch");
+                router.push(`/admin/settings/pitches/${data.pitch.id}`);
+              })
+              .catch((err) => {
+                setStatus(err instanceof Error ? err.message : "Could not duplicate the pitch");
+                setSaving(false);
+              });
+          }}
+        >
+          Duplicate
+        </SettingsButton>
         <SettingsButton variant={live ? "primary" : "ghost"} disabled={saving} onClick={() => void toggleLive()}>
           {live ? "Live" : "Hidden"}
         </SettingsButton>
@@ -594,6 +619,36 @@ export default function PitchEditor({ id }: { id: string }) {
 
       <details className="border-b border-[var(--csc-row-divider)]">
         <summary className="cursor-pointer py-3 text-sm text-white">Brief</summary>
+        <label className="block border-b border-[var(--csc-row-divider)] py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Address</span>
+          <input
+            value={href}
+            aria-label="Address"
+            spellCheck={false}
+            onChange={(event) => setHref(event.target.value)}
+            onBlur={() => {
+              const next = href.trim();
+              if (!next || next === savedHref.current) return;
+              void fetch(`/api/pitches/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ slug: next }),
+              }).then(async (res) => {
+                const data = await res.json();
+                if (!res.ok) {
+                  setStatus(data.error ?? "Could not save that address");
+                  setHref(savedHref.current);
+                  return;
+                }
+                const saved = data.pitch?.href ?? next;
+                savedHref.current = saved;
+                setHref(saved);
+                setPitch((current) => (current ? { ...current, href: saved } : current));
+              });
+            }}
+            className="mt-1 w-full bg-transparent font-mono text-sm text-white focus:outline-none"
+          />
+        </label>
         <label className="block border-b border-[var(--csc-row-divider)] py-3">
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Internal name</span>
           <input
@@ -694,7 +749,7 @@ export default function PitchEditor({ id }: { id: string }) {
             aria-label="Page password"
             placeholder={passwordOn ? "New password" : "Set a password"}
             onChange={(event) => setPagePassword(event.target.value)}
-            className="w-48 border border-white/15 bg-black px-3 py-1.5 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+            className="w-48 bg-transparent text-sm text-white focus:outline-none"
           />
           <SettingsButton type="submit" variant="primary" disabled={saving || !pagePassword.trim()}>
             Save password
@@ -1316,7 +1371,7 @@ function FilingMenu({
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full border border-white/15 bg-black px-2 py-1.5 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+        className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
       >
         <option value="">None</option>
         {options.map((option) => (
