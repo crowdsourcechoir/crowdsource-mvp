@@ -12,11 +12,27 @@ export function evenFitScale(
 
 /** Below this, a wide slide flows the body into a second column instead of shrinking the type. */
 export const COPY_SPLIT_SCALE = 0.75;
-/** Narrow frames keep one column. Two columns there would make the words narrower than the shrink. */
-export const COPY_SPLIT_MIN_WIDTH = 720;
+/**
+ * Narrow frames keep one column. Landscape phones (~667+) can still split;
+ * portrait phones stay one readable column and scroll instead of shrinking.
+ */
+export const COPY_SPLIT_MIN_WIDTH = 640;
+/** Never shrink type below this — scroll the slide instead of making words unreadably small. */
+export const COPY_MIN_SCALE = 0.9;
 
 export function shouldSplitCopy(scale: number, frameWidth: number): boolean {
   return frameWidth >= COPY_SPLIT_MIN_WIDTH && scale > 0 && scale < COPY_SPLIT_SCALE;
+}
+
+/** Phone / over-shrunk slides keep full type size and scroll. */
+export function shouldScrollCopy(scale: number, frameWidth: number): boolean {
+  if (frameWidth < COPY_SPLIT_MIN_WIDTH) return true;
+  return scale > 0 && scale < COPY_MIN_SCALE;
+}
+
+/** Scale applied to the visible copy box. 1 when we scroll instead of shrink. */
+export function displayFitScale(scale: number, frameWidth: number): number {
+  return shouldScrollCopy(scale, frameWidth) ? 1 : scale;
 }
 
 /**

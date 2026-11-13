@@ -47,18 +47,8 @@ export default async function PitchPage({ params }: PageProps) {
     }
   }
 
-  return (
-    <>
-      {pitch.id === SOBECA_PITCH_ID ? (
-        <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />
-      ) : (
-        <PitchSlideshow slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />
-      )}
-      {!pitch.live ? (
-        <p className="fixed bottom-16 left-1/2 z-30 -translate-x-1/2 border border-[#CFFF81] bg-black/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#CFFF81]">
-          Not live. Only you can see this.
-        </p>
-      ) : null}
-    </>
-  );
+  if (pitch.id === SOBECA_PITCH_ID) {
+    return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
+  }
+  return <PitchSlideshow slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
 }
