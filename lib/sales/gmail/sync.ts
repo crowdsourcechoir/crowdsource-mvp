@@ -6,6 +6,7 @@ import { getOpportunity, updateOpportunityRelationshipStage, updateOpportunityTo
 import { classifyInbound, extractEmailAddresses, failedRecipientsFromBounce } from "../outreach/inbound-kind";
 import { parseFromHeader, resolveCorrespondent } from "../outreach/reply-correspondent";
 import { getGmailClient, persistHistoryId } from "./client";
+import { gmailCorrespondenceQuery } from "./correspondence";
 import { GMAIL_OWNER_KEY, NUDGE_DUE_AFTER_DAYS, addDaysIso } from "./constants";
 
 export type GmailSyncResult = {
@@ -268,7 +269,8 @@ async function recordOutbound(input: {
 async function processInboundMessage(
   gmail: Awaited<ReturnType<typeof getGmailClient>>,
   messageId: string,
-  ourEmail: string
+  ourEmail: string,
+  options?: { forceOpportunityId?: string | null }
 ): Promise<ProcessResult> {
   const empty: ProcessResult = { reply: false, auto: false, bounce: false, outbound: false };
   if (!gmail) return empty;
@@ -299,7 +301,8 @@ async function processInboundMessage(
 
   // Joel replied (or sent) from Gmail itself — count it as outbound on a known thread.
   if ((isFromUs || isSentOnly) && threadId && res.data.id) {
-    const opportunityId = await findOpportunityIdByGmailThreadId(threadId);
+    let opportunityId = await findOpportunityIdByGmailThreadId(threadId);
+    if (!opportunityId && options?.forceOpportunityId) opportunityId = options.forceOpportunityId;
     if (!opportunityId) return empty;
     const recorded = await recordOutbound({
       opportunityId,
@@ -333,6 +336,9 @@ async function processInboundMessage(
     });
     let opportunityId = await findOpportunityIdByGmailThreadId(threadId);
     let contactId: string | null = null;
+    if (!opportunityId && options?.forceOpportunityId) {
+      opportunityId = options.forceOpportunityId;
+    }
     if (!opportunityId) {
       for (const email of failed) {
         const match = await findOpportunityForFailedRecipient(email);
@@ -368,6 +374,7 @@ async function processInboundMessage(
       if (opportunityId) break;
     }
   }
+  if (!opportunityId && options?.forceOpportunityId) opportunityId = options.forceOpportunityId;
   if (!opportunityId) return empty;
 
   const parsedFrom = parseFromHeader(from);
@@ -509,5 +516,102 @@ export async function syncGmailReplies(ownerKey: string = GMAIL_OWNER_KEY): Prom
     outboundsRecorded,
     bouncesRecorded,
     errors,
+  };
+}
+
+export type GmailCorrespondenceResult = GmailSyncResult & {
+  searched: number;
+  subjects: string[];
+};
+
+/**
+ * Pull every Gmail message to or from these addresses onto one opportunity.
+ * Used when a partner is added and the 14-day inbox poll would miss the thread.
+ */
+export async function syncGmailCorrespondence(input: {
+  opportunityId: string;
+  emails: string[];
+  ownerKey?: string;
+}): Promise<GmailCorrespondenceResult> {
+  const errors: string[] = [];
+  const empty: GmailCorrespondenceResult = {
+    skippedReason: null,
+    historyProcessed: false,
+    repliesRecorded: 0,
+    autoRepliesRecorded: 0,
+    outboundsRecorded: 0,
+    bouncesRecorded: 0,
+    errors,
+    searched: 0,
+    subjects: [],
+  };
+  const query = gmailCorrespondenceQuery(input.emails);
+  if (!query) {
+    return { ...empty, skippedReason: "No email addresses to search." };
+  }
+  const bundle = await getGmailClient(input.ownerKey ?? GMAIL_OWNER_KEY);
+  if (!bundle) {
+    return { ...empty, skippedReason: "Gmail not connected or OAuth env not configured." };
+  }
+
+  const messageIds: string[] = [];
+  let pageToken: string | undefined;
+  try {
+    while (messageIds.length < 80) {
+      const listed = await bundle.gmail.users.messages.list({
+        userId: "me",
+        q: query,
+        maxResults: 40,
+        pageToken,
+      });
+      for (const message of listed.data.messages ?? []) {
+        if (message.id) messageIds.push(message.id);
+      }
+      pageToken = listed.data.nextPageToken ?? undefined;
+      if (!pageToken) break;
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : String(err));
+  }
+
+  let repliesRecorded = 0;
+  let autoRepliesRecorded = 0;
+  let outboundsRecorded = 0;
+  let bouncesRecorded = 0;
+  const subjects: string[] = [];
+  for (const messageId of messageIds) {
+    try {
+      const recorded = await processInboundMessage(bundle, messageId, bundle.email, {
+        forceOpportunityId: input.opportunityId,
+      });
+      if (recorded.reply) repliesRecorded += 1;
+      if (recorded.auto) autoRepliesRecorded += 1;
+      if (recorded.outbound) outboundsRecorded += 1;
+      if (recorded.bounce) bouncesRecorded += 1;
+      if ((recorded.reply || recorded.outbound || recorded.auto) && subjects.length < 12) {
+        const meta = await bundle.gmail.users.messages.get({
+          userId: "me",
+          id: messageId,
+          format: "metadata",
+          metadataHeaders: ["Subject"],
+        });
+        const subject = headerValue(meta.data.payload?.headers, "Subject");
+        if (subject) subjects.push(subject.slice(0, 140));
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return {
+    skippedReason: null,
+    historyProcessed: false,
+    repliesRecorded,
+    autoRepliesRecorded,
+    outboundsRecorded,
+    bouncesRecorded,
+    errors,
+    searched: messageIds.length,
+    subjects,
   };
 }

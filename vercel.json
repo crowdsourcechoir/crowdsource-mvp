@@ -194,6 +194,18 @@
       "schedule": "20 16 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-visit-bellevue",
+      "schedule": "35 1 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-visit-bellevue",
+      "schedule": "35 9 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-visit-bellevue",
+      "schedule": "35 17 * * *"
+    },
+    {
       "path": "/api/sales/cron/gmail-sync",
       "schedule": "0 9 * * *"
     },
