@@ -879,25 +879,12 @@ export default function PitchEditor({ id }: { id: string }) {
                   <GradedPhoto
                     src={slide.image}
                     alt=""
+                    video={slide.video}
                     overlay={slide.photoOverlay}
                     amount={slide.photoOverlayAmount ?? 1}
                     color={slide.photoOverlayColor}
                     className="h-full w-full"
                   />
-                  {slide.video ? (
-                    <video
-                      key={slide.video}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      src={slide.video}
-                      poster={slide.image}
-                      muted
-                      playsInline
-                      autoPlay
-                      loop
-                      preload="metadata"
-                      aria-label="Slide background video preview"
-                    />
-                  ) : null}
                 </div>
                 <div className="absolute bottom-2 right-2 z-10 flex flex-wrap justify-end gap-1">
                   <label className="csc-link bg-black/70 px-2 py-1 text-xs">
@@ -945,14 +932,14 @@ export default function PitchEditor({ id }: { id: string }) {
                   <span className="csc-eyebrow">Color overlay</span>
                   <SettingsButton
                     variant={slide.photoOverlay === "salmon" ? "ghost" : "primary"}
-                    title="Leave the photo as it was shot."
+                    title="Leave the photo or video as it was shot."
                     onClick={() => patchSlide(slide.id, (current) => ({ ...current, photoOverlay: undefined }))}
                   >
                     None
                   </SettingsButton>
                   <SettingsButton
                     variant={slide.photoOverlay === "salmon" ? "primary" : "ghost"}
-                    title="Pink grade so this photo matches the salmon library photos."
+                    title="Pink grade so this photo or video matches the salmon library photos."
                     onClick={() => patchSlide(slide.id, (current) => ({ ...current, photoOverlay: "salmon" }))}
                   >
                     Salmon
@@ -970,7 +957,7 @@ export default function PitchEditor({ id }: { id: string }) {
                     max={100}
                     step={1}
                     aria-label="Overlay transparency"
-                    title="0% is the full color. 100% shows the photo as it was shot."
+                    title="0% is the full color. 100% shows the photo or video as it was shot."
                     value={Math.round((1 - (slide.photoOverlayAmount ?? 1)) * 100)}
                     onChange={(event) => {
                       const transparency = Number(event.target.value) / 100;
@@ -985,7 +972,7 @@ export default function PitchEditor({ id }: { id: string }) {
                   <input
                     type="color"
                     aria-label="Overlay color"
-                    title="Color of the photo grade"
+                    title="Color of the grade on the photo or video"
                     value={slide.photoOverlayColor || SALMON_OVERLAY_COLOR}
                     className="h-6 w-8 cursor-pointer bg-transparent"
                     onChange={(event) =>
