@@ -8,6 +8,7 @@ import { PITCH_AUTH_COOKIE, pitchAuthToken, readPitchPasswordHash } from "@/lib/
 import { resolveSongGardenPitch } from "@/lib/sobeca-pitch/copy";
 import PitchUnavailable from "@/components/pitch/PitchUnavailable";
 import { loadPitch } from "@/lib/pitches/service";
+import { pitchVisitorView } from "@/lib/pitches/visitor";
 import { signedInOwner } from "@/lib/operators/current";
 
 export const dynamic = "force-dynamic";
@@ -25,16 +26,19 @@ export default async function SobecaSongGardenPage() {
   const listing = await loadPitch("sobeca-song-garden");
   if (listing && listing.href !== "/sobeca-song-garden") redirect(listing.href);
   const live = listing?.live !== false;
-  const owner = live ? false : await signedInOwner();
-  if (!live && !owner) return <PitchUnavailable title="SoBECA Song Garden" />;
-
   const passwordHash = await readPitchPasswordHash();
-  if (passwordHash) {
-    const token = (await cookies()).get(PITCH_AUTH_COOKIE)?.value;
-    if (token !== pitchAuthToken(passwordHash)) {
-      return <PitchPasswordGate />;
-    }
-  }
+  const unlocked = passwordHash
+    ? (await cookies()).get(PITCH_AUTH_COOKIE)?.value === pitchAuthToken(passwordHash)
+    : false;
+  const owner = !live && !unlocked ? await signedInOwner() : false;
+  const view = pitchVisitorView({
+    live,
+    hasPassword: Boolean(passwordHash),
+    owner,
+    unlocked,
+  });
+  if (view === "password") return <PitchPasswordGate />;
+  if (view === "unavailable") return <PitchUnavailable title="SoBECA Song Garden" />;
   const pitch = await resolveSongGardenPitch();
   return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
 }

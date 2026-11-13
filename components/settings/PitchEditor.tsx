@@ -471,7 +471,13 @@ export default function PitchEditor({ id }: { id: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not update the page");
       setLive(Boolean(data.pitch?.live));
-      setStatus(data.pitch?.live ? "This pitch is live." : "This pitch is hidden.");
+      setStatus(
+        data.pitch?.live
+          ? "This pitch is live."
+          : passwordOn
+            ? "This pitch is hidden. The link still asks for the password."
+            : "This pitch is hidden."
+      );
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Could not update the page");
     } finally {
@@ -765,7 +771,7 @@ export default function PitchEditor({ id }: { id: string }) {
               if (!res.ok) throw new Error(data.error ?? "Could not save the password");
               setPasswordOn(true);
               setPagePassword("");
-              setStatus("Password saved.");
+              setStatus(live ? "Password saved." : "Password saved. The link asks for it.");
             } catch (err) {
               setStatus(err instanceof Error ? err.message : "Could not save the password");
             } finally {
@@ -773,7 +779,13 @@ export default function PitchEditor({ id }: { id: string }) {
             }
           }}
         >
-          <p className="text-sm text-white/70">{passwordOn ? "This page asks for a password." : "This page is public."}</p>
+          <p className="text-sm text-white/70">
+            {passwordOn
+              ? "The link asks for this password."
+              : live
+                ? "Anyone with the link can view this page."
+                : "The link says this page is not live."}
+          </p>
           <input
             type="password"
             value={pagePassword}
