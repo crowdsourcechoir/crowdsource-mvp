@@ -25,7 +25,7 @@ export type PitchSlide = {
   reveal?: "steps";
   /** Shown at the bottom after one click. A Line block stays on the slide. */
   bottom?: string;
-  /** Optional pink grade on this photo. Omitted photos stay as shot. */
+  /** Optional pink grade on the photo or video. Omitted media stays as shot. */
   photoOverlay?: "salmon";
   /** How much of the grade shows, 0–1. Omitted means the full grade. */
   photoOverlayAmount?: number;
