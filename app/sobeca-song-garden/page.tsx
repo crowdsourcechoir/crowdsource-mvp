@@ -36,14 +36,5 @@ export default async function SobecaSongGardenPage() {
     }
   }
   const pitch = await resolveSongGardenPitch();
-  return (
-    <>
-      <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />
-      {!live ? (
-        <p className="fixed bottom-4 left-4 z-20 border border-[#CFFF81] bg-black/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#CFFF81]">
-          Not live. Only you can see this.
-        </p>
-      ) : null}
-    </>
-  );
+  return <PitchDeck slides={pitch.slides} displayClass={display.className} monoClass={mono.className} />;
 }

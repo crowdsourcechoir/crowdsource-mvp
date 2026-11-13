@@ -6,7 +6,7 @@ import { PitchText } from "@/components/pitch/PitchText";
 import { SlideBackground } from "@/components/pitch/SlideBackground";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
 import { plainPitchText } from "@/lib/pitches/rich-text";
-import { columnSplitIndex, evenFitScale, shouldSplitCopy } from "@/lib/pitches/fit-copy";
+import { columnSplitIndex, displayFitScale, evenFitScale, shouldScrollCopy, shouldSplitCopy } from "@/lib/pitches/fit-copy";
 import {
   exitDeckFullscreen,
   fullscreenAvailable,
@@ -90,21 +90,21 @@ function Block({
   const follow = pitchFollowMargin(block.type, previous, footer);
   if (block.type === "title") {
     return (
-      <h1 className={`${display} max-w-5xl break-words text-6xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
+      <h1 className={`${display} max-w-5xl break-words text-5xl uppercase leading-[0.84] tracking-wide sm:text-8xl lg:text-9xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h1>
     );
   }
   if (block.type === "heading") {
     return (
-      <h2 className={`${display} max-w-5xl break-words text-5xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
+      <h2 className={`${display} max-w-5xl break-words text-4xl uppercase leading-[0.86] tracking-wide sm:text-7xl lg:text-8xl${weight(block)}`}>
         <PitchText text={block.text} />
       </h2>
     );
   }
   if (block.type === "heading2") {
     return (
-      <h3 className={`${display} ${follow} flex max-w-4xl items-start gap-3 text-3xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h3 className={`${display} ${follow} flex max-w-4xl items-start gap-3 text-2xl leading-[0.9] tracking-wide sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" />
         <span className="min-w-0 break-words">
           <PitchText text={block.text} />
@@ -114,7 +114,7 @@ function Block({
   }
   if (block.type === "heading3") {
     return (
-      <h4 className={`${follow} flex max-w-5xl items-start gap-4 pl-8 text-3xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
+      <h4 className={`${follow} flex max-w-5xl items-start gap-4 pl-6 text-2xl leading-snug tracking-wide sm:pl-12 sm:text-4xl lg:text-5xl${weight(block)}`}>
         <span aria-hidden="true" className="mt-[0.45em] h-[0.28em] w-[0.28em] shrink-0 rounded-full bg-[#CFFF81]" />
         <span className="min-w-0 break-words">
           <PitchText text={block.text} />
@@ -131,7 +131,7 @@ function Block({
   }
   if (block.type === "line") {
     return (
-      <p className={`${display} mt-8 max-w-4xl break-words text-3xl uppercase leading-[0.92] text-[#CFFF81] sm:text-5xl${weight(block)}`}>
+      <p className={`${display} mt-6 max-w-4xl break-words text-2xl uppercase leading-[0.92] text-[#CFFF81] sm:mt-8 sm:text-5xl${weight(block)}`}>
         <PitchText text={block.text} />
       </p>
     );
@@ -140,7 +140,7 @@ function Block({
     const tight = previous === "heading2";
     return (
       <p
-        className={`max-w-3xl break-words text-base sm:text-lg${weight(block)} ${tight ? "leading-snug" : "leading-relaxed"} ${
+        className={`max-w-3xl break-words text-[15px] sm:text-lg${weight(block)} ${tight ? "leading-snug" : "leading-relaxed"} ${
           tight && !block.rule ? "pl-4" : ""
         } ${block.rule ? "flex items-start gap-3" : ""} ${footer ? "text-white/85" : follow}`}
       >
@@ -160,7 +160,7 @@ function Block({
   }
   if (block.type === "list") {
     return (
-      <ul className="mt-6 max-w-3xl space-y-2 text-base leading-relaxed sm:text-lg">
+      <ul className="mt-5 max-w-3xl space-y-2 text-[15px] leading-relaxed sm:mt-6 sm:text-lg">
         {block.items.map((item, index) => (
           <li key={`${index}-${item}`} className="border-l-2 border-[#CFFF81] pl-4">
             {item}
@@ -238,7 +238,7 @@ function FitCopy({
 
     const apply = () => {
       if (!frame.isConnected || !stack.isConnected || !measure.isConnected || !box.isConnected) return;
-      const stackScale = evenFitScale(frame.clientWidth, frame.clientHeight, stack.scrollWidth, stack.offsetHeight);
+      const stackScale = evenFitScale(frame.clientWidth, frame.clientHeight, stack.scrollWidth, stack.scrollHeight);
       const wantSplit = shouldSplitCopy(stackScale, frame.clientWidth);
       const nodes = Array.from(stack.querySelectorAll<HTMLElement>("[data-copy-block]"));
       const cut = columnSplitIndex(
@@ -252,9 +252,14 @@ function FitCopy({
       }
       onSplitRef.current(columns !== null);
       const fitted = columns === null ? box : measure;
-      const scale = evenFitScale(frame.clientWidth, frame.clientHeight, fitted.scrollWidth, fitted.offsetHeight);
+      const rawScale = evenFitScale(frame.clientWidth, frame.clientHeight, fitted.scrollWidth, fitted.scrollHeight);
+      const scale = displayFitScale(rawScale, frame.clientWidth);
+      const scroll = shouldScrollCopy(rawScale, frame.clientWidth);
       box.style.transformOrigin = "top left";
       box.style.transform = scale < 0.999 ? `scale(${scale})` : "none";
+      frame.style.overflowY = scroll ? "auto" : "hidden";
+      frame.style.overscrollBehavior = scroll ? "contain" : "auto";
+      frame.dataset.copyScroll = scroll ? "1" : "0";
     };
 
     apply();
@@ -375,9 +380,9 @@ function SlideCopy({
   return (
     <div>
       {renderRun(title, titlePrevious, false)}
-      <div className="mt-6 grid grid-cols-2 items-start gap-x-10 sm:gap-x-14">
-        <div>{renderRun(left, slide.blocks[title[title.length - 1]]?.type, measure)}</div>
-        <div>{renderRun(right, undefined, false)}</div>
+      <div className="mt-6 grid grid-cols-2 items-start gap-x-6 sm:gap-x-14">
+        <div className="min-w-0">{renderRun(left, slide.blocks[title[title.length - 1]]?.type, measure)}</div>
+        <div className="min-w-0">{renderRun(right, undefined, false)}</div>
       </div>
     </div>
   );
