@@ -50,8 +50,7 @@ export default function PitchesLibrary({ title }: { title: string }) {
   const [workDraft, setWorkDraft] = useState("");
   const [live, setLive] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  const [savingUrl, setSavingUrl] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [workFilter, setWorkFilter] = useState<QueueWorkstreamFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<QueueCategoryFilter>("all");
@@ -105,68 +104,31 @@ export default function PitchesLibrary({ title }: { title: string }) {
     }
   }
 
-  async function saveUrl(pitch: PitchRow) {
-    const next = (urls[pitch.id] ?? pitch.href).trim();
-    if (!next || next === pitch.href) return;
-    setSavingUrl(pitch.id);
-    setStatus(null);
+  async function copyUrl(pitch: PitchRow) {
+    const url = new URL(pitch.href, window.location.origin).toString();
     try {
-      const res = await fetch(`/api/pitches/${pitch.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: next }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not save that address");
-      setUrls((current) => {
-        const copy = { ...current };
-        delete copy[pitch.id];
-        return copy;
-      });
-      await reload();
-      setStatus(`Address saved. The page is now ${data.pitch?.href ?? next}.`);
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Could not save that address");
-    } finally {
-      setSavingUrl(null);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        throw new Error("clipboard unavailable");
+      }
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = url;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      if (!ok) {
+        setStatus("Could not copy that URL.");
+        return;
+      }
     }
-  }
-
-  async function saveFiling(pitch: PitchRow, patch: { category?: string; workstream?: string }) {
-    if (patch.category !== undefined && patch.category === (pitch.category ?? "")) return;
-    if (patch.workstream !== undefined && patch.workstream === (pitch.workstream ?? "")) return;
-    setStatus(null);
-    try {
-      const res = await fetch(`/api/pitches/${pitch.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not save that filing");
-      await reload();
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Could not save that filing");
-    }
-  }
-
-  async function duplicate(id: string) {
-    setBusy(true);
-    setStatus(null);
-    try {
-      const res = await fetch(`/api/pitches/${id}/duplicate`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not duplicate the pitch");
-      setWorkFilter("all");
-      setCategoryFilter("all");
-      setQuery("");
-      await reload();
-      setStatus(`Duplicated ${data.pitch?.name ?? "pitch"}.`);
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Could not duplicate the pitch");
-    } finally {
-      setBusy(false);
-    }
+    setCopiedId(pitch.id);
+    window.setTimeout(() => setCopiedId((current) => (current === pitch.id ? null : current)), 1600);
   }
 
   return (
@@ -281,62 +243,65 @@ export default function PitchesLibrary({ title }: { title: string }) {
       ) : (
         <div className="csc-list mt-2">
           {visible.map((pitch) => (
-            <div key={pitch.id} className="csc-list-row gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <Link href={`/admin/settings/pitches/${pitch.id}`} className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
-                  {pitch.name}
-                </Link>
-                <FilingSelect
-                  label={`Work for ${pitch.name}`}
-                  value={pitch.workstream ?? ""}
-                  options={PITCH_WORK_OPTIONS}
-                  placeholder="Work"
-                  onChange={(value) => void saveFiling(pitch, { workstream: value })}
-                />
-                <FilingSelect
-                  label={`Category for ${pitch.name}`}
-                  value={pitch.category ?? ""}
-                  options={PITCH_CATEGORY_OPTIONS}
-                  placeholder="Category"
-                  onChange={(value) => void saveFiling(pitch, { category: value })}
-                />
-                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
-                  {pitch.live ? "Live" : "Hidden"}
-                  {pitch.protected ? " · Password" : ""}
-                </span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveUrl(pitch);
-                  }}
+            <div key={pitch.id} className="csc-list-row">
+              <Link href={`/admin/settings/pitches/${pitch.id}`} className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
+                {pitch.name}
+              </Link>
+              <div className="flex shrink-0 items-center gap-3">
+                <span
+                  className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                    pitch.live ? "text-[var(--csc-accent)]" : "text-white/40"
+                  }`}
                 >
-                  <label className="block">
-                    <span className="sr-only">URL for {pitch.name}</span>
-                    <input
-                      value={urls[pitch.id] ?? pitch.href}
-                      spellCheck={false}
-                      aria-label={`URL for ${pitch.name}`}
-                      disabled={savingUrl === pitch.id}
-                      onChange={(event) => setUrls((current) => ({ ...current, [pitch.id]: event.target.value }))}
-                      onBlur={() => void saveUrl(pitch)}
-                      className={`w-44 sm:w-72 ${fieldClass} font-mono text-xs disabled:opacity-50`}
-                    />
-                  </label>
-                </form>
-                <SettingsButton href={pitch.href} target="_blank">
+                  {pitch.live ? "Live" : "Hidden"}
+                </span>
+                {pitch.protected ? <LockMark /> : null}
+                <button
+                  type="button"
+                  className="csc-btn-circle"
+                  aria-label={copiedId === pitch.id ? `Copied URL for ${pitch.name}` : `Copy URL for ${pitch.name}`}
+                  title={copiedId === pitch.id ? "Copied" : "Copy URL"}
+                  onClick={() => void copyUrl(pitch)}
+                >
+                  {copiedId === pitch.id ? <CheckIcon /> : <CopyIcon />}
+                </button>
+                <a href={pitch.href} target="_blank" rel="noreferrer" className="csc-link text-sm font-semibold">
                   View
-                </SettingsButton>
-                <SettingsButton disabled={busy} onClick={() => void duplicate(pitch.id)}>
-                  Duplicate
-                </SettingsButton>
+                </a>
               </div>
             </div>
           ))}
         </div>
       )}
     </SettingsSubpage>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect x="4.25" y="4.25" width="7.5" height="7.5" rx="1.25" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M9.75 4.25V2.75A1.25 1.25 0 0 0 8.5 1.5H2.75A1.25 1.25 0 0 0 1.5 2.75V8.5a1.25 1.25 0 0 0 1.25 1.25H4.25" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M3 7.2 5.6 9.8 11 4.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LockMark() {
+  return (
+    <span role="img" title="Password protected" aria-label="Password protected" className="text-white/55">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <rect x="2.75" y="6" width="8.5" height="6.25" rx="1.25" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M4.5 6V4.4a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    </span>
   );
 }
 
