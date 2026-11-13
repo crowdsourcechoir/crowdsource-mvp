@@ -328,8 +328,9 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         status: "live",
         controls: [
           "Find pitches, including SoBECA Song Garden and Initial Meeting Deck",
-          "Search pitches",
-          "File a pitch under a category and filter the list by category",
+          "Search pitches from the header",
+          "Filter pitches with the Work and Category menus",
+          "File a pitch under a workstream and a category",
           "Show the most recently saved pitch first",
           "Edit each pitch URL",
           "Duplicate a pitch",

@@ -3,6 +3,7 @@ import { CONFERENCE_BELLEVUE_NAME, CONFERENCE_BELLEVUE_PROMPT, conferenceBellevu
 import { INITIAL_MEETING_NAME, INITIAL_MEETING_PROMPT, initialMeetingSlides } from "@/lib/pitches/initial-meeting";
 import { STRATEGY_NAME, STRATEGY_PROMPT, strategySlides } from "@/lib/pitches/strategy";
 import { VISIT_BELLEVUE_NAME, VISIT_BELLEVUE_PROMPT, visitBellevueSlides } from "@/lib/pitches/visit-bellevue";
+import { pitchCategoryFrom, pitchWorkFrom } from "@/lib/pitches/library";
 import { overlayColor as storedOverlayColor } from "@/lib/pitches/photo-overlay";
 
 const DEFAULT_COPY_COLOR = "#FFFFFF";
@@ -26,7 +27,6 @@ const MAX_CUSTOM = 40;
 const MAX_TEXT = 4000;
 const MAX_PROMPT = 2000;
 const MAX_NAME = 80;
-const MAX_CATEGORY = 40;
 
 /** Untouched built-in decks stay in the order they were added. A save moves that deck to the top. */
 const BUILTIN_UPDATED_AT: Record<string, string> = {
@@ -50,8 +50,10 @@ export type PitchAdmin = {
   organizationId: string | null;
   /** Resolved when the pitch is read for admin. Not stored on the pitch. */
   organizationName: string | null;
-  /** Short filing label. Null when the pitch is uncategorized. */
+  /** Sales category key. Null when the pitch is uncategorized. */
   category: string | null;
+  /** Sales workstream key. Null when the pitch is not filed under work. */
+  workstream: string | null;
   /** Last save, or the built-in deck's introduction time. Newest sorts first. */
   updatedAt: string;
   slides: PitchSlide[];
@@ -71,8 +73,10 @@ export type PitchOverride = {
   passwordHash?: string | null;
   /** Sales organization. Null clears a previous link. */
   organizationId?: string | null;
-  /** Filing label. Null clears it. */
+  /** Sales category key. Null clears it. */
   category?: string | null;
+  /** Sales workstream key. Null clears it. */
+  workstream?: string | null;
   updatedAt?: string;
 };
 
@@ -85,6 +89,7 @@ export type CustomPitch = {
   passwordHash: string | null;
   organizationId: string | null;
   category: string | null;
+  workstream: string | null;
   slides: PitchSlide[];
   createdAt: string;
   updatedAt: string;
@@ -188,6 +193,7 @@ export function toAdmin(pitch: LoadedPitch): PitchAdmin {
     organizationId: pitch.organizationId,
     organizationName: null,
     category: pitch.category,
+    workstream: pitch.workstream,
     updatedAt: pitch.updatedAt,
     slides: pitch.slides,
   };
@@ -468,12 +474,14 @@ export function organizationIdFrom(value: unknown): string | null | undefined {
   return ORG_ID.test(id) ? id : undefined;
 }
 
-/** A short filing label, or null when the pitch is left uncategorized. */
+/** A sales category key, or null when the pitch is left uncategorized. */
 export function categoryFrom(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const text = value.trim().replace(/\s+/g, " ");
-  if (!text) return null;
-  return text.slice(0, MAX_CATEGORY);
+  return pitchCategoryFrom(value);
+}
+
+/** A sales workstream key, or null when the pitch is not filed under work. */
+export function workstreamFrom(value: unknown): string | null {
+  return pitchWorkFrom(value);
 }
 
 function timeFrom(value: unknown): string | null {
@@ -483,12 +491,17 @@ function timeFrom(value: unknown): string | null {
   return new Date(time).toISOString();
 }
 
-function libraryFields(id: string, stored?: { category?: string | null; updatedAt?: string }): {
+function libraryFields(
+  id: string,
+  stored?: { category?: string | null; workstream?: string | null; updatedAt?: string }
+): {
   category: string | null;
+  workstream: string | null;
   updatedAt: string;
 } {
   return {
     category: categoryFrom(stored?.category ?? null),
+    workstream: workstreamFrom(stored?.workstream ?? null),
     updatedAt: timeFrom(stored?.updatedAt) ?? BUILTIN_UPDATED_AT[id] ?? "2026-01-01T00:00:00.000Z",
   };
 }
@@ -511,6 +524,7 @@ function sanitizeOverride(value: unknown): PitchOverride | null {
   const organizationId = organizationIdFrom(source.organizationId);
   if (organizationId !== undefined) override.organizationId = organizationId;
   if (Object.prototype.hasOwnProperty.call(source, "category")) override.category = categoryFrom(source.category);
+  if (Object.prototype.hasOwnProperty.call(source, "workstream")) override.workstream = workstreamFrom(source.workstream);
   const updatedAt = timeFrom(source.updatedAt);
   if (updatedAt) override.updatedAt = updatedAt;
   if (source.slides === null) override.slides = null;
@@ -539,6 +553,7 @@ function sanitizeCustom(value: unknown): CustomPitch | null {
     passwordHash: hashOrNull(source.passwordHash),
     organizationId: organizationIdFrom(source.organizationId) ?? null,
     category: categoryFrom(source.category),
+    workstream: workstreamFrom(source.workstream),
     slides,
     createdAt: typeof source.createdAt === "string" ? source.createdAt : new Date(0).toISOString(),
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : new Date(0).toISOString(),
@@ -623,6 +638,7 @@ function presentCustom(pitch: CustomPitch): LoadedPitch {
     builtin: false,
     organizationId: pitch.organizationId,
     category: categoryFrom(pitch.category),
+    workstream: workstreamFrom(pitch.workstream),
     updatedAt: timeFrom(pitch.updatedAt) ?? timeFrom(pitch.createdAt) ?? "2026-01-01T00:00:00.000Z",
     slides: pitch.slides,
   };
@@ -759,6 +775,7 @@ export function createCustomPitch(
     passwordHash: string | null;
     organizationId?: string | null;
     category?: string | null;
+    workstream?: string | null;
   },
   deps: { id: string; now: string }
 ): { state: WebPitchesState; pitch: CustomPitch } | { error: string } {
@@ -783,6 +800,7 @@ export function createCustomPitch(
     passwordHash: input.passwordHash,
     organizationId,
     category: categoryFrom(input.category),
+    workstream: workstreamFrom(input.workstream),
     slides: seedSlides(name, prompt),
     createdAt: deps.now,
     updatedAt: deps.now,
@@ -807,6 +825,7 @@ export function duplicatePitch(
     passwordHash: source.passwordHash,
     organizationId: source.organizationId,
     category: categoryFrom(source.category),
+    workstream: workstreamFrom(source.workstream),
     slides: cloneSlides(source.slides),
     createdAt: deps.now,
     updatedAt: deps.now,
@@ -826,6 +845,7 @@ export function applyPitchPatch(
     reset?: boolean;
     organizationId?: string | null;
     category?: string | null;
+    workstream?: string | null;
   },
   now: string
 ): { state: WebPitchesState; pitch: LoadedPitch } | { error: string } {
@@ -850,6 +870,7 @@ export function applyPitchPatch(
   }
   const live = typeof patch.live === "boolean" ? patch.live : current.live;
   const category = patch.category === undefined ? current.category : categoryFrom(patch.category);
+  const workstream = patch.workstream === undefined ? current.workstream : workstreamFrom(patch.workstream);
   let organizationId = current.organizationId;
   if (patch.organizationId !== undefined) {
     if (patch.organizationId === null) organizationId = null;
@@ -897,6 +918,7 @@ export function applyPitchPatch(
     live,
     organizationId,
     category,
+    workstream,
     updatedAt: now,
     slides,
     title: pitchTitle(slides, name),
@@ -913,6 +935,7 @@ export function applyPitchPatch(
             live,
             organizationId,
             category,
+            workstream,
             slides,
             updatedAt: now,
           }
@@ -922,7 +945,17 @@ export function applyPitchPatch(
   }
 
   const previous = state.overrides[current.id] ?? {};
-  const override: PitchOverride = { ...previous, name, prompt, slug, live, organizationId, category, updatedAt: now };
+  const override: PitchOverride = {
+    ...previous,
+    name,
+    prompt,
+    slug,
+    live,
+    organizationId,
+    category,
+    workstream,
+    updatedAt: now,
+  };
   if (
     current.id === INITIAL_MEETING_ID ||
     current.id === STRATEGY_ID ||

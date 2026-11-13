@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     password?: unknown;
     organizationId?: unknown;
     category?: unknown;
+    workstream?: unknown;
   };
   const created = await createPitch({
     name: typeof body.name === "string" ? body.name : "",
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
     password: typeof body.password === "string" ? body.password : "",
     organizationId: typeof body.organizationId === "string" ? body.organizationId : null,
     category: typeof body.category === "string" ? body.category : null,
+    workstream: typeof body.workstream === "string" ? body.workstream : null,
   });
   if (!created.pitch) {
     return NextResponse.json({ error: created.error ?? "Could not create the pitch." }, { status: created.status });

@@ -111,6 +111,7 @@ export async function createPitch(input: {
   password?: string;
   organizationId?: string | null;
   category?: string | null;
+  workstream?: string | null;
 }): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();
   if (context.error) return { error: context.error, status: 503 };
@@ -124,6 +125,7 @@ export async function createPitch(input: {
       passwordHash: password ? hashPitchPassword(password) : null,
       organizationId: input.organizationId ?? null,
       category: input.category ?? null,
+      workstream: input.workstream ?? null,
     },
     { id: newId(), now: now() }
   );
@@ -160,6 +162,7 @@ export async function updatePitch(
     reset?: boolean;
     organizationId?: string | null;
     category?: string | null;
+    workstream?: string | null;
   }
 ): Promise<{ pitch?: PitchAdmin; error?: string; status: number }> {
   const context = await readContext();

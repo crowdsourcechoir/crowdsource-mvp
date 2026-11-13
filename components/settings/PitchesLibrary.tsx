@@ -3,7 +3,20 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { pitchCategoryNames, pitchInCategory, pitchMatchesQuery } from "@/lib/pitches/library";
+import QueueFilterSelect from "@/components/sales/QueueFilterSelect";
+import {
+  PITCH_CATEGORY_FILTERS,
+  PITCH_CATEGORY_OPTIONS,
+  PITCH_WORK_FILTERS,
+  PITCH_WORK_OPTIONS,
+  countPitchCategories,
+  countPitchWork,
+  pitchMatchesCategory,
+  pitchMatchesQuery,
+  pitchMatchesWork,
+} from "@/lib/pitches/library";
+import type { QueueCategoryFilter } from "@/lib/sales/queue/category";
+import type { QueueWorkstreamFilter } from "@/lib/sales/queue/workstream";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
 import { SettingsButton } from "@/components/settings/ui";
 
@@ -18,13 +31,14 @@ type PitchRow = {
   builtin: boolean;
   organizationName: string | null;
   category: string | null;
+  workstream: string | null;
   updatedAt: string;
 };
 
 const fieldClass =
   "border border-white/15 bg-black px-2 py-1 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none";
 
-export default function PitchesLibrary({ title, description }: { title: string; description: string }) {
+export default function PitchesLibrary({ title }: { title: string }) {
   const router = useRouter();
   const [pitches, setPitches] = useState<PitchRow[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -33,12 +47,14 @@ export default function PitchesLibrary({ title, description }: { title: string; 
   const [prompt, setPrompt] = useState("");
   const [password, setPassword] = useState("");
   const [categoryDraft, setCategoryDraft] = useState("");
+  const [workDraft, setWorkDraft] = useState("");
   const [live, setLive] = useState(true);
   const [creating, setCreating] = useState(false);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [savingUrl, setSavingUrl] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("*");
+  const [workFilter, setWorkFilter] = useState<QueueWorkstreamFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<QueueCategoryFilter>("all");
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -57,14 +73,17 @@ export default function PitchesLibrary({ title, description }: { title: string; 
     reload().catch((err) => setStatus(err instanceof Error ? err.message : "Could not load pitches"));
   }, []);
 
-  const categories = useMemo(() => pitchCategoryNames((pitches ?? []).map((pitch) => pitch.category)), [pitches]);
-  const uncategorized = (pitches ?? []).some((pitch) => !pitch.category);
+  const workCounts = useMemo(() => countPitchWork((pitches ?? []).map((pitch) => pitch.workstream)), [pitches]);
+  const categoryCounts = useMemo(() => countPitchCategories((pitches ?? []).map((pitch) => pitch.category)), [pitches]);
   const visible = useMemo(
     () =>
       (pitches ?? []).filter(
-        (pitch) => pitchInCategory(pitch.category, categoryFilter) && pitchMatchesQuery(pitch, query)
+        (pitch) =>
+          pitchMatchesWork(pitch.workstream, workFilter) &&
+          pitchMatchesCategory(pitch.category, categoryFilter) &&
+          pitchMatchesQuery(pitch, query)
       ),
-    [pitches, categoryFilter, query]
+    [pitches, workFilter, categoryFilter, query]
   );
 
   async function createPitch(event: React.FormEvent) {
@@ -75,7 +94,7 @@ export default function PitchesLibrary({ title, description }: { title: string; 
       const res = await fetch("/api/pitches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, prompt, live, password, category: categoryDraft }),
+        body: JSON.stringify({ name, prompt, live, password, category: categoryDraft, workstream: workDraft }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not create the pitch");
@@ -113,21 +132,21 @@ export default function PitchesLibrary({ title, description }: { title: string; 
     }
   }
 
-  async function saveCategory(pitch: PitchRow, value: string) {
-    const next = value.trim().replace(/\s+/g, " ");
-    if (next === (pitch.category ?? "")) return;
+  async function saveFiling(pitch: PitchRow, patch: { category?: string; workstream?: string }) {
+    if (patch.category !== undefined && patch.category === (pitch.category ?? "")) return;
+    if (patch.workstream !== undefined && patch.workstream === (pitch.workstream ?? "")) return;
     setStatus(null);
     try {
       const res = await fetch(`/api/pitches/${pitch.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: next }),
+        body: JSON.stringify(patch),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not save the category");
+      if (!res.ok) throw new Error(data.error ?? "Could not save that filing");
       await reload();
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Could not save the category");
+      setStatus(err instanceof Error ? err.message : "Could not save that filing");
     }
   }
 
@@ -138,7 +157,8 @@ export default function PitchesLibrary({ title, description }: { title: string; 
       const res = await fetch(`/api/pitches/${id}/duplicate`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not duplicate the pitch");
-      setCategoryFilter("*");
+      setWorkFilter("all");
+      setCategoryFilter("all");
       setQuery("");
       await reload();
       setStatus(`Duplicated ${data.pitch?.name ?? "pitch"}.`);
@@ -153,11 +173,20 @@ export default function PitchesLibrary({ title, description }: { title: string; 
     <SettingsSubpage
       eyebrow="Content"
       title={title}
-      description={description}
       actions={
-        <SettingsButton variant="primary" expanded={creating} onClick={() => setCreating((open) => !open)}>
-          New pitch
-        </SettingsButton>
+        <>
+          <input
+            value={query}
+            type="search"
+            aria-label="Search pitches"
+            placeholder="Search…"
+            onChange={(event) => setQuery(event.target.value)}
+            className={`w-36 min-w-0 sm:w-56 ${fieldClass}`}
+          />
+          <SettingsButton variant="primary" expanded={creating} onClick={() => setCreating((open) => !open)}>
+            New pitch
+          </SettingsButton>
+        </>
       }
     >
       {creating ? (
@@ -173,17 +202,20 @@ export default function PitchesLibrary({ title, description }: { title: string; 
               className={`mt-1 w-full ${fieldClass} px-3 py-2`}
             />
           </label>
-          <label className="mt-3 block">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Category</span>
-            <input
-              value={categoryDraft}
-              aria-label="Category"
-              list="pitch-categories"
-              placeholder="Conference, partnership, internal"
-              onChange={(event) => setCategoryDraft(event.target.value)}
-              className={`mt-1 w-full ${fieldClass} px-3 py-2`}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <FilingSelect
+              label="Work"
+              value={workDraft}
+              options={PITCH_WORK_OPTIONS}
+              onChange={setWorkDraft}
             />
-          </label>
+            <FilingSelect
+              label="Category"
+              value={categoryDraft}
+              options={PITCH_CATEGORY_OPTIONS}
+              onChange={setCategoryDraft}
+            />
+          </div>
           <label className="mt-3 block">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Prompt</span>
             <textarea
@@ -220,34 +252,26 @@ export default function PitchesLibrary({ title, description }: { title: string; 
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          aria-label="Search pitches"
-          placeholder="Search pitches"
-          onChange={(event) => setQuery(event.target.value)}
-          className={`w-full sm:w-64 ${fieldClass}`}
+        <QueueFilterSelect
+          label="Work"
+          value={workFilter}
+          options={PITCH_WORK_FILTERS.map((option) => ({
+            key: option.key,
+            label: option.label,
+            count: workCounts[option.key],
+          }))}
+          onChange={setWorkFilter}
         />
-        {categories.length > 0 ? (
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Categories">
-            <FilterChip pressed={categoryFilter === "*"} onClick={() => setCategoryFilter("*")}>
-              All
-            </FilterChip>
-            {categories.map((category) => (
-              <FilterChip
-                key={category}
-                pressed={categoryFilter.toLowerCase() === category.toLowerCase()}
-                onClick={() => setCategoryFilter(category)}
-              >
-                {category}
-              </FilterChip>
-            ))}
-            {uncategorized ? (
-              <FilterChip pressed={categoryFilter === "?"} onClick={() => setCategoryFilter("?")}>
-                Uncategorized
-              </FilterChip>
-            ) : null}
-          </div>
-        ) : null}
+        <QueueFilterSelect
+          label="Category"
+          value={categoryFilter}
+          options={PITCH_CATEGORY_FILTERS.map((option) => ({
+            key: option.key,
+            label: option.label,
+            count: categoryCounts[option.key],
+          }))}
+          onChange={setCategoryFilter}
+        />
       </div>
 
       {!pitches ? (
@@ -256,31 +280,25 @@ export default function PitchesLibrary({ title, description }: { title: string; 
         <p className="mt-4 text-sm text-white/70">No pitches match.</p>
       ) : (
         <div className="csc-list mt-2">
-          <datalist id="pitch-categories">
-            {categories.map((category) => (
-              <option key={category} value={category} />
-            ))}
-          </datalist>
           {visible.map((pitch) => (
             <div key={pitch.id} className="csc-list-row gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <Link href={`/admin/settings/pitches/${pitch.id}`} className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
                   {pitch.name}
                 </Link>
-                <input
-                  key={`${pitch.id}:${pitch.category ?? ""}`}
-                  defaultValue={pitch.category ?? ""}
-                  aria-label={`Category for ${pitch.name}`}
-                  list="pitch-categories"
+                <FilingSelect
+                  label={`Work for ${pitch.name}`}
+                  value={pitch.workstream ?? ""}
+                  options={PITCH_WORK_OPTIONS}
+                  placeholder="Work"
+                  onChange={(value) => void saveFiling(pitch, { workstream: value })}
+                />
+                <FilingSelect
+                  label={`Category for ${pitch.name}`}
+                  value={pitch.category ?? ""}
+                  options={PITCH_CATEGORY_OPTIONS}
                   placeholder="Category"
-                  onBlur={(event) => void saveCategory(pitch, event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      event.currentTarget.blur();
-                    }
-                  }}
-                  className={`w-28 shrink-0 ${fieldClass} text-xs text-[var(--csc-accent)] placeholder:text-white/30`}
+                  onChange={(value) => void saveFiling(pitch, { category: value })}
                 />
                 <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
                   {pitch.live ? "Live" : "Hidden"}
@@ -322,27 +340,32 @@ export default function PitchesLibrary({ title, description }: { title: string; 
   );
 }
 
-function FilterChip({
-  pressed,
-  onClick,
-  children,
+function FilingSelect({
+  label,
+  value,
+  options,
+  onChange,
+  placeholder,
 }: {
-  pressed: boolean;
-  onClick: () => void;
-  children: string;
+  label: string;
+  value: string;
+  options: ReadonlyArray<{ key: string; label: string }>;
+  onChange: (value: string) => void;
+  placeholder?: string;
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
-        pressed
-          ? "border-[var(--csc-accent)] text-[var(--csc-accent)]"
-          : "border-white/20 text-gray-300 hover:border-white/40 hover:text-white"
-      }`}
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={`w-[9.25rem] shrink-0 ${fieldClass} text-xs ${value ? "text-white" : "text-white/45"}`}
     >
-      {children}
-    </button>
+      <option value="">{placeholder ?? label}</option>
+      {options.map((option) => (
+        <option key={option.key} value={option.key}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }
