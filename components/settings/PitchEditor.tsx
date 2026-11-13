@@ -25,6 +25,7 @@ import {
 import { GradedPhoto } from "@/components/pitch/GradedPhoto";
 import { SALMON_OVERLAY_COLOR } from "@/lib/pitches/photo-overlay";
 import PitchOrgField from "@/components/settings/PitchOrgField";
+import { PITCH_CATEGORY_OPTIONS, PITCH_WORK_OPTIONS } from "@/lib/pitches/library";
 import { SettingsButton } from "@/components/settings/ui";
 
 type PitchPayload = {
@@ -38,6 +39,7 @@ type PitchPayload = {
   organizationId: string | null;
   organizationName: string | null;
   category: string | null;
+  workstream: string | null;
   slides: PitchSlide[];
 };
 
@@ -275,7 +277,9 @@ export default function PitchEditor({ id }: { id: string }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
   const [category, setCategory] = useState("");
+  const [workstream, setWorkstream] = useState("");
   const savedCategory = useRef("");
+  const savedWorkstream = useRef("");
   const slidesRef = useRef<PitchSlide[] | null>(null);
   const nameRef = useRef("");
   const promptRef = useRef("");
@@ -373,7 +377,9 @@ export default function PitchEditor({ id }: { id: string }) {
         setOrganizationId(next.organizationId ?? null);
         setOrganizationName(next.organizationName ?? null);
         savedCategory.current = next.category ?? "";
+        savedWorkstream.current = next.workstream ?? "";
         setCategory(savedCategory.current);
+        setWorkstream(savedWorkstream.current);
         setActiveId(next.slides?.[0]?.id ?? null);
       })
       .catch((err) => {
@@ -597,15 +603,35 @@ export default function PitchEditor({ id }: { id: string }) {
             className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
           />
         </label>
-        <label className="block border-b border-[var(--csc-row-divider)] py-3">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Category</span>
-          <input
+        <div className="flex flex-wrap gap-2 border-b border-[var(--csc-row-divider)] py-3">
+          <FilingMenu
+            label="Work"
+            value={workstream}
+            options={PITCH_WORK_OPTIONS}
+            onChange={(next) => {
+              setWorkstream(next);
+              if (next === savedWorkstream.current) return;
+              void fetch(`/api/pitches/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workstream: next }),
+              }).then(async (res) => {
+                const data = await res.json();
+                if (!res.ok) {
+                  setStatus(data.error ?? "Could not save the work");
+                  return;
+                }
+                savedWorkstream.current = data.pitch?.workstream ?? "";
+                setWorkstream(savedWorkstream.current);
+              });
+            }}
+          />
+          <FilingMenu
+            label="Category"
             value={category}
-            aria-label="Category"
-            placeholder="Conference, partnership, internal"
-            onChange={(event) => setCategory(event.target.value)}
-            onBlur={() => {
-              const next = category.trim().replace(/\s+/g, " ");
+            options={PITCH_CATEGORY_OPTIONS}
+            onChange={(next) => {
+              setCategory(next);
               if (next === savedCategory.current) return;
               void fetch(`/api/pitches/${id}`, {
                 method: "PATCH",
@@ -621,9 +647,8 @@ export default function PitchEditor({ id }: { id: string }) {
                 setCategory(savedCategory.current);
               });
             }}
-            className="mt-1 w-full bg-transparent text-sm text-white focus:outline-none"
           />
-        </label>
+        </div>
         <label className="block py-3">
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Prompt</span>
           <textarea
@@ -1270,5 +1295,36 @@ export default function PitchEditor({ id }: { id: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function FilingMenu({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: ReadonlyArray<{ key: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block min-w-[12rem] flex-1">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full border border-white/15 bg-black px-2 py-1.5 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+      >
+        <option value="">None</option>
+        {options.map((option) => (
+          <option key={option.key} value={option.key}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

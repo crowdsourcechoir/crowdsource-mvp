@@ -36,6 +36,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     reset?: boolean;
     organizationId?: unknown;
     category?: unknown;
+    workstream?: unknown;
   };
   const updated = await updatePitch(params.id, {
     name: typeof body.name === "string" ? body.name : undefined,
@@ -48,6 +49,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       body.organizationId === null ? null : typeof body.organizationId === "string" ? body.organizationId : undefined,
     category:
       body.category === null || typeof body.category === "string" ? body.category : undefined,
+    workstream:
+      body.workstream === null || typeof body.workstream === "string" ? body.workstream : undefined,
   });
   if (!updated.pitch) {
     return NextResponse.json({ error: updated.error ?? "Could not save the pitch." }, { status: updated.status });

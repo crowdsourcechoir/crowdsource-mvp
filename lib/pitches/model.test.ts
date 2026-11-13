@@ -129,19 +129,33 @@ const afterAssign = listLoadedPitches(assigned.state, sobeca).map((pitch) => pit
 assert.ok(afterAssign.indexOf(INITIAL_MEETING_ID) < afterAssign.indexOf("strategy"));
 assert.equal(afterAssign[0], CONFERENCE_BELLEVUE_ID);
 
-const filed = applyPitchPatch(empty, conferencePitch!, { category: "  Conference  " }, "2026-11-13T00:00:00.000Z");
+const filed = applyPitchPatch(
+  empty,
+  conferencePitch!,
+  { category: "  Conference  ", workstream: "Premium 55%" },
+  "2026-11-13T00:00:00.000Z"
+);
 assert.ok(!("error" in filed));
 if ("error" in filed) throw new Error("category failed");
-assert.equal(filed.pitch.category, "Conference");
-assert.equal(findLoadedPitch(filed.state, CONFERENCE_BELLEVUE_ID, sobeca)?.category, "Conference");
-const clearedCategory = applyPitchPatch(filed.state, filed.pitch, { category: "   " }, "2026-11-13T01:00:00.000Z");
+assert.equal(filed.pitch.category, "conferences");
+assert.equal(filed.pitch.workstream, "premium");
+assert.equal(findLoadedPitch(filed.state, CONFERENCE_BELLEVUE_ID, sobeca)?.category, "conferences");
+assert.equal(findLoadedPitch(filed.state, CONFERENCE_BELLEVUE_ID, sobeca)?.workstream, "premium");
+const clearedCategory = applyPitchPatch(
+  filed.state,
+  filed.pitch,
+  { category: "   ", workstream: "" },
+  "2026-11-13T01:00:00.000Z"
+);
 assert.ok(!("error" in clearedCategory));
 if ("error" in clearedCategory) throw new Error("clear category failed");
 assert.equal(clearedCategory.pitch.category, null);
+assert.equal(clearedCategory.pitch.workstream, null);
 const copiedCategory = duplicatePitch(filed.state, filed.pitch, { id: "pitch_cat1", now: "2026-11-13T02:00:00.000Z" });
 assert.ok(!("error" in copiedCategory));
 if ("error" in copiedCategory) throw new Error("category copy failed");
-assert.equal(copiedCategory.pitch.category, "Conference");
+assert.equal(copiedCategory.pitch.category, "conferences");
+assert.equal(copiedCategory.pitch.workstream, "premium");
 assert.equal(listLoadedPitches(copiedCategory.state, sobeca)[0]?.id, "pitch_cat1");
 
 const hidden = listLoadedPitches(
