@@ -39,7 +39,12 @@ function main() {
   assert.equal(counts.other, 1);
   assert.equal(counts.sports, 1);
   assert.equal(counts.booking_agents, 1);
+  assert.equal(counts.sponsors, 0);
   assert.equal(counts.all, 3);
+  assert.equal(
+    classifyQueueCategory({ salesInitiative: "sponsor_partners", organizationName: "Kaiser Permanente" }),
+    "sponsors"
+  );
 
   console.log("queue/category tests passed");
 }

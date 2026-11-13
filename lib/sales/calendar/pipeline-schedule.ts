@@ -33,6 +33,7 @@ export type PipelineScheduleDay = {
 
 const CATEGORY_LABEL: Record<QueueCategoryKey, string> = {
   sports: "Sports",
+  sponsors: "Sponsors",
   conferences: "Conferences",
   fundraisers: "Fundraisers",
   arts: "Arts",

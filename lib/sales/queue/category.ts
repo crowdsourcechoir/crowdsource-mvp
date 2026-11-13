@@ -8,6 +8,7 @@
 
 export const QUEUE_CATEGORY_KEYS = [
   "sports",
+  "sponsors",
   "conferences",
   "fundraisers",
   "arts",
@@ -23,6 +24,7 @@ export type QueueCategoryFilter = "all" | QueueCategoryKey;
 export const QUEUE_CATEGORY_CHIPS: { key: QueueCategoryFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "sports", label: "Sports" },
+  { key: "sponsors", label: "Sponsors" },
   { key: "conferences", label: "Conferences" },
   { key: "fundraisers", label: "Fundraisers" },
   { key: "arts", label: "Arts" },
@@ -41,6 +43,7 @@ const INITIATIVE_TO_CATEGORY: Record<string, QueueCategoryKey> = {
   tech_conferences: "tech",
   booking_agents: "booking_agents",
   wfea_network: "other",
+  sponsor_partners: "sponsors",
 };
 
 export type QueueCategoryInput = {
@@ -158,6 +161,7 @@ export function countQueueCategories<T extends QueueCategoryInput>(
     entertainment: 0,
     tech: 0,
     booking_agents: 0,
+    sponsors: 0,
     other: 0,
   };
   for (const item of items) {

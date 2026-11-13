@@ -73,6 +73,15 @@ export const SALES_INITIATIVES = {
     opportunityTypeKeys: ["other", "community_festival", "annual_conference"] as const,
     industrySegmentKey: null,
   },
+  sponsor_partners: {
+    key: "sponsor_partners",
+    label: "Sponsor partners",
+    description:
+      "Brands, venues, media, and producers already investing in Seattle sports — Fan Chant sponsorship first, with room to underwrite experiences beyond the game.",
+    organizationTypeKeys: ["corporation", "venue", "event_agency", "nonprofit", "association", "other"] as const,
+    opportunityTypeKeys: ["other"] as const,
+    industrySegmentKey: null,
+  },
 } as const;
 
 export type SalesInitiativeKey = keyof typeof SALES_INITIATIVES;

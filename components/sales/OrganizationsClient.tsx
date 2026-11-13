@@ -10,14 +10,19 @@ export default function OrganizationsClient() {
   const [types, setTypes] = useState<OrganizationType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [sscOnly, setSscOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<Record<string, string>>({});
 
-  const load = useCallback(async (q?: string) => {
+  const load = useCallback(async (q?: string, ssc = false) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/sales/organizations${q ? `?search=${encodeURIComponent(q)}` : ""}`, { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (q) params.set("search", q);
+      if (ssc) params.set("ssc", "1");
+      const qs = params.toString();
+      const res = await fetch(`/api/sales/organizations${qs ? `?${qs}` : ""}`, { cache: "no-store" });
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Failed to load organizations"));
       const body = data as { organizations?: Organization[]; organizationTypes?: OrganizationType[] };
@@ -62,16 +67,26 @@ export default function OrganizationsClient() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && load(search)}
+          onKeyDown={(e) => e.key === "Enter" && load(search, sscOnly)}
           placeholder="Search organizations…"
           className="w-64 rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-500"
         />
-        <button onClick={() => load(search)} className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">
+        <button onClick={() => load(search, sscOnly)} className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">
           Search
+        </button>
+        <button
+          onClick={() => {
+            const next = !sscOnly;
+            setSscOnly(next);
+            load(search, next);
+          }}
+          className={`rounded-md border px-3 py-2 text-sm ${sscOnly ? "border-white text-white" : "border-gray-700 text-gray-300 hover:bg-gray-800"}`}
+        >
+          Seattle Sports partners
         </button>
       </div>
 
@@ -79,7 +94,11 @@ export default function OrganizationsClient() {
       {loading ? (
         <p className="text-gray-400">Loading…</p>
       ) : organizations.length === 0 ? (
-        <p className="text-gray-400">No organizations yet. Add one above, or run the import scripts — see docs/sales-platform/data-import.md.</p>
+        <p className="text-gray-400">
+          {sscOnly
+            ? "No Seattle Sports partners loaded yet."
+            : "No organizations yet. Add one above, or run the import scripts — see docs/sales-platform/data-import.md."}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-800">
           <table className="w-full text-left text-sm">
@@ -102,6 +121,11 @@ export default function OrganizationsClient() {
                     {org.isExistingClient && (
                       <span className="ml-2 rounded-full border border-emerald-700 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
                         Existing client
+                      </span>
+                    )}
+                    {org.importMetadata?.sscPartner === true && (
+                      <span className="ml-2 rounded-full border border-gray-600 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">
+                        SSC partner
                       </span>
                     )}
                     {org.websiteUrl && <div className="text-xs text-gray-500">{org.domain}</div>}
