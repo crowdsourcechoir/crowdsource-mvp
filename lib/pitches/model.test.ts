@@ -282,6 +282,34 @@ const ruledAudience = ruledMerge.find((slide) => slide.id === "audience")?.block
 assert.equal(ruledAudience?.type, "paragraph");
 assert.equal(ruledAudience && "rule" in ruledAudience ? ruledAudience.rule : false, true);
 
+const indented = acceptSlides([
+  {
+    id: "title",
+    image: "/pitch/library/conductor.jpg",
+    imageAlt: "A choir on stage",
+    blocks: [
+      { type: "heading2", text: "Price", indent: false },
+      { type: "paragraph", text: "Stay out.", indent: false },
+      { type: "paragraph", text: "Stay in.", indent: true },
+      { type: "heading", text: "No indent here" },
+    ],
+  },
+]);
+const price = indented?.[0]?.blocks[0];
+const stayedOut = indented?.[0]?.blocks[1];
+const stayedIn = indented?.[0]?.blocks[2];
+const mainHeading = indented?.[0]?.blocks[3];
+assert.equal(price?.type, "heading2");
+assert.equal(price && "indent" in price ? price.indent : undefined, false);
+assert.equal(stayedOut && "indent" in stayedOut ? stayedOut.indent : undefined, false);
+assert.equal(stayedIn && "indent" in stayedIn ? stayedIn.indent : undefined, true);
+assert.equal(mainHeading && "indent" in mainHeading ? mainHeading.indent : undefined, undefined);
+const indentMerge = mergeSlides(meeting.slides, [
+  { id: "audience", blocks: [{}, { type: "paragraph", text: "Lead an accessible experience.", indent: false }] },
+]);
+const indentAudience = indentMerge.find((slide) => slide.id === "audience")?.blocks[1];
+assert.equal(indentAudience && "indent" in indentAudience ? indentAudience.indent : undefined, false);
+
 const patched = applyPitchPatch(empty, meeting, { slides: edited, prompt: "A tighter brief." }, "2026-11-05T01:00:00.000Z");
 assert.ok(!("error" in patched));
 if ("error" in patched) throw new Error("patch failed");

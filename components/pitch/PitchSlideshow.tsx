@@ -5,6 +5,7 @@ import type { CopyBlock, PitchSlide } from "@/app/sobeca-song-garden/content";
 import { PitchText } from "@/components/pitch/PitchText";
 import { SlideBackground } from "@/components/pitch/SlideBackground";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
+import { paragraphDrawsIndent, paragraphIndentChoice } from "@/lib/pitches/section-indent";
 import { plainPitchText } from "@/lib/pitches/rich-text";
 import { columnSplitIndex, displayFitScale, evenFitScale, shouldScrollCopy, shouldSplitCopy } from "@/lib/pitches/fit-copy";
 import {
@@ -81,13 +82,19 @@ function Block({
   display,
   footer = false,
   previous,
+  indented = false,
+  grouped = false,
 }: {
   block: CopyBlock;
   display: string;
   footer?: boolean;
   previous?: CopyBlock["type"];
+  /** Left padding so the line lines up with the header text. */
+  indented?: boolean;
+  /** Keep this paragraph with the header, including when a lime bar supplies the offset. */
+  grouped?: boolean;
 }) {
-  const follow = pitchFollowMargin(block.type, previous, footer);
+  const follow = pitchFollowMargin(block.type, previous, footer, grouped);
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-5xl break-words text-5xl uppercase leading-[0.84] tracking-wide [overflow-wrap:anywhere] sm:text-8xl lg:text-9xl${weight(block)}`}>
@@ -137,11 +144,10 @@ function Block({
     );
   }
   if (block.type === "paragraph") {
-    const tight = previous === "heading2";
     return (
       <p
-        className={`max-w-none break-words text-[15px] sm:max-w-3xl sm:text-lg${weight(block)} ${tight ? "leading-snug" : "leading-relaxed"} ${
-          tight && !block.rule ? "pl-4" : ""
+        className={`max-w-none break-words text-[15px] sm:max-w-3xl sm:text-lg${weight(block)} ${
+          indented ? "pl-4 leading-snug" : "leading-relaxed"
         } ${block.rule ? "flex items-start gap-3" : ""} ${footer ? "text-white/85" : follow}`}
       >
         {block.rule ? <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" /> : null}
@@ -361,7 +367,13 @@ function SlideCopy({
         data-copy-block={bodyIndex === null ? undefined : ""}
         data-copy-type={bodyIndex === null ? undefined : shown.type}
       >
-        <Block block={shown} display={display} previous={previous} />
+        <Block
+          block={shown}
+          display={display}
+          previous={previous}
+          indented={paragraphDrawsIndent(slide.blocks, blockIndex)}
+          grouped={shown.type === "paragraph" && paragraphIndentChoice(slide.blocks, blockIndex)}
+        />
       </div>
     );
   }

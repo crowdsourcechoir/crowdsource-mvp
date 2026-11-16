@@ -296,6 +296,12 @@ function overlayAmount(value: unknown, overlay: "salmon" | undefined): number | 
   return Math.round(clamped * 100) / 100;
 }
 
+function explicitIndent(block: { indent?: boolean }): { indent: true } | { indent: false } | Record<string, never> {
+  if (block.indent === true) return { indent: true };
+  if (block.indent === false) return { indent: false };
+  return {};
+}
+
 function copyBlock(block: CopyBlock): CopyBlock {
   if (block.type === "list") return { ...block, items: block.items.slice() };
   if (block.type === "table") {
@@ -304,7 +310,16 @@ function copyBlock(block: CopyBlock): CopyBlock {
   if (!("text" in block)) return block;
   const bold = block.bold === true ? { bold: true as const } : {};
   if (block.type === "paragraph") {
-    return { type: "paragraph", text: block.text, ...bold, ...(block.rule === true ? { rule: true as const } : {}) };
+    return {
+      type: "paragraph",
+      text: block.text,
+      ...bold,
+      ...(block.rule === true ? { rule: true as const } : {}),
+      ...explicitIndent(block),
+    };
+  }
+  if (block.type === "heading2" || block.type === "heading3") {
+    return { type: block.type, text: block.text, ...bold, ...explicitIndent(block) };
   }
   return { type: block.type, text: block.text, ...bold };
 }
@@ -351,11 +366,17 @@ function overlayBlock(base: CopyBlock, incoming: unknown): CopyBlock {
     "text" in next &&
     typeof next.text === "string"
   ) {
+    const indent =
+      (next.type === "paragraph" || next.type === "heading2" || next.type === "heading3") &&
+      (next.indent === true || next.indent === false)
+        ? { indent: next.indent }
+        : {};
     return {
       type: next.type,
       text: next.text.slice(0, MAX_TEXT),
       ...(next.bold === true ? { bold: true as const } : {}),
       ...(next.type === "paragraph" && next.rule === true ? { rule: true as const } : {}),
+      ...indent,
     } as CopyBlock;
   }
   if (next.type !== base.type) return base;

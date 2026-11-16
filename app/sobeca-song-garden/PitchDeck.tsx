@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { CopyBlock, PitchSlide } from "./content";
 import { PitchText } from "@/components/pitch/PitchText";
 import { pitchFollowMargin } from "@/lib/pitches/block-space";
+import { paragraphDrawsIndent, paragraphIndentChoice } from "@/lib/pitches/section-indent";
 
 const OVERLAYS = ["#CFFF81", "#FF2D95", "#C026D3"] as const;
 const CLOSING_COLOR = "#CFFF81";
@@ -50,13 +51,17 @@ function Block({
   display,
   footer = false,
   previous,
+  indented = false,
+  grouped = false,
 }: {
   block: CopyBlock;
   display: string;
   footer?: boolean;
   previous?: CopyBlock["type"];
+  indented?: boolean;
+  grouped?: boolean;
 }) {
-  const follow = pitchFollowMargin(block.type, previous, footer);
+  const follow = pitchFollowMargin(block.type, previous, footer, grouped);
   if (block.type === "title") {
     return (
       <h1 className={`${display} max-w-6xl text-6xl leading-[0.9] tracking-wide sm:text-8xl${weight(block)}`}>
@@ -115,11 +120,10 @@ function Block({
     );
   }
   if (block.type === "paragraph") {
-    const tight = previous === "heading2";
     return (
       <p
         className={`${footer ? "" : follow} max-w-3xl text-base sm:text-lg${weight(block)} ${
-          tight ? "leading-snug" : "leading-relaxed"
+          indented ? "pl-4 leading-snug" : "leading-relaxed"
         } ${block.rule ? "flex items-start gap-3" : ""}`}
       >
         {block.rule ? <span aria-hidden="true" className="h-[1lh] w-0.5 shrink-0 bg-[#CFFF81]" /> : null}
@@ -302,7 +306,13 @@ export default function PitchDeck({
                           <ClosingLine text={closing.last} display={displayClass} />
                         </>
                       ) : (
-                        <Block block={block} display={displayClass} previous={blocks[blockIndex - 1]?.type} />
+                        <Block
+                          block={block}
+                          display={displayClass}
+                          previous={blocks[blockIndex - 1]?.type}
+                          indented={paragraphDrawsIndent(slide.blocks, slide.blocks.indexOf(block))}
+                          grouped={block.type === "paragraph" && paragraphIndentChoice(slide.blocks, slide.blocks.indexOf(block))}
+                        />
                       )}
                     </div>
                   ),
@@ -314,7 +324,14 @@ export default function PitchDeck({
                     .filter((block) => block.type === "line" || block.type === "paragraph" || block.type === "heading2" || block.type === "heading3")
                     .map((block, blockIndex, blocks) => (
                       <div key={`${slide.id}-foot-${blockIndex}`} className="pitch-rise" style={{ animationDelay: `${200 + blockIndex * 80}ms` }}>
-                        <Block block={block} display={displayClass} footer previous={blocks[blockIndex - 1]?.type} />
+                        <Block
+                          block={block}
+                          display={displayClass}
+                          footer
+                          previous={blocks[blockIndex - 1]?.type}
+                          indented={paragraphDrawsIndent(slide.blocks, slide.blocks.indexOf(block))}
+                          grouped={block.type === "paragraph" && paragraphIndentChoice(slide.blocks, slide.blocks.indexOf(block))}
+                        />
                       </div>
                     ))}
                 </div>

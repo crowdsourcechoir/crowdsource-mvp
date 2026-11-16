@@ -338,6 +338,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           "Create a pitch from a prompt",
           "Add, reorder, and delete slides",
           "Add and delete text, Heading 2 points, indented Heading 3 bullets, lists, and table rows",
+          "Indent every paragraph under a Heading 2 or Heading 3 until the next header, and turn that indent off with the arrow",
           "Edit words, photos, and copy color",
           "Upload a looping background video for a slide",
           "Use an uploaded video from the library, titled with its filename",

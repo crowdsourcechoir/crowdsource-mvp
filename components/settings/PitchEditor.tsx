@@ -7,6 +7,7 @@ import { DEFAULT_COPY_COLOR } from "@/lib/sobeca-pitch/copy";
 import { PHOTO_LIBRARY } from "@/lib/pitches/photo-library";
 import { uploadedLibraryVideos, videoTitleFromFilename, type LibraryVideo } from "@/lib/pitches/video-library";
 import { plainPitchText, toggleBoldMarkup } from "@/lib/pitches/rich-text";
+import { paragraphIndentChoice, sectionIndentDefault } from "@/lib/pitches/section-indent";
 import { SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { pitchDraftKey, shouldApplySavedDraft } from "@/lib/pitches/autosave";
 import {
@@ -135,6 +136,8 @@ function FitText({
   onToggleBold,
   rule = false,
   onToggleRule,
+  indent = false,
+  onToggleIndent,
   nextClick = false,
   onNextClick,
   tools,
@@ -148,6 +151,8 @@ function FitText({
   onToggleBold?: () => void;
   rule?: boolean;
   onToggleRule?: () => void;
+  indent?: boolean;
+  onToggleIndent?: () => void;
   nextClick?: boolean;
   onNextClick?: () => void;
   tools?: ReactNode;
@@ -200,6 +205,25 @@ function FitText({
               <option value="line">Line</option>
               <option value="paragraph">Paragraph</option>
             </select>
+          ) : null}
+          {onToggleIndent ? (
+            <button
+              type="button"
+              aria-pressed={indent}
+              aria-label={`Indent ${label}`}
+              title={
+                styleName === "heading2" || styleName === "heading3"
+                  ? "Indent the paragraphs under this header until the next header"
+                  : "Indent this paragraph"
+              }
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onToggleIndent}
+              className={`text-[10px] uppercase tracking-[0.16em] ${
+                indent ? "border border-[var(--csc-accent)] px-1.5 font-bold text-white" : "font-semibold text-[var(--csc-accent)]"
+              }`}
+            >
+              →
+            </button>
           ) : null}
           {onToggleRule ? (
             <button
@@ -257,7 +281,7 @@ function FitText({
         onChange={(event) => onChange(event.target.value)}
         className={`mt-1 w-full resize-none bg-transparent leading-snug text-white focus:outline-none ${
           styleName === "heading3" ? "font-mono text-base" : "text-sm"
-        } ${bold ? "font-bold" : ""}`}
+        } ${bold ? "font-bold" : ""} ${indent && styleName === "paragraph" ? "pl-4" : ""}`}
       />
     </label>
   );
@@ -1361,6 +1385,33 @@ export default function PitchEditor({ id }: { id: string }) {
                             bottom: current.bottom?.trim() === plain ? undefined : plain,
                           }));
                         }}
+                        indent={
+                          block.type === "heading2" || block.type === "heading3"
+                            ? block.indent !== false
+                            : block.type === "paragraph" && paragraphIndentChoice(slide.blocks, blockIndex)
+                        }
+                        onToggleIndent={
+                          block.type === "heading2" || block.type === "heading3" || block.type === "paragraph"
+                            ? () =>
+                                patchSlide(slide.id, (current) => {
+                                  const existing = current.blocks[blockIndex];
+                                  if (!existing) return current;
+                                  if (existing.type === "heading2" || existing.type === "heading3") {
+                                    return updateBlock(current, blockIndex, {
+                                      ...existing,
+                                      indent: existing.indent === false ? undefined : false,
+                                    });
+                                  }
+                                  if (existing.type !== "paragraph") return current;
+                                  const next = !paragraphIndentChoice(current.blocks, blockIndex);
+                                  const fallback = sectionIndentDefault(current.blocks, blockIndex);
+                                  return updateBlock(current, blockIndex, {
+                                    ...existing,
+                                    indent: next === fallback ? undefined : next,
+                                  });
+                                })
+                            : undefined
+                        }
                         rule={block.type === "paragraph" && block.rule === true}
                         onToggleRule={
                           block.type === "paragraph"
@@ -1388,6 +1439,10 @@ export default function PitchEditor({ id }: { id: string }) {
                           patchSlide(slide.id, (current) => {
                             const existing = current.blocks[blockIndex];
                             if (!existing || !("text" in existing)) return current;
+                            const keepIndent =
+                              (existing.type === "paragraph" || existing.type === "heading2" || existing.type === "heading3") &&
+                              (style === "paragraph" || style === "heading2" || style === "heading3") &&
+                              typeof existing.indent === "boolean";
                             return updateBlock(current, blockIndex, {
                               type: style,
                               text: existing.text,
@@ -1395,6 +1450,7 @@ export default function PitchEditor({ id }: { id: string }) {
                               ...(style === "paragraph" && existing.type === "paragraph" && existing.rule
                                 ? { rule: true }
                                 : {}),
+                              ...(keepIndent ? { indent: existing.indent } : {}),
                             });
                           })
                         }
