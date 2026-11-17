@@ -4,8 +4,12 @@
 
 A Participatory Entertainment Company
 
-This is the commercial source of truth for OCTO. Product, sales, and show work
-should stay coherent with it. The living-system map is in
+The company identity is [`octo-coherence.md`](./octo-coherence.md). This
+document is the 2027–2028 operating plan under that frame. Where a name
+differs, the identity frame wins: Holiday Party is the seasonal Rave Choir
+edition, Fourth of July is a themed edition, and Song Garden is a shared
+capability used for commissioned activations and selective owned blooms. The
+living-system map is in
 [`octo-living-system-workspace.md`](./octo-living-system-workspace.md). The
 October 2026 sales workload mix still lives in `lib/sales/strategy/playbook.ts`
 until those targets are replaced on purpose.
@@ -233,13 +237,14 @@ The goal is not simply to produce more events. It is to create the conditions
 for more collective creativity to bloom—while building a financially flourishing
 company capable of reaching more people, places, and communities.
 
-## How this sits in OCTO
+## How this sits in the company
 
-| Engine | Living-system home | Sales workload today |
-| --- | --- | --- |
-| Anthem | Bloom + Composer repertoire | Premium pipeline |
-| Fan Chant | Garden or Bloom for a team, funded only | Partnership pipeline |
-| Song Garden | Commissioned Garden, then Blooms from its material | Owned or commissioned activation, not a self-serve product |
-| Rave Choir and themed shows | Owned Blooms | Owned-show economics, only with funding and distribution |
-| Capture | Film, case study, slides, follow-up mail | Proof that sells the next engagement |
-| Journeys | 2028+. Do not build the retreat product now. | — |
+| Offering | Category | Living-system home | Sales workload today |
+| --- | --- | --- | --- |
+| Anthem | Commissioned. Signature premium offering. | Bloom + Composition | Premium pipeline |
+| Fan Chant | Commissioned. Sports offering in development. | Garden or Bloom for a team | Partnership pipeline, funded opportunities |
+| Custom activations | Commissioned. Branded Song Gardens, districts, creative journeys. | Garden, then Blooms from its material | Commissioned activation. Journeys stay exploratory so they do not take current revenue time. |
+| Rave Choir | Owned. Flagship property. | Owned Bloom | Owned-show economics, with funding and distribution |
+| Themed editions | Owned. A Thriller Night, Holiday Party, Fourth of July. | Owned Bloom | Same funding and distribution requirement |
+| Other blooms | Owned. Selective Song Gardens, solstice celebrations. | Garden and Bloom | Selective, when the three conditions are strong |
+| Song Garden capability | A Root, used by both categories. | Garden | Branded crowdsourcing and engagement |

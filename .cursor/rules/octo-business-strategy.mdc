@@ -1,33 +1,43 @@
 ---
-description: 2027–2028 commercial strategy — commissioned experiences, owned shows, and the decision filter
+description: Company coherence — Crowdsource Choir identity, two categories, the Roots, and the three conditions
 alwaysApply: true
 ---
 
-# OCTO business strategy (2027–2028)
+# Crowdsource Choir coherence
 
-Commercial coherence lives in `docs/octo-business-strategy-2027.md`. Read it before planning sales, shows, gardens, pitches, or new product surface.
+Read `docs/octo-coherence.md` before planning product, sales, gardens, shows, or pitches. It governs naming. The 2027–2028 operating plan is `docs/octo-business-strategy-2027.md`.
 
 ## Company
 
-Crowdsource Choir is a participatory entertainment company. Scale through distribution partners, repeatable formats, sponsorships, and long-term relationships. More founder-led performances are not the scale path.
+Crowdsource Choir is the parent company, creative intelligence, and brand. A participatory entertainment company. We turn audiences into choirs and crowds into the show.
 
-## Two models
+- Mission: Cultivate collective effervescence.
+- Operating principle: Crowd Sourced.
+- Creative philosophy: We Are the Show.
+- Brand promise: Make the Moment Undeniable.
 
-- Premium commissioned experiences: Anthem (cash engine), Fan Chant, Song Garden, and Song Garden Journeys only from 2028.
-- Owned entertainment: Rave Choir, Holiday Rave Choir, A Thriller Night, and other themed shows only when a partnership justifies them.
+OCTO is the sales, marketing, and operational system. It is not the company name.
 
-They share methods, technology, musicians, production, participation craft, and partners.
+## Two business categories
 
-## Decision filter
+Commissioned Experiences are client-funded and custom.
 
-Every opportunity needs creative potential, financial viability, and partnership quality. Prefer all three. Do not routinely trade away viability or partnership quality for creative excitement.
+- Anthem: signature premium offering.
+- Fan Chant: sports-specific offering in development.
+- Custom Activations: branded Song Gardens, district activations, creative journeys.
 
-## Do not drift
+Owned Entertainment is created by Crowdsource Choir.
 
-- Song Garden is a commissioned activation that blooms into other art. It is not a content bucket, and self-service gardens are not a current commercial priority.
-- Song Garden Journeys wait until 2028. Do not pull current build time into retreats.
-- Fan Chant follows funded team or league opportunities. Do not finance a speculative sports property.
-- No speculative ticketed production without funding, promotion, and a break-even plan. Tickets are upside, not the financing plan.
-- Shared infrastructure should raise capacity without turning OCTO into a large agency.
+- Rave Choir: flagship entertainment property.
+- Themed Editions: A Thriller Night, Holiday Party, Fourth of July.
+- Other Blooms: selective Song Gardens, solstice celebrations.
 
-The October 2026 queue mix in `lib/sales/strategy/playbook.ts` still directs daily sales workload. This strategy is the frame those numbers serve.
+## The Roots
+
+Shared creative capabilities: Song Garden (branded crowdsourcing and engagement), Composition, Musical Facilitation, Live Production, OCTO, and Creative Development. `/admin/roots` is the participation methodology inside those capabilities.
+
+## Three conditions
+
+Creative potential, financial viability, and quality of partnership. Prefer all three. Coherence is the core. Flow is the movement. Flourishing is the outcome.
+
+The operating plan still applies under this frame: scale through partners and repeatable formats, develop Fan Chant from funded opportunities, and do not take on a speculative ticketed production without funding, promotion, and a break-even plan. The October 2026 queue mix in `lib/sales/strategy/playbook.ts` still directs daily sales workload.

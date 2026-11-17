@@ -5,9 +5,10 @@
  * Encodes effort mix and category pipelines so Sales can *direct* work,
  * not only display targets.
  *
- * The 2027–2028 commercial frame is docs/octo-business-strategy-2027.md.
+ * Company coherence is docs/octo-coherence.md.
+ * The 2027–2028 operating plan is docs/octo-business-strategy-2027.md.
  * Premium maps to Anthem, partnership to Fan Chant and season deals,
- * sponsor to distribution partners, and owned to Rave Choir and themed shows.
+ * sponsor to distribution partners, and owned to Rave Choir and themed editions.
  * Replace these targets only when that strategy's numbers are ready to drive the queue.
  */
 
