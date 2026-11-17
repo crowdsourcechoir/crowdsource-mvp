@@ -1,0 +1,75 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { SettingsButton, SettingsPanel, StatusPill } from "@/components/settings/ui";
+import type { AutoSendQueueView } from "@/lib/sales/autosend/view";
+
+export default function AutoSendSettingsClient() {
+  const [view, setView] = useState<AutoSendQueueView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/sales/autosend", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Failed to load");
+    setView(data as AutoSendQueueView);
+  }, []);
+
+  useEffect(() => {
+    void load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
+  }, [load]);
+
+  async function setEnabled(enabled: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sales/autosend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Could not update sending");
+      setView(data as AutoSendQueueView);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update sending");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SettingsPanel
+      eyebrow="Outreach"
+      title="Weekday sending"
+      description="On sends up to 25 verified, high-scoring first touches each weekday between 8:00am and 5:00pm Pacific. Off keeps the line and sends nothing."
+      actions={
+        <>
+          <StatusPill tone={view?.enabled ? "ok" : "off"}>{view?.enabled ? "On" : "Paused"}</StatusPill>
+          {view?.enabled ? (
+            <SettingsButton variant="danger" disabled={busy} onClick={() => void setEnabled(false)}>
+              {busy ? "Saving…" : "Pause"}
+            </SettingsButton>
+          ) : (
+            <SettingsButton variant="primary" disabled={busy} onClick={() => void setEnabled(true)}>
+              {busy ? "Saving…" : "Resume"}
+            </SettingsButton>
+          )}
+        </>
+      }
+    >
+      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      <p className="text-sm text-gray-300">
+        {view ? `${view.sentToday} of ${view.dailyCap} sent today · ${view.weekSent} of ${view.weeklyCap} this week.` : "Loading the line…"}
+      </p>
+      <p className="text-sm text-gray-400">
+        Associations, small events, unverified emails, and undated opportunities stay off this line. 2027 Q1 and Q2 go first, then Q3, then dates at least six months out.
+      </p>
+      <Link href="/admin/sales/autosend" className="csc-link text-sm">
+        Open the live queue →
+      </Link>
+    </SettingsPanel>
+  );
+}

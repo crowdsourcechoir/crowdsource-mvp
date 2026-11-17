@@ -152,6 +152,17 @@ export default function SalesOverviewClient() {
         ) : null}
       </section>
 
+      <Link
+        href="/admin/sales/autosend"
+        className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--csc-row-divider)] px-4 py-3"
+      >
+        <div className="min-w-0">
+          <p className="csc-eyebrow">Automated sending</p>
+          <p className="mt-1 text-sm text-gray-300">Sent, in line today, and the next business days</p>
+        </div>
+        <span className="csc-link shrink-0 text-sm">Open queue</span>
+      </Link>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Link href="/admin/sales/queue" className="rounded-xl border border-gray-800 p-5 hover:border-gray-600">
           <p className="text-sm text-gray-500">Queue</p>

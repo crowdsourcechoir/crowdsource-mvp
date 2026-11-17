@@ -134,6 +134,21 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         ],
       },
       {
+        id: "autosend",
+        domain: "Sales",
+        title: "Automated sending",
+        description: "25 weekday emails, 8am–5pm Pacific",
+        href: "/admin/settings/autosend",
+        statusLabel: "Manage",
+        status: "live",
+        controls: [
+          "On / Off",
+          "Daily cap readout (25) and weekly cap readout (175)",
+          "Send window readout (weekdays 8:00am–5:00pm Pacific)",
+          "Link to the live send queue",
+        ],
+      },
+      {
         id: "sales-offers",
         domain: "Sales",
         title: "Offers & engines",

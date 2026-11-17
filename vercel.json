@@ -272,6 +272,18 @@
     {
       "path": "/api/sales/cron/calendar-sync",
       "schedule": "15 21 * * *"
+    },
+    {
+      "path": "/api/sales/cron/autosend",
+      "schedule": "5,25,45 16-23 * * *"
+    },
+    {
+      "path": "/api/sales/cron/autosend",
+      "schedule": "5,25,45 0 * * *"
+    },
+    {
+      "path": "/api/sales/cron/autosend",
+      "schedule": "10 1 * * *"
     }
   ]
 }
