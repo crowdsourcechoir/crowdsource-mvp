@@ -37,7 +37,7 @@ Chrome-only preferences (Design system, sidebar) stay in `localStorage`.
 
 ## Google connections
 
-Settings card `gmail` is titled **Google connections** (`/admin/settings/gmail`). One OAuth grant covers Gmail send/read and `calendar.readonly`. Calendar meetings sync into Storage (`google-calendar/events-v1.json`) and surface at `/admin/sales/calendar`. After adding Calendar scope, reconnect Google once and allow Calendar.
+Settings card `gmail` is titled **Google connections** (`/admin/settings/gmail`). One OAuth grant covers Gmail send, compose (drafts), read, and Calendar. Weekday outreach (`/admin/settings/autosend`) files Gmail drafts and does not send them. Calendar meetings sync into Storage (`google-calendar/events-v1.json`) and surface at `/admin/sales/calendar`. After a new Gmail or Calendar scope is added, reconnect Google once and allow it.
 
 ## Card statuses
 

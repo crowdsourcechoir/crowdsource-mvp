@@ -44,7 +44,7 @@ export default function AutoSendSettingsClient() {
     <SettingsPanel
       eyebrow="Outreach"
       title="Weekday sending"
-      description="On sends the weekday mix between 8:00am and 5:00pm Pacific: 18 large ($15k+), 2 sponsorship, 3 partnership, and 2 other. School auctions only fill Other. Off keeps the line and sends nothing."
+      description="On files the weekday mix as Gmail drafts between 8:00am and 5:00pm Pacific: 18 large ($15k+), 2 sponsorship, 3 partnership, and 2 other. You send each draft yourself. School auctions only fill Other. Off keeps the line and files nothing."
       actions={
         <>
           <StatusPill tone={view?.enabled ? "ok" : "off"}>{view?.enabled ? "On" : "Paused"}</StatusPill>
@@ -61,8 +61,15 @@ export default function AutoSendSettingsClient() {
       }
     >
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {view && !view.gmailComposeGranted ? (
+        <p className="text-sm text-amber-200">
+          Reconnect Google under Google connections and allow Gmail compose. Until then this line creates nothing and does not send.
+        </p>
+      ) : null}
       <p className="text-sm text-gray-300">
-        {view ? `${view.sentToday} of ${view.dailyCap} sent today · ${view.weekSent} of ${view.weeklyCap} this week.` : "Loading the line…"}
+        {view
+          ? `${view.draftedToday} drafted today · ${view.sentToday} sent earlier · ${view.weekSent} of ${view.weeklyCap} this week.`
+          : "Loading the line…"}
       </p>
       <p className="text-sm text-gray-400">
         Chapters, state associations, unverified emails, and undated large opportunities stay off this line. Sponsorships and partnerships can be a season without a single event date. 2027 Q1 and Q2 go first inside Large, then Q3, then dates at least six months out.

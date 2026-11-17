@@ -1,6 +1,6 @@
 import type { AutoSendLane } from "./policy";
 
-export type AutoSendSlotStatus = "queued" | "sending" | "sent" | "failed" | "skipped";
+export type AutoSendSlotStatus = "queued" | "sending" | "sent" | "drafted" | "failed" | "skipped";
 
 export type AutoSendLaneCounts = Record<AutoSendLane, number>;
 
@@ -21,7 +21,10 @@ export type AutoSendSlot = {
   scheduledAt: string;
   status: AutoSendSlotStatus;
   statusSince: string | null;
+  /** When the slot finished: a real send, or the moment a Gmail draft was created. */
   sentAt: string | null;
+  /** Link to the unsent Gmail draft. Null for older slots that were sent outright. */
+  draftUrl: string | null;
   error: string | null;
   attempts: number;
 };

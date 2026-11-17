@@ -298,6 +298,8 @@ async function processInboundMessage(
   const fromEmails = extractEmailAddresses(from);
   const toEmails = extractEmailAddresses(headerValue(headers, "To"));
   const threadId = res.data.threadId;
+  // An unsent weekday draft lives in Drafts. Do not count it as outbound or inbound.
+  if (res.data.labelIds?.includes("DRAFT")) return empty;
   const isFromUs = fromEmails.some((email) => email === ourEmail.toLowerCase());
   const isSentOnly =
     Boolean(res.data.labelIds?.includes("SENT")) && !res.data.labelIds?.includes("INBOX");

@@ -16,7 +16,7 @@ export default function GoogleConnectionsSettingsPage() {
     <SettingsSubpage
       eyebrow="Integrations"
       title={card?.title ?? "Google connections"}
-      description="Gmail outreach and Calendar meeting sync share one Google account — connect once, manage both here."
+      description="Gmail outreach and Calendar meeting sync share one Google account — connect once, manage both here. Weekday outreach needs Gmail compose so it can file drafts. Reconnect and allow compose if Connect happened before that permission existed. You send each draft yourself."
     >
       <GmailSettingsClient
         scopes={[...GOOGLE_OAUTH_SCOPES]}

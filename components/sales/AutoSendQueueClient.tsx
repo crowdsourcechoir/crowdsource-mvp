@@ -8,15 +8,16 @@ import type { AutoSendQueueView } from "@/lib/sales/autosend/view";
 import type { AutoSendSlot } from "@/lib/sales/autosend/types";
 
 function statusLabel(slot: AutoSendSlot): string {
+  if (slot.status === "drafted") return "Draft";
   if (slot.status === "sent") return "Sent";
-  if (slot.status === "sending") return "Sending";
+  if (slot.status === "sending") return "Filing";
   if (slot.status === "failed") return "Failed";
   if (slot.status === "skipped") return "Skipped";
   return "In line";
 }
 
 function statusTone(slot: AutoSendSlot): "ok" | "warn" | "off" | "neutral" {
-  if (slot.status === "sent") return "ok";
+  if (slot.status === "sent" || slot.status === "drafted") return "ok";
   if (slot.status === "failed" || slot.status === "skipped") return "warn";
   if (slot.status === "sending") return "ok";
   return "neutral";
@@ -51,7 +52,7 @@ export default function AutoSendQueueClient() {
           <p className="csc-eyebrow">Prospecting Intelligence</p>
           <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Sending</h1>
           <p className="mt-2 max-w-2xl text-sm text-gray-400">
-            Weekdays, 8:00am to 4:30pm Pacific. Each day is 18 large opportunities at $15k or more, 2 sponsorships, 3 partnerships, and 2 other. School auctions are the Other seats. A short lane stays short.
+            Weekdays, 8:00am to 4:30pm Pacific. Each due slot becomes a draft in Gmail Drafts. You open it and send it yourself. Each day is 18 large opportunities at $15k or more, 2 sponsorships, 3 partnerships, and 2 other. School auctions are the Other seats. A short lane stays short.
           </p>
         </div>
         <Link href="/admin/settings/autosend" className="csc-link text-sm">
@@ -66,11 +67,11 @@ export default function AutoSendQueueClient() {
         {view ? (
           <>
             <StatusPill tone={view.enabled ? "ok" : "off"}>{view.enabled ? "On" : "Paused"}</StatusPill>
-            <StatusPill tone={view.gmailSendsEnabled ? "ok" : "warn"}>
-              {view.gmailSendsEnabled ? "Gmail sending on" : "Gmail sending paused"}
+            <StatusPill tone={view.gmailComposeGranted ? "ok" : "warn"}>
+              {view.gmailComposeGranted ? "Gmail drafts on" : "Gmail compose needed"}
             </StatusPill>
             <span className="text-sm text-gray-300">
-              {view.sentToday} of {view.dailyCap} sent today · {view.weekSent} of {view.weeklyCap} this week
+              {view.draftedToday} drafted today · {view.sentToday} sent earlier · {view.weekSent} of {view.weeklyCap} this week
             </span>
           </>
         ) : (
@@ -92,13 +93,17 @@ export default function AutoSendQueueClient() {
         </div>
       ) : null}
       {view?.nextSendAt ? (
-        <p className="mt-3 text-sm text-gray-400">Next send {formatPacificWhen(view.nextSendAt)} Pacific.</p>
+        <p className="mt-3 text-sm text-gray-400">Next draft {formatPacificWhen(view.nextSendAt)} Pacific.</p>
       ) : view && !view.storeError ? (
         <p className="mt-3 text-sm text-gray-400">Nothing is waiting on the clock.</p>
       ) : null}
-      {view && !view.gmailSendsEnabled ? (
+      {view && !view.gmailComposeGranted ? (
         <p className="mt-3 text-sm text-amber-200">
-          Resume Gmail sending on Sales before the window opens. The line stays put until then.
+          Reconnect Google under Settings → Google connections and allow Gmail compose. Until then this line creates nothing and does not send.
+        </p>
+      ) : view ? (
+        <p className="mt-3 text-sm text-gray-400">
+          Drafts show up in Gmail Drafts, not as sent mail. Open each one and send it yourself.
         </p>
       ) : null}
 
@@ -108,7 +113,7 @@ export default function AutoSendQueueClient() {
             <p className="csc-eyebrow">{group.label}</p>
             {group.slots.length === 0 ? (
               <p className="mt-3 text-sm text-gray-500">
-                {group.key === "today" ? "No sends left in today’s window." : "None yet."}
+                {group.key === "today" ? "No drafts left in today’s window." : "None yet."}
               </p>
             ) : (
               <ul className="csc-list mt-3">
@@ -127,6 +132,11 @@ export default function AutoSendQueueClient() {
                           {slot.contactEmail}
                           {slot.eventDate ? ` · ${slot.eventTitle} · ${slot.eventDate}` : ""}
                         </p>
+                        {slot.draftUrl ? (
+                          <a href={slot.draftUrl} className="csc-link mt-1 inline-block text-xs" target="_blank" rel="noreferrer">
+                            Open draft
+                          </a>
+                        ) : null}
                         {slot.error ? <p className="mt-1 text-xs text-amber-200">{slot.error}</p> : null}
                       </div>
                       <StatusPill tone={statusTone(slot)}>{statusLabel(slot)}</StatusPill>

@@ -201,6 +201,22 @@ function main() {
   const kept = mergeAutoSendSlots([sent], [], tuesdayOpen);
   assert.equal(kept.some((slot) => slot.queueItemId === sent.queueItemId && slot.status === "sent"), true);
 
+  const drafted: AutoSendSlot = {
+    ...lined[1]!,
+    status: "drafted",
+    sentAt: tuesdayOpen.toISOString(),
+    draftUrl: "https://mail.google.com/mail/#drafts?compose=abc",
+  };
+  const sameOrgAgain = candidate("again", {
+    organizationId: drafted.organizationId,
+    queueItemId: "new-q",
+    eventDate: "2027-05-01",
+    score: 99,
+  });
+  const keptDraft = mergeAutoSendSlots([drafted], [sameOrgAgain], tuesdayOpen);
+  assert.equal(keptDraft.some((slot) => slot.queueItemId === drafted.queueItemId && slot.status === "drafted"), true);
+  assert.equal(keptDraft.some((slot) => slot.queueItemId === "new-q"), false);
+
   const state: AutoSendState = {
     enabled: true,
     updatedAt: null,

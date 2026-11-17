@@ -52,10 +52,14 @@ function lineFor(slot: AutoSendSlot): string {
   return `${LANE_LABEL[slot.lane]} — ${slot.organizationName} — ${who} — ${when} — score ${Math.round(slot.score)}`;
 }
 
+function placed(slot: AutoSendSlot): boolean {
+  return slot.status === "sent" || slot.status === "drafted";
+}
+
 function mixSummary(slots: AutoSendSlot[]): string {
   return AUTO_SEND_LANES.map((lane) => {
-    const sent = slots.filter((slot) => slot.lane === lane && slot.status === "sent").length;
-    return `${LANE_LABEL[lane]} ${sent}/${LANE_DAILY_QUOTA[lane]}`;
+    const count = slots.filter((slot) => slot.lane === lane && placed(slot)).length;
+    return `${LANE_LABEL[lane]} ${count}/${LANE_DAILY_QUOTA[lane]}`;
   }).join(" · ");
 }
 
@@ -63,16 +67,20 @@ export function daySendReportDue(state: AutoSendState, todayYmd: string, afterCl
   if (state.reports.some((mark) => mark.day === todayYmd)) return false;
   const todaySlots = state.slots.filter((slot) => slot.day === todayYmd);
   const open = todaySlots.some((slot) => slot.status === "queued" || slot.status === "sending");
-  const finished = todaySlots.filter((slot) => slot.status === "sent" || slot.status === "failed" || slot.status === "skipped").length;
+  const finished = todaySlots.filter(
+    (slot) => slot.status === "sent" || slot.status === "drafted" || slot.status === "failed" || slot.status === "skipped"
+  ).length;
   if (!open && finished >= AUTO_SEND_DAILY_CAP) return true;
   return afterClose;
 }
 
 export async function sendDayReport(state: AutoSendState, todayYmd: string): Promise<{ sentAt: string; to: string }> {
   const todaySlots = state.slots.filter((slot) => slot.day === todayYmd);
+  const drafted = todaySlots.filter((slot) => slot.status === "drafted");
   const sent = todaySlots.filter((slot) => slot.status === "sent");
   const failed = todaySlots.filter((slot) => slot.status === "failed" || slot.status === "skipped");
   const weekStart = pacificWeekStart(todayYmd);
+  const weekDrafted = state.slots.filter((slot) => slot.status === "drafted" && slot.day >= weekStart && slot.day <= todayYmd);
   const weekSent = state.slots.filter((slot) => slot.status === "sent" && slot.day >= weekStart && slot.day <= todayYmd);
   const tomorrow = state.slots
     .filter((slot) => slot.status === "queued" && slot.day > todayYmd)
@@ -93,18 +101,23 @@ export async function sendDayReport(state: AutoSendState, todayYmd: string): Pro
     holds = [];
   }
 
-  const subject = `Sales send report · ${formatPacificDay(todayYmd)} · ${sent.length} sent`;
+  const subject = `Sales drafts · ${formatPacificDay(todayYmd)} · ${drafted.length} in Gmail`;
   const text = [
-    `${sent.length} of ${AUTO_SEND_DAILY_CAP} outreach emails sent on ${formatPacificDay(todayYmd)}.`,
+    `${drafted.length} of ${AUTO_SEND_DAILY_CAP} outreach emails were filed as Gmail drafts on ${formatPacificDay(todayYmd)}. Nothing on this line was sent. Open Gmail Drafts and send each one yourself.`,
     `Mix: ${mixSummary(todaySlots)}. Empty seats stay empty instead of being filled with school auctions.`,
     "",
-    "Sent",
+    "In Gmail Drafts",
+    drafted.length
+      ? drafted.map((slot) => `- ${formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} · ${lineFor(slot)}${slot.draftUrl ? ` · ${slot.draftUrl}` : ""}`).join("\n")
+      : "- None",
+    "",
+    "Already sent earlier (not recalled)",
     sent.length ? sent.map((slot) => `- ${formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} · ${lineFor(slot)}`).join("\n") : "- None",
     "",
-    "Not sent",
+    "Not drafted",
     failed.length ? failed.map((slot) => `- ${slot.organizationName}: ${slot.error ?? slot.status}`).join("\n") : "- None",
     "",
-    `This week: ${weekSent.length} of ${AUTO_SEND_WEEKLY_CAP} sends.`,
+    `This week: ${weekDrafted.length} drafts and ${weekSent.length} earlier sends, of ${AUTO_SEND_WEEKLY_CAP}.`,
     `Replies marked on the funnel: ${outcomes.replies}. Wins: ${outcomes.wins} (target 1). Meeting target is 5 — mark those on the funnel when they are booked.`,
     "",
     nextLine.length

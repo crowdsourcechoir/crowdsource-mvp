@@ -4,11 +4,25 @@ export const NUDGE_DUE_AFTER_DAYS = 7;
 /** Cap on AI-generated nudges sent per opportunity (approved + sent). */
 export const MAX_NUDGES_PER_OPPORTUNITY = 2;
 
+export const GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose";
+
 export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
+  GMAIL_COMPOSE_SCOPE,
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
 ] as const;
+
+/** True when this Google grant can create drafts. `gmail.send` alone cannot. */
+export function hasGmailComposeScope(scopes: string[] | null | undefined): boolean {
+  if (!Array.isArray(scopes)) return false;
+  return scopes.some(
+    (scope) =>
+      scope === GMAIL_COMPOSE_SCOPE ||
+      scope === "https://www.googleapis.com/auth/gmail.modify" ||
+      scope === "https://mail.google.com/"
+  );
+}
 
 /** Full Google OAuth grant for connect — Gmail + Calendar (read/write for Blooms) + Slides/Drive. */
 export const GOOGLE_OAUTH_SCOPES = [
@@ -52,6 +66,15 @@ export function gmailThreadUrl(threadId: string, accountEmail?: string | null): 
   if (email) params.set("authuser", email);
   const query = params.toString();
   return `https://mail.google.com/mail/${query ? `?${query}` : ""}#all/${threadId}`;
+}
+
+/** Open one unsent draft in the connected account. `messageId` is the draft's message id. */
+export function gmailDraftUrl(messageId: string, accountEmail?: string | null): string {
+  const params = new URLSearchParams();
+  const email = accountEmail?.trim();
+  if (email) params.set("authuser", email);
+  const query = params.toString();
+  return `https://mail.google.com/mail/${query ? `?${query}` : ""}#drafts?compose=${encodeURIComponent(messageId)}`;
 }
 
 /** Add N calendar days to an ISO timestamp (UTC date arithmetic is fine for v1 cadence). */

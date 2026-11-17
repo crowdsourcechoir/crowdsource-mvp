@@ -5,8 +5,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 /**
- * Sends the outreach emails that are due inside weekdays 8:00am–5:00pm Pacific,
- * then mails one report once that day's line is finished.
+ * Files Gmail drafts for outreach that is due inside weekdays 8:00am–5:00pm Pacific.
+ * Does not send those messages. Mails one report to the connected account once that day's line is finished.
  */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;

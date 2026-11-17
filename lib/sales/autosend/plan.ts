@@ -41,6 +41,7 @@ function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledA
     status: "queued",
     statusSince: null,
     sentAt: null,
+    draftUrl: null,
     error: null,
     attempts: 0,
   };
@@ -96,7 +97,7 @@ export function mergeAutoSendSlots(
 
   const kept: AutoSendSlot[] = [];
   for (const slot of existing) {
-    if (slot.status === "sent" || slot.status === "failed" || slot.status === "skipped") {
+    if (slot.status === "sent" || slot.status === "drafted" || slot.status === "failed" || slot.status === "skipped") {
       if (slot.day >= historyFloor) kept.push(slot);
       continue;
     }
@@ -105,7 +106,7 @@ export function mergeAutoSendSlots(
       if (Number.isFinite(since) && now.getTime() - since > STUCK_SENDING_MS) {
         const candidate = byItem.get(slot.queueItemId);
         if (candidate && daySet.has(slot.day)) {
-          kept.push(refreshQueued({ ...slot, status: "queued", error: "Send was interrupted and returned to the line." }, candidate));
+          kept.push(refreshQueued({ ...slot, status: "queued", error: "Draft was interrupted and returned to the line." }, candidate));
         }
       } else if (daySet.has(slot.day)) {
         kept.push(slot);
@@ -139,7 +140,9 @@ export function mergeAutoSendSlots(
   const next = [...kept];
   for (const day of days) {
     const onDay = next.filter(
-      (slot) => slot.day === day && (slot.status === "queued" || slot.status === "sending" || slot.status === "sent")
+      (slot) =>
+        slot.day === day &&
+        (slot.status === "queued" || slot.status === "sending" || slot.status === "sent" || slot.status === "drafted")
     );
     let seats = AUTO_SEND_DAILY_CAP - onDay.length;
     if (seats <= 0) continue;

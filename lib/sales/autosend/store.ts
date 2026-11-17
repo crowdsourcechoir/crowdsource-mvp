@@ -5,7 +5,7 @@ import type { AutoSendLaneCounts, AutoSendSlot, AutoSendSlotStatus, AutoSendStat
 const BUCKET = process.env.SUPABASE_MEDIA_BUCKET || "agent-media";
 const OBJECT_PATH = "sales-autosend/plan-v1.json";
 
-const STATUSES = new Set<AutoSendSlotStatus>(["queued", "sending", "sent", "failed", "skipped"]);
+const STATUSES = new Set<AutoSendSlotStatus>(["queued", "sending", "sent", "drafted", "failed", "skipped"]);
 
 export const EMPTY_AUTO_SEND_STATE: AutoSendState = {
   enabled: true,
@@ -64,6 +64,7 @@ function asSlot(value: unknown): AutoSendSlot | null {
     status: status as AutoSendSlotStatus,
     statusSince: typeof row.statusSince === "string" ? row.statusSince : null,
     sentAt: typeof row.sentAt === "string" ? row.sentAt : null,
+    draftUrl: typeof row.draftUrl === "string" ? row.draftUrl : null,
     error: typeof row.error === "string" ? row.error : null,
     attempts: typeof row.attempts === "number" && Number.isFinite(row.attempts) ? row.attempts : 0,
   };

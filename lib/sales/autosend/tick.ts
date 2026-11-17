@@ -12,6 +12,7 @@ const MAX_ATTEMPTS = 3;
 export type AutoSendTick = {
   enabled: boolean;
   sent: number;
+  drafted: number;
   skipped: number;
   failed: number;
   linedUp: number;
@@ -55,28 +56,36 @@ export async function setAutoSendEnabled(enabled: boolean): Promise<{ state: Aut
 }
 
 /**
- * Line up the next business days, send anything due inside 8:00am–5:00pm Pacific,
- * then mail one report once that day's sends are finished.
+ * Line up the next business days, file Gmail drafts for anything due inside
+ * 8:00am–5:00pm Pacific, then mail one report once that day's line is finished.
+ * This queue does not send prospect mail.
  */
 export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick> {
   const refreshed = await refreshAutoSendPlan(now);
   if (refreshed.error) {
-    return { enabled: refreshed.state.enabled, sent: 0, skipped: 0, failed: 0, linedUp: 0, reportSent: false, error: refreshed.error };
+    return { enabled: refreshed.state.enabled, sent: 0, drafted: 0, skipped: 0, failed: 0, linedUp: 0, reportSent: false, error: refreshed.error };
   }
   let state = refreshed.state;
   const today = pacificClock(now).ymd;
   const linedUp = state.slots.filter((slot) => slot.status === "queued").length;
   if (!state.enabled) {
-    return { enabled: false, sent: 0, skipped: 0, failed: 0, linedUp, reportSent: false, error: null };
+    return { enabled: false, sent: 0, drafted: 0, skipped: 0, failed: 0, linedUp, reportSent: false, error: null };
   }
 
-  let sent = 0;
+  let drafted = 0;
   let skipped = 0;
   let failed = 0;
   const gmail = await getGmailConnectionStatus();
   const inWindow = isInsideSendWindow(now);
+  const killed = process.env.SALES_GMAIL_SENDS_ENABLED?.trim() === "false";
+  let gateError: string | null = null;
+  if (inWindow && killed) {
+    gateError = "Gmail is turned off (SALES_GMAIL_SENDS_ENABLED=false). No drafts were created.";
+  } else if (inWindow && gmail.connected && !gmail.composeGranted) {
+    gateError = "Reconnect Google and allow Gmail compose. Weekday outreach creates drafts and does not send.";
+  }
 
-  if (inWindow && gmail.connected && gmail.sendsEnabled) {
+  if (inWindow && gmail.connected && gmail.composeGranted && !killed) {
     const clock = pacificClock(now);
     const burst = WINDOW_END_MINUTE - clock.minutes <= 60 ? 4 : 2;
     const due = state.slots
@@ -100,9 +109,12 @@ export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick
         ...state,
         slots: state.slots.map((row) => {
           if (row.queueItemId !== slot.queueItemId || row.day !== slot.day) return row;
-          if (result.result === "sent") {
-            sent += 1;
-            return applySendResult({ ...row, status: "sent", sentAt: result.sentAt, subject: result.subject, error: null }, result.sentAt);
+          if (result.result === "drafted") {
+            drafted += 1;
+            return applySendResult(
+              { ...row, status: "drafted", sentAt: result.draftedAt, subject: result.subject, draftUrl: result.draftUrl, error: null },
+              result.draftedAt
+            );
           }
           if (result.result === "skipped") {
             skipped += 1;
@@ -136,7 +148,8 @@ export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick
     } catch (err) {
       return {
         enabled: true,
-        sent,
+        sent: 0,
+        drafted,
         skipped,
         failed,
         linedUp,
@@ -146,5 +159,5 @@ export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick
     }
   }
 
-  return { enabled: true, sent, skipped, failed, linedUp, reportSent, error: null };
+  return { enabled: true, sent: 0, drafted, skipped, failed, linedUp, reportSent, error: gateError };
 }

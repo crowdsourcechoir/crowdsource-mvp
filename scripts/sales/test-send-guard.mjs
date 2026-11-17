@@ -3,6 +3,7 @@
  * Run: npx tsx scripts/sales/test-send-guard.mjs
  */
 import assert from "node:assert/strict";
+import { hasGmailComposeScope } from "../../lib/sales/gmail/constants.ts";
 import {
   gmailSendsAllowed,
   pickNextRemainingInitialDraft,
@@ -143,6 +144,11 @@ function main() {
   assert.equal(gmailSendsAllowed({ envFlag: undefined, connectionSendsEnabled: true }), true);
   assert.equal(gmailSendsAllowed({ envFlag: "false", connectionSendsEnabled: true }), false);
   assert.equal(gmailSendsAllowed({ envFlag: "", connectionSendsEnabled: false }), false);
+
+  assert.equal(hasGmailComposeScope(["https://www.googleapis.com/auth/gmail.send"]), false);
+  assert.equal(hasGmailComposeScope(["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.compose"]), true);
+  assert.equal(hasGmailComposeScope(["https://www.googleapis.com/auth/gmail.modify"]), true);
+  assert.equal(hasGmailComposeScope(null), false);
 
   assert.equal(hasSendsEnabledMarker(["https://www.googleapis.com/auth/gmail.send"]), false);
   assert.equal(hasSendsEnabledMarker(["https://www.googleapis.com/auth/gmail.send", GMAIL_SENDS_ENABLED_MARKER]), true);
