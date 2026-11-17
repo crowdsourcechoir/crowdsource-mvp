@@ -40,7 +40,7 @@ export function isPlausibleEmail(email: string | null | undefined): boolean {
 }
 
 const GENERIC_MAILBOX_LOCAL_PARTS =
-  /^(info|contact|admissions|admin|office|hello|support|general|frontdesk|front-desk|inquiries|inquiry|sales|help|events|event|fundraising|development|press|media|marketing|communications|comms|donations|donate|donor|giving|volunteer|volunteers|partners|partnership|partnerships|tickets|boxoffice|box-office|rsvp|booking|bookings|programming|sponsorship|sponsors|membership|members|outreach|community|team|mail|webmaster)$/i;
+  /^(info|contact|admissions|admin|office|hello|support|general|frontdesk|front-desk|inquiries|inquiry|enquiries|enquiry|sales|help|events|event|fundraising|development|press|media|marketing|communications|comms|donations|donate|donor|giving|volunteer|volunteers|partners|partnership|partnerships|tickets|boxoffice|box-office|rsvp|booking|bookings|programming|sponsorship|sponsors|membership|members|outreach|community|team|theteam|mail|webmaster)$/i;
 
 const GENERIC_ROLE_NAMES =
   /^(general mailbox|front ?desk|main office|admissions office|info desk|events? contact|events? (team|inbox)|general inbox|info inbox|info contact|office inbox)$/i;

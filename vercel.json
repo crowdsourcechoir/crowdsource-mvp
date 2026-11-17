@@ -82,6 +82,14 @@
       "schedule": "15 4 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-eudemonia-comparables",
+      "schedule": "45 22 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-eudemonia-comparables",
+      "schedule": "20 23 * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "50 2 * * *"
     },
