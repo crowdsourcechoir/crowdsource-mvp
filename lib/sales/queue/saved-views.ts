@@ -113,7 +113,7 @@ export function matchingSavedView(filters: {
     const businessOk = (p.business ?? "all") === filters.business;
     const dealOk = (p.deal ?? "all") === filters.deal;
     const valueOk = (p.value ?? "all") === filters.value;
-    const expectedCash = p.cash === "now" ? "cash_now" : p.cash ?? "all";
+    const expectedCash = p.cash ?? "all";
     const cashOk = expectedCash === cashNorm;
     if (scopeOk && businessOk && dealOk && valueOk && cashOk) return view.key;
   }

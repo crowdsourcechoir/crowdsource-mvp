@@ -1,6 +1,11 @@
 // Shared domain types for the Sales Platform. Mirrors docs/sales-platform/database.md.
 // DB rows are snake_case; everything here is camelCase, mapped in lib/sales/db/*.
 
+import type {
+  BusinessCategoryKey,
+  DealTypeKey,
+  ProductExperienceKey,
+} from "./business-model";
 import type { ContactOutreach, OpportunityOutreachKind } from "./outreach/contact-outreach";
 import type { WorkstreamKey } from "./strategy/playbook";
 
@@ -430,11 +435,11 @@ export type QueueSidebarItem = {
   /** Playbook workstream: premium | partnership | sponsor | owned */
   workstream: WorkstreamKey;
   /** Commissioned Experiences | Owned Entertainment — derived or overridden. */
-  businessCategory: string;
+  businessCategory: BusinessCategoryKey;
   /** Anthem / Fan Chant / Song Garden / Custom Activation / Rave Choir / Other Bloom */
-  productExperience: string;
+  productExperience: ProductExperienceKey;
   /** Client Booking / Sponsorship / Strategic / Venue / Production partnership */
-  dealType: string;
+  dealType: DealTypeKey;
   /** Optional free-text edition or Bloom name (e.g. Holiday Rave Choir). */
   editionBloom: string | null;
   /** 0–4: decision-maker, date, potential $, next step */

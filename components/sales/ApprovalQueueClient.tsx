@@ -954,7 +954,7 @@ export default function ApprovalQueueClient() {
       if (p.business && p.business !== "all") params.set("business", p.business);
       if (p.deal && p.deal !== "all") params.set("deal", p.deal);
       if (p.value && p.value !== "all") params.set("value", p.value);
-      if (p.cash === "cash_now" || p.cash === "now") params.set("cash", "now");
+      if (p.cash === "cash_now") params.set("cash", "now");
     });
   }
 
