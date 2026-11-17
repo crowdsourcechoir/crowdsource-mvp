@@ -1,10 +1,18 @@
 /**
- * Gmail (and other mail clients) already append Joel's signature when a draft is launched via
- * mailto:, so the app must NOT embed the press-quote block in outreach bodies — that produced
- * a duplicate signature. These helpers strip any previously embedded block.
+ * Outreach and campaign mail go out through the Gmail API or Resend, which do not append
+ * the account signature. The block is added once at send time. Draft editors still strip it
+ * so a mailto launch does not show it twice when the Gmail window adds its own.
  */
 
 const SIGNATURE_MARKER = "One of the Pacific Northwest's Most Talented Composers";
+
+export const EMAIL_SIGNATURE = [
+  "--",
+  "Joel DeJong",
+  "Creator, Crowdsource Choir",
+  "'One of the Pacific Northwest's Most Talented Composers'",
+  "—American Songwriter",
+].join("\n");
 
 /** True when the body includes the press-quote signature block we used to embed. */
 export function hasEmailSignature(body: string): boolean {
@@ -38,7 +46,33 @@ export function stripEmailSignature(body: string): string {
   return next.replace(/[ \t]+$/gm, "").replace(/\n+$/, "");
 }
 
-/** @deprecated Use stripEmailSignature — we no longer embed signatures in drafts. */
+/** Append Joel's signature once. A body that already contains the block is left as-is. */
 export function ensureEmailSignature(body: string): string {
-  return stripEmailSignature(body);
+  const stripped = stripEmailSignature(body ?? "");
+  if (hasEmailSignature(stripped)) return stripped.replace(/\s+$/, "");
+  const base = stripped.replace(/\s+$/, "");
+  if (!base) return EMAIL_SIGNATURE;
+  return `${base}\n\n${EMAIL_SIGNATURE}`;
+}
+
+function escapeSignatureHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** HTML form of the signature, for messages that already have their own HTML body. */
+export function emailSignatureHtml(): string {
+  const lines = EMAIL_SIGNATURE.split("\n").map((line) => escapeSignatureHtml(line)).join("<br>");
+  return `<p style="margin:24px 0 0;font-family:sans-serif;font-size:14px;line-height:1.45;">${lines}</p>`;
+}
+
+export function ensureEmailSignatureHtml(html: string): string {
+  if (!html) return emailSignatureHtml();
+  if (html.includes(SIGNATURE_MARKER)) return html;
+  const block = emailSignatureHtml();
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${block}</body>`);
+  return `${html}${block}`;
 }

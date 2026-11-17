@@ -1,6 +1,8 @@
 import { getGmailClient } from "./client";
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
+import { looksLikeHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
 import { assertOutboundEmailAllowed } from "@/lib/sales/outreach/send-blocklist";
+import { ensureEmailSignature, ensureEmailSignatureHtml } from "@/lib/sales/outreach/signature";
 import { buildGmailMime } from "./mime";
 
 export type GmailSendResult = {
@@ -52,13 +54,16 @@ export async function sendGmailMessage(input: {
     throw new Error("Gmail is not connected. Connect Gmail on the Sales overview page first.");
   }
 
+  const plainSource = looksLikeHtml(input.body) ? draftToPlainText(input.body) : input.body;
+  const plain = ensureEmailSignature(plainSource);
+  const htmlSource = input.html ?? (looksLikeHtml(input.body) ? input.body : null);
   const raw = encodeRawMessage(
     buildGmailMime({
       from: bundle.email,
       to: input.to,
       subject: input.subject,
-      body: input.body,
-      htmlBody: input.html ?? undefined,
+      body: plain,
+      htmlBody: htmlSource ? ensureEmailSignatureHtml(htmlSource) : undefined,
       inReplyTo: input.inReplyTo,
       references: input.references,
     })

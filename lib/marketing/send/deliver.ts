@@ -1,3 +1,4 @@
+import { ensureEmailSignature, ensureEmailSignatureHtml } from "../../sales/outreach/signature";
 import { personalizeEmail } from "../render/personalize";
 import type { EmailDocument } from "../document/types";
 import type { OutboundEmail } from "../providers/types";
@@ -48,8 +49,8 @@ export function messageForRecipient(input: {
     from: formatFrom(input.prepared.fromName, input.prepared.fromEmail),
     replyTo: input.prepared.replyTo,
     subject: input.subject,
-    html: personalized.html,
-    text: personalized.text,
+    html: ensureEmailSignatureHtml(personalized.html),
+    text: ensureEmailSignature(personalized.text),
     headers: listHeaders(input.unsubscribe),
   };
 }
