@@ -1,4 +1,5 @@
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
+import { readDealType } from "@/lib/sales/business-model";
 import { readDealForecast } from "@/lib/sales/engines";
 import { looksLikePersonName } from "@/lib/sales/dedupe";
 import { readSalesInitiative } from "@/lib/sales/initiatives";
@@ -166,6 +167,7 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
       salesInitiative: readSalesInitiative(organization.import_metadata),
       suggestedFee: pricing.suggestedAnthemFee,
       potentialAmount,
+      dealType: readDealType(opportunity.import_metadata) ?? readDealType(organization.import_metadata),
     };
     const reason = autoSendSkipReason(
       {

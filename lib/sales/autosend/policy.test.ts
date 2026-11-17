@@ -109,6 +109,8 @@ function main() {
   );
   assert.equal(classifyAutoSendLane({ organizationName: "Alaska Airlines", salesInitiative: "sponsor_partners" }), "sponsorship");
   assert.equal(classifyAutoSendLane({ organizationName: "Ballard FC", organizationTypeKey: "sports_team" }), "partnership");
+  assert.equal(classifyAutoSendLane({ organizationName: "Harry Walker Agency", organizationTypeKey: "event_agency" }), "partnership");
+  assert.equal(classifyAutoSendLane({ organizationName: "Northwind Summit", organizationTypeKey: "corporation" }), "other");
   assert.equal(
     classifyAutoSendLane({
       organizationName: "Amplify Informatics",

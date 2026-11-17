@@ -1,3 +1,5 @@
+import { classifyDealType } from "@/lib/sales/business-model";
+
 /**
  * Weekday send window and who is allowed into the automated 25/day queue.
  * Research can run any time. Outreach leaves only during this window.
@@ -77,6 +79,8 @@ export type AutoSendGateInput = {
   salesInitiative?: string | null;
   suggestedFee?: number | null;
   potentialAmount?: number | null;
+  dealType?: string | null;
+  category?: string | null;
 };
 
 export type AutoSendLaneInput = {
@@ -87,6 +91,8 @@ export type AutoSendLaneInput = {
   salesInitiative?: string | null;
   suggestedFee?: number | null;
   potentialAmount?: number | null;
+  dealType?: string | null;
+  category?: string | null;
 };
 
 export function pacificClock(date: Date): PacificClock {
@@ -254,26 +260,15 @@ export function classifyAutoSendLane(input: AutoSendLaneInput): AutoSendLane {
   const orgType = (input.organizationTypeKey ?? "").toLowerCase();
   const oppType = (input.opportunityTypeKey ?? "").toLowerCase();
   const initiative = input.salesInitiative ?? "";
-
-  if (
-    initiative === "sports_fan_culture" ||
-    orgType === "sports_team" ||
-    orgType === "sports_league" ||
-    orgType === "university" ||
-    oppType === "fan_engagement_initiative" ||
-    oppType === "team_season_launch"
-  ) {
-    return "partnership";
-  }
-
-  if (
-    initiative === "sponsor_partners" ||
-    initiative === "booking_agents" ||
-    initiative === "wfea_network" ||
-    orgType === "event_agency"
-  ) {
-    return "sponsorship";
-  }
+  const deal = classifyDealType({
+    dealType: input.dealType,
+    salesInitiative: input.salesInitiative,
+    organizationTypeKey: input.organizationTypeKey,
+    opportunityTitle: text,
+    category: input.category,
+  });
+  if (deal === "sponsorship") return "sponsorship";
+  if (deal !== "client_booking") return "partnership";
 
   const priced = pricedAtLeastFee(input.suggestedFee, input.potentialAmount);
   if (oppType === "fundraising_gala" || GALA_NAME.test(text)) {
@@ -285,7 +280,6 @@ export function classifyAutoSendLane(input: AutoSendLaneInput): AutoSendLane {
     oppType === "annual_conference" ||
     oppType === "association_convention" ||
     orgType === "conference" ||
-    orgType === "corporation" ||
     initiative === "conferences_associations" ||
     initiative === "tech_conferences"
   ) {
