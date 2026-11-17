@@ -5,7 +5,7 @@ import { isInsideSendWindow, pacificClock, WINDOW_END_MINUTE } from "./policy";
 import { daySendReportDue, sendDayReport } from "./report";
 import { sendAutoSendSlot } from "./send-slot";
 import { readAutoSendState, writeAutoSendState } from "./store";
-import type { AutoSendSlot, AutoSendState } from "./types";
+import type { AutoSendLaneCounts, AutoSendSlot, AutoSendState } from "./types";
 
 const MAX_ATTEMPTS = 3;
 
@@ -38,7 +38,9 @@ export async function refreshAutoSendPlan(now: Date = new Date()): Promise<{ sta
     return { state, error: err instanceof Error ? err.message : "Could not load candidates." };
   }
   const slots = mergeAutoSendSlots(state.slots, candidates, now);
-  const next: AutoSendState = { ...state, slots, updatedAt: now.toISOString() };
+  const ready: AutoSendLaneCounts = { large: 0, sponsorship: 0, partnership: 0, other: 0 };
+  for (const candidate of candidates) ready[candidate.lane] += 1;
+  const next: AutoSendState = { ...state, slots, ready, updatedAt: now.toISOString() };
   const writeError = await persist(next);
   return { state: writeError ? state : next, error: writeError };
 }

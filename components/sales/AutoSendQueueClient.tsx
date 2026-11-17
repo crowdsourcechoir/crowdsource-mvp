@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusPill } from "@/components/settings/ui";
-import { formatPacificWhen } from "@/lib/sales/autosend/policy";
+import { formatPacificWhen, LANE_LABEL } from "@/lib/sales/autosend/policy";
 import type { AutoSendQueueView } from "@/lib/sales/autosend/view";
 import type { AutoSendSlot } from "@/lib/sales/autosend/types";
 
@@ -51,7 +51,7 @@ export default function AutoSendQueueClient() {
           <p className="csc-eyebrow">Prospecting Intelligence</p>
           <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Sending</h1>
           <p className="mt-2 max-w-2xl text-sm text-gray-400">
-            25 verified first-touch emails on weekdays, spaced from 8:00am to 4:30pm Pacific. A full report arrives after that day’s sends finish.
+            Weekdays, 8:00am to 4:30pm Pacific. Each day is 18 large opportunities at $15k or more, 2 sponsorships, 3 partnerships, and 2 other. School auctions are the Other seats. A short lane stays short.
           </p>
         </div>
         <Link href="/admin/settings/autosend" className="csc-link text-sm">
@@ -77,6 +77,20 @@ export default function AutoSendQueueClient() {
           <span className="text-sm text-gray-500">Loading the line…</span>
         )}
       </div>
+      {view ? (
+        <div className="mt-4 space-y-2 text-sm text-gray-300">
+          <p>
+            Today’s mix:{" "}
+            {view.mix.map((lane) => `${lane.label} ${lane.sent + lane.lined}/${lane.quota}`).join(" · ")}
+          </p>
+          {view.ready ? (
+            <p className="text-gray-400">
+              Verified and ready: Large {view.ready.large} · Sponsorship {view.ready.sponsorship} · Partnership{" "}
+              {view.ready.partnership} · Other {view.ready.other}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {view?.nextSendAt ? (
         <p className="mt-3 text-sm text-gray-400">Next send {formatPacificWhen(view.nextSendAt)} Pacific.</p>
       ) : view && !view.storeError ? (
@@ -103,7 +117,7 @@ export default function AutoSendQueueClient() {
                     <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-xs text-gray-500">
-                          {formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} Pacific · score {Math.round(slot.score)}
+                          {formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} Pacific · {LANE_LABEL[slot.lane]} · score {Math.round(slot.score)}
                         </p>
                         <Link href={`/admin/sales/opportunities/${slot.opportunityId}`} className="mt-1 block truncate text-sm font-medium text-white hover:underline">
                           {slot.organizationName}

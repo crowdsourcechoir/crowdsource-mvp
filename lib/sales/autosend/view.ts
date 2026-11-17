@@ -1,13 +1,17 @@
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import {
   AUTO_SEND_DAILY_CAP,
+  AUTO_SEND_LANES,
   AUTO_SEND_WEEKLY_CAP,
+  LANE_DAILY_QUOTA,
+  LANE_LABEL,
   addDaysYmd,
   formatPacificDay,
   pacificClock,
   pacificWeekStart,
+  type AutoSendLane,
 } from "./policy";
-import type { AutoSendSlot, AutoSendState } from "./types";
+import type { AutoSendLaneCounts, AutoSendSlot, AutoSendState } from "./types";
 
 export type AutoSendQueueGroup = {
   key: string;
@@ -27,6 +31,8 @@ export type AutoSendQueueView = {
   weeklyCap: number;
   nextSendAt: string | null;
   groups: AutoSendQueueGroup[];
+  ready: AutoSendLaneCounts | null;
+  mix: { lane: AutoSendLane; label: string; quota: number; sent: number; lined: number }[];
   storeError: string | null;
 };
 
@@ -65,6 +71,14 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
     .filter((slot) => slot.status === "queued" && Date.parse(slot.scheduledAt) >= now.getTime() - 60_000)
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
 
+  const mix = AUTO_SEND_LANES.map((lane) => ({
+    lane,
+    label: LANE_LABEL[lane],
+    quota: LANE_DAILY_QUOTA[lane],
+    sent: sentToday.filter((slot) => slot.lane === lane).length,
+    lined: queuedToday.filter((slot) => slot.lane === lane).length,
+  }));
+
   return {
     enabled: state.enabled,
     gmailConnected: gmail.connected,
@@ -77,6 +91,8 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
     weeklyCap: AUTO_SEND_WEEKLY_CAP,
     nextSendAt: next?.scheduledAt ?? null,
     groups: groups.filter((group) => group.slots.length > 0 || group.key === "sent" || group.key === "today"),
+    ready: state.ready,
+    mix,
     storeError: error,
   };
 }

@@ -1,11 +1,14 @@
 import {
   AUTO_SEND_DAILY_CAP,
+  AUTO_SEND_LANES,
+  LANE_DAILY_QUOTA,
   addDaysYmd,
   bandRank,
   eventDateBand,
   openSlotTimes,
   pacificClock,
   upcomingBusinessDays,
+  type AutoSendLane,
 } from "./policy";
 import type { AutoSendCandidate, AutoSendSlot } from "./types";
 
@@ -32,6 +35,7 @@ function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledA
     eventTitle: candidate.eventTitle,
     eventDate: candidate.eventDate,
     score: candidate.score,
+    lane: candidate.lane,
     day,
     scheduledAt,
     status: "queued",
@@ -52,12 +56,32 @@ function refreshQueued(slot: AutoSendSlot, candidate: AutoSendCandidate): AutoSe
     eventTitle: candidate.eventTitle,
     eventDate: candidate.eventDate,
     score: candidate.score,
+    lane: candidate.lane,
   };
 }
 
+function nextLane(used: Record<AutoSendLane, number>, pools: Record<AutoSendLane, AutoSendCandidate[]>): AutoSendLane | null {
+  const order: AutoSendLane[] = ["large", "partnership", "sponsorship", "other"];
+  let best: AutoSendLane | null = null;
+  let bestRatio = Infinity;
+  let bestOrder = Infinity;
+  for (const lane of AUTO_SEND_LANES) {
+    if (used[lane] >= LANE_DAILY_QUOTA[lane] || pools[lane].length === 0) continue;
+    const ratio = used[lane] / LANE_DAILY_QUOTA[lane];
+    const laneOrder = order.indexOf(lane);
+    if (ratio < bestRatio || (ratio === bestRatio && laneOrder < bestOrder)) {
+      best = lane;
+      bestRatio = ratio;
+      bestOrder = laneOrder;
+    }
+  }
+  return best;
+}
+
 /**
- * Keep finished sends, keep future queued rows that are still eligible, and fill each
- * open business day up to 25. Q1–Q2 2027 is used before Q3, then the rolling window.
+ * Keep finished sends. Rebuild the unsent line so each day follows the lane quotas:
+ * 18 large ($15k+), 2 sponsorship, 3 partnership, 2 other. A short lane is left short.
+ * Inside a lane, Q1–Q2 2027 is used before Q3, then the rolling window.
  */
 export function mergeAutoSendSlots(
   existing: AutoSendSlot[],
@@ -88,10 +112,6 @@ export function mergeAutoSendSlots(
       }
       continue;
     }
-    if (slot.status === "queued" && daySet.has(slot.day) && Date.parse(slot.scheduledAt) >= now.getTime() - 25 * 60 * 1000) {
-      const candidate = byItem.get(slot.queueItemId);
-      if (candidate) kept.push(refreshQueued(slot, candidate));
-    }
   }
 
   const usedItems = new Set(kept.map((slot) => slot.queueItemId));
@@ -108,26 +128,43 @@ export function mergeAutoSendSlots(
     uniquePool.push(candidate);
   }
 
+  const pools: Record<AutoSendLane, AutoSendCandidate[]> = {
+    large: [],
+    sponsorship: [],
+    partnership: [],
+    other: [],
+  };
+  for (const candidate of uniquePool) pools[candidate.lane].push(candidate);
+
   const next = [...kept];
-  let cursor = 0;
   for (const day of days) {
     const onDay = next.filter(
       (slot) => slot.day === day && (slot.status === "queued" || slot.status === "sending" || slot.status === "sent")
     );
-    const need = AUTO_SEND_DAILY_CAP - onDay.length;
-    if (need <= 0 || cursor >= uniquePool.length) continue;
+    let seats = AUTO_SEND_DAILY_CAP - onDay.length;
+    if (seats <= 0) continue;
+    const used: Record<AutoSendLane, number> = { large: 0, sponsorship: 0, partnership: 0, other: 0 };
+    for (const slot of onDay) used[slot.lane] += 1;
+
+    const picks: AutoSendCandidate[] = [];
+    while (picks.length < seats) {
+      const lane = nextLane(used, pools);
+      const candidate = lane ? pools[lane].shift() : undefined;
+      if (!lane || !candidate) break;
+      used[lane] += 1;
+      picks.push(candidate);
+    }
     const times = openSlotTimes(
       day,
       now,
       onDay.map((slot) => slot.scheduledAt),
-      Math.min(need, uniquePool.length - cursor)
+      picks.length
     );
-    for (const scheduledAt of times) {
-      const candidate = uniquePool[cursor];
-      if (!candidate) break;
-      cursor += 1;
+    picks.forEach((candidate, index) => {
+      const scheduledAt = times[index];
+      if (!scheduledAt) return;
       next.push(slotFromCandidate(candidate, day, scheduledAt));
-    }
+    });
   }
 
   return next.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt) || a.organizationName.localeCompare(b.organizationName));

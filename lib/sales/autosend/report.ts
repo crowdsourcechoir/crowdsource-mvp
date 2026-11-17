@@ -4,7 +4,10 @@ import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { sendSelfEmailViaGmail } from "@/lib/sales/gmail/send";
 import {
   AUTO_SEND_DAILY_CAP,
+  AUTO_SEND_LANES,
   AUTO_SEND_WEEKLY_CAP,
+  LANE_DAILY_QUOTA,
+  LANE_LABEL,
   formatPacificDay,
   formatPacificWhen,
   isAssociationProspect,
@@ -45,7 +48,15 @@ async function linkedInHolds(): Promise<{ organizationName: string; score: numbe
 
 function lineFor(slot: AutoSendSlot): string {
   const who = slot.contactName ? `${slot.contactName} <${slot.contactEmail}>` : slot.contactEmail;
-  return `${slot.organizationName} — ${who} — ${slot.eventTitle} (${slot.eventDate}) — score ${Math.round(slot.score)}`;
+  const when = slot.eventDate ? `${slot.eventTitle} (${slot.eventDate})` : slot.eventTitle;
+  return `${LANE_LABEL[slot.lane]} — ${slot.organizationName} — ${who} — ${when} — score ${Math.round(slot.score)}`;
+}
+
+function mixSummary(slots: AutoSendSlot[]): string {
+  return AUTO_SEND_LANES.map((lane) => {
+    const sent = slots.filter((slot) => slot.lane === lane && slot.status === "sent").length;
+    return `${LANE_LABEL[lane]} ${sent}/${LANE_DAILY_QUOTA[lane]}`;
+  }).join(" · ");
 }
 
 export function daySendReportDue(state: AutoSendState, todayYmd: string, afterClose: boolean): boolean {
@@ -85,6 +96,7 @@ export async function sendDayReport(state: AutoSendState, todayYmd: string): Pro
   const subject = `Sales send report · ${formatPacificDay(todayYmd)} · ${sent.length} sent`;
   const text = [
     `${sent.length} of ${AUTO_SEND_DAILY_CAP} outreach emails sent on ${formatPacificDay(todayYmd)}.`,
+    `Mix: ${mixSummary(todaySlots)}. Empty seats stay empty instead of being filled with school auctions.`,
     "",
     "Sent",
     sent.length ? sent.map((slot) => `- ${formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} · ${lineFor(slot)}`).join("\n") : "- None",

@@ -1,9 +1,12 @@
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
+import { readDealForecast } from "@/lib/sales/engines";
 import { looksLikePersonName } from "@/lib/sales/dedupe";
+import { readSalesInitiative } from "@/lib/sales/initiatives";
 import { isDoNotProspect } from "@/lib/sales/prospecting/do-not-prospect";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
-import { autoSendSkipReason, componentScore, pacificClock } from "./policy";
+import { readAnthemPricing } from "@/lib/sales/pricing/metadata";
+import { autoSendSkipReason, classifyAutoSendLane, componentScore, pacificClock } from "./policy";
 import type { AutoSendCandidate } from "./types";
 
 const OPEN_DRAFT = new Set(["draft", "qa_passed"]);
@@ -65,12 +68,16 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
     event_or_initiative_name: string | null;
     last_outbound_at: string | null;
     gmail_thread_id: string | null;
+    opportunity_type_id: string | null;
+    import_metadata: Record<string, unknown> | null;
   }>(
     items.map((item) => item.opportunity_id),
     async (chunk) =>
       db
         .from("opportunities")
-        .select("id, title, organization_id, event_date_estimate, event_or_initiative_name, last_outbound_at, gmail_thread_id")
+        .select(
+          "id, title, organization_id, event_date_estimate, event_or_initiative_name, last_outbound_at, gmail_thread_id, opportunity_type_id, import_metadata"
+        )
         .in("id", chunk)
   );
   const oppById = new Map(opportunities.map((row) => [row.id, row]));
@@ -91,6 +98,12 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
   const { data: typeRows, error: typeError } = await db.from("organization_types").select("id, key");
   if (typeError) throw new Error(typeError.message);
   const typeKeyById = new Map(((typeRows ?? []) as { id: string; key: string }[]).map((row) => [row.id, row.key]));
+
+  const { data: opportunityTypeRows, error: opportunityTypeError } = await db.from("opportunity_types").select("id, key");
+  if (opportunityTypeError) throw new Error(opportunityTypeError.message);
+  const opportunityTypeKeyById = new Map(
+    ((opportunityTypeRows ?? []) as { id: string; key: string }[]).map((row) => [row.id, row.key])
+  );
 
   const scoreIds = items.map((item) => item.prospect_score_id).filter((id): id is string => Boolean(id));
   const scores = scoreIds.length
@@ -137,12 +150,26 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
     const draft = item.outreach_draft_id ? draftById.get(item.outreach_draft_id) : undefined;
     const contact = draft?.contact_id ? contactById.get(draft.contact_id) : undefined;
     const email = contact?.email?.trim() || null;
+    const organizationTypeKey = organization.organization_type_id
+      ? typeKeyById.get(organization.organization_type_id) ?? null
+      : null;
+    const eventTitle = opportunity.event_or_initiative_name || opportunity.title;
+    const pricing = readAnthemPricing(opportunity.import_metadata);
+    const potentialAmount = readDealForecast(opportunity.import_metadata).potentialAmount;
+    const laneInput = {
+      organizationName: organization.name,
+      eventTitle,
+      organizationTypeKey,
+      opportunityTypeKey: opportunity.opportunity_type_id
+        ? opportunityTypeKeyById.get(opportunity.opportunity_type_id) ?? null
+        : null,
+      salesInitiative: readSalesInitiative(organization.import_metadata),
+      suggestedFee: pricing.suggestedAnthemFee,
+      potentialAmount,
+    };
     const reason = autoSendSkipReason(
       {
-        organizationName: organization.name,
-        organizationTypeKey: organization.organization_type_id
-          ? typeKeyById.get(organization.organization_type_id) ?? null
-          : null,
+        ...laneInput,
         doNotProspect: isDoNotProspect(organization.import_metadata),
         existingClient: Boolean(organization.is_existing_client),
         alreadyContacted: Boolean(opportunity.last_outbound_at || opportunity.gmail_thread_id),
@@ -170,9 +197,10 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
       contactName: contact?.full_name ?? null,
       contactEmail: email!,
       subject: coalesceDraftSubject(draft?.edited_subject, draft?.ai_subject),
-      eventTitle: opportunity.event_or_initiative_name || opportunity.title,
-      eventDate: opportunity.event_date_estimate!,
+      eventTitle,
+      eventDate: opportunity.event_date_estimate ?? "",
       score: Number(score!.total_score),
+      lane: classifyAutoSendLane(laneInput),
     });
   }
   return candidates;

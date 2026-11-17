@@ -1,4 +1,8 @@
+import type { AutoSendLane } from "./policy";
+
 export type AutoSendSlotStatus = "queued" | "sending" | "sent" | "failed" | "skipped";
+
+export type AutoSendLaneCounts = Record<AutoSendLane, number>;
 
 export type AutoSendSlot = {
   queueItemId: string;
@@ -11,6 +15,7 @@ export type AutoSendSlot = {
   eventTitle: string;
   eventDate: string;
   score: number;
+  lane: AutoSendLane;
   /** Pacific calendar day the send is assigned to, YYYY-MM-DD. */
   day: string;
   scheduledAt: string;
@@ -31,6 +36,8 @@ export type AutoSendState = {
   updatedAt: string | null;
   slots: AutoSendSlot[];
   reports: AutoSendReportMark[];
+  /** Verified leads that clear the bar, counted by lane. Null until the plan has been refreshed. */
+  ready: AutoSendLaneCounts | null;
 };
 
 export type AutoSendCandidate = {
@@ -44,4 +51,5 @@ export type AutoSendCandidate = {
   eventTitle: string;
   eventDate: string;
   score: number;
+  lane: AutoSendLane;
 };

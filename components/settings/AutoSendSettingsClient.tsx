@@ -44,7 +44,7 @@ export default function AutoSendSettingsClient() {
     <SettingsPanel
       eyebrow="Outreach"
       title="Weekday sending"
-      description="On sends up to 25 verified, high-scoring first touches each weekday between 8:00am and 5:00pm Pacific. Off keeps the line and sends nothing."
+      description="On sends the weekday mix between 8:00am and 5:00pm Pacific: 18 large ($15k+), 2 sponsorship, 3 partnership, and 2 other. School auctions only fill Other. Off keeps the line and sends nothing."
       actions={
         <>
           <StatusPill tone={view?.enabled ? "ok" : "off"}>{view?.enabled ? "On" : "Paused"}</StatusPill>
@@ -65,7 +65,7 @@ export default function AutoSendSettingsClient() {
         {view ? `${view.sentToday} of ${view.dailyCap} sent today · ${view.weekSent} of ${view.weeklyCap} this week.` : "Loading the line…"}
       </p>
       <p className="text-sm text-gray-400">
-        Associations, small events, unverified emails, and undated opportunities stay off this line. 2027 Q1 and Q2 go first, then Q3, then dates at least six months out.
+        Chapters, state associations, unverified emails, and undated large opportunities stay off this line. Sponsorships and partnerships can be a season without a single event date. 2027 Q1 and Q2 go first inside Large, then Q3, then dates at least six months out.
       </p>
       <Link href="/admin/sales/autosend" className="csc-link text-sm">
         Open the live queue →

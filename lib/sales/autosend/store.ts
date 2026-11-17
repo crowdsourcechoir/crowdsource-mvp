@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
-import type { AutoSendSlot, AutoSendSlotStatus, AutoSendState } from "./types";
+import { AUTO_SEND_LANES, classifyAutoSendLane, type AutoSendLane } from "./policy";
+import type { AutoSendLaneCounts, AutoSendSlot, AutoSendSlotStatus, AutoSendState } from "./types";
 
 const BUCKET = process.env.SUPABASE_MEDIA_BUCKET || "agent-media";
 const OBJECT_PATH = "sales-autosend/plan-v1.json";
@@ -11,7 +12,28 @@ export const EMPTY_AUTO_SEND_STATE: AutoSendState = {
   updatedAt: null,
   slots: [],
   reports: [],
+  ready: null,
 };
+
+function asLane(value: unknown, organizationName: string, eventTitle: string): AutoSendLane {
+  if (typeof value === "string" && (AUTO_SEND_LANES as readonly string[]).includes(value)) return value as AutoSendLane;
+  return classifyAutoSendLane({ organizationName, eventTitle });
+}
+
+function asReady(value: unknown): AutoSendLaneCounts | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const counts: AutoSendLaneCounts = { large: 0, sponsorship: 0, partnership: 0, other: 0 };
+  let any = false;
+  for (const lane of AUTO_SEND_LANES) {
+    const count = row[lane];
+    if (typeof count === "number" && Number.isFinite(count)) {
+      counts[lane] = count;
+      any = true;
+    }
+  }
+  return any ? counts : null;
+}
 
 function asSlot(value: unknown): AutoSendSlot | null {
   if (!value || typeof value !== "object") return null;
@@ -32,6 +54,11 @@ function asSlot(value: unknown): AutoSendSlot | null {
     eventTitle: typeof row.eventTitle === "string" ? row.eventTitle : "",
     eventDate: typeof row.eventDate === "string" ? row.eventDate : "",
     score: typeof row.score === "number" && Number.isFinite(row.score) ? row.score : 0,
+    lane: asLane(
+      row.lane,
+      typeof row.organizationName === "string" ? row.organizationName : "",
+      typeof row.eventTitle === "string" ? row.eventTitle : ""
+    ),
     day: row.day,
     scheduledAt: row.scheduledAt,
     status: status as AutoSendSlotStatus,
@@ -61,6 +88,7 @@ export function normalizeAutoSendState(value: unknown): AutoSendState {
     updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : null,
     slots,
     reports,
+    ready: asReady(row.ready),
   };
 }
 
