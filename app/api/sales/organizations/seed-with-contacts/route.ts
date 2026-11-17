@@ -26,6 +26,7 @@ import {
 import { seedWorldHealthExpoContacts } from "@/lib/sales/seed/seed-world-health-expo-contacts";
 import { EUDEMONIA_COMPARABLE_SEEDS } from "@/lib/sales/seed/eudemonia-comparables";
 import { seedEudemoniaComparables } from "@/lib/sales/seed/seed-eudemonia-comparables";
+import { seedArtsWaWfea } from "@/lib/sales/seed/artswa-wfea";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -157,6 +158,14 @@ export async function POST(request: Request) {
       return NextResponse.json({
         preset: "eudemonia-comparables",
         seedCount: EUDEMONIA_COMPARABLE_SEEDS.length,
+        ...result,
+      });
+    }
+
+    if (body?.preset === "artswa-wfea") {
+      const result = await seedArtsWaWfea({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "artswa-wfea",
         ...result,
       });
     }

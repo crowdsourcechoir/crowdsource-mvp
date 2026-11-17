@@ -90,6 +90,14 @@
       "schedule": "20 23 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-artswa-wfea",
+      "schedule": "32,35,38,42,48,55 22 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-artswa-wfea",
+      "schedule": "10 23 * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "50 2 * * *"
     },
