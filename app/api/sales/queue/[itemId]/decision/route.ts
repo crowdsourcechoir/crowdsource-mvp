@@ -339,6 +339,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
           nextFollowUpAt: addDaysIso(now, NUDGE_DUE_AFTER_DAYS),
           gmailThreadId: gmailSend.threadId,
         });
+        if (
+          opportunity.relationshipStage === "parked" ||
+          (opportunity.importMetadata?.parkedFollowUp && typeof opportunity.importMetadata.parkedFollowUp === "object")
+        ) {
+          const { clearParkedArtifacts } = await import("@/lib/sales/follow-up/park");
+          await clearParkedArtifacts(item.opportunityId);
+          await updateOpportunityRelationshipStage(item.opportunityId, "interest");
+        }
       }
     }
 
