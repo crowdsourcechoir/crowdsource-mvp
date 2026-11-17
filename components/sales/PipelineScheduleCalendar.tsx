@@ -25,6 +25,7 @@ const CATEGORY_DOT: Record<QueueCategoryKey, string> = {
   conferences: "bg-[var(--csc-accent)]",
   fundraisers: "bg-rose-400",
   sports: "bg-sky-400",
+  sponsors: "bg-sky-300",
   tech: "bg-violet-400",
   arts: "bg-amber-400",
   entertainment: "bg-emerald-400",

@@ -11,6 +11,8 @@ import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversat
 import { seedBookingAgents } from "@/lib/sales/seed/seed-booking-agents";
 import { seedEntertainmentBookingAgencies } from "@/lib/sales/seed/seed-entertainment-booking-agencies";
 import { seedExperientialAgencies } from "@/lib/sales/seed/seed-experiential-agencies";
+import { SEATTLE_SPORTS_PARTNERS } from "@/lib/sales/seed/seattle-sports-partners";
+import { seedSeattleSportsPartners } from "@/lib/sales/seed/seed-seattle-sports-partners";
 import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vibe-create-prospects";
 import { RESEND_FORWARD_SEED, seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
@@ -33,7 +35,8 @@ export const maxDuration = 300;
  * `{ preset: "elevate-vibe-create" }`, `{ preset: "seattle-fundraisers-2027" }`,
  * `{ preset: "ballard-fc" }`, `{ preset: "resend-forward" }`, `{ preset: "wfea-members" }`,
  * `{ preset: "booking-agents" }`, `{ preset: "entertainment-booking-agencies" }`,
- * `{ preset: "experiential-agencies" }`, or `{ preset: "world-health-expo" }`.
+ * `{ preset: "experiential-agencies" }`, `{ preset: "world-health-expo" }`,
+ * or `{ preset: "seattle-sports-partners" }`.
  */
 export async function POST(request: Request) {
   try {
@@ -130,6 +133,15 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body?.preset === "seattle-sports-partners") {
+      const result = await seedSeattleSportsPartners({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "seattle-sports-partners",
+        seedCount: SEATTLE_SPORTS_PARTNERS.length,
+        ...result,
+      });
+    }
+
     if (body?.preset === "world-health-expo") {
       const result = await seedWorldHealthExpoContacts({ force: Boolean(body.force) });
       return NextResponse.json({
@@ -160,7 +172,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, { preset: 'entertainment-booking-agencies' }, { preset: 'experiential-agencies' }, { preset: 'world-health-expo' }, or { name, websiteUrl, contacts[] }",
+            "Provide { preset: 'seahawks' }, { preset: 'amplify-2027' }, { preset: 'elevate-vibe-create' }, { preset: 'seattle-fundraisers-2027' }, { preset: 'ballard-fc' }, { preset: 'resend-forward' }, { preset: 'wfea-members' }, { preset: 'booking-agents' }, { preset: 'entertainment-booking-agencies' }, { preset: 'experiential-agencies' }, { preset: 'world-health-expo' }, { preset: 'seattle-sports-partners' }, or { name, websiteUrl, contacts[] }",
         },
         { status: 400 }
       );

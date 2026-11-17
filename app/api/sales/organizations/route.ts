@@ -15,8 +15,9 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? undefined;
+    const sscPartner = searchParams.get("ssc") === "1";
     const [organizations, organizationTypes] = await Promise.all([
-      listOrganizations({ search, limit: 500 }),
+      listOrganizations({ search, sscPartner, limit: sscPartner ? 300 : 500 }),
       listOrganizationTypes(),
     ]);
     return NextResponse.json({ organizations, organizationTypes }, { headers: { "Cache-Control": "no-store" } });

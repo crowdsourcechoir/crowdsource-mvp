@@ -70,6 +70,10 @@
       "schedule": "50 1 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-seattle-sports-partners",
+      "schedule": "20 3 * * *"
+    },
+    {
       "path": "/api/sales/cron/fix-neste-live-contacts",
       "schedule": "55 1 * * *"
     },

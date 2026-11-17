@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import { normalizeOrgName, extractDomain } from "../dedupe";
+import { isHeldFromAutoPipeline } from "../prospecting/hold-auto-pipeline";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
 import type { Organization } from "../types";
 
@@ -39,10 +40,16 @@ export type CreateOrganizationInput = {
   importMetadata?: Record<string, unknown> | null;
 };
 
-export async function listOrganizations(params?: { limit?: number; search?: string }): Promise<Organization[]> {
+export async function listOrganizations(params?: {
+  limit?: number;
+  search?: string;
+  /** Seattle Sports Commission partner roster (import_metadata.sscPartner). */
+  sscPartner?: boolean;
+}): Promise<Organization[]> {
   const db = requireSupabaseAdmin();
   let query = db.from("organizations").select("*").order("created_at", { ascending: false });
   if (params?.search) query = query.ilike("name", `%${params.search}%`);
+  if (params?.sscPartner) query = query.or("import_metadata->>sscPartner.eq.true");
   if (params?.limit) query = query.limit(params.limit);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -70,7 +77,9 @@ export async function listUnprocessedOrganizations(limit: number): Promise<Organ
 
   const candidates = (orgs ?? [])
     .map(rowToOrganization)
-    .filter((o) => !processedIds.has(o.id) && !isDoNotProspect(o.importMetadata));
+    .filter(
+      (o) => !processedIds.has(o.id) && !isDoNotProspect(o.importMetadata) && !isHeldFromAutoPipeline(o.importMetadata)
+    );
 
   const priorityOf = (o: Organization) =>
     String((o.importMetadata as { Priority?: string } | null)?.Priority ?? "Z");
