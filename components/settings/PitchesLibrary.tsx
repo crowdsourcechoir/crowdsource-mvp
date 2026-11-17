@@ -19,6 +19,7 @@ import type { QueueCategoryFilter } from "@/lib/sales/queue/category";
 import type { QueueWorkstreamFilter } from "@/lib/sales/queue/workstream";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
 import { SettingsButton } from "@/components/settings/ui";
+import ClientSpaces from "@/components/spaces/ClientSpaces";
 
 type PitchRow = {
   id: string;
@@ -151,6 +152,7 @@ export default function PitchesLibrary({ title }: { title: string }) {
         </>
       }
     >
+      <ClientSpaces />
       {creating ? (
         <form onSubmit={createPitch} className="border-b border-[var(--csc-row-divider)] pb-5">
           <label className="mt-3 block">

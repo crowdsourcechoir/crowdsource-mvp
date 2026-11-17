@@ -27,7 +27,8 @@ export const NAFSA_LA_ID = "nafsa-la-2027";
 export const SOBECA_PITCH_PROMPT =
   "Public pitch for the SoBECA Song Garden: a living participatory arts initiative for the arts district, and an invitation to create it together.";
 
-const MAX_CUSTOM = 40;
+/** Client workspaces file a deck per deal. The shelf has room for that. */
+const MAX_CUSTOM = 400;
 const MAX_TEXT = 4000;
 const MAX_PROMPT = 2000;
 const MAX_NAME = 80;

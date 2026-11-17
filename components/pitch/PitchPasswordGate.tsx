@@ -2,17 +2,26 @@
 
 import { useState } from "react";
 
-export default function PitchPasswordGate({ title, pitchId }: { title: string; pitchId: string }) {
+export default function PitchPasswordGate({
+  title,
+  pitchId,
+  accessPath,
+}: {
+  title: string;
+  pitchId?: string;
+  accessPath?: string;
+}) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const endpoint = accessPath || (pitchId ? `/api/pitches/${pitchId}/access` : "");
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/pitches/${pitchId}/access`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),

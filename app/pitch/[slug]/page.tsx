@@ -9,6 +9,7 @@ import PitchDeck from "@/app/sobeca-song-garden/PitchDeck";
 import { pitchGateCookie } from "@/lib/pitches/gate";
 import { pitchDescription, SOBECA_PITCH_ID } from "@/lib/pitches/model";
 import { loadPitch } from "@/lib/pitches/service";
+import { placedPitchHrefFor } from "@/lib/spaces/service";
 import { signedInOwner } from "@/lib/operators/current";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,8 @@ export default async function PitchPage({ params }: PageProps) {
   const pitch = await loadPitch(params.slug);
   if (!pitch) notFound();
   if (pitch.href !== `/pitch/${params.slug}`) redirect(pitch.href);
+  const placed = await placedPitchHrefFor(pitch.id);
+  if (placed) redirect(placed);
 
   const owner = await signedInOwner();
   if (!pitch.live && !owner) return <PitchUnavailable title={pitch.title} />;

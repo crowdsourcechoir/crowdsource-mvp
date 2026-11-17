@@ -13,6 +13,7 @@ import { stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { looksLikeHtml, sanitizeEmailHtml, coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
+import ClientSpaces from "@/components/spaces/ClientSpaces";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 
 const FINDING_LABELS: Record<string, string> = {
@@ -225,6 +226,13 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           </p>
         )}
       </div>
+
+      <ClientSpaces
+        organizationId={organization.id}
+        organizationName={organization.name}
+        salesOpportunityId={opportunity.id}
+        opportunityTitle={opportunity.title}
+      />
 
       {/* Score — summary first, details on click */}
       <section className="rounded-xl border border-gray-800 bg-gray-900/30 p-4">

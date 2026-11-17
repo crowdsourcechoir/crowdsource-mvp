@@ -1,5 +1,6 @@
 import { measurementIdFrom } from "@/lib/analytics/model";
 import { normalizeWebPitches, type WebPitchesState } from "@/lib/pitches/model";
+import { EMPTY_CLIENT_SPACES, normalizeClientSpaces, type ClientSpacesState } from "@/lib/spaces/model";
 import { EMPTY_SHOW_SLIDES, normalizeShowSlides, type ShowSlidesState } from "@/lib/show-slides/model";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
@@ -36,6 +37,8 @@ export type WorkspaceSettings = {
   songGarden: unknown;
   /** Web pitch decks: SoBECA and Initial Meeting overrides, plus pitches created in Settings. */
   webPitches: WebPitchesState;
+  /** Public client workspaces: /for/{organization} and the pages under each deal. */
+  clientSpaces: ClientSpacesState;
   /** Lyric show slides. Gather is filled in when this list has no Gather show. */
   showSlides: ShowSlidesState;
   /** GA4 measurement id. Null means first-party analytics only. */
@@ -48,6 +51,7 @@ export const EMPTY_WORKSPACE_SETTINGS: WorkspaceSettings = {
   digest: { enabled: null, minScore: null, targetCount: null, recipient: null },
   songGarden: null,
   webPitches: { overrides: {}, custom: [] },
+  clientSpaces: EMPTY_CLIENT_SPACES,
   showSlides: EMPTY_SHOW_SLIDES,
   gaMeasurementId: null,
   salesOffers: {
@@ -132,6 +136,7 @@ export function normalizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
     },
     songGarden: source.songGarden === undefined ? null : source.songGarden,
     webPitches: normalizeWebPitches(source.webPitches),
+    clientSpaces: normalizeClientSpaces(source.clientSpaces),
     showSlides: normalizeShowSlides(source.showSlides),
     gaMeasurementId: measurementIdFrom(source.gaMeasurementId),
     salesOffers: {
@@ -186,6 +191,7 @@ export async function writeWorkspaceSettings(
     gaMeasurementId: string | null;
     salesOffers: Partial<SalesOffersSettingsOverrides>;
     webPitches: WebPitchesState;
+    clientSpaces: ClientSpacesState;
     showSlides: ShowSlidesState;
   }>
 ): Promise<WorkspaceSettingsRead> {
@@ -207,6 +213,9 @@ export async function writeWorkspaceSettings(
     webPitches: Object.prototype.hasOwnProperty.call(patch, "webPitches")
       ? patch.webPitches
       : current.settings.webPitches,
+    clientSpaces: Object.prototype.hasOwnProperty.call(patch, "clientSpaces")
+      ? patch.clientSpaces
+      : current.settings.clientSpaces,
     showSlides: Object.prototype.hasOwnProperty.call(patch, "showSlides")
       ? patch.showSlides
       : current.settings.showSlides,
