@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { getOpportunity, updateOpportunityTouchTimestamps } from "@/lib/sales/db/opportunities";
+import { getOrganization } from "@/lib/sales/db/organizations";
+import {
+  getOpportunity,
+  updateOpportunityImportMetadata,
+  updateOpportunityTouchTimestamps,
+} from "@/lib/sales/db/opportunities";
 import { followUpFromDateInput, followUpPresetIso, type FollowUpPreset } from "@/lib/sales/follow-up/calendar";
+import { syncFollowUpCalendarEvent } from "@/lib/sales/follow-up/gmail-event";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +43,40 @@ export async function POST(request: Request, { params }: { params: Promise<{ opp
     }
 
     const updated = await updateOpportunityTouchTimestamps(oppId, { nextFollowUpAt });
-    return NextResponse.json({ opportunity: updated, nextFollowUpAt: updated.nextFollowUpAt });
+    const existingEventId =
+      typeof opportunity.importMetadata?.followUpCalendarEventId === "string"
+        ? opportunity.importMetadata.followUpCalendarEventId
+        : null;
+    const organization = await getOrganization(opportunity.organizationId);
+    let synced: { eventId: string | null; warning: string | null } = {
+      eventId: existingEventId,
+      warning: null,
+    };
+    try {
+      synced = await syncFollowUpCalendarEvent({
+        opportunityId: oppId,
+        organizationName: organization?.name ?? opportunity.title,
+        whenIso: updated.nextFollowUpAt,
+        existingEventId,
+      });
+    } catch (err) {
+      synced = {
+        eventId: existingEventId,
+        warning: `Follow-up saved. Calendar was not updated (${publicErrorMessage(err, "calendar error")}).`,
+      };
+    }
+    let saved = updated;
+    if (synced.eventId !== existingEventId) {
+      saved = await updateOpportunityImportMetadata(oppId, {
+        ...(updated.importMetadata ?? {}),
+        followUpCalendarEventId: synced.eventId,
+      });
+    }
+    return NextResponse.json({
+      opportunity: saved,
+      nextFollowUpAt: saved.nextFollowUpAt,
+      calendarWarning: synced.warning,
+    });
   } catch (err) {
     return NextResponse.json({ error: publicErrorMessage(err, "Failed to set follow-up") }, { status: 500 });
   }

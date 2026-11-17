@@ -289,8 +289,8 @@ function StartWorkspace({
           <input value={slug} aria-label="Client address" onChange={(event) => setSlug(event.target.value)} onBlur={(event) => setSlug(suggestSlug(event.target.value))} className={`mt-1 block w-40 ${fieldClass}`} />
         </label>
         <label>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Password</span>
-          <input value={password} type="password" autoComplete="new-password" aria-label="Client password" onChange={(event) => setPassword(event.target.value)} className={`mt-1 block w-44 ${fieldClass}`} />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Password, optional</span>
+          <input value={password} type="text" autoComplete="off" aria-label="Client password" placeholder="Before you send the link" onChange={(event) => setPassword(event.target.value)} className={`mt-1 block w-44 ${fieldClass}`} />
         </label>
         <label>
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--csc-accent)]">Deal</span>
@@ -302,7 +302,7 @@ function StartWorkspace({
         </label>
       </div>
       <div className="mt-3">
-        <SettingsButton type="submit" variant="primary" disabled={busy || !orgId || !slug || !password.trim() || !dealName.trim() || !dealSlug}>
+        <SettingsButton type="submit" variant="primary" disabled={busy || !orgId || !slug || !dealName.trim() || !dealSlug}>
           Start workspace
         </SettingsButton>
       </div>

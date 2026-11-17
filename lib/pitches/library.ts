@@ -125,6 +125,7 @@ export function countPitchCategories(categories: Array<string | null>): Record<Q
     conferences: 0,
     fundraisers: 0,
     arts: 0,
+    festivals: 0,
     entertainment: 0,
     tech: 0,
     sponsors: 0,

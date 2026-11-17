@@ -12,6 +12,7 @@ export const QUEUE_CATEGORY_KEYS = [
   "conferences",
   "fundraisers",
   "arts",
+  "festivals",
   "entertainment",
   "tech",
   "booking_agents",
@@ -28,6 +29,7 @@ export const QUEUE_CATEGORY_CHIPS: { key: QueueCategoryFilter; label: string }[]
   { key: "conferences", label: "Conferences" },
   { key: "fundraisers", label: "Fundraisers" },
   { key: "arts", label: "Arts" },
+  { key: "festivals", label: "Festivals" },
   { key: "entertainment", label: "Entertainment" },
   { key: "tech", label: "Tech" },
   { key: "booking_agents", label: "Booking agents" },
@@ -39,6 +41,7 @@ const INITIATIVE_TO_CATEGORY: Record<string, QueueCategoryKey> = {
   conferences_associations: "conferences",
   fundraising_galas: "fundraisers",
   arts_culture: "arts",
+  festivals: "festivals",
   entertainment_media: "entertainment",
   tech_conferences: "tech",
   booking_agents: "booking_agents",
@@ -112,6 +115,13 @@ export function classifyQueueCategory(input: QueueCategoryInput): QueueCategoryK
 
   if (
     orgType === "festival" ||
+    initiative === "festivals" ||
+    (/\bfestivals?\b/.test(text) && !/\bfilm festival\b|\bfestival association\b|western festival|\bwfea\b/.test(text))
+  ) {
+    return "festivals";
+  }
+
+  if (
     /\bwedgwood\b|\borchestra\b|\bphilharmonic\b|\bsymphony\b|\bopera\b|\bballet\b|\bchoir\b|\bchorus\b|\btheatre\b|\btheater\b|\bmuseum\b|\barts council\b|\bperforming arts\b|\bfilm independent\b|\bjazz\b|\bfolk alliance\b|\bamericana\b|\blincoln center\b|\bcarnegie hall\b|\bkexp\b/.test(
       text
     )
@@ -158,6 +168,7 @@ export function countQueueCategories<T extends QueueCategoryInput>(
     conferences: 0,
     fundraisers: 0,
     arts: 0,
+    festivals: 0,
     entertainment: 0,
     tech: 0,
     booking_agents: 0,

@@ -104,11 +104,10 @@ export async function openWorkspace(input: {
   const { state, error } = await readState();
   if (error) return { error, status: 503 };
   const password = input.password.trim();
-  if (!password) return { error: "Set a password for this client.", status: 400 };
   const claimed = claimAccount(state, {
     organizationId: input.organizationId,
     slug: input.slug,
-    passwordHash: hashPitchPassword(password),
+    passwordHash: password ? hashPitchPassword(password) : null,
   });
   if ("error" in claimed) return { error: claimed.error, status: 400 };
   const deal = addDeal(claimed.state, {

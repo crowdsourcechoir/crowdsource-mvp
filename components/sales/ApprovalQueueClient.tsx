@@ -193,6 +193,7 @@ export default function ApprovalQueueClient() {
   const [gmailSendEnabled, setGmailSendEnabled] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [addOrgOpen, setAddOrgOpen] = useState(false);
+  const [addOrgNote, setAddOrgNote] = useState<string | null>(null);
   const [scanCardOpen, setScanCardOpen] = useState(false);
   const [fillQueueOpen, setFillQueueOpen] = useState(false);
   const [jumpToQueueItemId, setJumpToQueueItemId] = useState<string | null>(null);
@@ -989,7 +990,15 @@ export default function ApprovalQueueClient() {
   );
 
   const addOrgModal = (
-    <AddOrganizationForm open={addOrgOpen} onClose={() => setAddOrgOpen(false)} onQueued={() => void load()} />
+    <AddOrganizationForm
+      open={addOrgOpen}
+      onClose={() => setAddOrgOpen(false)}
+      onQueued={() => void load()}
+      onFinished={(result) => {
+        setAddOrgNote(result.message);
+        if (!result.queueItemId) void load();
+      }}
+    />
   );
   const scanCardModal = (
     <ScanBusinessCardModal
@@ -1007,6 +1016,7 @@ export default function ApprovalQueueClient() {
       <div className="min-w-0">
         <p className="csc-eyebrow">Prospecting</p>
         <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Queue</h1>
+        {addOrgNote ? <p className="mt-2 text-sm text-[var(--csc-accent)]">{addOrgNote}</p> : null}
       </div>
       <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
         <SalesSearchBox onPick={pickFromSearch} />

@@ -45,6 +45,16 @@ function main() {
     classifyQueueCategory({ salesInitiative: "sponsor_partners", organizationName: "Kaiser Permanente" }),
     "sponsors"
   );
+  assert.equal(
+    classifyQueueCategory({ organizationTypeKey: "festival", organizationName: "Memphis in May" }),
+    "festivals"
+  );
+  assert.equal(
+    classifyQueueCategory({ organizationName: "Memphis in May International Festival" }),
+    "festivals"
+  );
+  assert.equal(classifyQueueCategory({ organizationName: "Sundance Film Festival" }), "entertainment");
+  assert.equal(counts.festivals, 0);
 
   console.log("queue/category tests passed");
 }

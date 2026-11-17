@@ -35,8 +35,16 @@ export const SALES_INITIATIVES = {
     key: "arts_culture",
     label: "Arts",
     description: "Music, museums, opera, theatre, patron circles — high-fit participatory gatherings.",
-    organizationTypeKeys: ["nonprofit", "festival", "association"] as const,
-    opportunityTypeKeys: ["annual_conference", "community_festival", "fundraising_gala"] as const,
+    organizationTypeKeys: ["nonprofit", "association"] as const,
+    opportunityTypeKeys: ["annual_conference", "fundraising_gala"] as const,
+    industrySegmentKey: null,
+  },
+  festivals: {
+    key: "festivals",
+    label: "Festivals",
+    description: "City, music, and cultural festivals — a commissioned anthem or participatory moment for the gathering.",
+    organizationTypeKeys: ["festival"] as const,
+    opportunityTypeKeys: ["community_festival"] as const,
     industrySegmentKey: null,
   },
   entertainment_media: {

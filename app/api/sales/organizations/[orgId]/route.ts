@@ -79,17 +79,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
     }
 
     const operatorNotes = optionalString(body?.operatorNotes);
-    if (operatorNotes !== undefined) {
+    const salesInitiative = optionalString(body?.salesInitiative);
+    if (operatorNotes !== undefined || salesInitiative !== undefined) {
       patch.importMetadata = {
         ...(existing.importMetadata ?? {}),
-        operatorNotes: operatorNotes ?? null,
-        operatorNotesUpdatedAt: new Date().toISOString(),
+        ...(operatorNotes !== undefined
+          ? { operatorNotes: operatorNotes ?? null, operatorNotesUpdatedAt: new Date().toISOString() }
+          : {}),
+        ...(salesInitiative !== undefined ? { salesInitiative: salesInitiative ?? null } : {}),
       };
     }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json(
-        { error: "Provide at least one of: name, websiteUrl, locationCity, locationRegion, locationCountry, isExistingClient, operatorNotes" },
+        { error: "Provide at least one of: name, websiteUrl, locationCity, locationRegion, locationCountry, isExistingClient, operatorNotes, salesInitiative" },
         { status: 400 }
       );
     }

@@ -32,10 +32,12 @@ export function AddOrgPlusButton({
 
 export default function AddOrganizationForm({
   onQueued,
+  onFinished,
   open,
   onClose,
 }: {
   onQueued?: (queueItemId: string) => void;
+  onFinished?: (result: { message: string; queueItemId: string | null }) => void;
   open: boolean;
   onClose: () => void;
 }) {
@@ -82,16 +84,17 @@ export default function AddOrganizationForm({
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not add organization"));
       const body = data as { queued?: boolean; queueItemId?: string | null; message?: string };
-      setMessage(body.message ?? "Saved.");
-      if (body.queued && body.queueItemId) {
-        setName("");
-        setWebsiteUrl("");
-        setContactFullName("");
-        setContactEmail("");
-        setContactRoleTitle("");
-        onQueued?.(body.queueItemId);
-        onClose();
-      }
+      const message = body.message ?? "Saved.";
+      const queueItemId = body.queueItemId ?? null;
+      setName("");
+      setWebsiteUrl("");
+      setContactFullName("");
+      setContactEmail("");
+      setContactRoleTitle("");
+      setMessage(null);
+      onFinished?.({ message, queueItemId });
+      if (body.queued && queueItemId) onQueued?.(queueItemId);
+      onClose();
     } catch (err) {
       setError(publicErrorMessage(err, "Could not add organization"));
     } finally {

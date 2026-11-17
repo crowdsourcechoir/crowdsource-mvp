@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { AgentRun, Contact, Opportunity, Organization, PipelineRun, ResearchFinding } from "@/lib/sales/types";
 import { PERSONA_STRATEGIES } from "@/lib/sales/outreach/persona";
 import ClientSpaces from "@/components/spaces/ClientSpaces";
+import OrganizationWork from "@/components/sales/OrganizationWork";
 
 type PipelineRunWithStages = PipelineRun & { agentRuns: AgentRun[] };
 type FindingWithUrl = ResearchFinding & { sourceUrl: string };
@@ -36,6 +37,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
   const [contactEmail, setContactEmail] = useState("");
   const [contactRole, setContactRole] = useState("");
   const [contactMessage, setContactMessage] = useState<string | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -73,9 +75,14 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
 
   async function addContact(e: React.FormEvent) {
     e.preventDefault();
-    if (!contactName.trim() && !contactEmail.trim()) return;
+    if (!contactName.trim() && !contactEmail.trim()) {
+      setContactError("Enter a name or an email.");
+      setContactMessage(null);
+      return;
+    }
     setAddingContact(true);
     setContactMessage(null);
+    setContactError(null);
     try {
       const res = await fetch(`/api/sales/organizations/${orgId}/contacts`, {
         method: "POST",
@@ -94,7 +101,7 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
       setContactMessage(json.message ?? "Contact added.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add contact");
+      setContactError(err instanceof Error ? err.message : "Could not add contact");
     } finally {
       setAddingContact(false);
     }
@@ -166,6 +173,13 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
             : ""}
         </p>
       )}
+
+      <OrganizationWork
+        key={organization.id}
+        organization={organization}
+        opportunities={opportunities}
+        onChanged={load}
+      />
 
       <ClientSpaces organizationId={organization.id} organizationName={organization.name} />
 
@@ -243,13 +257,14 @@ export default function OrganizationDetailClient({ orgId }: { orgId: string }) {
           />
           <button
             type="submit"
-            disabled={addingContact || (!contactName.trim() && !contactEmail.trim())}
+            disabled={addingContact}
             className="rounded-md bg-[var(--csc-accent)] px-3 py-1.5 text-xs font-semibold text-black hover:opacity-90 disabled:opacity-50 sm:col-span-3 w-fit"
           >
             {addingContact ? "Adding…" : "Add contact"}
           </button>
         </form>
         {contactMessage && <p className="mt-2 text-sm text-emerald-400">{contactMessage}</p>}
+        {contactError && <p className="mt-2 text-sm text-red-400">{contactError}</p>}
       </section>
 
       <section className="rounded-xl border border-gray-800 p-4">

@@ -29,6 +29,7 @@ export default function FollowUpControls({
   const [custom, setCustom] = useState(ymdInSalesZone(nextFollowUpAt));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [calendarNote, setCalendarNote] = useState<string | null>(null);
 
   useEffect(() => {
     setValue(nextFollowUpAt);
@@ -38,6 +39,7 @@ export default function FollowUpControls({
   async function save(body: Record<string, unknown>) {
     setBusy(true);
     setError(null);
+    setCalendarNote(null);
     try {
       const res = await fetch(`/api/sales/opportunities/${opportunityId}/follow-up`, {
         method: "POST",
@@ -47,8 +49,10 @@ export default function FollowUpControls({
       const data = await readApiJson(res);
       if (!res.ok) throw new Error(apiErrorFromBody(data, "Could not set follow-up"));
       const next = ((data as { nextFollowUpAt?: string | null }).nextFollowUpAt ?? null) as string | null;
+      const warning = (data as { calendarWarning?: string | null }).calendarWarning ?? null;
       setValue(next);
       setCustom(ymdInSalesZone(next));
+      setCalendarNote(warning);
       onSaved?.(next);
     } catch (err) {
       setError(publicErrorMessage(err, "Could not set follow-up"));
@@ -99,6 +103,7 @@ export default function FollowUpControls({
           }}
         />
       </div>
+      {calendarNote ? <p className="mt-2 text-xs text-[var(--csc-accent)]">{calendarNote}</p> : null}
       {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
     </div>
   );
