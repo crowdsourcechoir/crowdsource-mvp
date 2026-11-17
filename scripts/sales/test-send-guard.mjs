@@ -10,6 +10,8 @@ import {
 } from "../../lib/sales/outreach/send-guard.ts";
 import {
   GMAIL_SENDS_ENABLED_MARKER,
+  gmailDraftUrl,
+  hasGmailComposeScope,
   hasSendsEnabledMarker,
   withSendsEnabledMarker,
 } from "../../lib/sales/gmail/constants.ts";
@@ -151,6 +153,16 @@ function main() {
   assert.deepEqual(withSendsEnabledMarker(["gmail.send"], true), ["gmail.send", GMAIL_SENDS_ENABLED_MARKER]);
   assert.deepEqual(withSendsEnabledMarker(["gmail.send", GMAIL_SENDS_ENABLED_MARKER], false), ["gmail.send"]);
   assert.equal(withSendsEnabledMarker(["gmail.send", GMAIL_SENDS_ENABLED_MARKER], true).filter((s) => s === GMAIL_SENDS_ENABLED_MARKER).length, 1);
+
+  assert.equal(hasGmailComposeScope(["https://www.googleapis.com/auth/gmail.send"]), false);
+  assert.equal(
+    hasGmailComposeScope(["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.compose"]),
+    true
+  );
+  assert.equal(
+    gmailDraftUrl("th-42", "sing@crowdsourcechoir.com"),
+    "https://mail.google.com/mail/?authuser=sing%40crowdsourcechoir.com#drafts/th-42"
+  );
 
   console.log("ok: send-guard blocks same-contact duplicates and keeps remint/nudge working");
 }

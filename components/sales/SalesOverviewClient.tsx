@@ -158,8 +158,8 @@ export default function SalesOverviewClient() {
         className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--csc-row-divider)] px-4 py-3"
       >
         <div className="min-w-0">
-          <p className="csc-eyebrow">Automated sending</p>
-          <p className="mt-1 text-sm text-gray-300">Sent, in line today, and the next business days</p>
+          <p className="csc-eyebrow">Weekday Gmail drafts</p>
+          <p className="mt-1 text-sm text-gray-300">In Gmail Drafts, in line today, and the next business days</p>
         </div>
         <span className="csc-link shrink-0 text-sm">Open queue</span>
       </Link>

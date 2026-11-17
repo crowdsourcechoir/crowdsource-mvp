@@ -2,9 +2,19 @@ import { createOutreachActivity, findActivityByGmailMessageId, findOpportunityId
 import { getContact, listContactsByNormalizedEmail, listContactsForOrganization, updateContactVerification } from "../db/contacts";
 import { requireSupabaseAdmin } from "../db/client";
 import { getGmailConnection } from "../db/gmail";
-import { getOpportunity, updateOpportunityRelationshipStage, updateOpportunityTouchTimestamps } from "../db/opportunities";
+import {
+  getOpportunity,
+  updateOpportunityRelationshipStage,
+  updateOpportunityStatus,
+  updateOpportunityTouchTimestamps,
+} from "../db/opportunities";
+import { listDraftsForOpportunity, updateDraftDecision } from "../db/outreach";
+import { decideQueueItem, getInitialQueueItemByOpportunity, setQueueItemOutreachDraft } from "../db/queue";
+import { isSendableContact } from "../dedupe";
 import { classifyInbound, extractEmailAddresses, failedRecipientsFromBounce } from "../outreach/inbound-kind";
 import { parseFromHeader, resolveCorrespondent } from "../outreach/reply-correspondent";
+import { isOutboundEmailBlocked } from "../outreach/send-blocklist";
+import { isOpenDraftStatus, pickNextRemainingInitialDraft } from "../outreach/send-guard";
 import { getGmailClient, persistHistoryId } from "./client";
 import { GMAIL_OWNER_KEY, NUDGE_DUE_AFTER_DAYS, addDaysIso } from "./constants";
 
@@ -50,6 +60,40 @@ async function findOpenOpportunityByContactEmail(email: string): Promise<string 
       .limit(1);
     if (oppErr) throw new Error(oppErr.message);
     if (opps?.[0]?.id) return opps[0].id as string;
+  }
+  return null;
+}
+
+/**
+ * Match a message Joel sent directly from Gmail (or from a draft) to a CRM opportunity
+ * by recipient address, including opportunities whose `relationship_stage` is still `null`
+ * before first touch.
+ */
+async function findOpportunityForOutboundRecipients(emails: string[], ourEmail: string): Promise<string | null> {
+  const db = requireSupabaseAdmin();
+  const self = ourEmail.trim().toLowerCase();
+  const recipients = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e && e !== self)));
+  for (const email of recipients) {
+    const activeId = await findOpenOpportunityByContactEmail(email);
+    if (activeId) return activeId;
+
+    const { data: contacts, error } = await db
+      .from("contacts")
+      .select("id, organization_id")
+      .eq("normalized_email", email);
+    if (error) throw new Error(error.message);
+    for (const contact of contacts ?? []) {
+      if (!contact.organization_id) continue;
+      const { data: unlaunched, error: oppErr } = await db
+        .from("opportunities")
+        .select("id")
+        .eq("organization_id", contact.organization_id)
+        .is("relationship_stage", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (oppErr) throw new Error(oppErr.message);
+      if (unlaunched?.[0]?.id) return unlaunched[0].id as string;
+    }
   }
   return null;
 }
@@ -267,6 +311,51 @@ async function recordOutbound(input: {
     nextFollowUpAt: addDaysIso(occurredAt, NUDGE_DUE_AFTER_DAYS),
     gmailThreadId: input.gmailThreadId,
   });
+
+  if (!opportunity.relationshipStage) {
+    await updateOpportunityRelationshipStage(input.opportunityId, "awareness");
+    if (opportunity.status !== "approved") {
+      await updateOpportunityStatus(input.opportunityId, "approved");
+    }
+  }
+
+  if (contactId) {
+    const drafts = await listDraftsForOpportunity(input.opportunityId);
+    let justApprovedDraftId: string | null = null;
+    for (const draft of drafts) {
+      if (draft.contactId === contactId && draft.kind === "initial" && isOpenDraftStatus(draft.status)) {
+        await updateDraftDecision(draft.id, { status: "approved" });
+        draft.status = "approved";
+        justApprovedDraftId = draft.id;
+      }
+    }
+    const queueItem = await getInitialQueueItemByOpportunity(input.opportunityId);
+    if (queueItem && (queueItem.status === "pending" || (queueItem.status === "deferred" && queueItem.decidedBy === "autosend"))) {
+      const orgContacts = await listContactsForOrganization(opportunity.organizationId);
+      const readyIds = new Set(
+        orgContacts
+          .filter((c) => isSendableContact(c) && c.email && !isOutboundEmailBlocked(c.email))
+          .map((c) => c.id)
+      );
+      const nextDraft = pickNextRemainingInitialDraft({
+        drafts,
+        readyContactIds: readyIds,
+        justSentDraftId: justApprovedDraftId,
+        justSentContactId: contactId,
+      });
+      if (nextDraft && queueItem.status === "pending") {
+        await setQueueItemOutreachDraft(queueItem.id, nextDraft.id);
+      } else if (!nextDraft) {
+        await decideQueueItem(queueItem.id, {
+          status: "approved",
+          decidedBy: "gmail_sync",
+          decisionNotes: "Sent from Gmail (synced).",
+        });
+        await updateOpportunityStatus(input.opportunityId, "approved");
+      }
+    }
+  }
+
   return true;
 }
 
@@ -284,6 +373,7 @@ async function processInboundMessage(
     metadataHeaders: [
       "From",
       "To",
+      "Cc",
       "Delivered-To",
       "Subject",
       "Auto-Submitted",
@@ -292,19 +382,28 @@ async function processInboundMessage(
       "X-Failed-Recipients",
     ],
   });
+  // Unsent drafts in Gmail Drafts have not been sent or received yet.
+  if (res.data.labelIds?.includes("DRAFT")) return empty;
+
   const headers = res.data.payload?.headers;
   const from = headerValue(headers, "From");
   const subject = headerValue(headers, "Subject");
   const fromEmails = extractEmailAddresses(from);
-  const toEmails = extractEmailAddresses(headerValue(headers, "To"));
+  const toEmails = [
+    ...extractEmailAddresses(headerValue(headers, "To")),
+    ...extractEmailAddresses(headerValue(headers, "Cc")),
+  ];
   const threadId = res.data.threadId;
   const isFromUs = fromEmails.some((email) => email === ourEmail.toLowerCase());
   const isSentOnly =
     Boolean(res.data.labelIds?.includes("SENT")) && !res.data.labelIds?.includes("INBOX");
 
-  // Joel replied (or sent) from Gmail itself — count it as outbound on a known thread.
+  // Joel sent or replied from Gmail itself (including sending a filed weekday draft).
   if ((isFromUs || isSentOnly) && threadId && res.data.id) {
-    const opportunityId = await findOpportunityIdByGmailThreadId(threadId);
+    let opportunityId = await findOpportunityIdByGmailThreadId(threadId);
+    if (!opportunityId) {
+      opportunityId = await findOpportunityForOutboundRecipients(toEmails, ourEmail);
+    }
     if (!opportunityId) return empty;
     const recorded = await recordOutbound({
       opportunityId,

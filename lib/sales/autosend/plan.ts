@@ -1,3 +1,4 @@
+import { normalizeEmail } from "@/lib/sales/dedupe";
 import {
   AUTO_SEND_DAILY_CAP,
   AUTO_SEND_LANES,
@@ -41,6 +42,7 @@ function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledA
     status: "queued",
     statusSince: null,
     sentAt: null,
+    draftUrl: null,
     error: null,
     attempts: 0,
   };
@@ -79,7 +81,7 @@ function nextLane(used: Record<AutoSendLane, number>, pools: Record<AutoSendLane
 }
 
 /**
- * Keep finished sends. Rebuild the unsent line so each day follows the lane quotas:
+ * Keep finished sends and created drafts. Rebuild the open line so each day follows the lane quotas:
  * 18 large ($15k+), 2 sponsorship, 3 partnership, 2 other. A short lane is left short.
  * Inside a lane, Q1–Q2 2027 is used before Q3, then the rolling window.
  */
@@ -96,7 +98,7 @@ export function mergeAutoSendSlots(
 
   const kept: AutoSendSlot[] = [];
   for (const slot of existing) {
-    if (slot.status === "sent" || slot.status === "failed" || slot.status === "skipped") {
+    if (slot.status === "sent" || slot.status === "drafted" || slot.status === "failed" || slot.status === "skipped") {
       if (slot.day >= historyFloor) kept.push(slot);
       continue;
     }
@@ -105,7 +107,7 @@ export function mergeAutoSendSlots(
       if (Number.isFinite(since) && now.getTime() - since > STUCK_SENDING_MS) {
         const candidate = byItem.get(slot.queueItemId);
         if (candidate && daySet.has(slot.day)) {
-          kept.push(refreshQueued({ ...slot, status: "queued", error: "Send was interrupted and returned to the line." }, candidate));
+          kept.push(refreshQueued({ ...slot, status: "queued", error: "Draft was interrupted and returned to the line." }, candidate));
         }
       } else if (daySet.has(slot.day)) {
         kept.push(slot);
@@ -116,15 +118,27 @@ export function mergeAutoSendSlots(
 
   const usedItems = new Set(kept.map((slot) => slot.queueItemId));
   const usedOrgs = new Set(kept.map((slot) => slot.organizationId));
+  const usedEmails = new Set(
+    kept.map((slot) => normalizeEmail(slot.contactEmail)).filter((email): email is string => Boolean(email))
+  );
   const pool = candidates
-    .filter((candidate) => !usedItems.has(candidate.queueItemId) && !usedOrgs.has(candidate.organizationId))
+    .filter((candidate) => {
+      const email = normalizeEmail(candidate.contactEmail);
+      if (usedItems.has(candidate.queueItemId) || usedOrgs.has(candidate.organizationId)) return false;
+      if (email && usedEmails.has(email)) return false;
+      return true;
+    })
     .sort((a, b) => compareCandidates(a, b, today));
 
   const seenOrgs = new Set(usedOrgs);
+  const seenEmails = new Set(usedEmails);
   const uniquePool: AutoSendCandidate[] = [];
   for (const candidate of pool) {
+    const email = normalizeEmail(candidate.contactEmail);
     if (seenOrgs.has(candidate.organizationId)) continue;
+    if (email && seenEmails.has(email)) continue;
     seenOrgs.add(candidate.organizationId);
+    if (email) seenEmails.add(email);
     uniquePool.push(candidate);
   }
 
@@ -139,9 +153,11 @@ export function mergeAutoSendSlots(
   const next = [...kept];
   for (const day of days) {
     const onDay = next.filter(
-      (slot) => slot.day === day && (slot.status === "queued" || slot.status === "sending" || slot.status === "sent")
+      (slot) =>
+        slot.day === day &&
+        (slot.status === "queued" || slot.status === "sending" || slot.status === "sent" || slot.status === "drafted")
     );
-    let seats = AUTO_SEND_DAILY_CAP - onDay.length;
+    const seats = AUTO_SEND_DAILY_CAP - onDay.length;
     if (seats <= 0) continue;
     const used: Record<AutoSendLane, number> = { large: 0, sponsorship: 0, partnership: 0, other: 0 };
     for (const slot of onDay) used[slot.lane] += 1;

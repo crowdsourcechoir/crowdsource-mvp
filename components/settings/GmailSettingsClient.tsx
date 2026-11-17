@@ -19,6 +19,7 @@ type GmailStatus = {
   email: string | null;
   configured: boolean;
   sendsEnabled: boolean;
+  composeGranted: boolean;
   error?: string | null;
 };
 
@@ -93,6 +94,7 @@ export default function GmailSettingsClient({
           email: gmailData.email ?? null,
           configured: Boolean(gmailData.configured),
           sendsEnabled: Boolean(gmailData.sendsEnabled),
+          composeGranted: Boolean(gmailData.composeGranted),
         });
       }
       const calendarData = (await calendarRes.json().catch(() => ({}))) as CalendarStatus & { error?: string };
@@ -159,6 +161,7 @@ export default function GmailSettingsClient({
         email: data.email ?? null,
         configured: Boolean(data.configured),
         sendsEnabled: Boolean(data.sendsEnabled),
+        composeGranted: Boolean(data.composeGranted),
       });
       setMessage(
         enabled
@@ -307,9 +310,16 @@ export default function GmailSettingsClient({
           <>
             <StatusPill tone={tone}>{label}</StatusPill>
             {status?.connected ? (
-              <SettingsButton variant="danger" onClick={() => void disconnect()} disabled={busy}>
-                Disconnect
-              </SettingsButton>
+              <>
+                {!status.composeGranted ? (
+                  <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
+                    Reconnect for Gmail drafts
+                  </SettingsButton>
+                ) : null}
+                <SettingsButton variant="danger" onClick={() => void disconnect()} disabled={busy}>
+                  Disconnect
+                </SettingsButton>
+              </>
             ) : (
               <SettingsButton variant="primary" href="/api/sales/gmail/connect?returnTo=/admin/settings/gmail">
                 Connect Google
@@ -318,6 +328,11 @@ export default function GmailSettingsClient({
           </>
         }
       >
+        {status?.connected && !status.composeGranted ? (
+          <InlineNote tone="warn">
+            Weekday outreach files Gmail drafts instead of auto-sending and requires Gmail compose access. Click Reconnect for Gmail drafts and allow Gmail compose.
+          </InlineNote>
+        ) : null}
         <StatGrid>
           <Stat label="Account" value={status?.email ?? "Not connected"} />
           <Stat
@@ -329,7 +344,18 @@ export default function GmailSettingsClient({
                 : "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_TOKEN_ENCRYPTION_KEY"
             }
           />
-          <Stat label="Sending" value={status?.sendsEnabled ? "Resumed" : "Paused"} />
+          <Stat
+            label="Weekday drafts"
+            value={!status?.connected ? "—" : status.composeGranted ? "gmail.compose" : "Reconnect needed"}
+            hint={
+              !status?.connected
+                ? undefined
+                : status.composeGranted
+                  ? "Files in Gmail Drafts"
+                  : "Allow Gmail compose"
+            }
+          />
+          <Stat label="Manual queue sends" value={status?.sendsEnabled ? "Resumed" : "Paused"} />
         </StatGrid>
         {message ? <InlineNote tone="ok">{message}</InlineNote> : null}
         {error ? <InlineNote tone="off">{error}</InlineNote> : null}

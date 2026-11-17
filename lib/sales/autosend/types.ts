@@ -1,6 +1,6 @@
 import type { AutoSendLane } from "./policy";
 
-export type AutoSendSlotStatus = "queued" | "sending" | "sent" | "failed" | "skipped";
+export type AutoSendSlotStatus = "queued" | "sending" | "sent" | "drafted" | "failed" | "skipped";
 
 export type AutoSendLaneCounts = Record<AutoSendLane, number>;
 
@@ -16,12 +16,15 @@ export type AutoSendSlot = {
   eventDate: string;
   score: number;
   lane: AutoSendLane;
-  /** Pacific calendar day the send is assigned to, YYYY-MM-DD. */
+  /** Pacific calendar day the slot is assigned to, YYYY-MM-DD. */
   day: string;
   scheduledAt: string;
   status: AutoSendSlotStatus;
   statusSince: string | null;
+  /** When the slot finished: a historical send, or the timestamp the Gmail draft was created. */
   sentAt: string | null;
+  /** Direct link to the unsent Gmail draft (`null` for older slots that were sent outright). */
+  draftUrl: string | null;
   error: string | null;
   attempts: number;
 };

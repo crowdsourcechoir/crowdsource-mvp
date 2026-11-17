@@ -1,6 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import type { GmailConnection } from "../types";
-import { GMAIL_OWNER_KEY, hasSendsEnabledMarker, withSendsEnabledMarker } from "../gmail/constants";
+import { GMAIL_OWNER_KEY, hasGmailComposeScope, hasSendsEnabledMarker, withSendsEnabledMarker } from "../gmail/constants";
 import { gmailSendsAllowed } from "../outreach/send-guard";
 
 function supabaseErrorMessage(error: { message?: string; details?: string; hint?: string; code?: string } | null): string {
@@ -35,6 +35,7 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
   email: string | null;
   configured: boolean;
   sendsEnabled: boolean;
+  composeGranted: boolean;
   error?: string | null;
 }> {
   const configured = Boolean(
@@ -49,6 +50,7 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
         envFlag: process.env.SALES_GMAIL_SENDS_ENABLED,
         connectionSendsEnabled: false,
       }),
+      composeGranted: false,
     };
   }
   try {
@@ -57,7 +59,13 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
       envFlag: process.env.SALES_GMAIL_SENDS_ENABLED,
       connectionSendsEnabled: connection?.sendsEnabled ?? false,
     });
-    return { connected: Boolean(connection), email: connection?.email ?? null, configured: true, sendsEnabled };
+    return {
+      connected: Boolean(connection),
+      email: connection?.email ?? null,
+      configured: true,
+      sendsEnabled,
+      composeGranted: hasGmailComposeScope(connection?.scopes),
+    };
   } catch (err) {
     const detail = err instanceof Error && err.message.trim() ? err.message.trim() : "connection timed out";
     return {
@@ -68,6 +76,7 @@ export async function getGmailConnectionStatus(ownerKey: string = GMAIL_OWNER_KE
         envFlag: process.env.SALES_GMAIL_SENDS_ENABLED,
         connectionSendsEnabled: false,
       }),
+      composeGranted: false,
       error: `Can't reach the database (${detail}). OAuth is configured — wait a minute and click Connect Gmail again.`,
     };
   }
@@ -122,7 +131,13 @@ export async function deleteGmailConnection(ownerKey: string = GMAIL_OWNER_KEY):
 export async function setGmailSendsEnabled(
   enabled: boolean,
   ownerKey: string = GMAIL_OWNER_KEY
-): Promise<{ connected: boolean; email: string | null; configured: boolean; sendsEnabled: boolean }> {
+): Promise<{
+  connected: boolean;
+  email: string | null;
+  configured: boolean;
+  sendsEnabled: boolean;
+  composeGranted: boolean;
+}> {
   const connection = await getGmailConnection(ownerKey);
   if (!connection) {
     throw new Error("Gmail is not connected. Connect Gmail first, then Resume sending.");
