@@ -84,12 +84,11 @@ export async function parkFollowUp(opportunityId: string, ymd: string): Promise<
   ]);
   if (!organization) throw new Error("Organization missing");
 
+  const existing = readParkedFollowUp(opportunity.importMetadata);
   const picked = pickCheckInContact(contacts, activities);
   const contact =
     (existing ? contacts.find((row) => row.id === existing.contactId && row.email) : null) ?? picked;
   if (!contact?.email) throw new Error("No contact with an email on this deal");
-
-  const existing = readParkedFollowUp(opportunity.importMetadata);
   let draftId = existing?.draftId ?? "";
   let subject = existing?.subject ?? "";
   let body = existing?.body ?? "";
