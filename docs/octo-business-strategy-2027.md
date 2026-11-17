@@ -42,6 +42,14 @@ fundamental to the model.
 These two models share creative methods, technology, musicians, production
 systems, audience participation expertise, and partner relationships.
 
+Sales taxonomy in the queue (`lib/sales/business-model.ts`) mirrors this frame:
+**Business Category** (Commissioned Experiences / Owned Entertainment),
+**Product / Experience** (Anthem, Fan Chant, Song Garden, Custom Activation,
+Rave Choir, Other Bloom), **Opportunity Type** / deal structure (Client Booking,
+Sponsorship, Strategic / Venue / Production Partnership), and optional
+**Edition / Bloom** free text. Existing initiative, engine, and offer tags still
+map onto these fields without deleting historical data.
+
 ### 1. Premium commissioned experiences
 
 Organizations commission Crowdsource Choir to create participatory experiences

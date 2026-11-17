@@ -2,6 +2,7 @@ import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
 import { resolveQueueRecentlyAddedAt } from "../queue/added";
+import { resolveBusinessModelFromMetadata } from "../business-model";
 import { readSalesInitiative } from "../initiatives";
 import { readDealForecast, resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
 import { classifyWorkstream, qualificationScore } from "../strategy/playbook";
@@ -367,13 +368,27 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
     const revenueEngine = resolveRevenueEngine(opportunity.import_metadata, organization.import_metadata);
     const flagshipOffer = resolveFlagshipOffer(opportunity.import_metadata, organization.import_metadata);
     const potentialAmount = readDealForecast(opportunity.import_metadata).potentialAmount;
+    const salesInitiative = readSalesInitiative(organization.import_metadata);
     const workstream = classifyWorkstream({
       revenueEngine,
       flagshipOffer,
-      salesInitiative: readSalesInitiative(organization.import_metadata),
+      salesInitiative,
       category,
       organizationTypeKey,
     });
+    const businessModel = resolveBusinessModelFromMetadata(
+      opportunity.import_metadata,
+      organization.import_metadata,
+      {
+        revenueEngine,
+        flagshipOffer,
+        salesInitiative,
+        category,
+        organizationTypeKey,
+        workstream,
+        opportunityTitle: opportunity.title,
+      }
+    );
     const relationshipStage = (opportunity.relationship_stage as RelationshipStage | null) ?? null;
     const qual = qualificationScore({
       hasDecisionMaker:
@@ -411,6 +426,10 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       flagshipOffer,
       potentialAmount,
       workstream,
+      businessCategory: businessModel.businessCategory,
+      productExperience: businessModel.productExperience,
+      dealType: businessModel.dealType,
+      editionBloom: businessModel.editionBloom,
       qualificationScore: qual,
     });
   }

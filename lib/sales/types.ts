@@ -429,6 +429,14 @@ export type QueueSidebarItem = {
   potentialAmount: number | null;
   /** Playbook workstream: premium | partnership | sponsor | owned */
   workstream: WorkstreamKey;
+  /** Commissioned Experiences | Owned Entertainment — derived or overridden. */
+  businessCategory: string;
+  /** Anthem / Fan Chant / Song Garden / Custom Activation / Rave Choir / Other Bloom */
+  productExperience: string;
+  /** Client Booking / Sponsorship / Strategic / Venue / Production partnership */
+  dealType: string;
+  /** Optional free-text edition or Bloom name (e.g. Holiday Rave Choir). */
+  editionBloom: string | null;
   /** 0–4: decision-maker, date, potential $, next step */
   qualificationScore: number;
 };

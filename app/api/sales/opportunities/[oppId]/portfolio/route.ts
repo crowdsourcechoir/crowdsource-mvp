@@ -4,6 +4,19 @@ import {
   updateOpportunityImportMetadata,
 } from "@/lib/sales/db/opportunities";
 import {
+  isBusinessCategoryKey,
+  isDealTypeKey,
+  isProductExperienceKey,
+  readBusinessCategory,
+  readDealType,
+  readEditionBloom,
+  readProductExperience,
+  withBusinessCategory,
+  withDealType,
+  withEditionBloom,
+  withProductExperience,
+} from "@/lib/sales/business-model";
+import {
   isFlagshipOfferKey,
   isRevenueEngineKey,
   readDealEconomics,
@@ -38,9 +51,9 @@ function parseDateField(raw: unknown): string | null | undefined {
 }
 
 /**
- * PATCH portfolio fields on an opportunity: revenue engine, flagship offer,
- * potential deal + payment schedule, and booked/cash/earned.
- * Persisted in import_metadata (no schema migration).
+ * PATCH portfolio fields on an opportunity: business category / product / deal type /
+ * edition, revenue engine, flagship offer, potential deal + payment schedule, and
+ * booked/cash/earned. Persisted in import_metadata (no schema migration).
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ oppId: string }> }) {
   try {
@@ -50,6 +63,50 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ op
 
     const body = (await request.json()) as Record<string, unknown>;
     let meta: Record<string, unknown> = { ...(existing.importMetadata ?? {}) };
+
+    if ("productExperience" in body) {
+      const raw = body.productExperience;
+      if (raw === null || raw === "") {
+        meta = withProductExperience(meta, null);
+      } else if (isProductExperienceKey(raw)) {
+        meta = withProductExperience(meta, raw);
+      } else {
+        return NextResponse.json({ error: `Invalid productExperience "${String(raw)}"` }, { status: 400 });
+      }
+    }
+
+    if ("businessCategory" in body) {
+      const raw = body.businessCategory;
+      if (raw === null || raw === "") {
+        meta = withBusinessCategory(meta, null);
+      } else if (isBusinessCategoryKey(raw)) {
+        meta = withBusinessCategory(meta, raw);
+      } else {
+        return NextResponse.json({ error: `Invalid businessCategory "${String(raw)}"` }, { status: 400 });
+      }
+    }
+
+    if ("dealType" in body) {
+      const raw = body.dealType;
+      if (raw === null || raw === "") {
+        meta = withDealType(meta, null);
+      } else if (isDealTypeKey(raw)) {
+        meta = withDealType(meta, raw);
+      } else {
+        return NextResponse.json({ error: `Invalid dealType "${String(raw)}"` }, { status: 400 });
+      }
+    }
+
+    if ("editionBloom" in body) {
+      const raw = body.editionBloom;
+      if (raw === null || raw === "") {
+        meta = withEditionBloom(meta, null);
+      } else if (typeof raw === "string") {
+        meta = withEditionBloom(meta, raw);
+      } else {
+        return NextResponse.json({ error: "editionBloom must be a string" }, { status: 400 });
+      }
+    }
 
     if ("revenueEngine" in body) {
       const raw = body.revenueEngine;
@@ -118,6 +175,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ op
     const opportunity = await updateOpportunityImportMetadata(oppId, meta);
     return NextResponse.json({
       opportunity,
+      businessCategory: readBusinessCategory(opportunity.importMetadata),
+      productExperience: readProductExperience(opportunity.importMetadata),
+      dealType: readDealType(opportunity.importMetadata),
+      editionBloom: readEditionBloom(opportunity.importMetadata),
       revenueEngine: readRevenueEngine(opportunity.importMetadata),
       flagshipOffer: readFlagshipOffer(opportunity.importMetadata),
       dealEconomics: readDealEconomics(opportunity.importMetadata),
@@ -138,6 +199,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ opp
     if (!opportunity) return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
     return NextResponse.json({
       opportunity,
+      businessCategory: readBusinessCategory(opportunity.importMetadata),
+      productExperience: readProductExperience(opportunity.importMetadata),
+      dealType: readDealType(opportunity.importMetadata),
+      editionBloom: readEditionBloom(opportunity.importMetadata),
       revenueEngine: readRevenueEngine(opportunity.importMetadata),
       flagshipOffer: readFlagshipOffer(opportunity.importMetadata),
       dealEconomics: readDealEconomics(opportunity.importMetadata),

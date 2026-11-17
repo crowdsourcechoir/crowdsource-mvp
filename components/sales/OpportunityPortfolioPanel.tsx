@@ -3,6 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CscDatePicker from "@/components/ui/CscDatePicker";
 import {
+  BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORY_KEYS,
+  DEAL_TYPES,
+  DEAL_TYPE_KEYS,
+  PRODUCTS,
+  PRODUCT_KEYS,
+  readBusinessCategory,
+  readDealType,
+  readEditionBloom,
+  readProductExperience,
+  resolveBusinessModelFromMetadata,
+  type BusinessCategoryKey,
+  type DealTypeKey,
+  type ProductExperienceKey,
+} from "@/lib/sales/business-model";
+import {
   FLAGSHIP_OFFERS,
   FLAGSHIP_OFFER_KEYS,
   PREMIUM_DEAL_QUICK_AMOUNTS,
@@ -36,6 +52,10 @@ type Props = {
     importMetadata: Record<string, unknown> | null;
     revenueEngine: RevenueEngineKey | null;
     flagshipOffer: FlagshipOfferKey | null;
+    businessCategory?: BusinessCategoryKey | null;
+    productExperience?: ProductExperienceKey | null;
+    dealType?: DealTypeKey | null;
+    editionBloom?: string | null;
     dealEconomics: DealEconomics;
     dealForecast: DealForecast;
   }) => void;
@@ -60,8 +80,22 @@ export default function OpportunityPortfolioPanel({
   compact = false,
   onUpdated,
 }: Props) {
+  const derived = resolveBusinessModelFromMetadata(importMetadata, null, {
+    revenueEngine: readRevenueEngine(importMetadata),
+    flagshipOffer: readFlagshipOffer(importMetadata),
+  });
   const [engine, setEngine] = useState<RevenueEngineKey | "">(readRevenueEngine(importMetadata) ?? "");
   const [offer, setOffer] = useState<FlagshipOfferKey | "">(readFlagshipOffer(importMetadata) ?? "");
+  const [businessCategory, setBusinessCategory] = useState<BusinessCategoryKey | "">(
+    readBusinessCategory(importMetadata) ?? derived.businessCategory
+  );
+  const [productExperience, setProductExperience] = useState<ProductExperienceKey | "">(
+    readProductExperience(importMetadata) ?? derived.productExperience
+  );
+  const [dealType, setDealType] = useState<DealTypeKey | "">(
+    readDealType(importMetadata) ?? derived.dealType
+  );
+  const [editionBloom, setEditionBloom] = useState(readEditionBloom(importMetadata) ?? "");
   const economics = readDealEconomics(importMetadata);
   const forecast = readDealForecast(importMetadata);
   const anthemPricing = readAnthemPricing(importMetadata);
@@ -82,8 +116,16 @@ export default function OpportunityPortfolioPanel({
   const [customDeal, setCustomDeal] = useState(false);
 
   useEffect(() => {
+    const nextDerived = resolveBusinessModelFromMetadata(importMetadata, null, {
+      revenueEngine: readRevenueEngine(importMetadata),
+      flagshipOffer: readFlagshipOffer(importMetadata),
+    });
     setEngine(readRevenueEngine(importMetadata) ?? "");
     setOffer(readFlagshipOffer(importMetadata) ?? "");
+    setBusinessCategory(readBusinessCategory(importMetadata) ?? nextDerived.businessCategory);
+    setProductExperience(readProductExperience(importMetadata) ?? nextDerived.productExperience);
+    setDealType(readDealType(importMetadata) ?? nextDerived.dealType);
+    setEditionBloom(readEditionBloom(importMetadata) ?? "");
     const nextEcon = readDealEconomics(importMetadata);
     setBooked(moneyDraft(nextEcon.bookedAmount));
     setCash(moneyDraft(nextEcon.cashCollected));
@@ -132,6 +174,10 @@ export default function OpportunityPortfolioPanel({
           importMetadata: meta,
           revenueEngine: data.revenueEngine ?? null,
           flagshipOffer: data.flagshipOffer ?? null,
+          businessCategory: data.businessCategory ?? readBusinessCategory(meta),
+          productExperience: data.productExperience ?? readProductExperience(meta),
+          dealType: data.dealType ?? readDealType(meta),
+          editionBloom: data.editionBloom ?? readEditionBloom(meta),
           dealEconomics: data.dealEconomics ?? readDealEconomics(meta),
           dealForecast: data.dealForecast ?? readDealForecast(meta),
         });
@@ -222,8 +268,80 @@ export default function OpportunityPortfolioPanel({
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {!compact ? <p className="csc-eyebrow shrink-0">Portfolio</p> : null}
           <select
-            aria-label="Revenue engine"
+            aria-label="Business category"
             className={selectClass}
+            value={businessCategory}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value as BusinessCategoryKey | "";
+              setBusinessCategory(next || derived.businessCategory);
+              void patch(
+                { businessCategory: next === "" ? null : next },
+                next ? `${BUSINESS_CATEGORIES[next].shortLabel} saved` : "Business category cleared"
+              );
+            }}
+          >
+            {BUSINESS_CATEGORY_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {BUSINESS_CATEGORIES[key].shortLabel}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Product / experience"
+            className={selectClass}
+            value={productExperience}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value as ProductExperienceKey;
+              setProductExperience(next);
+              setBusinessCategory(PRODUCTS[next].businessCategory);
+              void patch({ productExperience: next }, `${PRODUCTS[next].label} saved`);
+            }}
+          >
+            {PRODUCT_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {PRODUCTS[key].label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Opportunity / deal type"
+            className={selectClass}
+            value={dealType}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value as DealTypeKey;
+              setDealType(next);
+              void patch({ dealType: next }, `${DEAL_TYPES[next].label} saved`);
+            }}
+          >
+            {DEAL_TYPE_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {DEAL_TYPES[key].label}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label="Edition / Bloom"
+            className={`${inputClass} w-[9rem]`}
+            placeholder="Edition / Bloom"
+            value={editionBloom}
+            disabled={busy}
+            onChange={(e) => setEditionBloom(e.target.value)}
+            onBlur={() => {
+              const current = readEditionBloom(importMetadata) ?? "";
+              if (editionBloom.trim() === current) return;
+              void patch(
+                { editionBloom: editionBloom.trim() || null },
+                editionBloom.trim() ? "Edition saved" : "Edition cleared"
+              );
+            }}
+          />
+          <select
+            aria-label="Revenue engine"
+            title="Legacy engine (kept in sync with product)"
+            className={`${selectClass} text-gray-400`}
             value={engine}
             disabled={busy}
             onChange={(e) => {
@@ -241,7 +359,8 @@ export default function OpportunityPortfolioPanel({
           </select>
           <select
             aria-label="Flagship offer"
-            className={selectClass}
+            title="Legacy offer (kept in sync with product)"
+            className={`${selectClass} text-gray-400`}
             value={offer}
             disabled={busy}
             onChange={(e) => {

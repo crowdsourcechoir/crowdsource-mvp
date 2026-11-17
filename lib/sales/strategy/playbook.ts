@@ -9,6 +9,8 @@
  * The 2027–2028 operating plan is docs/octo-business-strategy-2027.md.
  * Premium maps to Anthem, partnership to Fan Chant and season deals,
  * sponsor to distribution partners, and owned to Rave Choir and themed editions.
+ * The simplified operator lens is lib/sales/business-model.ts
+ * (Commissioned Experiences vs Owned Entertainment + product + deal type).
  * Replace these targets only when that strategy's numbers are ready to drive the queue.
  */
 

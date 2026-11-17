@@ -75,7 +75,48 @@ import {
   type QueueWorkstreamFilter,
 } from "@/lib/sales/queue/workstream";
 import {
-  WORKSTREAMS,
+  QUEUE_BUSINESS_OPTIONS,
+  countQueueBusiness,
+  matchesQueueBusiness,
+  parseQueueBusiness,
+  type QueueBusinessFilter,
+} from "@/lib/sales/queue/business";
+import {
+  QUEUE_PRODUCT_OPTIONS,
+  countQueueProducts,
+  matchesQueueProduct,
+  parseQueueProduct,
+  type QueueProductFilter,
+} from "@/lib/sales/queue/product";
+import {
+  QUEUE_DEAL_OPTIONS,
+  countQueueDeals,
+  matchesQueueDeal,
+  parseQueueDeal,
+  type QueueDealFilter,
+} from "@/lib/sales/queue/deal-type";
+import {
+  QUEUE_VALUE_OPTIONS,
+  countQueueValues,
+  matchesQueueValue,
+  parseQueueValue,
+  type QueueValueFilter,
+} from "@/lib/sales/queue/value";
+import {
+  QUEUE_SAVED_VIEWS,
+  matchingSavedView,
+  parseQueueSavedView,
+  type QueueSavedViewKey,
+} from "@/lib/sales/queue/saved-views";
+import {
+  BUSINESS_CATEGORIES,
+  DEAL_TYPES,
+  PRODUCTS,
+  type BusinessCategoryKey,
+  type DealTypeKey,
+  type ProductExperienceKey,
+} from "@/lib/sales/business-model";
+import {
   workstreamPriority,
   type WorkstreamKey,
 } from "@/lib/sales/strategy/playbook";
@@ -119,7 +160,19 @@ export default function ApprovalQueueClient() {
   const added = parseQueueAdded(searchParams.get("added"));
   const cashWindow = parseQueueCashWindow(searchParams.get("cash"));
   const workstream = parseQueueWorkstream(searchParams.get("workstream"));
+  const business = parseQueueBusiness(searchParams.get("business"));
+  const product = parseQueueProduct(searchParams.get("product"));
+  const deal = parseQueueDeal(searchParams.get("deal"));
+  const value = parseQueueValue(searchParams.get("value"));
   const deepLinkItem = searchParams.get("item");
+  const activeSavedView = matchingSavedView({
+    scope,
+    business,
+    deal,
+    value,
+    cash: cashWindow,
+  });
+  const viewParam = parseQueueSavedView(searchParams.get("view"));
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, QueueItemDetail>>({});
   const [loading, setLoading] = useState(true);
@@ -169,6 +222,18 @@ export default function ApprovalQueueClient() {
     };
   }, []);
 
+  // One-shot deep link: /admin/sales/queue?view=commissioned_revenue
+  useEffect(() => {
+    if (!viewParam) return;
+    applySavedView(viewParam);
+    // applySavedView is stable enough via replaceFilters; clear ?view= so refresh doesn't re-apply.
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("view");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when viewParam appears
+  }, [viewParam]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -217,7 +282,47 @@ export default function ApprovalQueueClient() {
         matchesQueueFunnel(item.relationshipStage, funnel) &&
         matchesQueueAdded(queueItemAddedAt(item), added) &&
         matchesQueueCashWindow(item, cashWindow) &&
-        matchesQueueWorkstream(item, workstream)
+        matchesQueueWorkstream(item, workstream) &&
+        matchesQueueBusiness(
+          {
+            businessCategory: item.businessCategory as BusinessCategoryKey,
+            productExperience: item.productExperience,
+            dealType: item.dealType,
+            revenueEngine: item.revenueEngine,
+            flagshipOffer: item.flagshipOffer,
+            category: item.category,
+            organizationTypeKey: item.organizationTypeKey,
+            workstream: item.workstream,
+            opportunityTitle: item.opportunityTitle,
+          },
+          business
+        ) &&
+        matchesQueueProduct(
+          {
+            productExperience: item.productExperience as ProductExperienceKey,
+            businessCategory: item.businessCategory,
+            dealType: item.dealType,
+            revenueEngine: item.revenueEngine,
+            flagshipOffer: item.flagshipOffer,
+            category: item.category,
+            workstream: item.workstream,
+            opportunityTitle: item.opportunityTitle,
+          },
+          product
+        ) &&
+        matchesQueueDeal(
+          {
+            dealType: item.dealType as DealTypeKey,
+            businessCategory: item.businessCategory,
+            productExperience: item.productExperience,
+            salesInitiative: undefined,
+            category: item.category,
+            organizationTypeKey: item.organizationTypeKey,
+            workstream: item.workstream,
+          },
+          deal
+        ) &&
+        matchesQueueValue(item.potentialAmount, value)
     );
     if (added === "new") {
       return [...filtered].sort((a, b) => {
@@ -243,12 +348,16 @@ export default function ApprovalQueueClient() {
       }
       return (b.potentialAmount ?? 0) - (a.potentialAmount ?? 0);
     });
-  }, [sidebar, category, funnel, added, cashWindow, workstream]);
+  }, [sidebar, category, funnel, added, cashWindow, workstream, business, product, deal, value]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
   const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
   const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
   const cashCounts = useMemo(() => countCashNow(sidebar), [sidebar]);
   const workstreamCounts = useMemo(() => countQueueWorkstreams(sidebar), [sidebar]);
+  const businessCounts = useMemo(() => countQueueBusiness(sidebar), [sidebar]);
+  const productCounts = useMemo(() => countQueueProducts(sidebar), [sidebar]);
+  const dealCounts = useMemo(() => countQueueDeals(sidebar), [sidebar]);
+  const valueCounts = useMemo(() => countQueueValues(sidebar), [sidebar]);
 
   const selected = visible[selectedIndex] ?? null;
   const selectedId = selected?.queueItem.id ?? null;
@@ -746,57 +855,107 @@ export default function ApprovalQueueClient() {
     if (jumpToQueueItemId) return;
     setSelectedIndex(0);
     setMobileDetailOpen(false);
-  }, [category, scope, funnel, added, cashWindow, workstream]);
+  }, [category, scope, funnel, added, cashWindow, workstream, business, product, deal, value, jumpToQueueItemId]);
 
-  function setCategory(next: QueueCategoryFilter) {
+  function replaceFilters(mutate: (params: URLSearchParams) => void) {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "all") params.delete("category");
-    else params.set("category", next);
+    mutate(params);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function setCategory(next: QueueCategoryFilter) {
+    replaceFilters((params) => {
+      if (next === "all") params.delete("category");
+      else params.set("category", next);
+    });
   }
 
   function setScope(next: QueueScope) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "to_send") params.delete("scope");
-    else params.set("scope", next);
-    params.delete("item");
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceFilters((params) => {
+      if (next === "to_send") params.delete("scope");
+      else params.set("scope", next);
+      params.delete("item");
+    });
   }
 
   function setFunnel(next: QueueFunnelFilter) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "all") params.delete("funnel");
-    else params.set("funnel", next === "purchase" ? "won" : next);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceFilters((params) => {
+      if (next === "all") params.delete("funnel");
+      else params.set("funnel", next === "purchase" ? "won" : next);
+    });
   }
 
   function setAdded(next: QueueAddedFilter) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "all") params.delete("added");
-    else params.set("added", next);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceFilters((params) => {
+      if (next === "all") params.delete("added");
+      else params.set("added", next);
+    });
   }
 
   function setCashWindow(next: QueueCashWindow) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "all") params.delete("cash");
-    else params.set("cash", "now");
-    // Cash-now spans to-send and follow-ups — show the full scoped list.
-    if (next === "cash_now" && scope === "to_send") params.set("scope", "all");
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceFilters((params) => {
+      if (next === "all") params.delete("cash");
+      else params.set("cash", "now");
+      // Cash-now spans to-send and follow-ups — show the full scoped list.
+      if (next === "cash_now" && scope === "to_send") params.set("scope", "all");
+    });
   }
 
   function setWorkstream(next: QueueWorkstreamFilter) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "all") params.delete("workstream");
-    else params.set("workstream", next);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceFilters((params) => {
+      if (next === "all") params.delete("workstream");
+      else params.set("workstream", next);
+    });
+  }
+
+  function setBusiness(next: QueueBusinessFilter) {
+    replaceFilters((params) => {
+      if (next === "all") params.delete("business");
+      else params.set("business", next);
+    });
+  }
+
+  function setProduct(next: QueueProductFilter) {
+    replaceFilters((params) => {
+      if (next === "all") params.delete("product");
+      else params.set("product", next);
+    });
+  }
+
+  function setDeal(next: QueueDealFilter) {
+    replaceFilters((params) => {
+      if (next === "all") params.delete("deal");
+      else params.set("deal", next);
+    });
+  }
+
+  function setValue(next: QueueValueFilter) {
+    replaceFilters((params) => {
+      if (next === "all") params.delete("value");
+      else params.set("value", next);
+    });
+  }
+
+  function applySavedView(key: QueueSavedViewKey) {
+    const view = QUEUE_SAVED_VIEWS.find((v) => v.key === key);
+    if (!view) return;
+    replaceFilters((params) => {
+      // Reset lenses this view owns, then apply its presets.
+      params.delete("business");
+      params.delete("product");
+      params.delete("deal");
+      params.delete("value");
+      params.delete("cash");
+      params.delete("item");
+      const p = view.params;
+      if (p.scope === "to_send" || p.scope == null) params.delete("scope");
+      else if (p.scope) params.set("scope", p.scope);
+      if (p.business && p.business !== "all") params.set("business", p.business);
+      if (p.deal && p.deal !== "all") params.set("deal", p.deal);
+      if (p.value && p.value !== "all") params.set("value", p.value);
+      if (p.cash === "cash_now" || p.cash === "now") params.set("cash", "now");
+    });
   }
 
   const pendingCount = visible.length;
@@ -860,7 +1019,67 @@ export default function ApprovalQueueClient() {
   const filterBar = (
     <div className="mb-4 space-y-3">
       <div className="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+        {QUEUE_SAVED_VIEWS.map((view) => {
+          const active = activeSavedView === view.key;
+          return (
+            <button
+              key={view.key}
+              type="button"
+              title={view.description}
+              onClick={() => applySavedView(view.key)}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? "border-[var(--csc-accent)]/60 bg-[var(--csc-accent)]/15 text-[var(--csc-accent)]"
+                  : "border-white/15 bg-transparent text-gray-300 hover:border-[var(--csc-accent)] hover:text-white"
+              }`}
+            >
+              {view.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
         <div className="flex shrink-0 items-center gap-2">
+          <QueueFilterSelect
+            label="Business"
+            value={business}
+            options={QUEUE_BUSINESS_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: businessCounts[opt.key],
+            }))}
+            onChange={setBusiness}
+          />
+          <QueueFilterSelect
+            label="Product"
+            value={product}
+            options={QUEUE_PRODUCT_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: productCounts[opt.key],
+            }))}
+            onChange={setProduct}
+          />
+          <QueueFilterSelect
+            label="Deal type"
+            value={deal}
+            options={QUEUE_DEAL_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: dealCounts[opt.key],
+            }))}
+            onChange={setDeal}
+          />
+          <QueueFilterSelect
+            label="Value"
+            value={value}
+            options={QUEUE_VALUE_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              count: valueCounts[opt.key],
+            }))}
+            onChange={setValue}
+          />
           <QueueFilterSelect
             label="Work"
             value={workstream}
@@ -1041,10 +1260,16 @@ export default function ApprovalQueueClient() {
                   </span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
-                    {queueCategoryLabel(parseQueueCategory(item.category))}
-                    {item.workstream && item.workstream in WORKSTREAMS
-                      ? ` · ${WORKSTREAMS[item.workstream as WorkstreamKey].shortLabel}`
+                    {item.businessCategory in BUSINESS_CATEGORIES
+                      ? BUSINESS_CATEGORIES[item.businessCategory as BusinessCategoryKey].shortLabel
+                      : queueCategoryLabel(parseQueueCategory(item.category))}
+                    {item.productExperience in PRODUCTS
+                      ? ` · ${PRODUCTS[item.productExperience as ProductExperienceKey].label}`
                       : ""}
+                    {item.dealType in DEAL_TYPES
+                      ? ` · ${DEAL_TYPES[item.dealType as DealTypeKey].shortLabel}`
+                      : ""}
+                    {item.editionBloom ? ` · ${item.editionBloom}` : ""}
                     {item.potentialAmount != null ? ` · ${formatUsd(item.potentialAmount)}` : ""}
                     {item.qualificationScore >= 3 ? " · qualified" : item.qualificationScore > 0 ? ` · Q${item.qualificationScore}` : ""}
                     {item.eventDateEstimate ? ` · ${item.eventDateEstimate}` : ""}
