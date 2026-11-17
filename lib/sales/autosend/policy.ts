@@ -62,6 +62,7 @@ export type AutoSendGateInput = {
   doNotProspect: boolean;
   existingClient: boolean;
   alreadyContacted: boolean;
+  hasMeeting?: boolean;
   duplicateWarning: boolean;
   eventDate: string | null;
   totalScore: number | null;
@@ -330,6 +331,7 @@ export function bandRank(band: EventDateBand): number {
 export function autoSendSkipReason(input: AutoSendGateInput, todayYmd: string): string | null {
   if (input.queueStatus !== "pending" || input.queueKind !== "initial") return "not an open first-touch draft";
   if (input.doNotProspect || input.existingClient) return "held";
+  if (input.hasMeeting) return "meeting on calendar";
   if (input.alreadyContacted) return "already contacted";
   if (input.duplicateWarning) return "possible duplicate";
   const lane = classifyAutoSendLane(input);

@@ -7,6 +7,7 @@ import { isDoNotProspect } from "@/lib/sales/prospecting/do-not-prospect";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { readAnthemPricing } from "@/lib/sales/pricing/metadata";
+import { loadPriorOutreachIndex, priorOutreachSkipReason } from "./dedup";
 import { autoSendSkipReason, classifyAutoSendLane, componentScore, pacificClock } from "./policy";
 import type { AutoSendCandidate } from "./types";
 
@@ -68,7 +69,9 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
     event_date_estimate: string | null;
     event_or_initiative_name: string | null;
     last_outbound_at: string | null;
+    last_inbound_at: string | null;
     gmail_thread_id: string | null;
+    relationship_stage: string | null;
     opportunity_type_id: string | null;
     import_metadata: Record<string, unknown> | null;
   }>(
@@ -77,7 +80,7 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
       db
         .from("opportunities")
         .select(
-          "id, title, organization_id, event_date_estimate, event_or_initiative_name, last_outbound_at, gmail_thread_id, opportunity_type_id, import_metadata"
+          "id, title, organization_id, event_date_estimate, event_or_initiative_name, last_outbound_at, last_inbound_at, gmail_thread_id, relationship_stage, opportunity_type_id, import_metadata"
         )
         .in("id", chunk)
   );
@@ -141,6 +144,12 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
     : [];
   const contactById = new Map(contacts.map((row) => [row.id, row]));
 
+  const priorIndex = await loadPriorOutreachIndex({
+    organizationIds: opportunities.map((row) => row.organization_id),
+    contactIds,
+    emails: contacts.map((row) => row.email).filter((email): email is string => Boolean(email)),
+  });
+
   const candidates: AutoSendCandidate[] = [];
   for (const item of items) {
     const opportunity = oppById.get(item.opportunity_id);
@@ -151,6 +160,12 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
     const draft = item.outreach_draft_id ? draftById.get(item.outreach_draft_id) : undefined;
     const contact = draft?.contact_id ? contactById.get(draft.contact_id) : undefined;
     const email = contact?.email?.trim() || null;
+    const priorSkip = priorOutreachSkipReason(priorIndex, {
+      opportunityId: opportunity.id,
+      organizationId: organization.id,
+      contactId: contact?.id ?? null,
+      email,
+    });
     const organizationTypeKey = organization.organization_type_id
       ? typeKeyById.get(organization.organization_type_id) ?? null
       : null;
@@ -174,7 +189,14 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
         ...laneInput,
         doNotProspect: isDoNotProspect(organization.import_metadata),
         existingClient: Boolean(organization.is_existing_client),
-        alreadyContacted: Boolean(opportunity.last_outbound_at || opportunity.gmail_thread_id),
+        hasMeeting: priorSkip === "meeting on calendar",
+        alreadyContacted: Boolean(
+          opportunity.last_outbound_at ||
+            opportunity.last_inbound_at ||
+            opportunity.gmail_thread_id ||
+            opportunity.relationship_stage ||
+            priorSkip === "already contacted"
+        ),
         duplicateWarning: Boolean(item.duplicate_warning),
         eventDate: opportunity.event_date_estimate,
         totalScore: score ? Number(score.total_score) : null,
