@@ -127,6 +127,7 @@ export function countPitchCategories(categories: Array<string | null>): Record<Q
     arts: 0,
     entertainment: 0,
     tech: 0,
+    sponsors: 0,
     booking_agents: 0,
     other: 0,
   };
