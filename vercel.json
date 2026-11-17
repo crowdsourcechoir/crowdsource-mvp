@@ -98,6 +98,22 @@
       "schedule": "10 23 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-wfea-business-cards",
+      "schedule": "50,53,56,59 22 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-business-cards",
+      "schedule": "0,5,12,20,35,50 23 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-business-cards",
+      "schedule": "15 0 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-wfea-business-cards",
+      "schedule": "40 2 * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "50 2 * * *"
     },
