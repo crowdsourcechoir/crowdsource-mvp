@@ -16,6 +16,7 @@ function funnelHint(buckets: SalesDashboardBuckets | null): string {
     funnelByStage.awareness ? `${funnelByStage.awareness} awareness` : null,
     funnelByStage.interest ? `${funnelByStage.interest} interest` : null,
     funnelByStage.lost ? `${funnelByStage.lost} lost` : null,
+    funnelByStage.parked ? `${funnelByStage.parked} parked` : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : "Awareness → Interest → Won";
 }

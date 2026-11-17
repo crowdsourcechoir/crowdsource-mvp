@@ -16,6 +16,7 @@ import {
   isRevenueEngineKey,
 } from "@/lib/sales/engines";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
+import { isParkedOpportunity } from "@/lib/sales/follow-up/parked";
 
 const STAGES = FUNNEL_STAGES.map((s) => ({
   ...s,
@@ -204,9 +205,11 @@ export default function FunnelClient() {
     );
   }, []);
 
+  const parkedItems = useMemo(() => items.filter((item) => isParkedOpportunity(item.opportunity)), [items]);
   const grouped = useMemo(() => {
     const byStage = new Map<RelationshipStage, FunnelItemDetail[]>(STAGES.map((s) => [s.key, []]));
     for (const item of items) {
+      if (isParkedOpportunity(item.opportunity)) continue;
       if (item.opportunity.relationshipStage) byStage.get(item.opportunity.relationshipStage)?.push(item);
     }
     return byStage;
@@ -224,6 +227,7 @@ export default function FunnelClient() {
   }
 
   return (
+    <div className="space-y-6">
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {STAGES.map((stage) => {
         const stageItems = grouped.get(stage.key) ?? [];
@@ -250,6 +254,30 @@ export default function FunnelClient() {
           </div>
         );
       })}
+    </div>
+    {parkedItems.length > 0 ? (
+      <section className="rounded-lg border border-white/10 bg-[var(--csc-shell-bg,#000)] p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="csc-eyebrow">Parked</p>
+          <p className="text-xs text-gray-500">
+            {parkedItems.length} check-in{parkedItems.length === 1 ? "" : "s"} · out of the active pipeline
+          </p>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          A drafted email and a one-minute calendar reminder. Nothing sends until you queue it and approve.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {parkedItems.map((item) => (
+            <FunnelCard
+              key={item.opportunity.id}
+              item={item}
+              onMove={moveStage}
+              onPortfolioMeta={patchPortfolioMeta}
+            />
+          ))}
+        </div>
+      </section>
+    ) : null}
     </div>
   );
 }

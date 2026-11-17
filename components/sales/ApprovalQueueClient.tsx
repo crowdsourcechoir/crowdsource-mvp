@@ -12,6 +12,7 @@ import { contactRoleDescription, fallbackRoleDescription } from "@/lib/sales/con
 import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
+import { isParkedOpportunity } from "@/lib/sales/follow-up/parked";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
 import type { SalesSearchHit } from "@/lib/sales/search/query";
 import {
@@ -206,6 +207,7 @@ export default function ApprovalQueueClient() {
     interest: 0,
     purchase: 0,
     lost: 0,
+    parked: 0,
   });
   const copyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInFlight = useRef(false);
@@ -280,7 +282,7 @@ export default function ApprovalQueueClient() {
     const filtered = sidebar.filter(
       (item) =>
         matchesQueueCategory(item, category) &&
-        matchesQueueFunnel(item.relationshipStage, funnel) &&
+        matchesQueueFunnel(item.relationshipStage, funnel, item.parked) &&
         matchesQueueAdded(queueItemAddedAt(item), added) &&
         matchesQueueCashWindow(item, cashWindow) &&
         matchesQueueWorkstream(item, workstream) &&
@@ -762,9 +764,18 @@ export default function ApprovalQueueClient() {
       if (!current) return;
       const itemId = current.queueItem.id;
       const previous = current.opportunity.relationshipStage;
-      replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: stage } });
+      const wasParked = isParkedOpportunity(current.opportunity);
+      const nextMeta = { ...(current.opportunity.importMetadata ?? {}) };
+      delete nextMeta.parkedFollowUp;
+      delete nextMeta.followUpCalendarEventId;
+      replaceDetail(itemId, {
+        ...current,
+        opportunity: { ...current.opportunity, relationshipStage: stage, importMetadata: nextMeta },
+      });
       setSidebar((rows) =>
-        rows.map((row) => (row.queueItem.id === itemId ? { ...row, relationshipStage: stage } : row))
+        rows.map((row) =>
+          row.queueItem.id === itemId ? { ...row, relationshipStage: stage, parked: false } : row
+        )
       );
       showCopyStatus(`Moved to ${FUNNEL_STAGES.find((s) => s.key === stage)?.label ?? stage}.`);
       void (async () => {
@@ -783,7 +794,9 @@ export default function ApprovalQueueClient() {
         } catch (err) {
           replaceDetail(itemId, { ...current, opportunity: { ...current.opportunity, relationshipStage: previous } });
           setSidebar((rows) =>
-            rows.map((row) => (row.queueItem.id === itemId ? { ...row, relationshipStage: previous } : row))
+            rows.map((row) =>
+              row.queueItem.id === itemId ? { ...row, relationshipStage: previous, parked: wasParked } : row
+            )
           );
           setActionError(publicErrorMessage(err, "Could not move funnel"));
         }
@@ -986,6 +999,8 @@ export default function ApprovalQueueClient() {
       current.opportunity.lastOutboundAt &&
       current.opportunity.relationshipStage !== "purchase" &&
       current.opportunity.relationshipStage !== "lost" &&
+      current.opportunity.relationshipStage !== "parked" &&
+      !current.opportunity.importMetadata?.parkedFollowUp &&
       !showSendableDraft
   );
 
@@ -1386,7 +1401,8 @@ export default function ApprovalQueueClient() {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Funnel</span>
             {FUNNEL_STAGES.map((s) => {
-              const active = current.opportunity.relationshipStage === s.key;
+              const dealParked = isParkedOpportunity(current.opportunity);
+              const active = !dealParked && current.opportunity.relationshipStage === s.key;
               return (
                 <button
                   key={s.key}
@@ -1406,6 +1422,11 @@ export default function ApprovalQueueClient() {
                 </button>
               );
             })}
+            {isParkedOpportunity(current.opportunity) ? (
+              <span className="rounded-full bg-[var(--csc-accent)] px-2.5 py-1 text-[11px] font-semibold text-black">
+                Parked
+              </span>
+            ) : null}
           </div>
 
           <OpportunityPortfolioPanel
@@ -1448,6 +1469,34 @@ export default function ApprovalQueueClient() {
                   ...current,
                   opportunity: { ...current.opportunity, nextFollowUpAt },
                 });
+              }}
+              onParked={(update) => {
+                replaceDetail(current.queueItem.id, {
+                  ...current,
+                  opportunity: {
+                    ...current.opportunity,
+                    nextFollowUpAt: update.nextFollowUpAt,
+                    relationshipStage: update.relationshipStage ?? current.opportunity.relationshipStage,
+                    importMetadata: update.importMetadata,
+                  },
+                });
+                setSidebar((rows) =>
+                  rows.map((row) =>
+                    row.queueItem.id === current.queueItem.id
+                      ? {
+                          ...row,
+                          parked: update.parked,
+                          relationshipStage: update.relationshipStage ?? row.relationshipStage,
+                          nextFollowUpAt: update.nextFollowUpAt,
+                        }
+                      : row
+                  )
+                );
+                showCopyStatus(
+                  update.parked
+                    ? "Parked. The check-in is drafted and on your calendar. Nothing was emailed."
+                    : "Returned to the pipeline."
+                );
               }}
             />
           ) : null}

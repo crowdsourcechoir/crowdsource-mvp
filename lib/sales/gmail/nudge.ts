@@ -137,6 +137,9 @@ export async function generateNudgeDraftForOpportunityContact(
   if (opportunity.relationshipStage === "purchase" || opportunity.relationshipStage === "lost") {
     return { ok: false, error: "Won/lost opportunities are not nudged" };
   }
+  if (opportunity.relationshipStage === "parked" || opportunity.importMetadata?.parkedFollowUp) {
+    return { ok: false, error: "This deal is parked. The check-in draft is already saved — queue it when you are ready to send." };
+  }
   if (!opportunity.lastOutboundAt) {
     return { ok: false, error: "No outbound email yet — send the first draft instead" };
   }

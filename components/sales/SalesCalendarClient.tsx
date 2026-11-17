@@ -152,7 +152,7 @@ export default function SalesCalendarClient() {
     const now = Date.now();
     let list = events.filter((e) => e.status !== "cancelled");
     if (filter === "matched") {
-      list = list.filter((e) => e.matchStatus === "matched" || e.source === "bloom");
+      list = list.filter((e) => e.matchStatus === "matched" || e.source === "bloom" || e.source === "check_in");
     }
     if (filter === "upcoming") {
       list = list.filter((e) => {
@@ -347,6 +347,8 @@ export default function SalesCalendarClient() {
                             <p className="mt-2 text-xs text-gray-300">{who}</p>
                           ) : event.source === "bloom" ? (
                             <p className="mt-2 text-xs text-[var(--csc-accent)]">Bloom</p>
+                          ) : event.source === "check_in" ? (
+                            <p className="mt-2 text-xs text-[var(--csc-accent)]">Check-in</p>
                           ) : null}
                         </div>
                         <span

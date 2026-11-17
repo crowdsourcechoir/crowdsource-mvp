@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { updateOpportunityRelationshipStage } from "@/lib/sales/db/opportunities";
+import { getOpportunity, updateOpportunityRelationshipStage } from "@/lib/sales/db/opportunities";
+import { clearParkedArtifacts } from "@/lib/sales/follow-up/park";
 import type { RelationshipStage } from "@/lib/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ opp
     if (!VALID_STAGES.includes(stage as RelationshipStage)) {
       return NextResponse.json({ error: `Invalid stage "${stage}"` }, { status: 400 });
     }
-    const opportunity = await updateOpportunityRelationshipStage(oppId, stage as RelationshipStage);
+    let opportunity = await updateOpportunityRelationshipStage(oppId, stage as RelationshipStage);
+    // Moving back onto the active board drops the check-in hold. The reminder is not an email.
+    if (stage !== "parked") {
+      try {
+        await clearParkedArtifacts(oppId);
+        opportunity = (await getOpportunity(oppId)) ?? opportunity;
+      } catch (clearErr) {
+        console.warn("[parked-follow-up] clear after stage move failed:", clearErr);
+      }
+    }
     return NextResponse.json({ opportunity });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Server error" }, { status: 500 });

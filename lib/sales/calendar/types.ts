@@ -22,8 +22,8 @@ export type SyncedCalendarEvent = {
   opportunityId: string | null;
   matchStatus: CalendarMatchStatus;
   syncedAt: string;
-  /** `bloom` when this Google event was created from a Crowdsource Bloom. */
-  source?: "google" | "bloom";
+  /** `bloom` from a Crowdsource Bloom. `check_in` is a one-minute sales reminder. */
+  source?: "google" | "bloom" | "check_in";
   bloomId?: string | null;
   bloomSlug?: string | null;
 };

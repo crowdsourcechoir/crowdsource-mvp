@@ -5,8 +5,10 @@ import {
   updateOpportunityImportMetadata,
   updateOpportunityTouchTimestamps,
 } from "@/lib/sales/db/opportunities";
-import { followUpFromDateInput, followUpPresetIso, type FollowUpPreset } from "@/lib/sales/follow-up/calendar";
+import { followUpFromDateInput, followUpPresetIso, ymdInSalesZone, type FollowUpPreset } from "@/lib/sales/follow-up/calendar";
 import { syncFollowUpCalendarEvent } from "@/lib/sales/follow-up/gmail-event";
+import { returnParkedToPipeline } from "@/lib/sales/follow-up/park";
+import { readParkedFollowUp, withParkedFollowUp, type ParkedFollowUpRecord } from "@/lib/sales/follow-up/parked";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ opp
       date?: string | null;
       clear?: boolean;
     };
+
+    const parked = readParkedFollowUp(opportunity.importMetadata);
+    if ((body.clear || body.at === null || body.date === null) && parked) {
+      const released = await returnParkedToPipeline(oppId);
+      return NextResponse.json({
+        opportunity: released,
+        nextFollowUpAt: released.nextFollowUpAt,
+        calendarWarning: null,
+      });
+    }
 
     let nextFollowUpAt: string | null;
     if (body.clear || body.at === null || body.date === null) {
@@ -56,8 +68,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ opp
       synced = await syncFollowUpCalendarEvent({
         opportunityId: oppId,
         organizationName: organization?.name ?? opportunity.title,
+        organizationId: organization?.id ?? null,
         whenIso: updated.nextFollowUpAt,
         existingEventId,
+        summary: parked ? `Check in — ${parked.editionLabel}` : null,
+        description: parked?.calendarDescription ?? null,
+        contactName: parked?.contactName ?? null,
+        contactEmail: parked?.contactEmail ?? null,
       });
     } catch (err) {
       synced = {
@@ -65,12 +82,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ opp
         warning: `Follow-up saved. Calendar was not updated (${publicErrorMessage(err, "calendar error")}).`,
       };
     }
+    const rescheduled: ParkedFollowUpRecord | null =
+      parked && updated.nextFollowUpAt ? { ...parked, followUpOn: ymdInSalesZone(updated.nextFollowUpAt) } : null;
     let saved = updated;
-    if (synced.eventId !== existingEventId) {
-      saved = await updateOpportunityImportMetadata(oppId, {
-        ...(updated.importMetadata ?? {}),
-        followUpCalendarEventId: synced.eventId,
-      });
+    if (synced.eventId !== existingEventId || rescheduled) {
+      saved = await updateOpportunityImportMetadata(
+        oppId,
+        rescheduled
+          ? withParkedFollowUp(updated.importMetadata, rescheduled, synced.eventId)
+          : { ...(updated.importMetadata ?? {}), followUpCalendarEventId: synced.eventId }
+      );
     }
     return NextResponse.json({
       opportunity: saved,

@@ -134,7 +134,9 @@ export default function OrganizationWork({
               <FollowUpControls
                 opportunityId={opportunity.id}
                 nextFollowUpAt={opportunity.nextFollowUpAt}
+                importMetadata={opportunity.importMetadata}
                 onSaved={() => void onChanged()}
+                onParked={() => void onChanged()}
               />
               <QueueOpportunityNotes opportunityId={opportunity.id} />
             </>

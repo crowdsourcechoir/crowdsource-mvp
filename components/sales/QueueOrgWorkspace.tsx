@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import FollowUpControls from "@/components/sales/FollowUpControls";
+import FollowUpControls, { type ParkedFollowUpUpdate } from "@/components/sales/FollowUpControls";
 import OrgAttachmentsPanel from "@/components/sales/OrgAttachmentsPanel";
 import OrgPitches from "@/components/sales/OrgPitches";
 import { apiErrorFromBody, publicErrorMessage, readApiJson } from "@/lib/sales/http-error";
@@ -115,11 +115,13 @@ export default function QueueOrgWorkspace({
   opportunity,
   onOrganizationSaved,
   onFollowUpSaved,
+  onParked,
 }: {
   organization: Organization;
   opportunity: Opportunity;
   onOrganizationSaved?: (organization: Organization) => void;
   onFollowUpSaved?: (nextFollowUpAt: string | null) => void;
+  onParked?: (update: ParkedFollowUpUpdate) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(organization.name);
@@ -305,7 +307,9 @@ export default function QueueOrgWorkspace({
         <FollowUpControls
           opportunityId={opportunity.id}
           nextFollowUpAt={opportunity.nextFollowUpAt}
+          importMetadata={opportunity.importMetadata}
           onSaved={onFollowUpSaved}
+          onParked={onParked}
         />
       </div>
 

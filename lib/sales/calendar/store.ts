@@ -58,7 +58,7 @@ function normalizeEvent(raw: unknown): SyncedCalendarEvent | null {
         ? row.matchStatus
         : "unmatched",
     syncedAt: typeof row.syncedAt === "string" ? row.syncedAt : new Date().toISOString(),
-    source: row.source === "bloom" ? "bloom" : "google",
+    source: row.source === "bloom" ? "bloom" : row.source === "check_in" ? "check_in" : "google",
     bloomId: typeof row.bloomId === "string" ? row.bloomId : null,
     bloomSlug: typeof row.bloomSlug === "string" ? row.bloomSlug : null,
   };
