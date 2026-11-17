@@ -9,6 +9,7 @@ import {
   type DealEconomics,
 } from "../engines";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
+import { isParkedOpportunity } from "../follow-up/parked";
 import { matchesCashNow } from "../queue/cash-window";
 import { readSalesInitiative } from "../initiatives";
 import {
@@ -72,6 +73,7 @@ const EMPTY_STAGES: Record<RelationshipStage, number> = {
   interest: 0,
   purchase: 0,
   lost: 0,
+  parked: 0,
 };
 
 const EMPTY_TODAY: SalesTodaySnapshot = { dueCount: 0, overdueCount: 0, repliedCount: 0, tasks: [] };
@@ -163,9 +165,16 @@ export async function loadSalesDashboardBuckets(): Promise<SalesDashboardBuckets
   >;
 
   for (const row of oppRows) {
-    const stage = row.relationship_stage as RelationshipStage | null;
-    if (!stage || !(stage in funnelByStage)) continue;
+    const rawStage = row.relationship_stage as RelationshipStage | null;
+    if (!rawStage) continue;
+    const parked = isParkedOpportunity({
+      relationshipStage: rawStage,
+      importMetadata: (row.import_metadata as Record<string, unknown> | null) ?? null,
+    });
+    const stage: RelationshipStage = parked ? "parked" : rawStage;
+    if (!(stage in funnelByStage)) continue;
     funnelByStage[stage] += 1;
+    if (parked) continue;
 
     const nextFollowUpAt =
       typeof row.next_follow_up_at === "string" ? row.next_follow_up_at : null;
@@ -238,7 +247,8 @@ export async function loadSalesDashboardBuckets(): Promise<SalesDashboardBuckets
   return {
     pendingCount: pendingRes.count ?? 0,
     orgCount: orgRes.count ?? 0,
-    funnelCount: oppRows.length,
+    funnelCount:
+      funnelByStage.awareness + funnelByStage.interest + funnelByStage.purchase + funnelByStage.lost,
     funnelByStage,
     wins: wonOpps.map((w) => ({
       id: w.id,

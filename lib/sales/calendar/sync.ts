@@ -8,7 +8,8 @@ import {
   hasCalendarWriteScope,
 } from "./constants";
 import { matchMeetingAttendees } from "./match";
-import { EMPTY_CALENDAR_STORE, writeCalendarStore } from "./store";
+import { FOLLOW_UP_CALENDAR_PROP } from "../follow-up/gmail-event";
+import { EMPTY_CALENDAR_STORE, readCalendarStore, writeCalendarStore } from "./store";
 import type { CalendarSyncResult, SyncedCalendarEvent } from "./types";
 import { readBloomCalendarIds } from "@/lib/events/bloom-calendar-ids";
 
@@ -106,6 +107,7 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
         const bloomIdFromProp = item.extendedProperties?.private?.[BLOOM_CALENDAR_PROP] ?? null;
         const bloomId = bloomIdFromProp || googleIdToBloomId.get(item.id) || null;
         const isBloom = Boolean(bloomId);
+        const checkInOppId = item.extendedProperties?.private?.[FOLLOW_UP_CALENDAR_PROP] ?? null;
 
         events.push({
           googleEventId: item.id,
@@ -126,10 +128,10 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
           contactEmail: match.contactEmail,
           organizationId: match.organizationId,
           organizationName: match.organizationName,
-          opportunityId: match.opportunityId,
-          matchStatus: isBloom ? "self_only" : match.matchStatus,
+          opportunityId: checkInOppId || match.opportunityId,
+          matchStatus: isBloom ? "self_only" : checkInOppId ? "matched" : match.matchStatus,
           syncedAt,
-          source: isBloom ? "bloom" : "google",
+          source: isBloom ? "bloom" : checkInOppId ? "check_in" : "google",
           bloomId,
           bloomSlug: null,
         });
@@ -158,6 +160,18 @@ export async function syncGoogleCalendar(): Promise<CalendarSyncResult> {
 
   const matched = events.filter((e) => e.matchStatus === "matched").length;
   const unmatched = events.filter((e) => e.matchStatus === "unmatched").length;
+
+  // Check-ins can sit months out, past the meeting sync window. Keep those local rows
+  // so the sales calendar still shows the reminder Google is holding.
+  try {
+    const previous = await readCalendarStore();
+    const seen = new Set(events.map((event) => event.googleEventId));
+    for (const event of previous.store.events) {
+      if (event.source === "check_in" && !seen.has(event.googleEventId)) events.push(event);
+    }
+  } catch (err) {
+    console.warn("[calendar-sync] could not keep far check-ins:", err);
+  }
 
   const written = await writeCalendarStore({
     lastSyncedAt: syncedAt,

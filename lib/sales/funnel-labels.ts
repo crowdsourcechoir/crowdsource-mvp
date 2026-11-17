@@ -10,6 +10,7 @@ export const FUNNEL_STAGES: { key: RelationshipStage; label: string }[] = [
 
 export function funnelStageLabel(stage: string | null | undefined): string {
   if (!stage) return "Not in funnel";
+  if (stage === "parked") return "Parked";
   const found = FUNNEL_STAGES.find((s) => s.key === stage);
   if (found) return found.label;
   return stage.charAt(0).toUpperCase() + stage.slice(1);

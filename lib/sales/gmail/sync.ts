@@ -157,12 +157,17 @@ async function recordReply(input: {
   });
 
   if (input.replyKind === "live") {
+    const parked =
+      opportunity.relationshipStage === "parked" ||
+      (opportunity.importMetadata?.parkedFollowUp &&
+        typeof opportunity.importMetadata.parkedFollowUp === "object");
     await updateOpportunityTouchTimestamps(input.opportunityId, {
       lastInboundAt: occurredAt,
-      nextFollowUpAt: occurredAt,
+      // A parked check-in keeps its calendar date. A live reply should not pull it back into today.
+      nextFollowUpAt: parked ? opportunity.nextFollowUpAt : occurredAt,
       gmailThreadId: input.gmailThreadId,
     });
-    if (opportunity.relationshipStage === "awareness") {
+    if (!parked && opportunity.relationshipStage === "awareness") {
       await updateOpportunityRelationshipStage(input.opportunityId, "interest");
     }
   }

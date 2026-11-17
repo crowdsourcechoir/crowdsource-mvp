@@ -21,7 +21,9 @@ export async function GET(request: Request) {
     const items =
       funnel === "all"
         ? await listQueueSidebarByScope(scope)
-        : await listQueueSidebarByFunnelStage(funnel);
+        : funnel === "parked"
+          ? (await listQueueSidebarByScope("all")).filter((item) => item.parked)
+          : await listQueueSidebarByFunnelStage(funnel);
     return NextResponse.json(
       {
         items,

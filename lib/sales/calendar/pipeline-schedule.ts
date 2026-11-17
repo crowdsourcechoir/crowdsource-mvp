@@ -3,6 +3,7 @@ import { classifyQueueCategory, type QueueCategoryKey } from "@/lib/sales/queue/
 import { readSalesInitiative } from "@/lib/sales/initiatives";
 import { readDealForecast } from "@/lib/sales/engines";
 import { SALES_TIME_ZONE, salesTodayParts } from "@/lib/sales/follow-up/calendar";
+import { isParkedOpportunity } from "@/lib/sales/follow-up/parked";
 import type { RelationshipStage } from "@/lib/sales/types";
 
 export type PipelineScheduleEvent = {
@@ -283,7 +284,12 @@ export async function loadPipelineScheduleEvents(): Promise<PipelineScheduleEven
       eventDateEstimate,
       eventDateConfidence,
       category,
-      relationshipStage: (row.relationship_stage as RelationshipStage | null) ?? null,
+      relationshipStage: isParkedOpportunity({
+        relationshipStage: (row.relationship_stage as RelationshipStage | null) ?? null,
+        importMetadata: (row.import_metadata as Record<string, unknown> | null) ?? null,
+      })
+        ? "parked"
+        : ((row.relationship_stage as RelationshipStage | null) ?? null),
       queueItemId,
       potentialAmount,
     };

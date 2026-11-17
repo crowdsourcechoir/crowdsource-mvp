@@ -123,9 +123,10 @@ export type OpportunityStatus =
 
 /** Post-approval funnel tracking — Joel's own mental model for what happens after an email is
  * launched, distinct from `status` above (which tracks the AI pipeline's own state, not the human
- * relationship). Null = not yet sent. `lost` is a terminal, non-funnel bucket, not a fourth funnel
- * stage — see docs/sales-platform/database.md. */
-export type RelationshipStage = "awareness" | "interest" | "purchase" | "lost";
+ * relationship). Null = not yet sent. `lost` is a terminal bucket. `parked` is a soft-lost
+ * check-back: still on file, out of the active pipeline, with a calendar reminder instead of an
+ * automated email. */
+export type RelationshipStage = "awareness" | "interest" | "purchase" | "lost" | "parked";
 
 export type Opportunity = {
   id: string;
@@ -424,6 +425,8 @@ export type QueueSidebarItem = {
   gmailThreadId: string | null;
   followUpDue: boolean;
   relationshipStage: RelationshipStage | null;
+  /** Soft-lost check-back. Hidden from the active pipeline and shown under Funnel → Parked. */
+  parked?: boolean;
   /** YYYY-MM-DD when known — used by Cash now filter. */
   eventDateEstimate: string | null;
   /** premium | partnership | owned — from opp or org import_metadata. */

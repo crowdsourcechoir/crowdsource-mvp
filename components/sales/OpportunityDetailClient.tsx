@@ -15,6 +15,7 @@ import { FUNNEL_STAGES } from "@/lib/sales/funnel-labels";
 import OpportunityPortfolioPanel from "@/components/sales/OpportunityPortfolioPanel";
 import ClientSpaces from "@/components/spaces/ClientSpaces";
 import { publicErrorMessage } from "@/lib/sales/http-error";
+import { isParkedOpportunity } from "@/lib/sales/follow-up/parked";
 
 const FINDING_LABELS: Record<string, string> = {
   audience_size: "Audience",
@@ -79,13 +80,17 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   const moveFunnel = useCallback(
     (stage: RelationshipStage) => {
       if (!detail || stageBusy) return;
-      if (detail.opportunity.relationshipStage === stage) return;
+      if (detail.opportunity.relationshipStage === stage && !isParkedOpportunity(detail.opportunity)) return;
       const previous = detail.opportunity.relationshipStage;
+      const previousMeta = detail.opportunity.importMetadata;
+      const nextMeta = { ...(previousMeta ?? {}) };
+      delete nextMeta.parkedFollowUp;
+      delete nextMeta.followUpCalendarEventId;
       setStageBusy(true);
       setStageError(null);
       setDetail({
         ...detail,
-        opportunity: { ...detail.opportunity, relationshipStage: stage },
+        opportunity: { ...detail.opportunity, relationshipStage: stage, importMetadata: nextMeta },
       });
       void (async () => {
         try {
@@ -99,7 +104,14 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
         } catch (err) {
           setDetail((current) =>
             current
-              ? { ...current, opportunity: { ...current.opportunity, relationshipStage: previous } }
+              ? {
+                  ...current,
+                  opportunity: {
+                    ...current.opportunity,
+                    relationshipStage: previous,
+                    importMetadata: previousMeta,
+                  },
+                }
               : current
           );
           setStageError(publicErrorMessage(err, "Could not move funnel"));
@@ -130,6 +142,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
   if (!detail) return <p className="text-gray-400">Loading…</p>;
 
   const { organization, opportunity, contact, contacts, score, draft, brief } = detail;
+  const parked = isParkedOpportunity(opportunity);
   const emailSubject = draft ? coalesceDraftSubject(draft.editedSubject, draft.aiSubject) : null;
   const emailBody = draft
     ? stripEmailSignature(coalesceDraftBody(draft.editedBody, draft.aiBody))
@@ -153,7 +166,7 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Funnel</span>
             {FUNNEL_STAGES.map((s) => {
-              const active = opportunity.relationshipStage === s.key;
+              const active = !parked && opportunity.relationshipStage === s.key;
               return (
                 <button
                   key={s.key}
@@ -171,6 +184,11 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
                 </button>
               );
             })}
+            {parked ? (
+              <span className="rounded-full bg-[var(--csc-accent)] px-2.5 py-1 text-[11px] font-semibold text-black">
+                Parked
+              </span>
+            ) : null}
           </div>
           {detail.opportunityTypeLabel && (
             <span className="rounded-md border border-gray-800 px-2 py-0.5 text-gray-400">{detail.opportunityTypeLabel}</span>
@@ -203,7 +221,9 @@ export default function OpportunityDetailClient({ opportunityId }: { opportunity
           <FollowUpControls
             opportunityId={opportunity.id}
             nextFollowUpAt={opportunity.nextFollowUpAt}
+            importMetadata={opportunity.importMetadata}
             onSaved={() => void load()}
+            onParked={() => void load()}
           />
         </div>
         <OpportunityPortfolioPanel

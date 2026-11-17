@@ -70,6 +70,7 @@ function stageLabel(stage: PipelineScheduleEvent["relationshipStage"]): string {
   if (stage === "awareness") return "Awareness";
   if (stage === "purchase") return "Won";
   if (stage === "lost") return "Lost";
+  if (stage === "parked") return "Parked";
   return "Unstaged";
 }
 

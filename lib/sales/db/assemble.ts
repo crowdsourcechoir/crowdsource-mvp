@@ -277,9 +277,18 @@ function needsNudge(opportunity: {
   lastOutboundAt: string | null;
   lastInboundAt: string | null;
   relationshipStage: string | null;
+  importMetadata?: Record<string, unknown> | null;
 }): boolean {
   if (!opportunity.nextFollowUpAt) return false;
-  if (opportunity.relationshipStage === "lost" || opportunity.relationshipStage === "purchase") return false;
+  const parkedMeta = opportunity.importMetadata?.parkedFollowUp;
+  if (
+    opportunity.relationshipStage === "lost" ||
+    opportunity.relationshipStage === "purchase" ||
+    opportunity.relationshipStage === "parked" ||
+    (parkedMeta && typeof parkedMeta === "object")
+  ) {
+    return false;
+  }
   if (new Date(opportunity.nextFollowUpAt).getTime() > Date.now()) return false;
   if (!opportunity.lastOutboundAt) return false;
   if (!opportunity.lastInboundAt) return true;

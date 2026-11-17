@@ -7,6 +7,7 @@ import { readSalesInitiative } from "../initiatives";
 import { readDealForecast, resolveFlagshipOffer, resolveRevenueEngine } from "../engines";
 import { classifyWorkstream, qualificationScore } from "../strategy/playbook";
 import { isFollowUpDueOnOrBeforeToday } from "../follow-up/calendar";
+import { isParkedOpportunity } from "../follow-up/parked";
 import { opportunityOutreachKind } from "../outreach/contact-outreach";
 import { isDoNotProspect } from "../prospecting/do-not-prospect";
 import { loadSalesTodayTasks } from "./follow-ups";
@@ -147,6 +148,22 @@ export async function hasPendingNudgeQueueItem(opportunityId: string): Promise<b
     .eq("status", "pending");
   if (error) throw new Error(error.message);
   return (count ?? 0) > 0;
+}
+
+export async function findPendingNudgeQueueItemId(opportunityId: string, draftId: string): Promise<string | null> {
+  const db = requireSupabaseAdmin();
+  const { data, error } = await db
+    .from("approval_queue_items")
+    .select("id")
+    .eq("opportunity_id", opportunityId)
+    .eq("outreach_draft_id", draftId)
+    .eq("kind", "nudge")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ? String(data.id) : null;
 }
 
 export async function hasPendingNudgeForContact(opportunityId: string, contactId: string): Promise<boolean> {
@@ -421,6 +438,10 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       gmailThreadId: opportunity.gmail_thread_id ?? null,
       followUpDue,
       relationshipStage,
+      parked: isParkedOpportunity({
+        relationshipStage,
+        importMetadata: opportunity.import_metadata,
+      }),
       eventDateEstimate: opportunity.event_date_estimate ?? null,
       revenueEngine,
       flagshipOffer,

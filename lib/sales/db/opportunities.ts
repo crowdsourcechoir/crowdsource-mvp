@@ -1,5 +1,6 @@
 import { requireSupabaseAdmin } from "./client";
 import { normalizeEventDateEstimate } from "../dates/normalizeEventDateEstimate";
+import { isParkedOpportunity } from "../follow-up/parked";
 import type { Opportunity, OpportunityStatus, RelationshipStage } from "../types";
 
 function rowToOpportunity(row: Record<string, unknown>): Opportunity {
@@ -196,6 +197,8 @@ export async function listOpportunitiesDueForNudge(nowIso: string = new Date().t
   return (data ?? [])
     .map(rowToOpportunity)
     .filter((opp) => {
+      // Parked check-ins are a calendar reminder, not an automated nudge.
+      if (isParkedOpportunity(opp)) return false;
       // No inbound since last outbound (or never inbound).
       if (!opp.lastOutboundAt) return false;
       if (!opp.lastInboundAt) return true;
