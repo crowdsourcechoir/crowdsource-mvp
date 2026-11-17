@@ -10,8 +10,8 @@ export default function AutoSendSettingsPage() {
   return (
     <SettingsSubpage
       eyebrow="Integrations"
-      title={card?.title ?? "Automated sending"}
-      description="Master switch for the weekday outreach queue. The live line of sent, today, and upcoming emails is on Sales."
+      title={card?.title ?? "Weekday Gmail drafts"}
+      description="Master switch for the weekday outreach queue. Due slots are filed in Gmail Drafts — nothing is auto-sent."
     >
       <AutoSendSettingsClient />
     </SettingsSubpage>

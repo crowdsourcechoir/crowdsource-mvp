@@ -23,9 +23,11 @@ export type AutoSendQueueView = {
   enabled: boolean;
   gmailConnected: boolean;
   gmailSendsEnabled: boolean;
+  gmailComposeGranted: boolean;
   today: string;
   inWindow: boolean;
   sentToday: number;
+  draftedToday: number;
   dailyCap: number;
   weekSent: number;
   weeklyCap: number;
@@ -40,22 +42,34 @@ function sortSlots(slots: AutoSendSlot[]): AutoSendSlot[] {
   return [...slots].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt) || a.organizationName.localeCompare(b.organizationName));
 }
 
-export async function buildAutoSendQueueView(state: AutoSendState, error: string | null, now: Date = new Date()): Promise<AutoSendQueueView> {
+export async function buildAutoSendQueueView(
+  state: AutoSendState,
+  error: string | null,
+  now: Date = new Date()
+): Promise<AutoSendQueueView> {
   const clock = pacificClock(now);
   const today = clock.ymd;
   const tomorrow = addDaysYmd(today, 1);
   const weekStart = pacificWeekStart(today);
-  const gmail = await getGmailConnectionStatus().catch(() => ({ connected: false, sendsEnabled: false }));
+  const gmail = await getGmailConnectionStatus().catch(() => ({
+    connected: false,
+    sendsEnabled: false,
+    composeGranted: false,
+  }));
   const sentToday = state.slots.filter((slot) => slot.day === today && slot.status === "sent");
+  const draftedToday = state.slots.filter((slot) => slot.day === today && slot.status === "drafted");
   const failedToday = state.slots.filter((slot) => slot.day === today && (slot.status === "failed" || slot.status === "skipped"));
   const queuedToday = state.slots.filter((slot) => slot.day === today && (slot.status === "queued" || slot.status === "sending"));
-  const weekSent = state.slots.filter((slot) => slot.status === "sent" && slot.day >= weekStart && slot.day <= today);
+  const weekSent = state.slots.filter(
+    (slot) => (slot.status === "sent" || slot.status === "drafted") && slot.day >= weekStart && slot.day <= today
+  );
   const futureDays = Array.from(
     new Set(state.slots.filter((slot) => slot.day > today && slot.status === "queued").map((slot) => slot.day))
   ).sort();
 
   const groups: AutoSendQueueGroup[] = [
-    { key: "sent", label: "Sent", slots: sortSlots([...sentToday, ...failedToday]) },
+    { key: "drafts", label: "In Gmail Drafts", slots: sortSlots(draftedToday) },
+    { key: "sent", label: "Sent / Skipped", slots: sortSlots([...sentToday, ...failedToday]) },
     { key: "today", label: "In line today", slots: sortSlots(queuedToday) },
   ];
   for (const day of futureDays) {
@@ -75,7 +89,7 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
     lane,
     label: LANE_LABEL[lane],
     quota: LANE_DAILY_QUOTA[lane],
-    sent: sentToday.filter((slot) => slot.lane === lane).length,
+    sent: sentToday.filter((slot) => slot.lane === lane).length + draftedToday.filter((slot) => slot.lane === lane).length,
     lined: queuedToday.filter((slot) => slot.lane === lane).length,
   }));
 
@@ -83,14 +97,16 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
     enabled: state.enabled,
     gmailConnected: gmail.connected,
     gmailSendsEnabled: gmail.sendsEnabled,
+    gmailComposeGranted: gmail.composeGranted,
     today,
     inWindow: clock.minutes >= 8 * 60 && clock.minutes < 17 * 60 && clock.weekday !== "Sat" && clock.weekday !== "Sun",
     sentToday: sentToday.length,
+    draftedToday: draftedToday.length,
     dailyCap: AUTO_SEND_DAILY_CAP,
     weekSent: weekSent.length,
     weeklyCap: AUTO_SEND_WEEKLY_CAP,
     nextSendAt: next?.scheduledAt ?? null,
-    groups: groups.filter((group) => group.slots.length > 0 || group.key === "sent" || group.key === "today"),
+    groups: groups.filter((group) => group.slots.length > 0 || group.key === "drafts" || group.key === "today"),
     ready: state.ready,
     mix,
     storeError: error,

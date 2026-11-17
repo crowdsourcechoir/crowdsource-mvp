@@ -22,7 +22,7 @@ function candidate(id: string, overrides: Partial<AutoSendCandidate> = {}): Auto
     organizationId: `org-${id}`,
     organizationName: `Org ${id}`,
     contactName: "Ada Lovelace",
-    contactEmail: "ada@example.com",
+    contactEmail: `ada-${id}@example.com`,
     subject: "Hello",
     eventTitle: "Annual meeting",
     eventDate: "2027-03-04",
@@ -85,6 +85,8 @@ function main() {
   assert.equal(eventDateBand(null, "2026-11-16"), "excluded");
 
   assert.equal(autoSendSkipReason(baseGate(), "2026-11-16"), null);
+  assert.equal(autoSendSkipReason(baseGate({ hasMeeting: true }), "2026-11-16"), "meeting on calendar");
+  assert.equal(autoSendSkipReason(baseGate({ alreadyContacted: true }), "2026-11-16"), "already contacted");
   assert.match(autoSendSkipReason(baseGate({ organizationName: "Oregon Library Association" }), "2026-11-16") ?? "", /association/);
   assert.match(autoSendSkipReason(baseGate({ organizationTypeKey: "association" }), "2026-11-16") ?? "", /association/);
   assert.match(autoSendSkipReason(baseGate({ audienceScore: 3 }), "2026-11-16") ?? "", /audience/);
@@ -197,14 +199,40 @@ function main() {
   assert.equal(stillToday.filter((slot) => slot.lane === "other").length, 0);
   assert.equal(stillToday.filter((slot) => slot.lane === "large").length, 4);
 
-  const sent: AutoSendSlot = { ...lined[0]!, status: "sent", sentAt: tuesdayOpen.toISOString() };
+  const sent: AutoSendSlot = { ...lined[0]!, status: "sent", sentAt: tuesdayOpen.toISOString(), draftUrl: null };
   const kept = mergeAutoSendSlots([sent], [], tuesdayOpen);
   assert.equal(kept.some((slot) => slot.queueItemId === sent.queueItemId && slot.status === "sent"), true);
+
+  const drafted: AutoSendSlot = {
+    ...lined[1]!,
+    status: "drafted",
+    sentAt: tuesdayOpen.toISOString(),
+    draftUrl: "https://mail.google.com/mail/#drafts/thread-1",
+  };
+  const sameOrgAgain = candidate("again-org", {
+    organizationId: drafted.organizationId,
+    queueItemId: "new-q-org",
+    eventDate: "2027-05-01",
+    score: 99,
+  });
+  const sameEmailAgain = candidate("again-email", {
+    organizationId: "org-brand-new",
+    contactEmail: drafted.contactEmail.toUpperCase(),
+    queueItemId: "new-q-email",
+    eventDate: "2027-05-01",
+    score: 99,
+  });
+  const keptDraft = mergeAutoSendSlots([drafted], [sameOrgAgain, sameEmailAgain], tuesdayOpen);
+  assert.equal(keptDraft.some((slot) => slot.queueItemId === drafted.queueItemId && slot.status === "drafted"), true);
+  assert.equal(keptDraft.some((slot) => slot.queueItemId === "new-q-org"), false);
+  assert.equal(keptDraft.some((slot) => slot.queueItemId === "new-q-email"), false);
 
   const state: AutoSendState = {
     enabled: true,
     updatedAt: null,
-    slots: capped.filter((slot) => slot.day === "2026-11-17").map((slot) => ({ ...slot, status: "sent" as const, sentAt: slot.scheduledAt })),
+    slots: capped
+      .filter((slot) => slot.day === "2026-11-17")
+      .map((slot) => ({ ...slot, status: "drafted" as const, sentAt: slot.scheduledAt, draftUrl: "https://mail.google.com/mail/#drafts/t" })),
     ready: null,
     reports: [],
   };

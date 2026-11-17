@@ -107,7 +107,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         status: "live",
         controls: [
           "Connect / Disconnect Google account",
-          "Connected account email + granted scopes (Gmail + Calendar + Slides)",
+          "Connected account email + granted scopes (Gmail send/compose/read + Calendar + Slides)",
+          "Reconnect for Gmail drafts (gmail.compose)",
           "Pause / Resume Gmail sending",
           "Reply sync now + nudge policy",
           "Calendar sync window + Sync calendar now",
@@ -136,17 +137,18 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       {
         id: "autosend",
         domain: "Sales",
-        title: "Automated sending",
-        description: "Weekday mix: 18 large, 2 sponsor, 3 partner, 2 other",
+        title: "Weekday Gmail drafts",
+        description: "Files the weekday mix in Gmail Drafts. You send each one.",
         href: "/admin/settings/autosend",
         statusLabel: "Manage",
         status: "live",
         controls: [
           "On / Off",
+          "Creates Gmail drafts only (no auto-send)",
           "Daily mix readout (18 large / 2 sponsorship / 3 partnership / 2 other)",
           "Weekly cap readout (175)",
-          "Send window readout (weekdays 8:00am–5:00pm Pacific)",
-          "Link to the live send queue",
+          "Window readout (weekdays 8:00am–5:00pm Pacific)",
+          "Link to the live draft queue",
         ],
       },
       {
