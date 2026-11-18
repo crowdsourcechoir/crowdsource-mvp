@@ -87,9 +87,10 @@ function main() {
   assert.equal(eventDateBand("2027-11-01", "2026-11-16"), "rolling");
   assert.equal(eventDateBand("2027-05-01", "2026-11-16"), "q1q2_2027");
   assert.equal(eventDateBand("2026-12-01", "2026-11-16"), "excluded");
-  assert.equal(eventDateBand(null, "2026-11-16"), "excluded");
+  assert.equal(eventDateBand(null, "2026-11-16"), "annual_tbd");
 
   assert.equal(autoSendSkipReason(baseGate(), "2026-11-16"), null);
+  assert.equal(autoSendSkipReason(baseGate({ eventDate: null, suggestedFee: 25_000 }), "2026-11-16"), null);
   assert.equal(autoSendSkipReason(baseGate({ emailVerificationStatus: "valid_format" }), "2026-11-16"), null);
   assert.match(autoSendSkipReason(baseGate({ organizationName: "Oregon Library Association" }), "2026-11-16") ?? "", /association/);
   assert.match(
@@ -101,7 +102,7 @@ function main() {
   );
   assert.match(autoSendSkipReason(baseGate({ audienceScore: 3 }), "2026-11-16") ?? "", /audience/);
   assert.match(autoSendSkipReason(baseGate({ emailVerificationStatus: "risky" }), "2026-11-16") ?? "", /verified/);
-  assert.match(autoSendSkipReason(baseGate({ eventDate: null }), "2026-11-16") ?? "", /window/);
+  assert.match(autoSendSkipReason(baseGate({ eventDate: null, suggestedFee: null }), "2026-11-16") ?? "", /window/);
 
   // School auctions and unpriced local galas are excluded ("below $15k tier")
   assert.equal(

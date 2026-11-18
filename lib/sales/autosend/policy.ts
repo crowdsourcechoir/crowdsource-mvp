@@ -45,7 +45,7 @@ const GALA_NAME = /\bauction\b|\bgala\b|fundrais|benefit dinner|charity ball/i;
 const STATE_OR_REGIONAL =
   /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|regional)\b/i;
 
-export type EventDateBand = "q1q2_2027" | "q3_2027" | "rolling" | "excluded";
+export type EventDateBand = "q1q2_2027" | "q3_2027" | "rolling" | "annual_tbd" | "excluded";
 
 export type PacificClock = {
   ymd: string;
@@ -321,7 +321,7 @@ export function associationBlocksAutoSend(
  * Undated and past events stay off Large and Other. Sponsorship and partnership may be a season with no single date.
  */
 export function eventDateBand(eventDate: string | null | undefined, todayYmd: string): EventDateBand {
-  if (!eventDate || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return "excluded";
+  if (!eventDate || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return "annual_tbd";
   if (eventDate < todayYmd) return "excluded";
   if (eventDate >= "2027-01-01" && eventDate <= "2027-06-30") return "q1q2_2027";
   if (eventDate >= "2027-07-01" && eventDate <= "2027-09-30") return "q3_2027";
@@ -334,6 +334,7 @@ export function bandRank(band: EventDateBand): number {
   if (band === "q1q2_2027") return 0;
   if (band === "q3_2027") return 1;
   if (band === "rolling") return 2;
+  if (band === "annual_tbd") return 3;
   return 9;
 }
 
@@ -359,9 +360,13 @@ export function autoSendSkipReason(input: AutoSendGateInput, todayYmd: string): 
   if (input.budgetScore == null || input.budgetScore < AUTO_SEND_MIN_BUDGET) return "budget below keynote tier";
   const band = eventDateBand(input.eventDate, todayYmd);
   if (band === "excluded") {
+    return "event date is outside the window";
+  }
+  if (band === "annual_tbd") {
     const seasonal = lane === "sponsorship" || lane === "partnership";
-    const dated = Boolean(input.eventDate && /^\d{4}-\d{2}-\d{2}$/.test(input.eventDate));
-    if (!seasonal || (dated && input.eventDate! < todayYmd)) return "event date is outside the window";
+    const pricedLarge =
+      lane === "large" && pricedAtLeastFee(input.suggestedFee, input.potentialAmount);
+    if (!seasonal && !pricedLarge) return "event date is outside the window";
   }
   return null;
 }
