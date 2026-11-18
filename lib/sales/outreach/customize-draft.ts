@@ -24,7 +24,7 @@ I'm Joel DeJong, founder of Crowdsource Choir. All four of my children have atte
 I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life. Together, attendees co-create and sing an original anthem inspired by the conference, transforming the theme into a shared experience that's joyful, memorable, and deeply participatory.
 
 I've included a bit more about the experience here:
-https://www.crowdsourcechoir.com/book
+www.crowdsourcechoir.com
 If it feels like it could be a fit, I'd love to schedule a quick call and learn more about the conference.
 
 Thanks, and I hope we have a chance to connect.
@@ -98,7 +98,7 @@ Voice — copy the SENT EMAILS and examples below, not the generic template:
 - Give 2–3 concrete possibilities tailored to this gathering (opening / shared anthem / ongoing participation — worded for THIS community, not copy-pasted Seahawks "12s" language unless this really is the Seahawks).
 - One throughline sentence about THIS community's energy.
 - Close with a role-specific ask that uses their title. Then:
-There's a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book
+There's a little more about Crowdsource Choir here: www.crowdsourcechoir.com
 
 Best,
 Joel

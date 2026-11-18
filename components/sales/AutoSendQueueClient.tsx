@@ -5,9 +5,15 @@ import Link from "next/link";
 import { SettingsButton, SettingsPanel, StatusPill } from "@/components/settings/ui";
 import { formatPacificWhen, LANE_LABEL } from "@/lib/sales/autosend/policy";
 import { formatUsd } from "@/lib/sales/engines";
+import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { draftToEmailHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
 import { buildMailtoUrl, copyEmailToClipboard, launchMailto } from "@/lib/sales/outreach/mailto";
-import { ensureEmailSignature, stripEmailSignature } from "@/lib/sales/outreach/signature";
+import {
+  WEBSITE_HREF,
+  ensureEmailSignature,
+  ensureEmailSignatureHtml,
+  stripEmailSignature,
+} from "@/lib/sales/outreach/signature";
 import type { AutoSendQueueView } from "@/lib/sales/autosend/view";
 import type { AutoSendSlot } from "@/lib/sales/autosend/types";
 
@@ -17,7 +23,7 @@ function statusLabel(slot: AutoSendSlot): string {
   if (slot.status === "sending") return "Filing draft";
   if (slot.status === "failed") return "Failed";
   if (slot.status === "skipped") return "Skipped";
-  return "Ready to draft";
+  return "Ready";
 }
 
 function statusTone(slot: AutoSendSlot): "ok" | "warn" | "off" | "neutral" {
@@ -44,6 +50,34 @@ function csvCell(value: string | number | null | undefined): string {
   return str;
 }
 
+function renderPlainLineWithLinks(line: string, lineKey: string) {
+  const tokenRe = /(https?:\/\/[^\s<]+|(?:www\.)?crowdsourcechoir\.com(?:\/[^\s<]*)?)/gi;
+  const parts = line.split(tokenRe);
+  return parts.map((part, idx) => {
+    if (!part) return null;
+    if (/^(https?:\/\/[^\s<]+|(?:www\.)?crowdsourcechoir\.com(?:\/[^\s<]*)?)$/i.test(part)) {
+      const trimmed = part.replace(/[),.;:!?]+$/g, "");
+      const trailing = part.slice(trimmed.length);
+      const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      return (
+        <span key={`${lineKey}-${idx}`}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="csc-link underline"
+          >
+            {trimmed}
+          </a>
+          {trailing}
+        </span>
+      );
+    }
+    return <span key={`${lineKey}-${idx}`}>{part}</span>;
+  });
+}
+
 export default function AutoSendQueueClient() {
   const [view, setView] = useState<AutoSendQueueView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +85,7 @@ export default function AutoSendQueueClient() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
@@ -73,6 +108,24 @@ export default function AutoSendQueueClient() {
     const timer = window.setInterval(() => void load(), 25_000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  function toggleRow(rowKey: string) {
+    setExpandedIds((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }));
+  }
+
+  function expandOrCollapseAll(expand: boolean) {
+    if (!view || !expand) {
+      setExpandedIds({});
+      return;
+    }
+    const next: Record<string, boolean> = {};
+    for (const group of view.groups) {
+      for (const slot of group.slots) {
+        next[`${group.key}-${slot.day}-${slot.queueItemId}`] = true;
+      }
+    }
+    setExpandedIds(next);
+  }
 
   async function runAction(
     actionKey: string,
@@ -125,16 +178,24 @@ export default function AutoSendQueueClient() {
     }
   }
 
-  function startEditing(slot: AutoSendSlot) {
+  function cleanBodyPlain(slot: AutoSendSlot): string {
+    return normalizeCrowdsourceWebsiteLinks(
+      stripEmailSignature(draftToPlainText(slot.body ?? ""))
+    ).trim();
+  }
+
+  function startEditing(slot: AutoSendSlot, rowKey: string) {
+    setExpandedIds((prev) => ({ ...prev, [rowKey]: true }));
     setEditingId(slot.queueItemId);
     setEditSubject(slot.subject || "");
-    setEditBody(stripEmailSignature(draftToPlainText(slot.body ?? "")));
+    setEditBody(cleanBodyPlain(slot));
   }
 
   async function saveEdit(slot: AutoSendSlot) {
     setSavingEdit(true);
     setError(null);
     try {
+      const normalizedEdit = normalizeCrowdsourceWebsiteLinks(editBody);
       const res = await fetch("/api/sales/autosend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,7 +203,7 @@ export default function AutoSendQueueClient() {
           action: "save_draft",
           queueItemId: slot.queueItemId,
           editedSubject: editSubject,
-          editedBody: editBody,
+          editedBody: normalizedEdit,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as AutoSendQueueView & { error?: string };
@@ -158,9 +219,9 @@ export default function AutoSendQueueClient() {
   }
 
   function handleCopy(slot: AutoSendSlot) {
-    const clean = stripEmailSignature(slot.body ?? "");
-    const plain = ensureEmailSignature(draftToPlainText(clean));
-    const html = draftToEmailHtml(plain);
+    const clean = cleanBodyPlain(slot);
+    const plain = ensureEmailSignature(clean);
+    const html = ensureEmailSignatureHtml(draftToEmailHtml(clean));
     copyEmailToClipboard(slot.contactEmail, slot.subject, plain, html)
       .then(() => {
         setCopiedId(slot.queueItemId);
@@ -170,7 +231,7 @@ export default function AutoSendQueueClient() {
   }
 
   function handleMailto(slot: AutoSendSlot) {
-    const plain = ensureEmailSignature(draftToPlainText(stripEmailSignature(slot.body ?? "")));
+    const plain = ensureEmailSignature(cleanBodyPlain(slot));
     launchMailto(buildMailtoUrl(slot.contactEmail, slot.subject, plain));
   }
 
@@ -200,7 +261,7 @@ export default function AutoSendQueueClient() {
       "Email Body",
     ];
     const rows = allSlots.map((slot) => {
-      const plain = ensureEmailSignature(draftToPlainText(stripEmailSignature(slot.body ?? "")));
+      const plain = ensureEmailSignature(cleanBodyPlain(slot));
       return [
         slot.day,
         LANE_LABEL[slot.lane],
@@ -229,6 +290,8 @@ export default function AutoSendQueueClient() {
     URL.revokeObjectURL(url);
   }
 
+  const anyExpanded = Object.values(expandedIds).some(Boolean);
+
   return (
     <div className="w-full text-white">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -236,7 +299,8 @@ export default function AutoSendQueueClient() {
           <p className="csc-eyebrow">Prospecting Intelligence · 30+ Day Rolling Draft Pipeline</p>
           <h1 className="mt-2 text-2xl font-bold sm:text-3xl">$15k+ Outreach Drafts</h1>
           <p className="mt-2 max-w-3xl text-sm text-gray-400">
-            Every qualifying lead is lined up 30 business days ahead with its full draft visible right here — no school auctions or sub-$15k fillers. Click <span className="text-white">Don’t send</span> on any email (or delete it) and the next qualifying $15k+ lead immediately takes its seat. Nothing auto-sends.
+            Click any row to expand the full email draft, edit inline, or open in Gmail. Click{" "}
+            <span className="text-white">Don’t send</span> on any row and the next qualifying $15k+ lead immediately takes its place. Nothing auto-sends.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -246,12 +310,13 @@ export default function AutoSendQueueClient() {
             onClick={() =>
               void runAction("load_more", { action: "load_more", batchLimit: 4 }, (data) => {
                 const s = (data.loadedSummary ?? {}) as {
+                  newSeededOrgs?: number;
                   pipelineAttempted?: number;
                   pipelineSucceeded?: number;
                   awaitingQueued?: number;
                   draftedToGmail?: number;
                 };
-                return `Researched ${s.pipelineAttempted ?? 0} new high-value org(s), advanced ${(s.pipelineSucceeded ?? 0) + (s.awaitingQueued ?? 0)}, and filed ${s.draftedToGmail ?? 0} Gmail draft(s).`;
+                return `Loaded ${s.newSeededOrgs ?? 0} new org(s), researched ${s.pipelineAttempted ?? 0}, advanced ${(s.pipelineSucceeded ?? 0) + (s.awaitingQueued ?? 0)}, and filed ${s.draftedToGmail ?? 0} Gmail draft(s).`;
               })
             }
           >
@@ -268,8 +333,11 @@ export default function AutoSendQueueClient() {
           >
             {busyAction === "draft_now" ? "Filing to Gmail…" : "Push next 20 into Gmail Drafts"}
           </SettingsButton>
+          <SettingsButton disabled={!view} onClick={() => expandOrCollapseAll(!anyExpanded)}>
+            {anyExpanded ? "Collapse all" : "Expand all"}
+          </SettingsButton>
           <SettingsButton disabled={!view} onClick={exportAllCsv}>
-            Export CSV (any mailbox)
+            Export CSV
           </SettingsButton>
         </div>
       </div>
@@ -320,11 +388,11 @@ export default function AutoSendQueueClient() {
               </p>
               {!view.gmailComposeGranted ? (
                 <p className="text-amber-200">
-                  Every draft email is already visible below so you can read, edit, copy, or remove leads right now. Click{" "}
+                  Click any row below to inspect, edit, copy, or dismiss drafts right now. Click{" "}
                   <a href="/api/sales/gmail/connect" className="csc-link underline">
                     Switch Gmail / Grant compose
                   </a>{" "}
-                  once to also drop them directly into Gmail’s Drafts folder.
+                  once to also push them straight into Gmail’s Drafts folder.
                 </p>
               ) : null}
             </div>
@@ -347,139 +415,209 @@ export default function AutoSendQueueClient() {
                 {group.key === "drafts"
                   ? view?.gmailComposeGranted
                     ? "Click “Push next 20 into Gmail Drafts” or wait for the next 20-minute background tick."
-                    : "Grant Gmail compose above to push these drafts straight into your Gmail Drafts folder — all draft copy is shown in the lineup below."
+                    : "Grant Gmail compose above to push these drafts straight into your Gmail Drafts folder — click any row below to read the draft copy."
                   : "No leads in this section right now — click “Find & load more $15k+ leads now” above to keep filling."}
               </p>
             ) : (
               <ul className="csc-list mt-3">
                 {group.slots.map((slot) => {
-                  const plainBody = ensureEmailSignature(draftToPlainText(stripEmailSignature(slot.body ?? "")));
+                  const rowKey = `${group.key}-${slot.day}-${slot.queueItemId}`;
+                  const isExpanded = Boolean(expandedIds[rowKey]);
+                  const bodyWithoutSig = cleanBodyPlain(slot);
+                  const plainWithSig = ensureEmailSignature(bodyWithoutSig);
                   const isEditing = editingId === slot.queueItemId;
                   const isDismissing = dismissingId === slot.queueItemId;
                   const composeInConnected = gmailComposeNewUrl(
                     slot.contactEmail,
                     slot.subject,
-                    plainBody,
+                    plainWithSig,
                     view?.gmailEmail
                   );
-                  const composeInAnyGmail = gmailComposeNewUrl(slot.contactEmail, slot.subject, plainBody, null);
+                  const composeInAnyGmail = gmailComposeNewUrl(slot.contactEmail, slot.subject, plainWithSig, null);
 
                   return (
-                    <li key={`${slot.day}-${slot.queueItemId}`} className="csc-list-row">
-                      <div className="w-full space-y-3 py-1">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-xs text-gray-400">
-                              {formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} Pacific · {LANE_LABEL[slot.lane]}
-                              {slot.suggestedFee ? ` · est. ${formatUsd(slot.suggestedFee)}` : " · $15k+ tier"} · score{" "}
-                              {Math.round(slot.score)}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                              <Link
-                                href={`/admin/sales/opportunities/${slot.opportunityId}`}
-                                className="text-base font-semibold text-white hover:underline"
-                              >
+                    <li key={rowKey}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleRow(rowKey)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleRow(rowKey);
+                          }
+                        }}
+                        className="csc-list-row"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <span
+                            aria-hidden
+                            className="inline-block w-4 shrink-0 text-center text-xs text-gray-400 transition-transform"
+                          >
+                            {isExpanded ? "▾" : "▸"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="truncate text-sm font-semibold text-white">
                                 {slot.organizationName}
-                              </Link>
-                              {slot.eventTitle ? (
-                                <span className="text-xs text-gray-400">
-                                  · {slot.eventTitle}
-                                  {slot.eventDate ? ` (${slot.eventDate})` : ""}
-                                </span>
-                              ) : null}
+                              </span>
+                              <span className="truncate text-xs text-gray-400">
+                                {slot.contactName ? `${slot.contactName} · ` : ""}
+                                {slot.contactEmail}
+                              </span>
+                              <span className="text-xs text-[var(--csc-accent)]">
+                                {slot.suggestedFee ? formatUsd(slot.suggestedFee) : "$15k+"}
+                              </span>
                             </div>
-                            <p className="mt-1 text-xs text-gray-300">
-                              To: <span className="text-white">{slot.contactName ? `${slot.contactName} ` : ""}</span>
-                              &lt;{slot.contactEmail}&gt;
+                            <p className="mt-0.5 truncate text-xs text-gray-400">
+                              <span className="text-gray-300">{slot.subject || slot.eventTitle}</span>
+                              {" · "}
+                              {formatPacificWhen(slot.sentAt ?? slot.scheduledAt)} Pacific · {LANE_LABEL[slot.lane]}
+                              {slot.eventDate ? ` · ${slot.eventDate}` : ""} · score {Math.round(slot.score)}
                             </p>
-                            {slot.error ? <p className="mt-1 text-xs text-amber-200">{slot.error}</p> : null}
-                          </div>
-
-                          <div className="flex shrink-0 flex-wrap items-center gap-2">
-                            <StatusPill tone={statusTone(slot)}>{statusLabel(slot)}</StatusPill>
-                            {slot.draftUrl ? (
-                              <SettingsButton href={slot.draftUrl} target="_blank" variant="primary">
-                                Open Gmail draft
-                              </SettingsButton>
-                            ) : (
-                              <SettingsButton href={composeInConnected} target="_blank" variant="primary">
-                                Compose in Gmail
-                              </SettingsButton>
-                            )}
-                            <SettingsButton href={composeInAnyGmail} target="_blank" title="Open in another Gmail account">
-                              Other Gmail
-                            </SettingsButton>
-                            <SettingsButton onClick={() => handleMailto(slot)} title="Open in default mail app">
-                              Mail app
-                            </SettingsButton>
-                            <SettingsButton onClick={() => handleCopy(slot)}>
-                              {copiedId === slot.queueItemId ? "Copied" : "Copy"}
-                            </SettingsButton>
-                            {slot.status !== "sent" ? (
-                              <>
-                                <SettingsButton onClick={() => (isEditing ? setEditingId(null) : startEditing(slot))}>
-                                  {isEditing ? "Cancel" : "Edit"}
-                                </SettingsButton>
-                                <SettingsButton
-                                  variant="danger"
-                                  disabled={isDismissing}
-                                  onClick={() => void dismissSlot(slot)}
-                                >
-                                  {isDismissing ? "Replacing…" : "Don’t send"}
-                                </SettingsButton>
-                              </>
-                            ) : null}
+                            {slot.error ? <p className="mt-0.5 text-xs text-amber-200">{slot.error}</p> : null}
                           </div>
                         </div>
 
-                        {isEditing ? (
-                          <div className="space-y-2 rounded-lg border border-[var(--csc-row-divider)] p-3">
-                            <div>
-                              <label className="block text-[11px] uppercase tracking-[0.14em] text-gray-400">
-                                Subject
-                              </label>
-                              <input
-                                type="text"
-                                value={editSubject}
-                                onChange={(e) => setEditSubject(e.target.value)}
-                                className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[11px] uppercase tracking-[0.14em] text-gray-400">
-                                Body (signature is appended automatically)
-                              </label>
-                              <textarea
-                                rows={9}
-                                value={editBody}
-                                onChange={(e) => setEditBody(e.target.value)}
-                                className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <SettingsButton
-                                variant="primary"
-                                disabled={savingEdit}
-                                onClick={() => void saveEdit(slot)}
-                              >
-                                {savingEdit ? "Saving…" : "Save draft"}
-                              </SettingsButton>
-                              <SettingsButton disabled={savingEdit} onClick={() => setEditingId(null)}>
-                                Cancel
-                              </SettingsButton>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="rounded-lg border border-[var(--csc-row-divider)] px-3.5 py-3">
-                            <p className="text-xs font-semibold text-white">
-                              Subject: <span className="font-normal text-gray-200">{slot.subject || "(No subject)"}</span>
-                            </p>
-                            <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed text-gray-300">
-                              {plainBody || "(Draft copy loading…)"}
-                            </pre>
-                          </div>
-                        )}
+                        <div
+                          className="flex shrink-0 flex-wrap items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <StatusPill tone={statusTone(slot)}>{statusLabel(slot)}</StatusPill>
+                          {slot.draftUrl ? (
+                            <SettingsButton href={slot.draftUrl} target="_blank" variant="primary">
+                              Open draft
+                            </SettingsButton>
+                          ) : null}
+                          {slot.status !== "sent" ? (
+                            <SettingsButton
+                              variant="danger"
+                              disabled={isDismissing}
+                              onClick={() => void dismissSlot(slot)}
+                            >
+                              {isDismissing ? "Replacing…" : "Don’t send"}
+                            </SettingsButton>
+                          ) : null}
+                        </div>
                       </div>
+
+                      {isExpanded ? (
+                        <div className="space-y-3 border-t border-[var(--csc-row-divider)] px-4 py-4 sm:pl-11">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs text-gray-400">
+                              To: <span className="text-white">{slot.contactName ? `${slot.contactName} ` : ""}</span>
+                              &lt;{slot.contactEmail}&gt;
+                              {slot.eventTitle ? ` · ${slot.eventTitle}` : ""}
+                              {" · "}
+                              <Link
+                                href={`/admin/sales/opportunities/${slot.opportunityId}`}
+                                className="csc-link hover:underline"
+                              >
+                                Open opportunity →
+                              </Link>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {slot.draftUrl ? (
+                                <SettingsButton href={slot.draftUrl} target="_blank" variant="primary">
+                                  Open Gmail draft
+                                </SettingsButton>
+                              ) : (
+                                <SettingsButton href={composeInConnected} target="_blank" variant="primary">
+                                  Compose in Gmail
+                                </SettingsButton>
+                              )}
+                              <SettingsButton href={composeInAnyGmail} target="_blank" title="Open in another Gmail account">
+                                Other Gmail
+                              </SettingsButton>
+                              <SettingsButton onClick={() => handleMailto(slot)} title="Open in default mail app">
+                                Mail app
+                              </SettingsButton>
+                              <SettingsButton onClick={() => handleCopy(slot)}>
+                                {copiedId === slot.queueItemId ? "Copied" : "Copy"}
+                              </SettingsButton>
+                              {slot.status !== "sent" ? (
+                                <SettingsButton
+                                  onClick={() =>
+                                    isEditing ? setEditingId(null) : startEditing(slot, rowKey)
+                                  }
+                                >
+                                  {isEditing ? "Cancel" : "Edit"}
+                                </SettingsButton>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {isEditing ? (
+                            <div className="space-y-2 rounded-lg border border-[var(--csc-row-divider)] p-3">
+                              <div>
+                                <label className="block text-[11px] uppercase tracking-[0.14em] text-gray-400">
+                                  Subject
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editSubject}
+                                  onChange={(e) => setEditSubject(e.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] uppercase tracking-[0.14em] text-gray-400">
+                                  Body (signature with linked Crowdsource Choir is appended automatically)
+                                </label>
+                                <textarea
+                                  rows={9}
+                                  value={editBody}
+                                  onChange={(e) => setEditBody(e.target.value)}
+                                  className="mt-1 w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white focus:border-[var(--csc-accent)] focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <SettingsButton
+                                  variant="primary"
+                                  disabled={savingEdit}
+                                  onClick={() => void saveEdit(slot)}
+                                >
+                                  {savingEdit ? "Saving…" : "Save draft"}
+                                </SettingsButton>
+                                <SettingsButton disabled={savingEdit} onClick={() => setEditingId(null)}>
+                                  Cancel
+                                </SettingsButton>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-[var(--csc-row-divider)] px-4 py-3">
+                              <p className="text-xs font-semibold text-white">
+                                Subject: <span className="font-normal text-gray-200">{slot.subject || "(No subject)"}</span>
+                              </p>
+                              <div className="mt-3 space-y-0.5 font-sans text-sm leading-relaxed text-gray-200">
+                                {(bodyWithoutSig || "(Draft copy loading…)").split("\n").map((line, i) => (
+                                  <p key={i} className="min-h-[1.25rem]">
+                                    {line ? renderPlainLineWithLinks(line, `${rowKey}-line-${i}`) : "\u00A0"}
+                                  </p>
+                                ))}
+                                <div className="pt-4 text-sm leading-snug text-gray-300">
+                                  <p>--</p>
+                                  <p>Joel DeJong</p>
+                                  <p>
+                                    Creator,{" "}
+                                    <a
+                                      href={WEBSITE_HREF}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="csc-link underline"
+                                    >
+                                      Crowdsource Choir
+                                    </a>
+                                  </p>
+                                  <p>&apos;One of the Pacific Northwest&apos;s Most Talented Composers&apos;</p>
+                                  <p>—American Songwriter</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                     </li>
                   );
                 })}

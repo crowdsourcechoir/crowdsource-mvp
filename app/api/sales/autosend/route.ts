@@ -15,6 +15,7 @@ import {
   getKey2027ProspectsSeedStatus,
   seedKey2027Prospects,
 } from "@/lib/sales/seed/seed-key-2027-prospects";
+import { ensureBookLinks } from "@/lib/sales/outreach/ensureBookLinks";
 import { updateDraftEdits } from "@/lib/sales/db/outreach";
 import { getQueueItem } from "@/lib/sales/db/queue";
 
@@ -22,9 +23,14 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const REFRESH_AFTER_MS = 2 * 60 * 1000;
+let linksEnsuredInInstance = false;
 
 export async function GET() {
   try {
+    if (!linksEnsuredInInstance) {
+      linksEnsuredInInstance = true;
+      await ensureBookLinks().catch(() => null);
+    }
     const seedStatus = await getKey2027ProspectsSeedStatus().catch(() => ({ done: true }));
     if (!seedStatus.done) {
       await seedKey2027Prospects().catch(() => null);

@@ -7,7 +7,7 @@
 const BULLET = String.raw`[-*•●◦▪·]|\u2022|\u25cf|\u25e6|\uf0b7|\u00b7`;
 const UL_LINE = new RegExp(String.raw`^\s*(?:${BULLET})\s*(.*)$`, "i");
 const OL_LINE = /^\s*(\d+)[.)]\s+(.*)$/;
-const URL_RE = /https?:\/\/[^\s<]+|(?:www\.)?crowdsourcechoir\.com\/book/gi;
+const URL_RE = /https?:\/\/[^\s<]+|(?:www\.)?crowdsourcechoir\.com(?:\/[^\s<]*)?/gi;
 
 export function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

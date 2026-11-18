@@ -1,4 +1,5 @@
 import { requireSupabaseAdmin } from "./client";
+import { normalizeCrowdsourceWebsiteLinks } from "../outreach/bookUrl";
 import type { OutreachDraft, OutreachDraftKind, OutreachDraftStatus, OutreachTemplate } from "../types";
 
 function rowToTemplate(row: Record<string, unknown>): OutreachTemplate {
@@ -13,6 +14,7 @@ function rowToTemplate(row: Record<string, unknown>): OutreachTemplate {
 }
 
 function rowToDraft(row: Record<string, unknown>): OutreachDraft {
+  const editedBodyRaw = (row.edited_body as string | null) ?? null;
   return {
     id: row.id as string,
     opportunityId: row.opportunity_id as string,
@@ -21,9 +23,9 @@ function rowToDraft(row: Record<string, unknown>): OutreachDraft {
     templateId: (row.template_id as string | null) ?? null,
     kind: ((row.kind as OutreachDraftKind | null) ?? "initial") as OutreachDraftKind,
     aiSubject: row.ai_subject as string,
-    aiBody: row.ai_body as string,
+    aiBody: normalizeCrowdsourceWebsiteLinks(row.ai_body as string),
     editedSubject: (row.edited_subject as string | null) ?? null,
-    editedBody: (row.edited_body as string | null) ?? null,
+    editedBody: editedBodyRaw !== null ? normalizeCrowdsourceWebsiteLinks(editedBodyRaw) : null,
     qaFlags: (row.qa_flags as OutreachDraft["qaFlags"]) ?? null,
     status: row.status as OutreachDraftStatus,
     confidenceScore: row.confidence_score == null ? null : Number(row.confidence_score),

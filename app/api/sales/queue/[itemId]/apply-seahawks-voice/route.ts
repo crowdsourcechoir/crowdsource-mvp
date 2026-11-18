@@ -27,7 +27,7 @@ The throughline is simple: there’s enormous collective energy and creative pot
 
 I’d love to connect, share what we’re building, and see whether there’s a place to explore this with the Seahawks. If someone else on the team is the right person to talk with about this, I’d really appreciate being pointed in their direction.
 
-There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book
+There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com
 
 Best,
 Joel`,
@@ -50,7 +50,7 @@ The throughline is simple: there’s enormous collective energy and creative pot
 
 Given your work in entertainment experience and programming, I’d love to connect and explore how this kind of participation could become part of the Seahawks experience—not just something fans watch, but something they help create.
 
-There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book
+There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com
 
 Best,
 Joel`,
@@ -73,7 +73,7 @@ The throughline is simple: there’s enormous collective energy and creative pot
 
 Given your work leading marketing, I’m especially interested in the potential for this to extend beyond a single game-day moment into something the 12s help create and build throughout the season. I’d love to connect, share what we’re building, and explore whether there’s a fit with the Seahawks.
 
-There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book
+There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com
 
 Best,
 Joel`,
@@ -98,7 +98,7 @@ Given your work in marketing, I’m especially interested in how this could beco
 
 I’d love to connect, share what we’re building, and explore whether there’s a fit with the Seahawks.
 
-There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book
+There’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com
 
 Best,
 Joel`,

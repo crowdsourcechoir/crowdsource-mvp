@@ -1,8 +1,9 @@
 import { getGmailClient } from "./client";
 import { getGmailConnection, getGmailConnectionStatus } from "@/lib/sales/db/gmail";
-import { looksLikeHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
+import { looksLikeHtml, draftToEmailHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
+import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { assertOutboundEmailAllowed } from "@/lib/sales/outreach/send-blocklist";
-import { ensureEmailSignature, ensureEmailSignatureHtml } from "@/lib/sales/outreach/signature";
+import { ensureEmailSignature, ensureEmailSignatureHtml, stripEmailSignature } from "@/lib/sales/outreach/signature";
 import { gmailDraftUrl, hasGmailComposeScope } from "./constants";
 import { buildGmailMime } from "./mime";
 
@@ -46,16 +47,22 @@ function mimeForOutbound(input: {
   inReplyTo?: string | null;
   references?: string | null;
 }): string {
-  const plainSource = looksLikeHtml(input.body) ? draftToPlainText(input.body) : input.body;
-  const plain = ensureEmailSignature(plainSource);
-  const htmlSource = input.html ?? (looksLikeHtml(input.body) ? input.body : null);
+  const normalizedBody = normalizeCrowdsourceWebsiteLinks(input.body);
+  const plainSource = looksLikeHtml(normalizedBody) ? draftToPlainText(normalizedBody) : normalizedBody;
+  const cleanPlain = stripEmailSignature(plainSource);
+  const plain = ensureEmailSignature(cleanPlain);
+  const rawHtml = input.html
+    ? normalizeCrowdsourceWebsiteLinks(input.html)
+    : looksLikeHtml(normalizedBody)
+      ? normalizedBody
+      : draftToEmailHtml(cleanPlain);
   return encodeRawMessage(
     buildGmailMime({
       from: input.from,
       to: input.to,
       subject: input.subject,
       body: plain,
-      htmlBody: htmlSource ? ensureEmailSignatureHtml(htmlSource) : undefined,
+      htmlBody: ensureEmailSignatureHtml(rawHtml),
       inReplyTo: input.inReplyTo,
       references: input.references,
     })

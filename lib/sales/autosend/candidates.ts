@@ -7,6 +7,7 @@ import { readSalesInitiative } from "@/lib/sales/initiatives";
 import { isDoNotProspect } from "@/lib/sales/prospecting/do-not-prospect";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
+import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { readAnthemPricing } from "@/lib/sales/pricing/metadata";
 import { autoSendSkipReason, classifyAutoSendLane, componentScore, pacificClock } from "./policy";
 import type { AutoSendCandidate } from "./types";
@@ -298,7 +299,7 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
       contactName: contact?.full_name ?? null,
       contactEmail: email!,
       subject: coalesceDraftSubject(draft?.edited_subject, draft?.ai_subject),
-      body: coalesceDraftBody(draft?.edited_body, draft?.ai_body),
+      body: normalizeCrowdsourceWebsiteLinks(coalesceDraftBody(draft?.edited_body, draft?.ai_body)),
       suggestedFee,
       eventTitle,
       eventDate: opportunity.event_date_estimate ?? "",

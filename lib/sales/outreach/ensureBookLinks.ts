@@ -1,5 +1,10 @@
 import { requireSupabaseAdmin } from "../db/client";
-import { bookUrl, replaceAttachmentInTemplate, replaceAttachmentWithBookLink } from "./bookUrl";
+import {
+  bookUrl,
+  normalizeCrowdsourceWebsiteLinks,
+  replaceAttachmentInTemplate,
+  replaceAttachmentWithBookLink,
+} from "./bookUrl";
 
 export type EnsureBookLinksResult = {
   templatesUpdated: number;
@@ -55,10 +60,14 @@ export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
       draftsScanned += 1;
       const aiBody = (row.ai_body as string) ?? "";
       const editedBody = (row.edited_body as string | null) ?? null;
-      const nextAi = replaceAttachmentWithBookLink(aiBody, url);
-      const nextEdited = editedBody ? replaceAttachmentWithBookLink(editedBody, url) : null;
+      const nextAi = normalizeCrowdsourceWebsiteLinks(replaceAttachmentWithBookLink(aiBody, url), url);
+      const nextEdited = editedBody
+        ? normalizeCrowdsourceWebsiteLinks(replaceAttachmentWithBookLink(editedBody, url), url)
+        : null;
       if (nextAi === aiBody && nextEdited === editedBody) {
-        if (/crowdsourcechoir\.com\/book/i.test(aiBody)) draftsAlreadyLinked += 1;
+        if (/crowdsourcechoir\.com/i.test(aiBody) && !/crowdsourcechoir\.com\/book/i.test(aiBody)) {
+          draftsAlreadyLinked += 1;
+        }
         if (!sampleUnchangedWithAttach && /attached a one-page/i.test(aiBody)) {
           sampleUnchangedWithAttach = `${row.id as string}:${JSON.stringify(aiBody.match(/I.ve attached[^\n.]{0,60}/)?.[0] ?? "").slice(0, 120)}`;
         }

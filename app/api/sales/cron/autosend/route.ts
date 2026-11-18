@@ -6,9 +6,12 @@ import {
   getKey2027ProspectsSeedStatus,
   seedKey2027Prospects,
 } from "@/lib/sales/seed/seed-key-2027-prospects";
+import { ensureBookLinks } from "@/lib/sales/outreach/ensureBookLinks";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 180;
+
+let linksEnsuredInCronInstance = false;
 
 /**
  * GET ?status=1 — read-only lineup summary (counts, days covered, org names/lanes/fees — no email addresses or bodies).
@@ -18,6 +21,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   if (url.searchParams.get("status") === "1") {
     try {
+      if (!linksEnsuredInCronInstance) {
+        linksEnsuredInCronInstance = true;
+        await ensureBookLinks().catch(() => null);
+      }
       const seedStatus = await getKey2027ProspectsSeedStatus().catch(() => ({ done: true }));
       if (!seedStatus.done) {
         await seedKey2027Prospects().catch(() => null);

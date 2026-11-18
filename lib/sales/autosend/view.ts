@@ -1,6 +1,7 @@
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { requireSupabaseAdmin } from "@/lib/sales/db/client";
 import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
+import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { readAnthemPricing } from "@/lib/sales/pricing/metadata";
 import { readDealForecast } from "@/lib/sales/engines";
 import {
@@ -111,10 +112,11 @@ async function hydrateMissingSlotBodies(slots: AutoSendSlot[]): Promise<AutoSend
     return slots.map((slot) => {
       const draftId = draftIdByQueue.get(slot.queueItemId);
       const copy = draftId ? draftBodyById.get(draftId) : undefined;
+      const rawBody = slot.body ?? copy?.body ?? null;
       return {
         ...slot,
         subject: slot.subject || copy?.subject || "",
-        body: slot.body ?? copy?.body ?? null,
+        body: rawBody !== null ? normalizeCrowdsourceWebsiteLinks(rawBody) : null,
         suggestedFee: slot.suggestedFee ?? feeByOpp.get(slot.opportunityId) ?? null,
       };
     });
@@ -135,7 +137,11 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
     composeGranted: false,
   }));
 
-  const slots = await hydrateMissingSlotBodies(state.slots);
+  const hydratedSlots = await hydrateMissingSlotBodies(state.slots);
+  const slots = hydratedSlots.map((slot) => ({
+    ...slot,
+    body: slot.body != null ? normalizeCrowdsourceWebsiteLinks(slot.body) : null,
+  }));
 
   const sentToday = slots.filter((slot) => slot.day === today && slot.status === "sent");
   const draftedToday = slots.filter((slot) => slot.day === today && slot.status === "drafted");

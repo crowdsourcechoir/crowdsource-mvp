@@ -33,7 +33,7 @@ I'm Joel DeJong, founder of Crowdsource Choir. All four of my children have atte
 I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life. Together, attendees co-create and sing an original anthem inspired by the conference, transforming the theme into a shared experience that's joyful, memorable, and deeply participatory.
 
 I've included a bit more about the experience here:
-https://www.crowdsourcechoir.com/book
+www.crowdsourcechoir.com
 If it feels like it could be a fit, I'd love to schedule a quick call and learn more about the conference.
 
 Thanks, and I hope we have a chance to connect.
@@ -53,7 +53,7 @@ We create experiences that move people from being an audience to actually partic
 For a gathering of people who think deeply about how we convene, engage, and include people, I think there's something especially relevant about experiencing that kind of participation firsthand.
 
 I've included a bit more about the experience here:
-https://www.crowdsourcechoir.com/book
+www.crowdsourcechoir.com
 
 If it feels like it could be a fit, I'd love to schedule a quick call and learn more. And if you're not the right person for programming, I'd be grateful if you could point me toward whoever is.
 

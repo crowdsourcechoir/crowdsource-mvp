@@ -81,7 +81,8 @@ function main() {
   assert.match(lizDraft.body, /^Hi Liz,/);
   assert.match(lizDraft.body, /WFEA conference/);
   assert.match(lizDraft.body, /partner/i);
-  assert.match(lizDraft.body, /https:\/\/www\.crowdsourcechoir\.com\/book/);
+  assert.match(lizDraft.body, /www\.crowdsourcechoir\.com/);
+  assert.doesNotMatch(lizDraft.body, /\/book/);
   assert.match(lizDraft.body, /Best,\nJoel$/);
 
   const julianneDraft = buildEeFundraisingDraftCopy("Julianne Read");

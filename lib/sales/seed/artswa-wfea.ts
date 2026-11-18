@@ -77,7 +77,7 @@ export function buildArtsWaWfeaDraft(): { subject: string; body: string } {
       "I'd love to explore what a partnership with the Creative Districts network could look like — whether introducing districts and local festival leaders to commissioned community Song Gardens and Anthems, or piloting a signature participatory moment with one of Washington's Creative Districts.",
       "",
       "Here's a short look at what we build:",
-      "https://www.crowdsourcechoir.com/book",
+      "www.crowdsourcechoir.com",
       "",
       "Would you be open to a quick call in the next couple of weeks to trade ideas?",
       "",

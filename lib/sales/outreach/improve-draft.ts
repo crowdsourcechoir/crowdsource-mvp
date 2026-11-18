@@ -18,7 +18,7 @@ I'm Joel DeJong, founder of Crowdsource Choir. All four of my children have atte
 I wanted to reach out because I think Crowdsource Choir could be a unique way to bring the CAIS Trustee/School Head Conference theme to life. Together, attendees co-create and sing an original anthem inspired by the conference, transforming the theme into a shared experience that's joyful, memorable, and deeply participatory.
 
 I've included a bit more about the experience here:
-https://www.crowdsourcechoir.com/book
+www.crowdsourcechoir.com
 If it feels like it could be a fit, I'd love to schedule a quick call and learn more about the conference.
 
 Thanks, and I hope we have a chance to connect.
@@ -55,7 +55,7 @@ Voice rules from Joel's real sends:
 - Open with Hi {first name}. Introduce as founder of Crowdsource Choir. Local/personal context when it fits (e.g. "I've been a 12", schools his kids attended) — do not invent personal facts that are not already in the draft or the sports examples.
 - For sports: three concrete possibilities (team/camp cohesion, stadium anthem with fans, season-long chants), then a one-line throughline, then a role-specific ask.
 - For conferences: name the event, describe attendees co-creating an anthem so they become the message.
-- Close with the book URL as www.crowdsourcechoir.com/book (no https) and "Best,\\nJoel" — never include the American Songwriter signature block.
+- Close with the book URL as www.crowdsourcechoir.com (no https) and "Best,\\nJoel" — never include the American Songwriter signature block.
 - Keep roughly the same length as Joel's Seahawks emails. Do not add attachments or pricing.
 
 ${hint}

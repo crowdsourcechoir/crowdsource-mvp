@@ -63,7 +63,7 @@ function conferenceDraft(firstName: string, event: string): { subject: string; b
       : `If it feels like it could be a fit, I'd love to connect. If this year is already set, I'd be glad to talk about next year — or connect with whoever handles programming.`;
   return {
     subject: `Crowdsource Choir + ${event}`,
-    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nWe create experiences that move people from being an audience to actually creating something together. Attendees contribute their voices and ideas, and we bring those contributions together into an original anthem that the whole room performs.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\n${ask}\n\n${thanks}\n\nBest,\nJoel`,
+    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nWe create experiences that move people from being an audience to actually creating something together. Attendees contribute their voices and ideas, and we bring those contributions together into an original anthem that the whole room performs.\n\nI've included a bit more about the experience here:\nwww.crowdsourcechoir.com\n\n${ask}\n\n${thanks}\n\nBest,\nJoel`,
   };
 }
 
@@ -75,7 +75,7 @@ function fundraiserDraft(firstName: string, orgName: string, event: string): { s
       : `If it feels like it could be a fit, I'd love to connect — or be pointed to whoever produces the event.`;
   return {
     subject: `Crowdsource Choir + ${event}`,
-    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nFor a room that's already gathered around a cause, this is a way to stop being an audience and actually create something together — an original anthem for ${orgName} that the whole night performs. It can sit as an opening, a live moment mid-program, or a close that people leave humming.\n\nI've included a bit more about the experience here:\nhttps://www.crowdsourcechoir.com/book\n\n${ask}\n\n${thanks}\n\nBest,\nJoel`,
+    body: `Hi ${firstName},\n\nI hope you're doing well!\n\nI'm Joel DeJong, founder of Crowdsource Choir — a participatory musical experience where the audience becomes the choir. I wanted to reach out because I think it could be a natural fit for ${event}.\n\nFor a room that's already gathered around a cause, this is a way to stop being an audience and actually create something together — an original anthem for ${orgName} that the whole night performs. It can sit as an opening, a live moment mid-program, or a close that people leave humming.\n\nI've included a bit more about the experience here:\nwww.crowdsourcechoir.com\n\n${ask}\n\n${thanks}\n\nBest,\nJoel`,
   };
 }
 
@@ -156,7 +156,7 @@ export function draftCopyForContact(
   }
   return {
     subject: `Crowdsourcing a ${orgName} choir`,
-    body: `Hi ${firstName},\n\nI’m Joel DeJong, founder of Crowdsource Choir here in Seattle. We design and deliver participatory music experiences, custom anthems, and crowdsourced chants to create energy, resonance, and cohesion within groups.\n\nWith ${orgName}, I see a few connected possibilities:\n\nA participatory music experience with the team (or student-athletes) to create energy and cohesion\nAn original anthem created with fans and brought to life as a game-day moment\nA season-long pipeline of crowdsourced chants and sounds that gives people new ways to contribute\n\nThe throughline is simple: there’s already enormous collective energy in this community. We help harness it into super fun, engaging musical experiences.\n\n${ask}\n\nThere’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book\n\nBest,\nJoel`,
+    body: `Hi ${firstName},\n\nI’m Joel DeJong, founder of Crowdsource Choir here in Seattle. We design and deliver participatory music experiences, custom anthems, and crowdsourced chants to create energy, resonance, and cohesion within groups.\n\nWith ${orgName}, I see a few connected possibilities:\n\nA participatory music experience with the team (or student-athletes) to create energy and cohesion\nAn original anthem created with fans and brought to life as a game-day moment\nA season-long pipeline of crowdsourced chants and sounds that gives people new ways to contribute\n\nThe throughline is simple: there’s already enormous collective energy in this community. We help harness it into super fun, engaging musical experiences.\n\n${ask}\n\nThere’s a little more about Crowdsource Choir here: www.crowdsourcechoir.com\n\nBest,\nJoel`,
   };
 }
 

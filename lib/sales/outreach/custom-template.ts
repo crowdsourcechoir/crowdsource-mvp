@@ -172,7 +172,7 @@ export function buildCustomizedTemplateDraft(input: {
     "",
     ask,
     "",
-    `There's a little more about Crowdsource Choir here: www.crowdsourcechoir.com/book`,
+    `There's a little more about Crowdsource Choir here: www.crowdsourcechoir.com`,
     "",
     "Best,",
     "Joel",

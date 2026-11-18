@@ -64,7 +64,7 @@ export async function POST(request: Request) {
           id: row.id as string,
           changed,
           hadAttach: /attached a one-page/i.test(aiBody),
-          hasBookAfter: /crowdsourcechoir\.com\/book/i.test(afterBody),
+          hasBookAfter: /crowdsourcechoir\.com/i.test(afterBody) && !/crowdsourcechoir\.com\/book/i.test(afterBody),
           beforeSnippet: aiBody.match(/I['\u2019]ve (?:attached|included)[^\n]{0,70}/)?.[0] ?? null,
           afterSnippet: afterBody.match(/I['\u2019]ve (?:attached|included)[^\n]{0,70}/)?.[0] ?? null,
           updatedAt: (updated?.updated_at as string) ?? null,

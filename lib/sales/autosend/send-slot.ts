@@ -7,6 +7,7 @@ import { gmailDraftUrl } from "@/lib/sales/gmail/constants";
 import { createGmailDraft } from "@/lib/sales/gmail/send";
 import { normalizeEmail } from "@/lib/sales/dedupe";
 import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
+import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
 import type { OutreachActivity } from "@/lib/sales/types";
@@ -70,7 +71,7 @@ export async function sendAutoSendSlot(slot: AutoSendSlot): Promise<SlotSendResu
   }
 
   const subject = coalesceDraftSubject(draft.editedSubject, draft.aiSubject).trim();
-  const body = coalesceDraftBody(draft.editedBody, draft.aiBody).trim();
+  const body = normalizeCrowdsourceWebsiteLinks(coalesceDraftBody(draft.editedBody, draft.aiBody)).trim();
   if (!subject || !body) return { result: "skipped", error: "Draft subject or body is empty." };
 
   const activities = await listActivitiesForOpportunity(opportunity.id);
