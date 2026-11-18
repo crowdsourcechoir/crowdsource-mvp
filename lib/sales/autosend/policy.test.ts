@@ -92,6 +92,7 @@ function main() {
   assert.equal(autoSendSkipReason(baseGate(), "2026-11-16"), null);
   assert.equal(autoSendSkipReason(baseGate({ eventDate: null, suggestedFee: 25_000 }), "2026-11-16"), null);
   assert.equal(autoSendSkipReason(baseGate({ emailVerificationStatus: "valid_format" }), "2026-11-16"), null);
+  assert.match(autoSendSkipReason(baseGate({ email: "enquiries@northwind.com" }), "2026-11-16") ?? "", /generic/);
   assert.match(autoSendSkipReason(baseGate({ organizationName: "Oregon Library Association" }), "2026-11-16") ?? "", /association/);
   assert.match(
     autoSendSkipReason(

@@ -1,4 +1,5 @@
 import { classifyDealType } from "@/lib/sales/business-model";
+import { isGenericMailboxEmail } from "@/lib/sales/dedupe";
 
 /**
  * Weekday send window and who is allowed into the automated 25/day queue.
@@ -353,6 +354,7 @@ export function autoSendSkipReason(input: AutoSendGateInput, todayYmd: string): 
   if (associationBlocksAutoSend(input.organizationName, input.organizationTypeKey, lane)) return "association";
   if (!input.draftOpen) return "draft is not ready";
   if (!input.personName || !input.email) return "no named contact";
+  if (isGenericMailboxEmail(input.email)) return "generic inbox";
   if (input.blockedEmail) return "blocked address";
   if (
     input.emailVerificationStatus !== "verified_deliverable" &&

@@ -118,6 +118,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/sales/cron/hunter-sweep",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "50 2 * * *"
     },
