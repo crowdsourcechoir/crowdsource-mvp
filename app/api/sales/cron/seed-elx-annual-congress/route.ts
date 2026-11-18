@@ -10,7 +10,7 @@ export const maxDuration = 120;
 
 /**
  * Idempotent seed of Event Leaders Exchange / ELX Annual Congress 2027.
- * GET ?status=1 — name and counts only, no email.
+ * GET ?status=1 — name, counts, and contact names. No email addresses.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
