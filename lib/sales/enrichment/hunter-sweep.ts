@@ -417,6 +417,11 @@ async function collectSweepCandidates(options?: { force?: boolean }): Promise<{
       continue;
     }
 
+    const hasPendingQueue = opps.some((o) => pendingQueueByOpp.has(o.id));
+    if (isHeldFromAutoPipeline(meta) && !hasPendingQueue) {
+      continue;
+    }
+
     const isSchool = SCHOOL_AUCTION_RE.test(org.name) || opps.some((o) => SCHOOL_AUCTION_RE.test(o.title));
     const feeBoost = maxSuggestedFee >= 15_000 ? 200 : isSchool ? -50 : 50;
 
@@ -427,7 +432,9 @@ async function collectSweepCandidates(options?: { force?: boolean }): Promise<{
             ? 1000
             : meta.artswaWfeaSeeded || meta.eeFundraisingPartnershipSeeded
               ? 950
-              : 800;
+              : hasPendingQueue
+                ? 850
+                : 750;
         candidates.push({
           org,
           tier: "new_lead",
