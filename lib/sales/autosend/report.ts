@@ -57,10 +57,12 @@ function placed(slot: AutoSendSlot): boolean {
 }
 
 function mixSummary(slots: AutoSendSlot[]): string {
-  return AUTO_SEND_LANES.map((lane) => {
-    const count = slots.filter((slot) => slot.lane === lane && placed(slot)).length;
-    return `${LANE_LABEL[lane]} ${count}/${LANE_DAILY_QUOTA[lane]}`;
-  }).join(" · ");
+  return AUTO_SEND_LANES.filter((lane) => LANE_DAILY_QUOTA[lane] > 0)
+    .map((lane) => {
+      const count = slots.filter((slot) => slot.lane === lane && placed(slot)).length;
+      return `${LANE_LABEL[lane]} ${count}/${LANE_DAILY_QUOTA[lane]}`;
+    })
+    .join(" · ");
 }
 
 export function daySendReportDue(state: AutoSendState, todayYmd: string, afterClose: boolean): boolean {

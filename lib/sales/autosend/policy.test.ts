@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mergeAutoSendSlots } from "./plan";
 import {
+  AUTO_SEND_HORIZON_DAYS,
   associationBlocksAutoSend,
   autoSendSkipReason,
   classifyAutoSendLane,
@@ -8,7 +9,6 @@ import {
   formatPacificWhen,
   isInsideSendWindow,
   pacificClock,
-  pacificLocalToIso,
   slotGridIso,
   upcomingBusinessDays,
 } from "./policy";
@@ -24,6 +24,8 @@ function candidate(id: string, overrides: Partial<AutoSendCandidate> = {}): Auto
     contactName: "Ada Lovelace",
     contactEmail: "ada@example.com",
     subject: "Hello",
+    body: "Hi Ada,\n\nI hope you're doing well!",
+    suggestedFee: 15_000,
     eventTitle: "Annual meeting",
     eventDate: "2027-03-04",
     score: 80,
@@ -35,7 +37,9 @@ function candidate(id: string, overrides: Partial<AutoSendCandidate> = {}): Auto
 function baseGate(overrides: Partial<Parameters<typeof autoSendSkipReason>[0]> = {}) {
   return {
     organizationName: "Northwind Summit",
-    organizationTypeKey: "corporation",
+    organizationTypeKey: "conference",
+    opportunityTypeKey: "annual_conference",
+    suggestedFee: 15_000,
     doNotProspect: false,
     existingClient: false,
     alreadyContacted: false,
@@ -62,6 +66,7 @@ function main() {
   assert.equal(clock.hour, 20);
   assert.equal(isInsideSendWindow(mondayNight), false);
   assert.deepEqual(upcomingBusinessDays(mondayNight, 2), ["2026-11-17", "2026-11-18"]);
+  assert.equal(upcomingBusinessDays(mondayNight, AUTO_SEND_HORIZON_DAYS).length, 30);
 
   const tuesdayOpen = new Date("2026-11-17T16:00:00.000Z");
   assert.equal(pacificClock(tuesdayOpen).ymd, "2026-11-17");
@@ -85,14 +90,35 @@ function main() {
   assert.equal(eventDateBand(null, "2026-11-16"), "excluded");
 
   assert.equal(autoSendSkipReason(baseGate(), "2026-11-16"), null);
+  assert.equal(autoSendSkipReason(baseGate({ emailVerificationStatus: "valid_format" }), "2026-11-16"), null);
   assert.match(autoSendSkipReason(baseGate({ organizationName: "Oregon Library Association" }), "2026-11-16") ?? "", /association/);
-  assert.match(autoSendSkipReason(baseGate({ organizationTypeKey: "association" }), "2026-11-16") ?? "", /association/);
+  assert.match(
+    autoSendSkipReason(
+      baseGate({ organizationTypeKey: "corporation", opportunityTypeKey: "other", suggestedFee: null }),
+      "2026-11-16"
+    ) ?? "",
+    /15k/
+  );
   assert.match(autoSendSkipReason(baseGate({ audienceScore: 3 }), "2026-11-16") ?? "", /audience/);
   assert.match(autoSendSkipReason(baseGate({ emailVerificationStatus: "risky" }), "2026-11-16") ?? "", /verified/);
   assert.match(autoSendSkipReason(baseGate({ eventDate: null }), "2026-11-16") ?? "", /window/);
+
+  // School auctions and unpriced local galas are excluded ("below $15k tier")
   assert.equal(
     classifyAutoSendLane({ organizationName: "Bishop Blanchet High School", eventTitle: "SHINE Gala", opportunityTypeKey: "fundraising_gala" }),
     "other"
+  );
+  assert.match(
+    autoSendSkipReason(
+      baseGate({
+        organizationName: "Bishop Blanchet High School",
+        eventTitle: "SHINE Gala",
+        opportunityTypeKey: "fundraising_gala",
+        suggestedFee: 10_000,
+      }),
+      "2026-11-16"
+    ) ?? "",
+    /15k/
   );
   assert.equal(
     classifyAutoSendLane({ organizationName: "The Goodtimes Project", eventTitle: "Goodtimes Gala", opportunityTypeKey: "fundraising_gala" }),
@@ -107,6 +133,16 @@ function main() {
     }),
     "large"
   );
+  // Conference explicitly priced below $15k ($10k mid_association) is excluded
+  assert.equal(
+    classifyAutoSendLane({
+      organizationName: "Small Regional Conf",
+      opportunityTypeKey: "annual_conference",
+      suggestedFee: 10_000,
+    }),
+    "other"
+  );
+
   assert.equal(classifyAutoSendLane({ organizationName: "Alaska Airlines", salesInitiative: "sponsor_partners" }), "sponsorship");
   assert.equal(classifyAutoSendLane({ organizationName: "Ballard FC", organizationTypeKey: "sports_team" }), "partnership");
   assert.equal(classifyAutoSendLane({ organizationName: "Harry Walker Agency", organizationTypeKey: "event_agency" }), "partnership");
@@ -159,13 +195,16 @@ function main() {
   );
   assert.equal(lined.some((slot) => slot.queueItemId === "q1-0"), false);
 
-  const many = Array.from({ length: 30 }, (_, index) =>
+  // 30-day rolling lineup: 120 Large candidates spread across 6 business days at 20/day
+  const many = Array.from({ length: 120 }, (_, index) =>
     candidate(`m-${index}`, { organizationId: `org-m-${index}`, score: 90 - (index % 5), eventDate: "2027-03-01" })
   );
   const capped = mergeAutoSendSlots([], many, mondayNight);
-  assert.equal(capped.filter((slot) => slot.day === "2026-11-17").length, 18);
-  assert.equal(capped.filter((slot) => slot.day === "2026-11-18").length, 12);
+  assert.equal(capped.length, 120);
+  assert.equal(capped.filter((slot) => slot.day === "2026-11-17").length, 20);
+  assert.equal(capped.filter((slot) => slot.day === "2026-11-18").length, 20);
 
+  // Zero school auctions allowed onto the lineup
   const schools = Array.from({ length: 20 }, (_, index) =>
     candidate(`s-${index}`, {
       lane: "other",
@@ -182,20 +221,25 @@ function main() {
     candidate(`p-${index}`, { lane: "partnership", organizationId: `org-p-${index}` })
   );
   const mixed = mergeAutoSendSlots([], [...schools, ...larges, ...sponsors, ...partners], mondayNight);
+  assert.equal(mixed.filter((slot) => slot.lane === "other").length, 0);
   const tuesday = mixed.filter((slot) => slot.day === "2026-11-17");
   assert.equal(tuesday.filter((slot) => slot.lane === "large").length, 4);
   assert.equal(tuesday.filter((slot) => slot.lane === "sponsorship").length, 1);
   assert.equal(tuesday.filter((slot) => slot.lane === "partnership").length, 3);
-  assert.equal(tuesday.filter((slot) => slot.lane === "other").length, 2);
-  assert.equal(tuesday.length, 10);
+  assert.equal(tuesday.length, 8);
 
-  const sentSchools = tuesday
-    .filter((slot) => slot.lane === "other")
-    .map((slot) => ({ ...slot, status: "sent" as const, sentAt: tuesdayOpen.toISOString() }));
-  const afterSchools = mergeAutoSendSlots(sentSchools, [...schools, ...larges], tuesdayOpen);
-  const stillToday = afterSchools.filter((slot) => slot.day === "2026-11-17" && slot.status === "queued");
-  assert.equal(stillToday.filter((slot) => slot.lane === "other").length, 0);
-  assert.equal(stillToday.filter((slot) => slot.lane === "large").length, 4);
+  // Dismissing / deleting a slot immediately promotes the next waiting lead into its freed seat
+  const dismissedPartner = tuesday.find((slot) => slot.lane === "partnership")!;
+  const remainingExisting = mixed.filter((slot) => slot.queueItemId !== dismissedPartner.queueItemId && slot.status !== "queued");
+  const remainingCandidates = [...larges, ...sponsors, ...partners].filter(
+    (c) => c.queueItemId !== dismissedPartner.queueItemId
+  );
+  const refilled = mergeAutoSendSlots(remainingExisting, remainingCandidates, mondayNight);
+  assert.equal(
+    refilled.filter((slot) => slot.day === "2026-11-17" && slot.lane === "partnership").length,
+    3
+  );
+  assert.equal(refilled.some((slot) => slot.queueItemId === dismissedPartner.queueItemId), false);
 
   const sent: AutoSendSlot = { ...lined[0]!, status: "sent", sentAt: tuesdayOpen.toISOString() };
   const kept = mergeAutoSendSlots([sent], [], tuesdayOpen);

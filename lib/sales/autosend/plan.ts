@@ -1,5 +1,6 @@
 import {
   AUTO_SEND_DAILY_CAP,
+  AUTO_SEND_HORIZON_DAYS,
   AUTO_SEND_LANES,
   LANE_DAILY_QUOTA,
   addDaysYmd,
@@ -32,6 +33,8 @@ function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledA
     contactName: candidate.contactName,
     contactEmail: candidate.contactEmail,
     subject: candidate.subject,
+    body: candidate.body,
+    suggestedFee: candidate.suggestedFee,
     eventTitle: candidate.eventTitle,
     eventDate: candidate.eventDate,
     score: candidate.score,
@@ -42,6 +45,7 @@ function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledA
     statusSince: null,
     sentAt: null,
     draftUrl: null,
+    gmailDraftId: null,
     error: null,
     attempts: 0,
   };
@@ -54,6 +58,8 @@ function refreshQueued(slot: AutoSendSlot, candidate: AutoSendCandidate): AutoSe
     contactName: candidate.contactName,
     contactEmail: candidate.contactEmail,
     subject: candidate.subject,
+    body: candidate.body,
+    suggestedFee: candidate.suggestedFee,
     eventTitle: candidate.eventTitle,
     eventDate: candidate.eventDate,
     score: candidate.score,
@@ -90,7 +96,7 @@ export function mergeAutoSendSlots(
   now: Date
 ): AutoSendSlot[] {
   const today = pacificClock(now).ymd;
-  const days = upcomingBusinessDays(now, 5);
+  const days = upcomingBusinessDays(now, AUTO_SEND_HORIZON_DAYS);
   const daySet = new Set(days);
   const historyFloor = addDaysYmd(today, -HISTORY_DAYS);
   const byItem = new Map(candidates.map((candidate) => [candidate.queueItemId, candidate]));
@@ -115,8 +121,14 @@ export function mergeAutoSendSlots(
     }
   }
 
+  // Only completed / active sends & drafts hold an org off the board.
+  // Skipped/rejected slots stay in history for audit, or if deleted by the operator are removed outright.
   const usedItems = new Set(kept.map((slot) => slot.queueItemId));
-  const usedOrgs = new Set(kept.map((slot) => slot.organizationId));
+  const usedOrgs = new Set(
+    kept
+      .filter((slot) => slot.status === "sent" || slot.status === "drafted" || slot.status === "sending")
+      .map((slot) => slot.organizationId)
+  );
   const pool = candidates
     .filter((candidate) => !usedItems.has(candidate.queueItemId) && !usedOrgs.has(candidate.organizationId))
     .sort((a, b) => compareCandidates(a, b, today));

@@ -99,167 +99,15 @@
     },
     {
       "path": "/api/sales/cron/pipeline",
-      "schedule": "5 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "15 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "25 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "35 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "45 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "55 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 10 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 11 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 12 * * *"
+      "schedule": "*/20 * * * *"
     },
     {
       "path": "/api/sales/cron/digest",
-      "schedule": "10 10 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 10 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "10 11 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 11 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "10 12 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 12 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "10 13 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 13 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "10 14 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 14 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "10 15 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 15 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "10 16 * * *"
-    },
-    {
-      "path": "/api/sales/cron/digest",
-      "schedule": "40 16 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 13 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 14 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 15 * * *"
-    },
-    {
-      "path": "/api/sales/cron/pipeline",
-      "schedule": "20 16 * * *"
+      "schedule": "10,40 10-16 * * *"
     },
     {
       "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 11 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 17 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 18 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 19 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 20 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/sales/cron/gmail-sync",
-      "schedule": "0 22 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/sales/cron/nudges",
@@ -267,31 +115,11 @@
     },
     {
       "path": "/api/sales/cron/calendar-sync",
-      "schedule": "15 9 * * *"
-    },
-    {
-      "path": "/api/sales/cron/calendar-sync",
-      "schedule": "15 13 * * *"
-    },
-    {
-      "path": "/api/sales/cron/calendar-sync",
-      "schedule": "15 17 * * *"
-    },
-    {
-      "path": "/api/sales/cron/calendar-sync",
-      "schedule": "15 21 * * *"
+      "schedule": "15 9,13,17,21 * * *"
     },
     {
       "path": "/api/sales/cron/autosend",
-      "schedule": "5,25,45 16-23 * * *"
-    },
-    {
-      "path": "/api/sales/cron/autosend",
-      "schedule": "5,25,45 0 * * *"
-    },
-    {
-      "path": "/api/sales/cron/autosend",
-      "schedule": "10 1 * * *"
+      "schedule": "5,25,45 * * * *"
     }
   ]
 }

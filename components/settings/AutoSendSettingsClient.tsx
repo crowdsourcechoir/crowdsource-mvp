@@ -31,10 +31,10 @@ export default function AutoSendSettingsClient() {
         body: JSON.stringify({ enabled }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Could not update sending");
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Could not update draft pipeline");
       setView(data as AutoSendQueueView);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update sending");
+      setError(err instanceof Error ? err.message : "Could not update draft pipeline");
     } finally {
       setBusy(false);
     }
@@ -43,11 +43,14 @@ export default function AutoSendSettingsClient() {
   return (
     <SettingsPanel
       eyebrow="Outreach"
-      title="Weekday sending"
-      description="On files the weekday mix as Gmail drafts between 8:00am and 5:00pm Pacific: 18 large ($15k+), 2 sponsorship, 3 partnership, and 2 other. You send each draft yourself. School auctions only fill Other. Off keeps the line and files nothing."
+      title="30-day $15k+ Gmail draft pipeline"
+      description="Continuously builds a 30-business-day rolling lineup of $15k+ opportunities (20 large Anthem, 2 sponsorship, 3 partnership per day — zero school auctions or sub-$15k fillers) and pre-loads them into Gmail Drafts. Nothing auto-sends."
       actions={
         <>
-          <StatusPill tone={view?.enabled ? "ok" : "off"}>{view?.enabled ? "On" : "Paused"}</StatusPill>
+          <StatusPill tone={view?.enabled ? "ok" : "off"}>{view?.enabled ? "On (24/7)" : "Paused"}</StatusPill>
+          <SettingsButton href="/api/sales/gmail/connect">
+            {view?.gmailConnected ? `Switch Gmail (${view.gmailEmail ?? "connected"})` : "Connect Gmail"}
+          </SettingsButton>
           {view?.enabled ? (
             <SettingsButton variant="danger" disabled={busy} onClick={() => void setEnabled(false)}>
               {busy ? "Saving…" : "Pause"}
@@ -63,19 +66,19 @@ export default function AutoSendSettingsClient() {
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
       {view && !view.gmailComposeGranted ? (
         <p className="text-sm text-amber-200">
-          Reconnect Google under Google connections and allow Gmail compose. Until then this line creates nothing and does not send.
+          Click Switch Gmail above (or under Google connections) and allow Gmail compose so drafts push directly into your Gmail Drafts folder. Every draft is already readable and editable in the live lineup.
         </p>
       ) : null}
       <p className="text-sm text-gray-300">
         {view
-          ? `${view.draftedToday} drafted today · ${view.sentToday} sent earlier · ${view.weekSent} of ${view.weeklyCap} this week.`
-          : "Loading the line…"}
+          ? `${view.totalDrafted} in Gmail Drafts · ${view.totalLinedUp} lined up across ${view.daysCovered} business days (window: ${view.horizonDays} business days).`
+          : "Loading the 30-day lineup…"}
       </p>
       <p className="text-sm text-gray-400">
-        Chapters, state associations, unverified emails, and undated large opportunities stay off this line. Sponsorships and partnerships can be a season without a single event date. 2027 Q1 and Q2 go first inside Large, then Q3, then dates at least six months out.
+        Chapters, state associations, school auctions, sub-$15k local fundraisers, prior contacts across any opportunity, and calendar meeting contacts are automatically excluded. Removing a draft immediately promotes the next qualifying $15k+ lead.
       </p>
       <Link href="/admin/sales/autosend" className="csc-link text-sm">
-        Open the live queue →
+        Open the $15k+ draft lineup →
       </Link>
     </SettingsPanel>
   );

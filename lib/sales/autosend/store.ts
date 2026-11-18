@@ -51,6 +51,8 @@ function asSlot(value: unknown): AutoSendSlot | null {
     contactName: typeof row.contactName === "string" ? row.contactName : null,
     contactEmail: typeof row.contactEmail === "string" ? row.contactEmail : "",
     subject: typeof row.subject === "string" ? row.subject : "",
+    body: typeof row.body === "string" ? row.body : null,
+    suggestedFee: typeof row.suggestedFee === "number" && Number.isFinite(row.suggestedFee) ? row.suggestedFee : null,
     eventTitle: typeof row.eventTitle === "string" ? row.eventTitle : "",
     eventDate: typeof row.eventDate === "string" ? row.eventDate : "",
     score: typeof row.score === "number" && Number.isFinite(row.score) ? row.score : 0,
@@ -65,6 +67,7 @@ function asSlot(value: unknown): AutoSendSlot | null {
     statusSince: typeof row.statusSince === "string" ? row.statusSince : null,
     sentAt: typeof row.sentAt === "string" ? row.sentAt : null,
     draftUrl: typeof row.draftUrl === "string" ? row.draftUrl : null,
+    gmailDraftId: typeof row.gmailDraftId === "string" ? row.gmailDraftId : null,
     error: typeof row.error === "string" ? row.error : null,
     attempts: typeof row.attempts === "number" && Number.isFinite(row.attempts) ? row.attempts : 0,
   };

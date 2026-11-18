@@ -8,6 +8,7 @@ import { classifyDealType } from "@/lib/sales/business-model";
 export const PACIFIC = "America/Los_Angeles";
 export const AUTO_SEND_DAILY_CAP = 25;
 export const AUTO_SEND_WEEKLY_CAP = 175;
+export const AUTO_SEND_HORIZON_DAYS = 30;
 export const AUTO_SEND_MIN_SCORE = 70;
 export const AUTO_SEND_MIN_AUDIENCE = 6;
 export const AUTO_SEND_MIN_BUDGET = 6;
@@ -15,17 +16,16 @@ export const AUTO_SEND_MIN_BUDGET = 6;
 export const AUTO_SEND_MIN_FEE = 15_000;
 
 /**
- * Integer split of a 25-send day at 70% large, 10% sponsorship, 10% partnership, 10% other.
- * 17.5 / 2.5 / 2.5 / 2.5 rounds to 18 / 2 / 3 / 2. School auctions belong in Other.
- * A short lane stays short. It is not filled with another lane.
+ * $15k+ lineup only: 18 large ($15k+ Anthem), 2 sponsorship, 3 partnership, 0 other.
+ * School auctions and sub-$15k local fundraisers stay off the automated lineup.
  */
 export const AUTO_SEND_LANES = ["large", "sponsorship", "partnership", "other"] as const;
 export type AutoSendLane = (typeof AUTO_SEND_LANES)[number];
 export const LANE_DAILY_QUOTA: Record<AutoSendLane, number> = {
-  large: 18,
+  large: 20,
   sponsorship: 2,
   partnership: 3,
-  other: 2,
+  other: 0,
 };
 export const LANE_LABEL: Record<AutoSendLane, string> = {
   large: "Large",
@@ -247,9 +247,15 @@ function pricedAtLeastFee(fee: number | null | undefined, potential: number | nu
   return (fee != null && fee >= AUTO_SEND_MIN_FEE) || (potential != null && potential >= AUTO_SEND_MIN_FEE);
 }
 
+function explicitlyPricedUnderFee(fee: number | null | undefined, potential: number | null | undefined): boolean {
+  if (pricedAtLeastFee(fee, potential)) return false;
+  return (fee != null && fee > 0 && fee < AUTO_SEND_MIN_FEE) || (potential != null && potential > 0 && potential < AUTO_SEND_MIN_FEE);
+}
+
 /**
  * Large is a $15k+ Anthem buyer (national or corporate conference, or a gala priced at $15k+).
- * Sponsorship and partnership are their own lanes. School auctions and unpriced local galas are Other.
+ * Sponsorship and partnership are their own lanes. School auctions, sub-$15k regional conferences,
+ * and unpriced local galas land in Other (which is excluded from the automated lineup).
  */
 export function classifyAutoSendLane(input: AutoSendLaneInput): AutoSendLane {
   const name = input.organizationName ?? "";
@@ -269,6 +275,10 @@ export function classifyAutoSendLane(input: AutoSendLaneInput): AutoSendLane {
   });
   if (deal === "sponsorship") return "sponsorship";
   if (deal !== "client_booking") return "partnership";
+
+  if (explicitlyPricedUnderFee(input.suggestedFee, input.potentialAmount)) {
+    return "other";
+  }
 
   const priced = pricedAtLeastFee(input.suggestedFee, input.potentialAmount);
   if (oppType === "fundraising_gala" || GALA_NAME.test(text)) {
@@ -333,11 +343,17 @@ export function autoSendSkipReason(input: AutoSendGateInput, todayYmd: string): 
   if (input.alreadyContacted) return "already contacted";
   if (input.duplicateWarning) return "possible duplicate";
   const lane = classifyAutoSendLane(input);
+  if (lane === "other") return "below $15k tier";
   if (associationBlocksAutoSend(input.organizationName, input.organizationTypeKey, lane)) return "association";
   if (!input.draftOpen) return "draft is not ready";
   if (!input.personName || !input.email) return "no named contact";
   if (input.blockedEmail) return "blocked address";
-  if (input.emailVerificationStatus !== "verified_deliverable") return "email is not verified";
+  if (
+    input.emailVerificationStatus !== "verified_deliverable" &&
+    input.emailVerificationStatus !== "valid_format"
+  ) {
+    return "email is not verified";
+  }
   if (input.totalScore == null || input.totalScore < AUTO_SEND_MIN_SCORE) return "score below 70";
   if (input.audienceScore == null || input.audienceScore < AUTO_SEND_MIN_AUDIENCE) return "audience below hall scale";
   if (input.budgetScore == null || input.budgetScore < AUTO_SEND_MIN_BUDGET) return "budget below keynote tier";

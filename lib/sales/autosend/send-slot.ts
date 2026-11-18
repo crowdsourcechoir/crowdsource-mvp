@@ -5,14 +5,16 @@ import { getDraft, listDraftsForOpportunity } from "@/lib/sales/db/outreach";
 import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
 import { gmailDraftUrl } from "@/lib/sales/gmail/constants";
 import { createGmailDraft } from "@/lib/sales/gmail/send";
+import { normalizeEmail } from "@/lib/sales/dedupe";
 import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { shouldBlockInitialGmailSend } from "@/lib/sales/outreach/send-guard";
 import type { OutreachActivity } from "@/lib/sales/types";
+import { loadPriorOutreachSuppression } from "./candidates";
 import type { AutoSendSlot } from "./types";
 
 export type SlotSendResult =
-  | { result: "drafted"; draftedAt: string; subject: string; draftUrl: string }
+  | { result: "drafted"; draftedAt: string; subject: string; body: string; draftUrl: string; gmailDraftId: string | null }
   | { result: "skipped"; error: string }
   | { result: "retry"; error: string };
 
@@ -24,6 +26,7 @@ function existingGmailDraft(activities: OutreachActivity[], contactId: string): 
     const activity = activities[index];
     if (activity.contactId !== contactId) continue;
     if (activity.metadata?.kind !== "gmail_draft") continue;
+    if (activity.metadata?.retracted === true) continue;
     const messageId = activity.metadata?.gmailDraftMessageId;
     if (typeof messageId !== "string" || !messageId.trim()) continue;
     return activity;
@@ -59,7 +62,10 @@ export async function sendAutoSendSlot(slot: AutoSendSlot): Promise<SlotSendResu
   if (isOutboundEmailBlocked(contact.email)) {
     return { result: "skipped", error: `Blocked address ${contact.email}.` };
   }
-  if (contact.emailVerificationStatus !== "verified_deliverable") {
+  if (
+    contact.emailVerificationStatus !== "verified_deliverable" &&
+    contact.emailVerificationStatus !== "valid_format"
+  ) {
     return { result: "skipped", error: "Email is no longer verified." };
   }
 
@@ -75,16 +81,30 @@ export async function sendAutoSendSlot(slot: AutoSendSlot): Promise<SlotSendResu
       decidedBy: "autosend",
       decisionNotes: DRAFT_NOTE,
     });
+    const storedDraftId =
+      typeof alreadyFiled.metadata?.gmailDraftId === "string" ? alreadyFiled.metadata.gmailDraftId : null;
     return {
       result: "drafted",
       draftedAt: alreadyFiled.occurredAt,
       subject,
+      body,
       draftUrl: draftUrlFromActivity(alreadyFiled),
+      gmailDraftId: storedDraftId,
     };
   }
 
-  if (opportunity.lastOutboundAt || opportunity.gmailThreadId) {
+  if (opportunity.lastOutboundAt || opportunity.lastInboundAt || opportunity.gmailThreadId) {
     return { result: "skipped", error: "This organization was already contacted." };
+  }
+
+  const suppression = await loadPriorOutreachSuppression([opportunity.organizationId], [contact.id]);
+  const normalizedEmail = normalizeEmail(contact.email);
+  if (
+    suppression.contactedOrgIds.has(opportunity.organizationId) ||
+    suppression.contactedContactIds.has(contact.id) ||
+    (normalizedEmail && suppression.contactedEmails.has(normalizedEmail))
+  ) {
+    return { result: "skipped", error: "Prior outreach or calendar meeting found for this contact/organization." };
   }
 
   const siblingDrafts = await listDraftsForOpportunity(opportunity.id);
@@ -129,5 +149,12 @@ export async function sendAutoSendSlot(slot: AutoSendSlot): Promise<SlotSendResu
     decisionNotes: DRAFT_NOTE,
   });
 
-  return { result: "drafted", draftedAt, subject, draftUrl: gmailDraft.draftUrl };
+  return {
+    result: "drafted",
+    draftedAt,
+    subject,
+    body,
+    draftUrl: gmailDraft.draftUrl,
+    gmailDraftId: gmailDraft.draftId,
+  };
 }

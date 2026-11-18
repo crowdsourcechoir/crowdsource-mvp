@@ -110,6 +110,31 @@ export type GmailDraftResult = {
 };
 
 /**
+ * Remove an unsent Gmail draft from the connected account's Drafts folder.
+ * Ignores 404 when the operator already deleted or sent the draft in Gmail.
+ */
+export async function deleteGmailDraft(draftId: string): Promise<{ deleted: boolean; error: string | null }> {
+  if (!draftId?.trim()) return { deleted: false, error: null };
+  const connection = await getGmailConnection();
+  if (!connection || !hasGmailComposeScope(connection.scopes)) {
+    return { deleted: false, error: null };
+  }
+  const bundle = await getGmailClient();
+  if (!bundle) return { deleted: false, error: null };
+  try {
+    await bundle.gmail.users.drafts.delete({
+      userId: "me",
+      id: draftId.trim(),
+    });
+    return { deleted: true, error: null };
+  } catch (err) {
+    const code = (err as { code?: number; status?: number } | null)?.code ?? (err as { status?: number } | null)?.status;
+    if (code === 404) return { deleted: false, error: null };
+    return { deleted: false, error: err instanceof Error ? err.message : "Could not delete Gmail draft." };
+  }
+}
+
+/**
  * Put a message in the connected account's Drafts folder. Does not send.
  * Requires the Gmail compose scope; `gmail.send` cannot create drafts.
  */

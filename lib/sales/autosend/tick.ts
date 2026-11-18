@@ -1,7 +1,12 @@
 import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
+import { decideQueueItem, getQueueItem } from "@/lib/sales/db/queue";
+import { getOpportunity, updateOpportunityStatus, updateOpportunityTouchTimestamps } from "@/lib/sales/db/opportunities";
+import { getDraft, updateDraftDecision } from "@/lib/sales/db/outreach";
+import { listActivitiesForOpportunity } from "@/lib/sales/db/activities";
+import { deleteGmailDraft } from "@/lib/sales/gmail/send";
 import { listAutoSendCandidates } from "./candidates";
 import { mergeAutoSendSlots } from "./plan";
-import { isInsideSendWindow, pacificClock, WINDOW_END_MINUTE } from "./policy";
+import { pacificClock, WINDOW_END_MINUTE } from "./policy";
 import { daySendReportDue, sendDayReport } from "./report";
 import { sendAutoSendSlot } from "./send-slot";
 import { readAutoSendState, writeAutoSendState } from "./store";
@@ -56,41 +61,124 @@ export async function setAutoSendEnabled(enabled: boolean): Promise<{ state: Aut
 }
 
 /**
- * Line up the next business days, file Gmail drafts for anything due inside
- * 8:00am–5:00pm Pacific, then mail one report once that day's line is finished.
- * This queue does not send prospect mail.
+ * Remove a lead from the lineup ("Don't send" / "Delete"), delete any unsent Gmail draft
+ * already filed for it, mark the queue item rejected so it never comes back, and immediately
+ * pull the next best $15k+ candidate into the freed seat.
  */
-export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick> {
+export async function dismissAutoSendSlot(input: {
+  queueItemId: string;
+  day?: string | null;
+}): Promise<{ state: AutoSendState; deletedGmailDraft: boolean; error: string | null }> {
+  const { state, error } = await readAutoSendState();
+  if (error) return { state, deletedGmailDraft: false, error };
+
+  const matching = state.slots.filter(
+    (slot) => slot.queueItemId === input.queueItemId && (!input.day || slot.day === input.day)
+  );
+  const target = matching[0] ?? null;
+
+  let deletedGmailDraft = false;
+  let draftIdToDelete = target?.gmailDraftId ?? null;
+
+  const item = await getQueueItem(input.queueItemId).catch(() => null);
+  const opportunityId = target?.opportunityId || item?.opportunityId || null;
+
+  if (!draftIdToDelete && opportunityId) {
+    const activities = await listActivitiesForOpportunity(opportunityId).catch(() => []);
+    for (let index = activities.length - 1; index >= 0; index -= 1) {
+      const act = activities[index];
+      if (act.metadata?.kind === "gmail_draft" && typeof act.metadata?.gmailDraftId === "string") {
+        draftIdToDelete = act.metadata.gmailDraftId;
+        break;
+      }
+    }
+  }
+
+  if (draftIdToDelete) {
+    const del = await deleteGmailDraft(draftIdToDelete);
+    deletedGmailDraft = del.deleted;
+  }
+
+  if (opportunityId) {
+    const opp = await getOpportunity(opportunityId).catch(() => null);
+    if (opp && !opp.lastOutboundAt && !opp.lastInboundAt) {
+      await updateOpportunityTouchTimestamps(opportunityId, { gmailThreadId: null }).catch(() => undefined);
+    }
+  }
+
+  if (item) {
+    if (item.outreachDraftId) {
+      const draft = await getDraft(item.outreachDraftId).catch(() => null);
+      if (draft && draft.status !== "approved" && draft.status !== "approved_with_edits") {
+        await updateDraftDecision(draft.id, { status: "rejected" }).catch(() => undefined);
+      }
+    }
+    await decideQueueItem(item.id, {
+      status: "rejected",
+      decidedBy: "operator",
+      decisionNotes: "Removed from the $15k+ lineup (Don't send).",
+    }).catch(() => undefined);
+    if (item.kind === "initial") {
+      await updateOpportunityStatus(item.opportunityId, "rejected").catch(() => undefined);
+    }
+  }
+
+  const remainingSlots = state.slots.filter((slot) => slot.queueItemId !== input.queueItemId);
+  const clearedState: AutoSendState = { ...state, slots: remainingSlots };
+  const writeErr = await persist(clearedState);
+  if (writeErr) return { state: clearedState, deletedGmailDraft, error: writeErr };
+
+  const refreshed = await refreshAutoSendPlan();
+  return { state: refreshed.state, deletedGmailDraft, error: refreshed.error };
+}
+
+/**
+ * Line up the next 30 business days of $15k+ leads and pre-load Gmail drafts immediately
+ * (any hour of day, up to `maxToDraft` queued slots in chronological order) so the Drafts
+ * inbox stays stocked ahead of time instead of waiting on a weekday clock.
+ * This queue never sends prospect mail.
+ */
+export async function tickAutoSend(
+  now: Date = new Date(),
+  opts?: { maxToDraft?: number; forceWhenPaused?: boolean }
+): Promise<AutoSendTick> {
   const refreshed = await refreshAutoSendPlan(now);
   if (refreshed.error) {
-    return { enabled: refreshed.state.enabled, sent: 0, drafted: 0, skipped: 0, failed: 0, linedUp: 0, reportSent: false, error: refreshed.error };
+    return {
+      enabled: refreshed.state.enabled,
+      sent: 0,
+      drafted: 0,
+      skipped: 0,
+      failed: 0,
+      linedUp: 0,
+      reportSent: false,
+      error: refreshed.error,
+    };
   }
   let state = refreshed.state;
   const today = pacificClock(now).ymd;
   const linedUp = state.slots.filter((slot) => slot.status === "queued").length;
-  if (!state.enabled) {
-    return { enabled: false, sent: 0, drafted: 0, skipped: 0, failed: 0, linedUp, reportSent: false, error: null };
+  if (!state.enabled && !opts?.forceWhenPaused) {
+    return { enabled: state.enabled, sent: 0, drafted: 0, skipped: 0, failed: 0, linedUp, reportSent: false, error: null };
   }
 
   let drafted = 0;
   let skipped = 0;
   let failed = 0;
   const gmail = await getGmailConnectionStatus();
-  const inWindow = isInsideSendWindow(now);
   const killed = process.env.SALES_GMAIL_SENDS_ENABLED?.trim() === "false";
   let gateError: string | null = null;
-  if (inWindow && killed) {
+  if (killed) {
     gateError = "Gmail is turned off (SALES_GMAIL_SENDS_ENABLED=false). No drafts were created.";
-  } else if (inWindow && gmail.connected && !gmail.composeGranted) {
-    gateError = "Reconnect Google and allow Gmail compose. Weekday outreach creates drafts and does not send.";
+  } else if (gmail.connected && !gmail.composeGranted) {
+    gateError = "Reconnect Google and allow Gmail compose so drafts can be filed directly in Gmail Drafts.";
   }
 
-  if (inWindow && gmail.connected && gmail.composeGranted && !killed) {
-    const clock = pacificClock(now);
-    const burst = WINDOW_END_MINUTE - clock.minutes <= 60 ? 4 : 2;
+  if (gmail.connected && gmail.composeGranted && !killed) {
+    const burst = Math.max(1, Math.min(25, opts?.maxToDraft ?? 8));
     const due = state.slots
-      .filter((slot) => slot.status === "queued" && slot.day === today && Date.parse(slot.scheduledAt) <= now.getTime() + 30_000)
-      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+      .filter((slot) => slot.status === "queued")
+      .sort((a, b) => a.day.localeCompare(b.day) || a.scheduledAt.localeCompare(b.scheduledAt))
       .slice(0, burst);
 
     for (const slot of due) {
@@ -112,7 +200,16 @@ export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick
           if (result.result === "drafted") {
             drafted += 1;
             return applySendResult(
-              { ...row, status: "drafted", sentAt: result.draftedAt, subject: result.subject, draftUrl: result.draftUrl, error: null },
+              {
+                ...row,
+                status: "drafted",
+                sentAt: result.draftedAt,
+                subject: result.subject,
+                body: result.body,
+                draftUrl: result.draftUrl,
+                gmailDraftId: result.gmailDraftId,
+                error: null,
+              },
               result.draftedAt
             );
           }
@@ -133,13 +230,18 @@ export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick
       };
       await persist(state);
     }
+
+    if (skipped > 0) {
+      const refilled = await refreshAutoSendPlan(now);
+      if (!refilled.error) state = refilled.state;
+    }
   }
 
   let reportSent = false;
   const clock = pacificClock(now);
   const businessAfterClose =
     clock.minutes >= WINDOW_END_MINUTE && clock.weekday !== "Sat" && clock.weekday !== "Sun";
-  if (daySendReportDue(state, today, businessAfterClose)) {
+  if (state.enabled && daySendReportDue(state, today, businessAfterClose)) {
     try {
       const report = await sendDayReport(state, today);
       state = { ...state, reports: [...state.reports.filter((mark) => mark.day !== today), { day: today, sentAt: report.sentAt }] };
@@ -147,17 +249,26 @@ export async function tickAutoSend(now: Date = new Date()): Promise<AutoSendTick
       reportSent = true;
     } catch (err) {
       return {
-        enabled: true,
+        enabled: state.enabled,
         sent: 0,
         drafted,
         skipped,
         failed,
-        linedUp,
+        linedUp: state.slots.filter((slot) => slot.status === "queued").length,
         reportSent: false,
         error: err instanceof Error ? err.message : "Report failed.",
       };
     }
   }
 
-  return { enabled: true, sent: 0, drafted, skipped, failed, linedUp, reportSent, error: gateError };
+  return {
+    enabled: state.enabled,
+    sent: 0,
+    drafted,
+    skipped,
+    failed,
+    linedUp: state.slots.filter((slot) => slot.status === "queued").length,
+    reportSent,
+    error: gateError,
+  };
 }

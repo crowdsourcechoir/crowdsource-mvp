@@ -12,6 +12,8 @@ export type AutoSendSlot = {
   contactName: string | null;
   contactEmail: string;
   subject: string;
+  body?: string | null;
+  suggestedFee?: number | null;
   eventTitle: string;
   eventDate: string;
   score: number;
@@ -25,6 +27,7 @@ export type AutoSendSlot = {
   sentAt: string | null;
   /** Link to the unsent Gmail draft. Null for older slots that were sent outright. */
   draftUrl: string | null;
+  gmailDraftId?: string | null;
   error: string | null;
   attempts: number;
 };
@@ -51,6 +54,8 @@ export type AutoSendCandidate = {
   contactName: string | null;
   contactEmail: string;
   subject: string;
+  body: string;
+  suggestedFee: number | null;
   eventTitle: string;
   eventDate: string;
   score: number;

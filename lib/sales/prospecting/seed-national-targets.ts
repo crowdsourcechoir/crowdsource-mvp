@@ -40,6 +40,7 @@ async function upsertNationalTarget(target: NationalKeynoteTarget): Promise<{
       importMetadata: withSalesInitiative(
         {
           ...(existing.importMetadata ?? {}),
+          Priority: "A",
           keynoteTier: true,
           keynoteNotes: target.notes,
           seededNationalKeynote: true,
@@ -57,6 +58,7 @@ async function upsertNationalTarget(target: NationalKeynoteTarget): Promise<{
     source: "manual",
     importMetadata: withSalesInitiative(
       {
+        Priority: "A",
         keynoteTier: true,
         keynoteNotes: target.notes,
         seededNationalKeynote: true,
