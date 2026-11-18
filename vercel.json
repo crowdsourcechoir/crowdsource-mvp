@@ -90,6 +90,14 @@
       "schedule": "20 23 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-elx-annual-congress",
+      "schedule": "10 7 * * *"
+    },
+    {
+      "path": "/api/sales/cron/seed-elx-annual-congress",
+      "schedule": "40 7 * * *"
+    },
+    {
       "path": "/api/sales/cron/seed-artswa-wfea",
       "schedule": "32,35,38,42,48,55 22 * * *"
     },

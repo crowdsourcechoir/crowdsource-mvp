@@ -26,6 +26,7 @@ import {
 import { seedWorldHealthExpoContacts } from "@/lib/sales/seed/seed-world-health-expo-contacts";
 import { EUDEMONIA_COMPARABLE_SEEDS } from "@/lib/sales/seed/eudemonia-comparables";
 import { seedEudemoniaComparables } from "@/lib/sales/seed/seed-eudemonia-comparables";
+import { seedElxAnnualCongress } from "@/lib/sales/seed/seed-elx-annual-congress";
 import { seedArtsWaWfea } from "@/lib/sales/seed/artswa-wfea";
 import { seedEeFundraisingPartnership } from "@/lib/sales/seed/seed-ee-fundraising-partnership";
 
@@ -159,6 +160,14 @@ export async function POST(request: Request) {
       return NextResponse.json({
         preset: "eudemonia-comparables",
         seedCount: EUDEMONIA_COMPARABLE_SEEDS.length,
+        ...result,
+      });
+    }
+
+    if (body?.preset === "elx-annual-congress") {
+      const result = await seedElxAnnualCongress({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "elx-annual-congress",
         ...result,
       });
     }
