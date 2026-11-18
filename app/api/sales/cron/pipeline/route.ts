@@ -13,6 +13,7 @@ import { seedElevateVibeCreateProspects } from "@/lib/sales/seed/seed-elevate-vi
 import { seedBallardFcConversation } from "@/lib/sales/seed/ballard-fc-conversation";
 import { seedResendForward } from "@/lib/sales/seed/resend-forward";
 import { seedSeattleFundraisers2027 } from "@/lib/sales/seed/seed-seattle-fundraisers-2027";
+import { seedKey2027Prospects } from "@/lib/sales/seed/seed-key-2027-prospects";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 290;
@@ -42,7 +43,13 @@ export async function GET(request: Request) {
     const chainDepth = Number(url.searchParams.get("continue") ?? "0") || 0;
 
     let nationalSeed = null;
+    let key2027Seed = null;
     if (chainDepth === 0) {
+      try {
+        key2027Seed = await seedKey2027Prospects();
+      } catch (err) {
+        key2027Seed = { error: err instanceof Error ? err.message : "Key 2027 prospects seed failed" };
+      }
       try {
         nationalSeed = await seedNationalKeynoteTargets({ runPipeline: false });
       } catch (err) {
@@ -150,6 +157,14 @@ export async function GET(request: Request) {
     return NextResponse.json({
       chainDepth,
       pipelineChained,
+      key2027Seed:
+        key2027Seed && "attempted" in key2027Seed
+          ? {
+              attempted: key2027Seed.attempted,
+              createdOrgs: key2027Seed.createdOrgs,
+              enqueued: key2027Seed.enqueued,
+            }
+          : key2027Seed,
       nationalSeed: nationalSeed && "attempted" in nationalSeed ? { attempted: nationalSeed.attempted, created: nationalSeed.created, updated: nationalSeed.updated } : nationalSeed,
       amplifySeed,
       elevateVibeCreateSeed,

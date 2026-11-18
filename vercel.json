@@ -106,6 +106,10 @@
       "schedule": "15 23 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-key-2027-prospects",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/sales/cron/anthem-pricing",
       "schedule": "50 2 * * *"
     },

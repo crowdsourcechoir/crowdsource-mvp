@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { readAutoSendState } from "@/lib/sales/autosend/store";
 import { refreshAutoSendPlan, tickAutoSend } from "@/lib/sales/autosend/tick";
 import { buildAutoSendQueueView } from "@/lib/sales/autosend/view";
+import {
+  getKey2027ProspectsSeedStatus,
+  seedKey2027Prospects,
+} from "@/lib/sales/seed/seed-key-2027-prospects";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 /**
  * GET ?status=1 — read-only lineup summary (counts, days covered, org names/lanes/fees — no email addresses or bodies).
@@ -14,9 +18,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   if (url.searchParams.get("status") === "1") {
     try {
+      const seedStatus = await getKey2027ProspectsSeedStatus().catch(() => ({ done: true }));
+      if (!seedStatus.done) {
+        await seedKey2027Prospects().catch(() => null);
+      }
       const current = await readAutoSendState();
       const age = current.state.updatedAt ? Date.now() - Date.parse(current.state.updatedAt) : Number.POSITIVE_INFINITY;
-      const loaded = current.error || age > 60_000 ? await refreshAutoSendPlan() : current;
+      const loaded = !seedStatus.done || current.error || age > 60_000 ? await refreshAutoSendPlan() : current;
       const view = await buildAutoSendQueueView(loaded.state, loaded.error);
       return NextResponse.json({
         enabled: view.enabled,

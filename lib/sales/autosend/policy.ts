@@ -308,7 +308,12 @@ export function associationBlocksAutoSend(
   organizationTypeKey: string | null | undefined,
   lane: AutoSendLane
 ): boolean {
-  if (CHAPTER_NAME.test(name)) return true;
+  if (CHAPTER_NAME.test(name)) {
+    if (lane === "large" && !STATE_OR_REGIONAL.test(name) && !/\b(chapter|regional|local)\b/i.test(name)) {
+      return false;
+    }
+    return true;
+  }
   const association =
     (organizationTypeKey ?? "").toLowerCase().includes("association") || /\bassociation\b/i.test(name);
   if (!association) return false;

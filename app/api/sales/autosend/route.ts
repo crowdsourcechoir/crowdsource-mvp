@@ -11,6 +11,10 @@ import { fillQueueFromAwaitingContact } from "@/lib/sales/pipeline/fill-queue";
 import { runPipelineBatch } from "@/lib/sales/pipeline/run-pipeline-batch";
 import { drainAnthemPricing } from "@/lib/sales/pricing/evaluate";
 import { seedNationalKeynoteTargets } from "@/lib/sales/prospecting/seed-national-targets";
+import {
+  getKey2027ProspectsSeedStatus,
+  seedKey2027Prospects,
+} from "@/lib/sales/seed/seed-key-2027-prospects";
 import { updateDraftEdits } from "@/lib/sales/db/outreach";
 import { getQueueItem } from "@/lib/sales/db/queue";
 
@@ -21,9 +25,13 @@ const REFRESH_AFTER_MS = 2 * 60 * 1000;
 
 export async function GET() {
   try {
+    const seedStatus = await getKey2027ProspectsSeedStatus().catch(() => ({ done: true }));
+    if (!seedStatus.done) {
+      await seedKey2027Prospects().catch(() => null);
+    }
     const current = await readAutoSendState();
     const age = current.state.updatedAt ? Date.now() - Date.parse(current.state.updatedAt) : Number.POSITIVE_INFINITY;
-    const loaded = current.error || age > REFRESH_AFTER_MS ? await refreshAutoSendPlan() : current;
+    const loaded = !seedStatus.done || current.error || age > REFRESH_AFTER_MS ? await refreshAutoSendPlan() : current;
     const view = await buildAutoSendQueueView(loaded.state, loaded.error);
     return NextResponse.json(view);
   } catch (err) {
@@ -87,6 +95,7 @@ export async function POST(request: Request) {
 
     if (action === "load_more") {
       const batchLimit = Math.max(1, Math.min(8, typeof body?.batchLimit === "number" ? body.batchLimit : 4));
+      const key2027 = await seedKey2027Prospects().catch(() => null);
       await seedNationalKeynoteTargets({ runPipeline: false }).catch(() => null);
       const batch = await runPipelineBatch(batchLimit);
       let awaiting = null;
@@ -100,6 +109,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ...view,
         loadedSummary: {
+          newSeededOrgs: key2027?.createdOrgs ?? 0,
           pipelineAttempted: batch.attempted,
           pipelineSucceeded: batch.succeeded + batch.partiallyFailed,
           awaitingQueued: awaiting?.queuedOrAdvanced ?? 0,
