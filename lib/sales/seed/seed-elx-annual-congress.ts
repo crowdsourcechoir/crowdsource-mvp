@@ -81,7 +81,7 @@ export async function getElxAnnualCongressStatus(): Promise<{
   contactCount: number;
   done: boolean;
   contacts: Array<{
-    fullName: string;
+    fullName: string | null;
     roleTitle: string | null;
     source: string;
     emailVerificationStatus: string | null;

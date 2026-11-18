@@ -29,6 +29,7 @@ import { seedEudemoniaComparables } from "@/lib/sales/seed/seed-eudemonia-compar
 import { seedElxAnnualCongress } from "@/lib/sales/seed/seed-elx-annual-congress";
 import { seedArtsWaWfea } from "@/lib/sales/seed/artswa-wfea";
 import { seedEeFundraisingPartnership } from "@/lib/sales/seed/seed-ee-fundraising-partnership";
+import { seedFigmaConfig2027 } from "@/lib/sales/seed/figma-config-2027";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -184,6 +185,15 @@ export async function POST(request: Request) {
       const result = await seedEeFundraisingPartnership({ force: Boolean(body.force) });
       return NextResponse.json({
         preset: "ee-fundraising-partnership",
+        seedCount: 1,
+        ...result,
+      });
+    }
+
+    if (body?.preset === "figma-config-2027") {
+      const result = await seedFigmaConfig2027({ force: Boolean(body.force) });
+      return NextResponse.json({
+        preset: "figma-config-2027",
         seedCount: 1,
         ...result,
       });

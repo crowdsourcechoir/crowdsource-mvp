@@ -118,6 +118,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/sales/cron/seed-figma-config-2027",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/sales/cron/hunter-sweep",
       "schedule": "*/5 * * * *"
     },
