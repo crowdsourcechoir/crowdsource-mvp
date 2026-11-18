@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { NextResponse } from "next/server";
 import { readAutoSendState } from "@/lib/sales/autosend/store";
 import { refreshAutoSendPlan, tickAutoSend } from "@/lib/sales/autosend/tick";
@@ -23,7 +24,11 @@ export async function GET(request: Request) {
     try {
       if (!linksEnsuredInCronInstance) {
         linksEnsuredInCronInstance = true;
-        await ensureBookLinks().catch(() => null);
+        try {
+          waitUntil(ensureBookLinks().catch(() => null));
+        } catch {
+          void ensureBookLinks().catch(() => null);
+        }
       }
       const seedStatus = await getKey2027ProspectsSeedStatus().catch(() => ({ done: true }));
       if (!seedStatus.done) {

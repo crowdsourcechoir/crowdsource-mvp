@@ -15,13 +15,19 @@ export type EnsureBookLinksResult = {
   sampleUnchangedWithAttach: string | null;
 };
 
+export type EnsureBookLinksOptions = {
+  budgetMs?: number;
+};
+
 /**
  * Forces cold-outreach templates + pending/draft outreach bodies off "I've attached..."
- * and onto the branded /book URL. Safe to re-run (idempotent).
+ * and `/book` onto `www.crowdsourcechoir.com`. Safe to re-run (idempotent) and time-boxed.
  */
-export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
+export async function ensureBookLinks(options?: EnsureBookLinksOptions): Promise<EnsureBookLinksResult> {
   const db = requireSupabaseAdmin();
   const url = bookUrl();
+  const startedAt = Date.now();
+  const budgetMs = options?.budgetMs ?? 25_000;
   let templatesUpdated = 0;
   let draftsUpdated = 0;
   let draftsAlreadyLinked = 0;
@@ -57,6 +63,7 @@ export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
     if (page.length === 0) break;
 
     for (const row of page) {
+      if (Date.now() - startedAt > budgetMs) break;
       draftsScanned += 1;
       const aiBody = (row.ai_body as string) ?? "";
       const editedBody = (row.edited_body as string | null) ?? null;
@@ -81,7 +88,7 @@ export async function ensureBookLinks(): Promise<EnsureBookLinksResult> {
       draftsUpdated += 1;
     }
 
-    if (page.length < pageSize) break;
+    if (page.length < pageSize || Date.now() - startedAt > budgetMs) break;
     from += pageSize;
   }
 
