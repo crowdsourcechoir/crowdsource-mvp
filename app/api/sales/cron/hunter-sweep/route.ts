@@ -9,14 +9,34 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 290;
 
+const MAX_CHAIN_DEPTH = 30;
+
 function cronBaseUrl(request: Request): string {
+  const origin = new URL(request.url).origin;
+  if (origin && !origin.includes("localhost")) return origin;
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return new URL(request.url).origin;
+  return origin;
+}
+
+async function kickNextBatch(baseUrl: string, cronSecret: string, nextDepth: number): Promise<void> {
+  const next = new URL("/api/sales/cron/hunter-sweep", baseUrl);
+  next.searchParams.set("continue", String(nextDepth));
+  try {
+    const res = await fetch(next.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${cronSecret}` },
+    });
+    await res.text();
+  } catch (err) {
+    console.error("[hunter-sweep] continuation failed:", err);
+  }
 }
 
 /**
  * Automated Hunter enrichment sweep across new leads and weak generic-inbox leads.
- * Self-chains while eligible leads and credit headroom remain.
+ * Continuation hops (`continue >= 1`) return 202 immediately and run inside `waitUntil`
+ * so the parent invocation never blocks on the child's 3-minute batch.
  *
  * GET ?status=1 — public read-only progress + Hunter credit summary (no emails).
  * GET/POST with Bearer CRON_SECRET — execute batch.
@@ -66,21 +86,42 @@ async function runSweep(request: Request) {
     );
   }
 
+  const url = new URL(request.url);
+  const chainDepth = Number(url.searchParams.get("continue") ?? "0") || 0;
+  let force = url.searchParams.get("force") === "1";
+  let maxOrgs: number | undefined;
+
+  if (request.method === "POST") {
+    const body = (await request.json().catch(() => ({}))) as {
+      force?: boolean;
+      maxOrgs?: number;
+    };
+    if (body.force !== undefined) force = Boolean(body.force);
+    if (typeof body.maxOrgs === "number") maxOrgs = body.maxOrgs;
+  }
+
+  const baseUrl = cronBaseUrl(request);
+
+  if (chainDepth >= 1 && request.method === "GET") {
+    const backgroundWork = async () => {
+      try {
+        const result = await runHunterLeadSweep({
+          maxOrgs,
+          force: false,
+          ensureRecentSeeds: false,
+        });
+        if (!result.done && result.batchAttempted > 0 && chainDepth < MAX_CHAIN_DEPTH) {
+          await kickNextBatch(baseUrl, cronSecret, chainDepth + 1);
+        }
+      } catch (err) {
+        console.error("[hunter-sweep] background hop failed:", err);
+      }
+    };
+    waitUntil(backgroundWork());
+    return NextResponse.json({ accepted: true, chainDepth }, { status: 202 });
+  }
+
   try {
-    const url = new URL(request.url);
-    const chainDepth = Number(url.searchParams.get("continue") ?? "0") || 0;
-    let force = url.searchParams.get("force") === "1";
-    let maxOrgs: number | undefined;
-
-    if (request.method === "POST") {
-      const body = (await request.json().catch(() => ({}))) as {
-        force?: boolean;
-        maxOrgs?: number;
-      };
-      if (body.force !== undefined) force = Boolean(body.force);
-      if (typeof body.maxOrgs === "number") maxOrgs = body.maxOrgs;
-    }
-
     const result = await runHunterLeadSweep({
       maxOrgs,
       force,
@@ -88,25 +129,9 @@ async function runSweep(request: Request) {
     });
 
     let chained = false;
-    if (!result.done && result.batchAttempted > 0 && chainDepth < 25) {
+    if (!result.done && result.batchAttempted > 0 && chainDepth < MAX_CHAIN_DEPTH) {
       chained = true;
-      const next = new URL("/api/sales/cron/hunter-sweep", cronBaseUrl(request));
-      next.searchParams.set("continue", String(chainDepth + 1));
-      const runNext = async () => {
-        try {
-          await fetch(next.toString(), {
-            method: "GET",
-            headers: { Authorization: `Bearer ${cronSecret}` },
-          }).then((r) => r.text());
-        } catch (err) {
-          console.error("[hunter-sweep] continuation failed:", err);
-        }
-      };
-      try {
-        waitUntil(runNext());
-      } catch {
-        void runNext();
-      }
+      waitUntil(kickNextBatch(baseUrl, cronSecret, chainDepth + 1));
     }
 
     return NextResponse.json({

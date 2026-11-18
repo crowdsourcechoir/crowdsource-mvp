@@ -48,8 +48,8 @@ import type { Contact } from "@/lib/sales/types";
 
 export const HUNTER_SWEEP_FLAG = "hunterBackOnlineSweepV1";
 export const HUNTER_SWEEP_CREDIT_RESERVE = 100;
-const DEFAULT_BATCH_ORGS = 22;
-const DEFAULT_BUDGET_MS = 195_000;
+const DEFAULT_BATCH_ORGS = 40;
+const DEFAULT_BUDGET_MS = 200_000;
 const LEASE_MS = 4 * 60_000;
 const RECENT_DAYS_MS = 14 * 86_400_000;
 
