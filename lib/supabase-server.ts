@@ -16,7 +16,7 @@ if (url && serviceRoleKey) {
     // after ensure-book-links updated them).
     global: {
       fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-        const timeout = AbortSignal.timeout(8_000);
+        const timeout = AbortSignal.timeout(15_000);
         const signal =
           init?.signal && typeof AbortSignal.any === "function"
             ? AbortSignal.any([init.signal, timeout])

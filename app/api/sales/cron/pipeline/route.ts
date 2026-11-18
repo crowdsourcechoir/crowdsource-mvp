@@ -130,7 +130,7 @@ export async function GET(request: Request) {
     }
 
     let pipelineChained = false;
-    if (chainDepth < 12) {
+    if (chainDepth < 2) {
       const remaining = await listUnprocessedOrganizations(1).catch(() => []);
       if (remaining.length > 0 && summary.attempted > 0) {
         pipelineChained = true;

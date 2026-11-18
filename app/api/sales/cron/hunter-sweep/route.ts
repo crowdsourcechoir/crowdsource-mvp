@@ -9,7 +9,7 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 290;
 
-const MAX_CHAIN_DEPTH = 30;
+const MAX_CHAIN_DEPTH = 1;
 
 function cronBaseUrl(request: Request): string {
   const origin = new URL(request.url).origin;

@@ -83,47 +83,31 @@
     },
     {
       "path": "/api/sales/cron/seed-eudemonia-comparables",
-      "schedule": "45 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-eudemonia-comparables",
-      "schedule": "20 23 * * *"
+      "schedule": "20 4 * * *"
     },
     {
       "path": "/api/sales/cron/seed-elx-annual-congress",
-      "schedule": "10 7 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-elx-annual-congress",
-      "schedule": "40 7 * * *"
+      "schedule": "25 4 * * *"
     },
     {
       "path": "/api/sales/cron/seed-artswa-wfea",
-      "schedule": "32,35,38,42,48,55 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-artswa-wfea",
-      "schedule": "10 23 * * *"
+      "schedule": "30 4 * * *"
     },
     {
       "path": "/api/sales/cron/seed-ee-fundraising-partnership",
-      "schedule": "42,45,48,52,58 22 * * *"
-    },
-    {
-      "path": "/api/sales/cron/seed-ee-fundraising-partnership",
-      "schedule": "15 23 * * *"
+      "schedule": "35 4 * * *"
     },
     {
       "path": "/api/sales/cron/seed-key-2027-prospects",
-      "schedule": "*/5 * * * *"
+      "schedule": "40 4 * * *"
     },
     {
       "path": "/api/sales/cron/seed-figma-config-2027",
-      "schedule": "*/5 * * * *"
+      "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },
     {
       "path": "/api/sales/cron/hunter-sweep",
-      "schedule": "*/5 * * * *"
+      "schedule": "33 * * * *"
     },
     {
       "path": "/api/sales/cron/anthem-pricing",

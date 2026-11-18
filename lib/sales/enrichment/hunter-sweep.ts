@@ -48,8 +48,8 @@ import type { Contact } from "@/lib/sales/types";
 
 export const HUNTER_SWEEP_FLAG = "hunterBackOnlineSweepV1";
 export const HUNTER_SWEEP_CREDIT_RESERVE = 100;
-const DEFAULT_BATCH_ORGS = 40;
-const DEFAULT_BUDGET_MS = 200_000;
+const DEFAULT_BATCH_ORGS = 20;
+const DEFAULT_BUDGET_MS = 180_000;
 const LEASE_MS = 4 * 60_000;
 const RECENT_DAYS_MS = 14 * 86_400_000;
 
@@ -258,32 +258,36 @@ async function collectSweepCandidates(options?: { force?: boolean }): Promise<{
   const nowMs = Date.now();
   const db = requireSupabaseAdmin();
 
-  const [orgs, contactRows, oppRows, queueRows, draftRows, scoreRows, oppTypeRes, orgTypeRes] =
-    await Promise.all([
-      fetchAllPaged<OrgRow>(
-        "organizations",
-        "id, name, domain, website_url, organization_type_id, is_existing_client, import_metadata, created_at"
-      ),
-      fetchAllPaged<ContactRow>(
-        "contacts",
-        "id, organization_id, full_name, role_title, role_category, email, normalized_email, email_verification_status, duplicate_of_contact_id, enrichment_attempted_at, enrichment_status, import_metadata"
-      ),
-      fetchAllPaged<OppRow>(
-        "opportunities",
-        "id, organization_id, opportunity_type_id, title, event_or_initiative_name, status, last_outbound_at, last_inbound_at, gmail_thread_id, import_metadata"
-      ),
-      fetchAllPaged<QueueRow>(
-        "approval_queue_items",
-        "id, opportunity_id, outreach_draft_id, prospect_score_id, kind, status"
-      ),
-      fetchAllPaged<DraftRow>(
-        "outreach_drafts",
-        "id, opportunity_id, contact_id, status, edited_subject, edited_body"
-      ),
-      fetchAllPaged<ScoreRow>("prospect_scores", "id, opportunity_id, total_score, created_at"),
-      db.from("opportunity_types").select("id, key"),
-      db.from("organization_types").select("id, key"),
-    ]);
+  // Sequential paged reads keep PostgREST connection concurrency at 1 so cron passes
+  // never starve interactive /admin/sales requests on small Supabase instances.
+  const orgs = await fetchAllPaged<OrgRow>(
+    "organizations",
+    "id, name, domain, website_url, organization_type_id, is_existing_client, import_metadata, created_at"
+  );
+  const contactRows = await fetchAllPaged<ContactRow>(
+    "contacts",
+    "id, organization_id, full_name, role_title, role_category, email, normalized_email, email_verification_status, duplicate_of_contact_id, enrichment_attempted_at, enrichment_status, import_metadata"
+  );
+  const oppRows = await fetchAllPaged<OppRow>(
+    "opportunities",
+    "id, organization_id, opportunity_type_id, title, event_or_initiative_name, status, last_outbound_at, last_inbound_at, gmail_thread_id, import_metadata"
+  );
+  const queueRows = await fetchAllPaged<QueueRow>(
+    "approval_queue_items",
+    "id, opportunity_id, outreach_draft_id, prospect_score_id, kind, status"
+  );
+  const draftRows = await fetchAllPaged<DraftRow>(
+    "outreach_drafts",
+    "id, opportunity_id, contact_id, status, edited_subject, edited_body"
+  );
+  const scoreRows = await fetchAllPaged<ScoreRow>(
+    "prospect_scores",
+    "id, opportunity_id, total_score, created_at"
+  );
+  const [oppTypeRes, orgTypeRes] = await Promise.all([
+    db.from("opportunity_types").select("id, key"),
+    db.from("organization_types").select("id, key"),
+  ]);
 
   const oppTypeKeyById = new Map(
     ((oppTypeRes.data ?? []) as Array<{ id: string; key: string }>).map((r) => [r.id, r.key])
