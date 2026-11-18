@@ -44,6 +44,7 @@ async function main() {
   assert.equal(isGenericMailboxEmail("info@org.org"), true);
   assert.equal(isGenericMailboxEmail("EVENTS+gala@FredHutch.org"), true);
   assert.equal(isGenericMailboxEmail("tsheehan@fredhutch.org"), false);
+  assert.equal(isGenericMailboxEmail("administrator@eventleaders.com"), true);
   assert.equal(isGenericMailboxEmail("enquiries@healthoptimisation.com"), true);
   assert.equal(isGenericMailboxEmail("theteam@longevityshow.com"), true);
   assert.equal(isGenericMailboxEmail("congress.whx@informa.com"), true);
