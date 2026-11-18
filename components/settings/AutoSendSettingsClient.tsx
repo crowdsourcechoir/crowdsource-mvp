@@ -48,7 +48,7 @@ export default function AutoSendSettingsClient() {
       actions={
         <>
           <StatusPill tone={view?.enabled ? "ok" : "off"}>{view?.enabled ? "On (24/7)" : "Paused"}</StatusPill>
-          <SettingsButton href="/api/sales/gmail/connect">
+          <SettingsButton href="/api/sales/gmail/connect?returnTo=/admin/settings/autosend">
             {view?.gmailConnected ? `Switch Gmail (${view.gmailEmail ?? "connected"})` : "Connect Gmail"}
           </SettingsButton>
           {view?.enabled ? (

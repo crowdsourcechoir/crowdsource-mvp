@@ -109,6 +109,24 @@ export default function AutoSendQueueClient() {
     return () => window.clearInterval(timer);
   }, [load]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gmail") !== "connected") return;
+    const autoPush = params.get("autopush") === "1";
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, "", cleanUrl);
+    if (autoPush) {
+      void runAction("draft_now", { action: "draft_now", maxToDraft: 10 }, (data) => {
+        const t = (data.tick ?? {}) as { drafted?: number };
+        return `Google compose connected — filed ${t.drafted ?? 0} draft(s) straight into your Gmail Drafts folder.`;
+      });
+    } else {
+      setNotice("Gmail connected with draft permission.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function toggleRow(rowKey: string) {
     setExpandedIds((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }));
   }
@@ -323,15 +341,28 @@ export default function AutoSendQueueClient() {
             {busyAction === "load_more" ? "Researching & loading leads…" : "Find & load more $15k+ leads now"}
           </SettingsButton>
           <SettingsButton
-            disabled={busyAction !== null || !view?.gmailComposeGranted}
-            onClick={() =>
-              void runAction("draft_now", { action: "draft_now", maxToDraft: 20 }, (data) => {
-                const t = (data.tick ?? {}) as { drafted?: number };
-                return `Filed ${t.drafted ?? 0} draft(s) into Gmail Drafts (${view?.gmailEmail ?? "connected inbox"}).`;
-              })
+            variant={view?.gmailComposeGranted ? "primary" : "ghost"}
+            disabled={busyAction !== null}
+            href={
+              view && !view.gmailComposeGranted
+                ? "/api/sales/gmail/connect?returnTo=/admin/sales/autosend&autopush=1"
+                : undefined
+            }
+            onClick={
+              view?.gmailComposeGranted
+                ? () =>
+                    void runAction("draft_now", { action: "draft_now", maxToDraft: 10 }, (data) => {
+                      const t = (data.tick ?? {}) as { drafted?: number };
+                      return `Filed ${t.drafted ?? 0} draft(s) into Gmail Drafts (${view?.gmailEmail ?? "connected inbox"}).`;
+                    })
+                : undefined
             }
           >
-            {busyAction === "draft_now" ? "Filing to Gmail…" : "Push next 20 into Gmail Drafts"}
+            {busyAction === "draft_now"
+              ? "Filing to Gmail…"
+              : view && !view.gmailComposeGranted
+                ? "Allow Gmail Drafts & Push 10"
+                : "Push next 10 into Gmail Drafts"}
           </SettingsButton>
           <SettingsButton disabled={!view} onClick={() => expandOrCollapseAll(!anyExpanded)}>
             {anyExpanded ? "Collapse all" : "Expand all"}
@@ -363,7 +394,10 @@ export default function AutoSendQueueClient() {
               <StatusPill tone={view?.gmailComposeGranted ? "ok" : "warn"}>
                 {view?.gmailComposeGranted ? "Gmail Drafts connected" : "Needs Gmail compose"}
               </StatusPill>
-              <SettingsButton href="/api/sales/gmail/connect" variant={view?.gmailComposeGranted ? "ghost" : "primary"}>
+              <SettingsButton
+                href="/api/sales/gmail/connect?returnTo=/admin/sales/autosend&autopush=1"
+                variant={view?.gmailComposeGranted ? "ghost" : "primary"}
+              >
                 {view?.gmailConnected ? "Switch Gmail / Grant compose" : "Connect Gmail"}
               </SettingsButton>
               <Link href="/admin/settings/autosend" className="csc-link text-xs">
@@ -389,10 +423,13 @@ export default function AutoSendQueueClient() {
               {!view.gmailComposeGranted ? (
                 <p className="text-amber-200">
                   Click any row below to inspect, edit, copy, or dismiss drafts right now. Click{" "}
-                  <a href="/api/sales/gmail/connect" className="csc-link underline">
-                    Switch Gmail / Grant compose
+                  <a
+                    href="/api/sales/gmail/connect?returnTo=/admin/sales/autosend&autopush=1"
+                    className="csc-link underline"
+                  >
+                    Allow Gmail Drafts &amp; Push 10
                   </a>{" "}
-                  once to also push them straight into Gmail’s Drafts folder.
+                  once so Google grants draft-creation permission (`gmail.compose`) — your earlier Gmail login only granted send/read.
                 </p>
               ) : null}
             </div>

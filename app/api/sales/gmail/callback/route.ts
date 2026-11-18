@@ -22,7 +22,9 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const oauthError = searchParams.get("error");
-  const redirectBase = `${siteUrl()}${sanitizeGmailReturnPath(cookies().get(GMAIL_RETURN_COOKIE)?.value)}`;
+  const rawReturn = cookies().get(GMAIL_RETURN_COOKIE)?.value ?? "";
+  const hasAutoPush = rawReturn.includes("autopush=1");
+  const redirectBase = `${siteUrl()}${sanitizeGmailReturnPath(rawReturn)}`;
 
   if (oauthError) {
     return failRedirect(
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const res = NextResponse.redirect(`${redirectBase}?gmail=connected`);
+    const res = NextResponse.redirect(`${redirectBase}?gmail=connected${hasAutoPush ? "&autopush=1" : ""}`);
     res.cookies.set("gmail_oauth_state", "", { httpOnly: true, path: "/", maxAge: 0 });
     res.cookies.set(GMAIL_RETURN_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
     return res;

@@ -28,8 +28,10 @@ export async function GET(request: Request) {
       path: "/",
       maxAge: 1800,
     });
-    const returnPath = sanitizeGmailReturnPath(new URL(request.url).searchParams.get("returnTo"));
-    res.cookies.set(GMAIL_RETURN_COOKIE, returnPath, {
+    const reqUrl = new URL(request.url);
+    const returnPath = sanitizeGmailReturnPath(reqUrl.searchParams.get("returnTo"));
+    const autopush = reqUrl.searchParams.get("autopush") === "1" ? "?autopush=1" : "";
+    res.cookies.set(GMAIL_RETURN_COOKIE, `${returnPath}${autopush}`, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
