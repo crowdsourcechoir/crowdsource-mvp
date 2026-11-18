@@ -80,6 +80,12 @@ export async function getElxAnnualCongressStatus(): Promise<{
   created: boolean | null;
   contactCount: number;
   done: boolean;
+  contacts: Array<{
+    fullName: string;
+    roleTitle: string | null;
+    source: string;
+    emailVerificationStatus: string | null;
+  }>;
 }> {
   const seed = ELX_ANNUAL_CONGRESS_SEED;
   const existing = await findExistingOrganization(seed.name, seed.websiteUrl);
@@ -91,6 +97,7 @@ export async function getElxAnnualCongressStatus(): Promise<{
       created: null,
       contactCount: 0,
       done: false,
+      contacts: [],
     };
   }
   const meta = (existing.importMetadata ?? {}) as Record<string, unknown>;
@@ -103,5 +110,11 @@ export async function getElxAnnualCongressStatus(): Promise<{
     created: typeof meta.elxCongressCreated === "boolean" ? meta.elxCongressCreated : null,
     contactCount: contacts.length,
     done: markedSeeded && contacts.length > 0,
+    contacts: contacts.map((contact) => ({
+      fullName: contact.fullName,
+      roleTitle: contact.roleTitle,
+      source: contact.source,
+      emailVerificationStatus: contact.emailVerificationStatus,
+    })),
   };
 }
