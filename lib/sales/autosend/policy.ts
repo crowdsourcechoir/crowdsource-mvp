@@ -17,15 +17,16 @@ export const AUTO_SEND_MIN_BUDGET = 6;
 export const AUTO_SEND_MIN_FEE = 15_000;
 
 /**
- * $15k+ lineup only: 18 large ($15k+ Anthem), 2 sponsorship, 3 partnership, 0 other.
+ * $15k+ lineup only, with Seattle & PNW local sports partner teams prioritized first:
+ * 16 large ($15k+ Anthem), 2 sponsorship, 7 partnership (led by Seattle/PNW sports teams), 0 other.
  * School auctions and sub-$15k local fundraisers stay off the automated lineup.
  */
 export const AUTO_SEND_LANES = ["large", "sponsorship", "partnership", "other"] as const;
 export type AutoSendLane = (typeof AUTO_SEND_LANES)[number];
 export const LANE_DAILY_QUOTA: Record<AutoSendLane, number> = {
-  large: 20,
+  large: 16,
   sponsorship: 2,
-  partnership: 3,
+  partnership: 7,
   other: 0,
 };
 export const LANE_LABEL: Record<AutoSendLane, string> = {

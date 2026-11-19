@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { SettingsButton, SettingsPanel, StatusPill } from "@/components/settings/ui";
 import { formatPacificWhen, LANE_LABEL } from "@/lib/sales/autosend/policy";
+import { pnwSportsPriorityLabel, type PnwSportsPriorityTier } from "@/lib/sales/queue/pnw-sports-priority";
 import { formatUsd } from "@/lib/sales/engines";
 import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { draftToEmailHtml, draftToPlainText } from "@/lib/sales/outreach/email-body-format";
@@ -499,6 +500,11 @@ export default function AutoSendQueueClient() {
                               <span className="truncate text-sm font-semibold text-white">
                                 {slot.organizationName}
                               </span>
+                              {slot.pnwSportsPriorityTier ? (
+                                <span className="text-xs font-medium text-[var(--csc-accent)]">
+                                  {pnwSportsPriorityLabel(slot.pnwSportsPriorityTier as PnwSportsPriorityTier)}
+                                </span>
+                              ) : null}
                               <span className="truncate text-xs text-gray-400">
                                 {slot.contactName ? `${slot.contactName} · ` : ""}
                                 {slot.contactEmail}

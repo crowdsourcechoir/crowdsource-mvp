@@ -1,6 +1,7 @@
 import { requireSupabaseAdmin } from "./client";
 import { sortQueueSidebarItems } from "../queue/sidebar";
 import { classifyQueueCategory } from "../queue/category";
+import { pnwSportsPriorityTier } from "../queue/pnw-sports-priority";
 import { resolveQueueRecentlyAddedAt } from "../queue/added";
 import { resolveBusinessModelFromMetadata } from "../business-model";
 import { readSalesInitiative } from "../initiatives";
@@ -349,11 +350,17 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
     id: string;
     name: string;
     organization_type_id: string | null;
+    location_city: string | null;
+    location_region: string | null;
+    location_country: string | null;
     import_metadata: Record<string, unknown> | null;
   }>(
     opportunities.map((row) => row.organization_id),
     async (chunk) =>
-      db.from("organizations").select("id, name, organization_type_id, import_metadata").in("id", chunk)
+      db
+        .from("organizations")
+        .select("id, name, organization_type_id, location_city, location_region, location_country, import_metadata")
+        .in("id", chunk)
   );
   const orgById = new Map(organizations.map((row) => [row.id, row]));
 
@@ -452,6 +459,20 @@ async function assembleQueueSidebar(items: ApprovalQueueItem[]): Promise<QueueSi
       dealType: businessModel.dealType,
       editionBloom: businessModel.editionBloom,
       qualificationScore: qual,
+      locationCity: organization.location_city ?? null,
+      locationRegion: organization.location_region ?? null,
+      pnwSportsPriorityTier: pnwSportsPriorityTier({
+        organizationName: organization.name,
+        opportunityTitle: opportunity.title,
+        category,
+        opportunityTypeKey,
+        organizationTypeKey,
+        salesInitiative,
+        productExperience: businessModel.productExperience,
+        locationCity: organization.location_city,
+        locationRegion: organization.location_region,
+        locationCountry: organization.location_country,
+      }),
     });
   }
   return sortQueueSidebarItems(sidebar);

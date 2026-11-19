@@ -7,6 +7,10 @@ import {
   getKey2027ProspectsSeedStatus,
   seedKey2027Prospects,
 } from "@/lib/sales/seed/seed-key-2027-prospects";
+import {
+  getPnwSportsPartnerTeamsSeedStatus,
+  seedPnwSportsPartnerTeams,
+} from "@/lib/sales/seed/pnw-sports-teams";
 import { ensureBookLinks } from "@/lib/sales/outreach/ensureBookLinks";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +38,16 @@ export async function GET(request: Request) {
       if (!seedStatus.done) {
         await seedKey2027Prospects().catch(() => null);
       }
+      const pnwStatus = await getPnwSportsPartnerTeamsSeedStatus().catch(() => ({ done: true }));
+      if (!pnwStatus.done) {
+        await seedPnwSportsPartnerTeams({ pushGmailDrafts: 15 }).catch(() => null);
+      }
       const current = await readAutoSendState();
       const age = current.state.updatedAt ? Date.now() - Date.parse(current.state.updatedAt) : Number.POSITIVE_INFINITY;
-      const loaded = !seedStatus.done || current.error || age > 60_000 ? await refreshAutoSendPlan() : current;
+      const loaded =
+        !seedStatus.done || !pnwStatus.done || current.error || age > 60_000
+          ? await refreshAutoSendPlan()
+          : current;
       const view = await buildAutoSendQueueView(loaded.state, loaded.error);
       return NextResponse.json({
         enabled: view.enabled,
@@ -52,10 +63,11 @@ export async function GET(request: Request) {
         sampleLineup: view.groups
           .flatMap((g) => g.slots)
           .filter((s) => s.status === "queued" || s.status === "drafted")
-          .slice(0, 20)
+          .slice(0, 30)
           .map((s) => ({
             day: s.day,
             lane: s.lane,
+            pnwSportsPriorityTier: s.pnwSportsPriorityTier ?? 0,
             score: Math.round(s.score),
             suggestedFee: s.suggestedFee ?? null,
             organizationName: s.organizationName,
@@ -80,6 +92,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    const pnwStatus = await getPnwSportsPartnerTeamsSeedStatus().catch(() => ({ done: true }));
+    if (!pnwStatus.done) {
+      await seedPnwSportsPartnerTeams().catch(() => null);
+    }
     const tick = await tickAutoSend();
     return NextResponse.json(tick);
   } catch (err) {

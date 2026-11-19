@@ -102,6 +102,10 @@
       "schedule": "40 4 * * *"
     },
     {
+      "path": "/api/sales/cron/seed-pnw-sports-teams",
+      "schedule": "45 4 * * *"
+    },
+    {
       "path": "/api/sales/cron/seed-figma-config-2027",
       "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },

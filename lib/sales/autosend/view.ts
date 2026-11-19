@@ -4,6 +4,7 @@ import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/em
 import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { readAnthemPricing } from "@/lib/sales/pricing/metadata";
 import { readDealForecast } from "@/lib/sales/engines";
+import { pnwSportsPriorityTier } from "@/lib/sales/queue/pnw-sports-priority";
 import {
   AUTO_SEND_DAILY_CAP,
   AUTO_SEND_HORIZON_DAYS,
@@ -49,8 +50,23 @@ export type AutoSendQueueView = {
   storeError: string | null;
 };
 
-function sortSlots(slots: AutoSendSlot[]): AutoSendSlot[] {
-  return [...slots].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt) || a.organizationName.localeCompare(b.organizationName));
+function slotPnwTier(slot: AutoSendSlot): 0 | 1 | 2 | 3 {
+  if (slot.pnwSportsPriorityTier != null) return slot.pnwSportsPriorityTier;
+  return pnwSportsPriorityTier({
+    organizationName: slot.organizationName,
+    opportunityTitle: slot.eventTitle,
+  });
+}
+
+function sortSlots(slots: AutoSendSlot[], prioritizePnwFirst = false): AutoSendSlot[] {
+  return [...slots].sort((a, b) => {
+    if (prioritizePnwFirst) {
+      const aPnw = slotPnwTier(a);
+      const bPnw = slotPnwTier(b);
+      if (aPnw !== bPnw) return bPnw - aPnw;
+    }
+    return a.scheduledAt.localeCompare(b.scheduledAt) || a.organizationName.localeCompare(b.organizationName);
+  });
 }
 
 async function hydrateMissingSlotBodies(slots: AutoSendSlot[]): Promise<AutoSendSlot[]> {
@@ -140,6 +156,7 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
   const hydratedSlots = await hydrateMissingSlotBodies(state.slots);
   const slots = hydratedSlots.map((slot) => ({
     ...slot,
+    pnwSportsPriorityTier: slotPnwTier(slot),
     body: slot.body != null ? normalizeCrowdsourceWebsiteLinks(slot.body) : null,
   }));
 
@@ -167,13 +184,14 @@ export async function buildAutoSendQueueView(state: AutoSendState, error: string
   );
 
   const groups: AutoSendQueueGroup[] = [
-    { key: "drafts", label: "In Gmail Drafts (ready to review & send)", slots: sortSlots(allDrafted) },
+    { key: "drafts", label: "In Gmail Drafts (ready to review & send)", slots: sortSlots(allDrafted, true) },
     { key: "sent", label: "Sent earlier", slots: sortSlots([...sentToday, ...failedToday]) },
-    { key: "today", label: "In line today", slots: sortSlots(queuedToday) },
+    { key: "today", label: "In line today", slots: sortSlots(queuedToday, true) },
   ];
   for (const day of futureDays) {
     const daySlots = sortSlots(
-      slots.filter((slot) => slot.day === day && (slot.status === "queued" || slot.status === "sending" || slot.status === "drafted"))
+      slots.filter((slot) => slot.day === day && (slot.status === "queued" || slot.status === "sending" || slot.status === "drafted")),
+      true
     );
     if (daySlots.length === 0) continue;
     const label = day === tomorrow ? `Tomorrow · ${formatPacificDay(day)}` : formatPacificDay(day);

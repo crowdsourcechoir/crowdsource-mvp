@@ -5,15 +5,25 @@ import { getGmailConnectionStatus } from "@/lib/sales/db/gmail";
 import { publicErrorMessage } from "@/lib/sales/http-error";
 import { parseQueueFunnel } from "@/lib/sales/queue/funnel";
 import { parseQueueScope } from "@/lib/sales/queue/scope";
+import {
+  getPnwSportsPartnerTeamsSeedStatus,
+  seedPnwSportsPartnerTeams,
+} from "@/lib/sales/seed/pnw-sports-teams";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const scope = parseQueueScope(searchParams.get("scope"));
     const funnel = parseQueueFunnel(searchParams.get("funnel"));
+    if (scope === "to_send" && funnel === "all") {
+      const pnwStatus = await getPnwSportsPartnerTeamsSeedStatus().catch(() => ({ done: true }));
+      if (!pnwStatus.done) {
+        await seedPnwSportsPartnerTeams().catch(() => null);
+      }
+    }
     const [buckets, gmail] = await Promise.all([
       loadSalesDashboardBuckets(),
       getGmailConnectionStatus(),

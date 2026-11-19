@@ -7,6 +7,7 @@ import { deleteGmailDraft } from "@/lib/sales/gmail/send";
 import { listAutoSendCandidates } from "./candidates";
 import { mergeAutoSendSlots } from "./plan";
 import { pacificClock, WINDOW_END_MINUTE } from "./policy";
+import { pnwSportsPriorityTier } from "@/lib/sales/queue/pnw-sports-priority";
 import { daySendReportDue, sendDayReport } from "./report";
 import { sendAutoSendSlot } from "./send-slot";
 import { readAutoSendState, writeAutoSendState } from "./store";
@@ -176,9 +177,20 @@ export async function tickAutoSend(
 
   if (gmail.connected && gmail.composeGranted && !killed) {
     const burst = Math.max(1, Math.min(25, opts?.maxToDraft ?? 8));
+    const slotTier = (slot: AutoSendSlot) =>
+      slot.pnwSportsPriorityTier ??
+      pnwSportsPriorityTier({
+        organizationName: slot.organizationName,
+        opportunityTitle: slot.eventTitle,
+      });
     const due = state.slots
       .filter((slot) => slot.status === "queued")
-      .sort((a, b) => a.day.localeCompare(b.day) || a.scheduledAt.localeCompare(b.scheduledAt))
+      .sort((a, b) => {
+        const aPnw = slotTier(a);
+        const bPnw = slotTier(b);
+        if (aPnw !== bPnw) return bPnw - aPnw;
+        return a.day.localeCompare(b.day) || a.scheduledAt.localeCompare(b.scheduledAt);
+      })
       .slice(0, burst);
 
     for (const slot of due) {

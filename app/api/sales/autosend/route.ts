@@ -16,6 +16,10 @@ import {
   getKey2027ProspectsSeedStatus,
   seedKey2027Prospects,
 } from "@/lib/sales/seed/seed-key-2027-prospects";
+import {
+  getPnwSportsPartnerTeamsSeedStatus,
+  seedPnwSportsPartnerTeams,
+} from "@/lib/sales/seed/pnw-sports-teams";
 import { ensureBookLinks } from "@/lib/sales/outreach/ensureBookLinks";
 import { updateDraftEdits } from "@/lib/sales/db/outreach";
 import { getQueueItem } from "@/lib/sales/db/queue";
@@ -40,9 +44,16 @@ export async function GET() {
     if (!seedStatus.done) {
       await seedKey2027Prospects().catch(() => null);
     }
+    const pnwStatus = await getPnwSportsPartnerTeamsSeedStatus().catch(() => ({ done: true }));
+    if (!pnwStatus.done) {
+      await seedPnwSportsPartnerTeams({ pushGmailDrafts: 15 }).catch(() => null);
+    }
     const current = await readAutoSendState();
     const age = current.state.updatedAt ? Date.now() - Date.parse(current.state.updatedAt) : Number.POSITIVE_INFINITY;
-    const loaded = !seedStatus.done || current.error || age > REFRESH_AFTER_MS ? await refreshAutoSendPlan() : current;
+    const loaded =
+      !seedStatus.done || !pnwStatus.done || current.error || age > REFRESH_AFTER_MS
+        ? await refreshAutoSendPlan()
+        : current;
     const view = await buildAutoSendQueueView(loaded.state, loaded.error);
     return NextResponse.json(view);
   } catch (err) {
@@ -106,6 +117,7 @@ export async function POST(request: Request) {
 
     if (action === "load_more") {
       const batchLimit = Math.max(1, Math.min(8, typeof body?.batchLimit === "number" ? body.batchLimit : 4));
+      await seedPnwSportsPartnerTeams().catch(() => null);
       const key2027 = await seedKey2027Prospects().catch(() => null);
       await seedNationalKeynoteTargets({ runPipeline: false }).catch(() => null);
       const batch = await runPipelineBatch(batchLimit);

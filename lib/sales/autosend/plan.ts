@@ -11,17 +11,31 @@ import {
   upcomingBusinessDays,
   type AutoSendLane,
 } from "./policy";
+import { pnwSportsPriorityTier } from "@/lib/sales/queue/pnw-sports-priority";
 import type { AutoSendCandidate, AutoSendSlot } from "./types";
 
 const STUCK_SENDING_MS = 10 * 60 * 1000;
 const HISTORY_DAYS = 14;
+/** Daily extra headroom above LANE_DAILY_QUOTA.partnership when Seattle/PNW sports teams are waiting. */
+const PNW_SPORTS_DAILY_CAP = 12;
+
+function candidatePnwTier(candidate: AutoSendCandidate): 0 | 1 | 2 | 3 {
+  if (candidate.pnwSportsPriorityTier != null) return candidate.pnwSportsPriorityTier;
+  return pnwSportsPriorityTier({
+    organizationName: candidate.organizationName,
+    opportunityTitle: candidate.eventTitle,
+  });
+}
 
 function compareCandidates(a: AutoSendCandidate, b: AutoSendCandidate, todayYmd: string): number {
+  const aPnw = candidatePnwTier(a);
+  const bPnw = candidatePnwTier(b);
+  if (aPnw !== bPnw) return bPnw - aPnw;
   const band =
     bandRank(eventDateBand(a.eventDate, todayYmd)) - bandRank(eventDateBand(b.eventDate, todayYmd));
   if (band !== 0) return band;
   if (b.score !== a.score) return b.score - a.score;
-  return a.eventDate.localeCompare(b.eventDate);
+  return a.eventDate.localeCompare(b.eventDate) || a.organizationName.localeCompare(b.organizationName);
 }
 
 function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledAt: string): AutoSendSlot {
@@ -39,6 +53,7 @@ function slotFromCandidate(candidate: AutoSendCandidate, day: string, scheduledA
     eventDate: candidate.eventDate,
     score: candidate.score,
     lane: candidate.lane,
+    pnwSportsPriorityTier: candidatePnwTier(candidate),
     day,
     scheduledAt,
     status: "queued",
@@ -64,11 +79,17 @@ function refreshQueued(slot: AutoSendSlot, candidate: AutoSendCandidate): AutoSe
     eventDate: candidate.eventDate,
     score: candidate.score,
     lane: candidate.lane,
+    pnwSportsPriorityTier: candidatePnwTier(candidate),
   };
 }
 
 function nextLane(used: Record<AutoSendLane, number>, pools: Record<AutoSendLane, AutoSendCandidate[]>): AutoSendLane | null {
-  const order: AutoSendLane[] = ["large", "partnership", "sponsorship", "other"];
+  const nextPartner = pools.partnership[0];
+  if (nextPartner && candidatePnwTier(nextPartner) > 0 && used.partnership < PNW_SPORTS_DAILY_CAP) {
+    return "partnership";
+  }
+
+  const order: AutoSendLane[] = ["partnership", "large", "sponsorship", "other"];
   let best: AutoSendLane | null = null;
   let bestRatio = Infinity;
   let bestOrder = Infinity;

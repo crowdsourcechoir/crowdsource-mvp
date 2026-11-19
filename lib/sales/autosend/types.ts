@@ -28,6 +28,8 @@ export type AutoSendSlot = {
   /** Link to the unsent Gmail draft. Null for older slots that were sent outright. */
   draftUrl: string | null;
   gmailDraftId?: string | null;
+  /** 3 = Seattle metro sports, 2 = WA sports, 1 = OR/ID/BC sports, 0 = other */
+  pnwSportsPriorityTier?: 0 | 1 | 2 | 3;
   error: string | null;
   attempts: number;
 };
@@ -60,4 +62,6 @@ export type AutoSendCandidate = {
   eventDate: string;
   score: number;
   lane: AutoSendLane;
+  /** 3 = Seattle metro sports, 2 = WA sports, 1 = OR/ID/BC sports, 0 = other */
+  pnwSportsPriorityTier?: 0 | 1 | 2 | 3;
 };

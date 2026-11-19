@@ -447,6 +447,10 @@ export type QueueSidebarItem = {
   editionBloom: string | null;
   /** 0–4: decision-maker, date, potential $, next step */
   qualificationScore: number;
+  locationCity?: string | null;
+  locationRegion?: string | null;
+  /** 3 = Seattle metro sports, 2 = WA sports, 1 = OR/ID/BC sports, 0 = other */
+  pnwSportsPriorityTier?: 0 | 1 | 2 | 3;
 };
 
 /** Fully assembled view for one queue item — everything the review UI needs without extra navigation. */

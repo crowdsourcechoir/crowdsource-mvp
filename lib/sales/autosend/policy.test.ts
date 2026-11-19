@@ -197,14 +197,14 @@ function main() {
   );
   assert.equal(lined.some((slot) => slot.queueItemId === "q1-0"), false);
 
-  // 30-day rolling lineup: 120 Large candidates spread across 6 business days at 20/day
-  const many = Array.from({ length: 120 }, (_, index) =>
+  // 30-day rolling lineup: 112 Large candidates spread across 7 business days at 16/day
+  const many = Array.from({ length: 112 }, (_, index) =>
     candidate(`m-${index}`, { organizationId: `org-m-${index}`, score: 90 - (index % 5), eventDate: "2027-03-01" })
   );
   const capped = mergeAutoSendSlots([], many, mondayNight);
-  assert.equal(capped.length, 120);
-  assert.equal(capped.filter((slot) => slot.day === "2026-11-17").length, 20);
-  assert.equal(capped.filter((slot) => slot.day === "2026-11-18").length, 20);
+  assert.equal(capped.length, 112);
+  assert.equal(capped.filter((slot) => slot.day === "2026-11-17").length, 16);
+  assert.equal(capped.filter((slot) => slot.day === "2026-11-18").length, 16);
 
   // Zero school auctions allowed onto the lineup
   const schools = Array.from({ length: 20 }, (_, index) =>
@@ -219,7 +219,7 @@ function main() {
     candidate(`l-${index}`, { lane: "large", organizationId: `org-l-${index}`, score: 90 })
   );
   const sponsors = [candidate("sp", { lane: "sponsorship", organizationId: "org-sp", eventDate: "" })];
-  const partners = Array.from({ length: 5 }, (_, index) =>
+  const partners = Array.from({ length: 9 }, (_, index) =>
     candidate(`p-${index}`, { lane: "partnership", organizationId: `org-p-${index}` })
   );
   const mixed = mergeAutoSendSlots([], [...schools, ...larges, ...sponsors, ...partners], mondayNight);
@@ -227,8 +227,8 @@ function main() {
   const tuesday = mixed.filter((slot) => slot.day === "2026-11-17");
   assert.equal(tuesday.filter((slot) => slot.lane === "large").length, 4);
   assert.equal(tuesday.filter((slot) => slot.lane === "sponsorship").length, 1);
-  assert.equal(tuesday.filter((slot) => slot.lane === "partnership").length, 3);
-  assert.equal(tuesday.length, 8);
+  assert.equal(tuesday.filter((slot) => slot.lane === "partnership").length, 7);
+  assert.equal(tuesday.length, 12);
 
   // Dismissing / deleting a slot immediately promotes the next waiting lead into its freed seat
   const dismissedPartner = tuesday.find((slot) => slot.lane === "partnership")!;
@@ -239,9 +239,64 @@ function main() {
   const refilled = mergeAutoSendSlots(remainingExisting, remainingCandidates, mondayNight);
   assert.equal(
     refilled.filter((slot) => slot.day === "2026-11-17" && slot.lane === "partnership").length,
-    3
+    7
   );
   assert.equal(refilled.some((slot) => slot.queueItemId === dismissedPartner.queueItemId), false);
+
+  // Seattle & PNW sports partner teams front-load ahead of out-of-region partnership & large leads
+  const pnwCandidates: AutoSendCandidate[] = [
+    candidate("boston-bc", {
+      lane: "partnership",
+      organizationId: "org-bc",
+      organizationName: "Boston College Athletics",
+      eventTitle: "Fan Chant",
+      eventDate: "",
+      score: 94,
+      pnwSportsPriorityTier: 0,
+    }),
+    candidate("portland-thorns", {
+      lane: "partnership",
+      organizationId: "org-thorns",
+      organizationName: "Portland Thorns FC",
+      eventTitle: "Fan Chant — Portland Thorns FC",
+      eventDate: "",
+      score: 88,
+      pnwSportsPriorityTier: 1,
+    }),
+    candidate("spokane-velocity", {
+      lane: "partnership",
+      organizationId: "org-spokane",
+      organizationName: "USL Spokane (Spokane Velocity FC & Spokane Zephyr FC)",
+      eventTitle: "Fan Chant — USL Spokane",
+      eventDate: "",
+      score: 87,
+      pnwSportsPriorityTier: 2,
+    }),
+    candidate("seattle-sounders", {
+      lane: "partnership",
+      organizationId: "org-sounders",
+      organizationName: "Seattle Sounders FC",
+      eventTitle: "Fan Chant — Seattle Sounders FC",
+      eventDate: "",
+      score: 91,
+      pnwSportsPriorityTier: 3,
+    }),
+    candidate("national-conf", {
+      lane: "large",
+      organizationId: "org-nat",
+      organizationName: "National Summit",
+      eventTitle: "2027 Annual Summit",
+      eventDate: "2027-03-01",
+      score: 95,
+      pnwSportsPriorityTier: 0,
+    }),
+  ];
+  const pnwLined = mergeAutoSendSlots([], pnwCandidates, mondayNight);
+  const pnwDayOne = pnwLined.filter((slot) => slot.day === "2026-11-17");
+  assert.deepEqual(
+    pnwDayOne.slice(0, 3).map((slot) => slot.queueItemId),
+    ["seattle-sounders", "spokane-velocity", "portland-thorns"]
+  );
 
   const sent: AutoSendSlot = { ...lined[0]!, status: "sent", sentAt: tuesdayOpen.toISOString() };
   const kept = mergeAutoSendSlots([sent], [], tuesdayOpen);

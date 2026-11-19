@@ -9,6 +9,7 @@ import { isOutboundEmailBlocked } from "@/lib/sales/outreach/send-blocklist";
 import { coalesceDraftBody, coalesceDraftSubject } from "@/lib/sales/outreach/email-body-format";
 import { normalizeCrowdsourceWebsiteLinks } from "@/lib/sales/outreach/bookUrl";
 import { readAnthemPricing } from "@/lib/sales/pricing/metadata";
+import { pnwSportsPriorityTier } from "@/lib/sales/queue/pnw-sports-priority";
 import { autoSendSkipReason, classifyAutoSendLane, componentScore, pacificClock } from "./policy";
 import type { AutoSendCandidate } from "./types";
 
@@ -167,12 +168,20 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
     id: string;
     name: string;
     organization_type_id: string | null;
+    location_city: string | null;
+    location_region: string | null;
+    location_country: string | null;
     import_metadata: Record<string, unknown> | null;
     is_existing_client: boolean | null;
   }>(
     opportunities.map((row) => row.organization_id),
     async (chunk) =>
-      db.from("organizations").select("id, name, organization_type_id, import_metadata, is_existing_client").in("id", chunk)
+      db
+        .from("organizations")
+        .select(
+          "id, name, organization_type_id, location_city, location_region, location_country, import_metadata, is_existing_client"
+        )
+        .in("id", chunk)
   );
   const orgById = new Map(organizations.map((row) => [row.id, row]));
 
@@ -291,6 +300,16 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
       today
     );
     if (reason) continue;
+    const pnwTier = pnwSportsPriorityTier({
+      organizationName: organization.name,
+      opportunityTitle: eventTitle,
+      opportunityTypeKey: laneInput.opportunityTypeKey,
+      organizationTypeKey,
+      salesInitiative: laneInput.salesInitiative,
+      locationCity: organization.location_city,
+      locationRegion: organization.location_region,
+      locationCountry: organization.location_country,
+    });
     candidates.push({
       queueItemId: item.id,
       opportunityId: opportunity.id,
@@ -305,6 +324,7 @@ export async function listAutoSendCandidates(now: Date = new Date()): Promise<Au
       eventDate: opportunity.event_date_estimate ?? "",
       score: Number(score!.total_score),
       lane: classifyAutoSendLane(laneInput),
+      pnwSportsPriorityTier: pnwTier,
     });
   }
   return candidates;

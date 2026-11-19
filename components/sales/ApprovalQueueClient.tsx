@@ -23,6 +23,8 @@ import {
   queueCategoryLabel,
   type QueueCategoryFilter,
 } from "@/lib/sales/queue/category";
+import { pnwSportsPriorityLabel, type PnwSportsPriorityTier } from "@/lib/sales/queue/pnw-sports-priority";
+import { queueSidebarPnwSportsTier } from "@/lib/sales/queue/sidebar";
 import {
   QUEUE_FUNNEL_OPTIONS,
   funnelCountsFromStages,
@@ -172,6 +174,7 @@ export default function ApprovalQueueClient() {
     deal,
     value,
     cash: cashWindow,
+    category,
   });
   const viewParam = parseQueueSavedView(searchParams.get("view"));
   const [sidebar, setSidebar] = useState<QueueSidebarItem[]>([]);
@@ -334,8 +337,14 @@ export default function ApprovalQueueClient() {
         return bT - aT;
       });
     }
-    // Playbook focus: cash-now + qualified buyers first, then effort-weighted workstream.
+    // Seattle & Pacific Northwest sports partner teams lead "To send" first,
+    // followed by cash-now + qualified buyers, then effort-weighted workstream.
     return [...filtered].sort((a, b) => {
+      if (scope === "to_send") {
+        const aPnw = queueSidebarPnwSportsTier(a);
+        const bPnw = queueSidebarPnwSportsTier(b);
+        if (aPnw !== bPnw) return bPnw - aPnw;
+      }
       const aCash = matchesQueueCashWindow(a, "cash_now") ? 1 : 0;
       const bCash = matchesQueueCashWindow(b, "cash_now") ? 1 : 0;
       if (aCash !== bCash) return bCash - aCash;
@@ -349,9 +358,12 @@ export default function ApprovalQueueClient() {
         const bDate = b.eventDateEstimate ?? "9999-12-31";
         if (aDate !== bDate) return aDate.localeCompare(bDate);
       }
+      if ((b.totalScore ?? 0) !== (a.totalScore ?? 0)) {
+        return (b.totalScore ?? 0) - (a.totalScore ?? 0);
+      }
       return (b.potentialAmount ?? 0) - (a.potentialAmount ?? 0);
     });
-  }, [sidebar, category, funnel, added, cashWindow, workstream, business, product, deal, value]);
+  }, [sidebar, scope, category, funnel, added, cashWindow, workstream, business, product, deal, value]);
   const categoryCounts = useMemo(() => countQueueCategories(sidebar), [sidebar]);
   const funnelCounts = useMemo(() => funnelCountsFromStages(funnelByStage), [funnelByStage]);
   const addedCounts = useMemo(() => countQueueAdded(sidebar), [sidebar]);
@@ -961,10 +973,12 @@ export default function ApprovalQueueClient() {
       params.delete("deal");
       params.delete("value");
       params.delete("cash");
+      params.delete("category");
       params.delete("item");
       const p = view.params;
       if (p.scope === "to_send" || p.scope == null) params.delete("scope");
       else if (p.scope) params.set("scope", p.scope);
+      if (p.category && p.category !== "all") params.set("category", p.category);
       if (p.business && p.business !== "all") params.set("business", p.business);
       if (p.deal && p.deal !== "all") params.set("deal", p.deal);
       if (p.value && p.value !== "all") params.set("value", p.value);
@@ -1285,6 +1299,13 @@ export default function ApprovalQueueClient() {
                   </span>
                   <span className="block truncate text-xs text-gray-500">{item.opportunityTitle}</span>
                   <span className="mt-0.5 block truncate text-[11px] uppercase tracking-wide text-gray-600">
+                    {(() => {
+                      const pnwTier = queueSidebarPnwSportsTier(item) as PnwSportsPriorityTier;
+                      const pnwLabel = pnwSportsPriorityLabel(pnwTier);
+                      return pnwLabel ? (
+                        <span className="text-[var(--csc-accent)]">{pnwLabel} · </span>
+                      ) : null;
+                    })()}
                     {item.businessCategory in BUSINESS_CATEGORIES
                       ? BUSINESS_CATEGORIES[item.businessCategory as BusinessCategoryKey].shortLabel
                       : queueCategoryLabel(parseQueueCategory(item.category))}

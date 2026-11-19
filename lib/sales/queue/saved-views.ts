@@ -9,6 +9,7 @@ import type { BusinessCategoryKey, DealTypeKey } from "../business-model";
 import { HIGH_VALUE_POTENTIAL_USD } from "../business-model";
 
 export type QueueSavedViewKey =
+  | "pnw_sports_partners"
   | "commissioned_revenue"
   | "owned_entertainment"
   | "sponsorships"
@@ -36,6 +37,12 @@ export type QueueSavedView = {
 };
 
 export const QUEUE_SAVED_VIEWS: QueueSavedView[] = [
+  {
+    key: "pnw_sports_partners",
+    label: "Seattle & PNW Sports",
+    description: "To send email drafts led by Seattle & Pacific Northwest sports partner teams",
+    params: { scope: "to_send", category: "sports", business: "all", deal: "all", value: "all", cash: "all" },
+  },
   {
     key: "commissioned_revenue",
     label: "Commissioned Revenue",
@@ -90,10 +97,24 @@ export function matchingSavedView(filters: {
   deal: string;
   value: string;
   cash: string;
+  category?: string;
 }): QueueSavedViewKey | null {
   const cashNorm = filters.cash === "now" ? "cash_now" : filters.cash;
   for (const view of QUEUE_SAVED_VIEWS) {
     const p = view.params;
+    if (view.key === "pnw_sports_partners") {
+      if (
+        filters.scope === "to_send" &&
+        filters.category === "sports" &&
+        filters.business === "all" &&
+        filters.deal === "all" &&
+        filters.value === "all" &&
+        cashNorm === "all"
+      ) {
+        return "pnw_sports_partners";
+      }
+      continue;
+    }
     if (view.key === "follow_ups") {
       if (
         filters.scope === "due" &&
